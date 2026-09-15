@@ -20,9 +20,15 @@ if [ -z "$APK" ] || [ ! -f "$APK" ]; then
   exit 1
 fi
 echo "[1/6] Instalando $APK ..."
-nsenter -t 1 -m -- pm install -r "$APK" 2>&1 || pm install -r "$APK" 2>&1
+# pm necesita path accesible a system_server (no /sdcard fuse). Si falla, usa stdin pipe
+if nsenter -t 1 -m -- pm install -r "$APK" 2>&1; then echo "  pm install OK"; else
+  echo "  pm install falló (fuse perm?), probando stdin pipe..."
+  if nsenter -t 1 -m -- sh -c "cat \"$APK\" | pm install -S $(stat -c%s \"$APK\" 2>/dev/null || wc -c < \"$APK\")" 2>&1; then echo "  stdin install OK"; else
+    echo "  ERROR: ambos métodos fallaron"; exit 1
+  fi
+fi
 echo "  -> pm list | grep companion:"
-nsenter -t 1 -m -- pm list packages 2>&1 | grep -i companion || pm list packages 2>&1 | grep -i companion || echo "  (aún no visible, revisa log arriba)"
+nsenter -t 1 -m -- pm list packages 2>&1 | grep -i companion || echo "  (aún no visible, revisa log arriba)"
 
 echo "[2/6] Concediendo permisos runtime ..."
 nsenter -t 1 -m -- pm grant com.opencode.companion android.permission.RECORD_AUDIO 2>&1 || true
