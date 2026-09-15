@@ -1,0 +1,45 @@
+name: Build Companion APK
+on:
+  push:
+    paths:
+      - 'opencode-companion-apk/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: opencode-companion-apk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate Gradle wrapper
+        run: |
+          gradle wrapper --gradle-version 8.10.2
+          chmod +x gradlew
+          ls -lh gradle/wrapper/
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Build release APK (unsigned)
+        run: ./gradlew assembleRelease --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencode-companion-apk
+          path: |
+            opencode-companion-apk/app/build/outputs/apk/debug/*.apk
+            opencode-companion-apk/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error

@@ -1,0 +1,20 @@
+.opencode/node_modules/
+.opencode/package-lock.json
+node_modules/
+*.log
+hub.log
+opencode.log
+*.tmp
+tmp/
+.opencode-mem/
+# companion runtime
+opencode-companion/hub.log
+opencode-companion/opencode.log
+opencode-companion-apk/.gradle/
+opencode-companion-apk/build/
+opencode-companion-apk/app/build/
+opencode-companion-apk/local.properties
+*.keystore
+*.jks
+.idea/
+*.iml

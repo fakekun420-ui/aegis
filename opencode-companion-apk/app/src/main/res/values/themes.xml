@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.OpencodeCompanion" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#7C5CFF</item>
+        <item name="android:statusBarColor">#0A0A0F</item>
+        <item name="android:navigationBarColor">#0A0A0F</item>
+    </style>
+</resources>

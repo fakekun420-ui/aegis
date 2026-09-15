@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Opencode Companion</string>
+    <string name="a11y_desc">Permite a Opencode Companion controlar la pantalla: abrir apps, tocar botones, escribir texto y automatizar Yape/Proton/etc. Sin esto, el control por voz se limita a shell ROOT.</string>
+    <string name="hub_url_hint">http://127.0.0.1:8765</string>
+</resources>
