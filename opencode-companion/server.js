@@ -56,8 +56,8 @@ function proxyToOpencode(req, res){
 }
 
 // device helpers — portable + Android namespace aware
-// En este POCO F3, los comandos Android (pm, input, am, getprop, uiautomator) solo funcionan vía nsenter -t 1 -m
-const ANDROID_CMDS = /\b(pm|input|am|getprop|uiautomator|cmd|dumpsys|settings)\b/;
+// En este POCO F3, los comandos Android solo funcionan vía nsenter -t 1 -m (monkey también necesita nsenter)
+const ANDROID_CMDS = /\b(pm|input|am|getprop|uiautomator|cmd|dumpsys|settings|monkey)\b/;
 const MAX_BUFFER = 50 * 1024 * 1024; // 50 MB para screenshots Base64 1080p/4K
 const MAX_JSON_BODY = 55 * 1024 * 1024; // 55 MB límite JSON entrante
 
