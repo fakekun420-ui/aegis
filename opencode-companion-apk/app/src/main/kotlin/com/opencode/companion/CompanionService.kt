@@ -35,7 +35,7 @@ class CompanionService : Service() {
         server = SimpleHttpServer(8766).also { it.start() }
     }
     override fun onDestroy() {
-        try { server?.stop() } catch(_:Exception){}
+        try { server?.stopServer() } catch(_:Exception){}
         scope.cancel()
         super.onDestroy()
     }
@@ -76,8 +76,6 @@ class CompanionService : Service() {
             }catch(e: Exception){ e.printStackTrace() }
         }
         fun stopServer(){ running=false; try{ socket?.close() }catch(_:Exception){}; interrupt() }
-        // alias for Service
-        fun stop(){ stopServer() }
     }
 
     private fun handleClient(sock: Socket){
