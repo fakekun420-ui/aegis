@@ -18,3 +18,5 @@ opencode-companion-apk/local.properties
 *.jks
 .idea/
 *.iml
+keepalive.lock
+keepalive.log

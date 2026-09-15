@@ -9,6 +9,13 @@ import { exec, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// resiliencia: no morir por uncaughtException/unhandledRejection ni por EADDRINUSE
+process.on('uncaughtException', e => console.error('[hub] uncaughtException', e?.stack || e));
+process.on('unhandledRejection', e => console.error('[hub] unhandledRejection', e?.stack || e));
+process.on('SIGTERM', () => console.log('[hub] SIGTERM ignorado — keepalive lo relanza si hace falta'));
+process.on('SIGPIPE', () => console.log('[hub] SIGPIPE ignorado'));
+
 function argVal(name, fallback){
   const i = process.argv.indexOf(name);
   return i !== -1 && process.argv[i+1] ? process.argv[i+1] : fallback;
@@ -33,26 +40,37 @@ function json(res, code, obj){ send(res, code, JSON.stringify(obj), {"Content-Ty
 
 function proxyToOpencode(req, res){
   const targetPath = req.url.replace(/^\/opencode/, "") || "/";
-  // streaming-safe: no buffer body en memoria, pipe directo
-  // importante para parts con imágenes Base64 5-15MB — no usar readJsonBody aquí
   const opts = { hostname: OPENCODE_HOST, port: OPENCODE_PORT, path: targetPath, method: req.method, headers: { ...req.headers, host: `${OPENCODE_HOST}:${OPENCODE_PORT}` } };
-  // conserva content-length si existe para que opencode no espere chunked
   delete opts.headers["accept-encoding"];
-  // si el cliente mandó body grande, Node ya lo está pipeando — no lo bufferices
+  // anti-hang: si ninguna parte escribe, responde 502 en 8s
+  const guard = setTimeout(() => {
+    if (!res.headersSent) {
+      try { json(res, 502, { error: 'opencode timeout', hint: `opencode serve no respondió en 8s en ${OPENCODE_HOST}:${OPENCODE_PORT}` }); } catch (_) {}
+    }
+    try { pr.destroy(); } catch (_) {}
+  }, 8000);
   const pr = http.request(opts, (prRes)=>{
-    // reenvía status + headers (incluye SSE content-type)
+    clearTimeout(guard);
     const h = { ...prRes.headers, "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"*", "Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS" };
-    res.writeHead(prRes.statusCode, h);
+    if (!res.headersSent) res.writeHead(prRes.statusCode, h);
+    prRes.on('error', e => { console.error('[proxy] prRes error', e.message); try { res.destroy(); } catch (_) {} });
+    res.on('error', e => { console.error('[proxy] res error', e.message); try { pr.destroy(); } catch (_) {} });
+    req.on('aborted', () => { try { pr.destroy(); } catch (_) {} });
     prRes.pipe(res);
   });
   pr.on("error", e=> {
-    if(!res.headersSent) json(res, 502, { error:"opencode unreachable", detail:String(e), hint:`opencode serve debe estar corriendo en ${OPENCODE_HOST}:${OPENCODE_PORT}. Ejecuta: opencode serve --port ${OPENCODE_PORT} --hostname 0.0.0.0  ó  opencode web --port ${OPENCODE_PORT} --hostname 0.0.0.0` });
-    else try{ res.end(); }catch(_){}
+    clearTimeout(guard);
+    console.error('[proxy] error', e.message);
+    if(!res.headersSent) {
+      try { json(res, 502, { error:"opencode unreachable", detail:String(e), hint:`opencode serve debe estar corriendo en ${OPENCODE_HOST}:${OPENCODE_PORT}. Ejecuta: opencode serve --port ${OPENCODE_PORT} --hostname 0.0.0.0  ó  opencode web --port ${OPENCODE_PORT} --hostname 0.0.0.0` }); } catch(_){}
+    } else try{ res.end(); }catch(_){}
   });
+  req.on('error', e => { clearTimeout(guard); console.error('[proxy] req error', e.message); try { pr.destroy(); } catch (_) {} });
   // backpressure-safe pipe (mantiene memoria < 64KB chunks)
-  req.pipe(pr);
+  try { req.pipe(pr); } catch (e) { clearTimeout(guard); console.error('[proxy] pipe err', e.message); }
   // timeout largo para streaming LLM con imágenes (60s)
-  pr.setTimeout(65000, ()=> { try{ pr.destroy(); }catch(_){} });
+  pr.setTimeout(65000, ()=> { clearTimeout(guard); console.error('[proxy] timeout 65s'); try{ pr.destroy(); }catch(_){} });
+  res.setTimeout(70000, () => { clearTimeout(guard); console.error('[proxy] res timeout 70s'); try { res.destroy(); } catch (_) {} });
 }
 
 // device helpers — portable + Android namespace aware
@@ -118,8 +136,12 @@ async function listProjects(){
 }
 
 const server = http.createServer(async (req, res)=>{
+  // harden against slowloris / header attacks
+  req.setTimeout(65000, () => { console.error('[hub] req timeout 65s', req.url?.slice(0,120)); try { res.destroy(); } catch (_) {} });
+  res.on('close', () => { /* cleanup */ });
   if(req.method==="OPTIONS"){ return send(res, 204, ""); }
-  const url = new URL(req.url, `http://${req.headers.host}`);
+  let url;
+  try { url = new URL(req.url, `http://${req.headers.host}`); } catch (e) { return json(res, 400, { error: 'bad url', detail: String(e) }); }
   const pathname = url.pathname;
 
   // 1) opencode proxy
@@ -254,11 +276,27 @@ const server = http.createServer(async (req, res)=>{
   fs.createReadStream(fp).pipe(res);
 });
 
+server.on('error', e => {
+  if (String(e.code) === 'EADDRINUSE') {
+    console.error(`[hub] puerto ${HUB_PORT} ocupado — deja el existente y salgo con 0`);
+    process.exit(0);
+  }
+  console.error('[hub] server error', e);
+});
+server.on('clientError', (err, socket) => {
+  console.error('[hub] clientError', String(err).slice(0,300));
+  try { socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'); } catch (_) {}
+});
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+server.requestTimeout = 70000;
+server.maxHeadersCount = 100;
 server.listen(HUB_PORT, "0.0.0.0", ()=>{
   console.log(`\n[opencode-companion] hub listening http://0.0.0.0:${HUB_PORT}`);
   console.log(`  local  : http://127.0.0.1:${HUB_PORT}`);
   console.log(`  proxy  : /opencode/* -> http://${OPENCODE_HOST}:${OPENCODE_PORT}`);
   console.log(`  api    : /api/status  /api/device/*`);
+  console.log(`  pid    : ${process.pid}  node ${process.version}  keepAlive 65s`);
   // try auto-start opencode if not healthy
   http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path:"/global/health", timeout:2000 }, r=>{
     let d=""; r.on("data",c=>d+=c); r.on("end",()=>{
