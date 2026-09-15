@@ -62,8 +62,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // load hub if running on this device, else show help
         val hubUrl = "http://127.0.0.1:8765"
         webView.loadUrl(hubUrl)
-        findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.swipe)?.setOnRefreshListener { swipe ->
-            webView.reload(); swipe.isRefreshing = false
+        val swipe = findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.swipe)
+        swipe?.setOnRefreshListener {
+            webView.reload()
+            swipe.isRefreshing = false
         }
     }
 
