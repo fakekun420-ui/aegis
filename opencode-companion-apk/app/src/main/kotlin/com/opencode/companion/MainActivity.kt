@@ -179,17 +179,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         txt?.text = msg
         btn?.visibility = android.view.View.GONE
     }
+    // Único criterio: HTTP 200 en /api/system/status (spec punto 2/4) — no filtrar por ready:true para evitar duplicar lógica web
     private suspend fun isHubReady(): Boolean = withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
             val url = java.net.URL("http://127.0.0.1:8765/api/system/status")
             (url.openConnection() as java.net.HttpURLConnection).run {
                 connectTimeout = 1500; readTimeout = 1500; requestMethod = "GET"
-                val code = responseCode
-                if (code == 200) {
-                    val body = inputStream.bufferedReader().readText()
-                    // listo = ready:true y healthy:true
-                    body.contains("\"ready\":true")
-                } else false
+                responseCode == 200
             }
         } catch (_: Exception) { false }
     }
