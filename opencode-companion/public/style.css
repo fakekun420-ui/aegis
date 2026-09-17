@@ -43,3 +43,19 @@ a{color:var(--accent2)}button{font:inherit}
 .projects .item{font-size:13px}
 .log{font:12px ui-monospace,monospace;white-space:pre-wrap;max-height:160px;overflow:auto;background:#0a0a0f;border-radius:8px;padding:8px;border:1px solid var(--border)}
 .divider{height:1px;background:var(--border);margin:8px 0}
+.welcome-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:radial-gradient(900px 500px at 50% -10%, rgba(124,92,255,.22), transparent 60%), var(--bg);padding:24px}
+.welcome-overlay.hidden{display:none}
+.welcome-card{width:min(560px, 92vw);background:var(--panel);border:1px solid var(--border);border-radius:22px;padding:28px 24px;box-shadow:0 30px 80px rgba(0,0,0,.55);text-align:center}
+.welcome-icon{width:54px;height:54px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),#3ad0ff);color:white;font-size:22px;box-shadow:0 12px 30px rgba(124,92,255,.45)}
+.welcome-title{margin:0;font-size:22px;font-weight:800;letter-spacing:.2px}
+.welcome-sub{margin:6px 0 10px;color:var(--muted);font-size:13px}
+.welcome-desc{margin:0 auto 18px;max-width:46ch;color:#c8cbe0;font-size:13px;line-height:1.6}
+.welcome-desc code{font:12px ui-monospace,monospace;background:#0f0f14;border:1px solid var(--border);padding:1px 6px;border-radius:6px}
+.btn-start-system{width:100%;padding:14px 18px;border-radius:14px;border:0;background:linear-gradient(135deg, var(--accent), #3ad0ff);color:white;font-weight:800;font-size:16px;letter-spacing:.2px;cursor:pointer;box-shadow:0 14px 30px rgba(124,92,255,.35);transition:transform .12s, opacity .15s, filter .15s}
+.btn-start-system:hover{filter:brightness(1.07)} .btn-start-system:active{transform:scale(.98)} .btn-start-system:disabled{opacity:.6;cursor:wait;filter:grayscale(.2)}
+.welcome-status{margin-top:14px;min-height:20px;font-size:13px;color:var(--muted)} .welcome-status.ok{color:var(--ok)} .welcome-status.err{color:var(--err)} .welcome-status.busy{color:#ffd166}
+.welcome-steps{margin-top:10px;text-align:left;font:12px ui-monospace,monospace;white-space:pre-wrap;max-height:140px;overflow:auto;background:#0a0a0f;border:1px solid var(--border);border-radius:10px;padding:10px;display:none}
+.welcome-steps.show{display:block}
+.welcome-hint{margin-top:14px;font-size:11px;color:#7d829a}
+.welcome-overlay.out{animation:welcomeOut .45s ease forwards}
+@keyframes welcomeOut{ from{opacity:1; transform:scale(1)} to{opacity:0; transform:scale(.98); visibility:hidden} }

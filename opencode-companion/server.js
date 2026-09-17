@@ -10,10 +10,11 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// resiliencia: no morir por uncaughtException/unhandledRejection ni por EADDRINUSE
+// resiliencia: no morir por crash del proxy, pero sí permitir reinicio limpio por keepalive (pkill -f) o por kill -15
 process.on('uncaughtException', e => console.error('[hub] uncaughtException', e?.stack || e));
 process.on('unhandledRejection', e => console.error('[hub] unhandledRejection', e?.stack || e));
-process.on('SIGTERM', () => console.log('[hub] SIGTERM ignorado — keepalive lo relanza si hace falta'));
+process.on('SIGTERM', () => { console.log('[hub] SIGTERM — cierre limpio (keepalive relanza)'); try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
+process.on('SIGINT',  () => { console.log('[hub] SIGINT — cierre');  try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
 process.on('SIGPIPE', () => console.log('[hub] SIGPIPE ignorado'));
 
 function argVal(name, fallback){
@@ -155,6 +156,55 @@ const server = http.createServer(async (req, res)=>{
   }
 
   // 2) API hub
+  if(pathname==="/api/system/status" && req.method==="GET"){
+    const ocHealth = await new Promise(resolve=>{
+      http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path:"/global/health", timeout:2000 }, r=>{
+        let d=""; r.on("data",c=>d+=c); r.on("end",()=>{ try{ const j=JSON.parse(d); resolve({ up: !!j.healthy, version: j.version || null, healthy: !!j.healthy }); }catch{ resolve({ up: r.statusCode===200, healthy: false }) } });
+      }).on("error", ()=> resolve({ up:false, healthy:false })).end();
+    });
+    const bridgeHealth = await new Promise(resolve=>{
+      http.get({ hostname:"127.0.0.1", port:8766, path:"/status", timeout:1500 }, r=>{
+        let d=""; r.on("data",c=>d+=c); r.on("end",()=>{ try{ const j=JSON.parse(d); resolve({ up:true, a11y: !!j.a11y }); }catch{ resolve({ up:true, a11y:false }) } });
+      }).on("error", ()=> resolve({ up:false, a11y:false })).end();
+    });
+    const ready = ocHealth.healthy && ocHealth.up;
+    return json(res, 200, { ready, hub:`http://127.0.0.1:${HUB_PORT}`, opencode: ocHealth, bridge: bridgeHealth, hint: ready ? "ready" : "starting or opencode not healthy — POST /api/system/start relanza" });
+  }
+  if(pathname==="/api/system/start" && req.method==="POST"){
+    await readJsonBody(req, 64*1024).catch(()=> "{}");
+    console.log('[system] POST /api/system/start — invocando keepalive + opencode ensure (host namespace)');
+    const steps = [];
+    async function ensureOpencode(){
+      const health = await new Promise(resolve=>{
+        http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path:"/global/health", timeout:2000 }, r=>{
+          let d=""; r.on("data",c=>d+=c); r.on("end",()=>{ try{ const j=JSON.parse(d); resolve(j.healthy===true);}catch{ resolve(false) }});
+        }).on("error", ()=> resolve(false)).end();
+      });
+      if(health) { steps.push("opencode: already healthy"); return { already:true }; }
+      steps.push("opencode: not healthy — launching via host keepalive.sh");
+      // keepalive.sh y opencode deben lanzarse en HOST (donde existe /usr/bin/node), no en system (nsenter -t 1 -m no ve /usr/bin/node)
+      const r1 = await shellExecRaw(`nohup sh /sdcard/projects/opencode-companion/keepalive.sh > /sdcard/projects/opencode-companion/keepalive.log 2>&1 & echo keepalive_pid=$!`, 8000, 1024*1024);
+      steps.push(`keepalive.sh: ${r1.stdout.trim().slice(0,300)} ${r1.stderr.trim().slice(0,200)}`);
+      // intento directo inmediato por si keepalive tarda 10s
+      await shellExecRaw(`nohup opencode serve --port ${OPENCODE_PORT} --hostname 0.0.0.0 >> /sdcard/projects/opencode-companion/opencode.log 2>&1 & echo opencode_direct_pid=$!`, 8000, 1024*1024).then(r=> steps.push(`opencode direct: ${r.stdout.trim().slice(0,300)} ${r.stderr.trim().slice(0,200)}`)).catch(e=> steps.push(`opencode direct err ${String(e).slice(0,200)}`));
+      await runShell(`dumpsys deviceidle whitelist +com.opencode.companion 2>&1 | head -n 3; cmd deviceidle whitelist +com.opencode.companion 2>&1 | head -n 3; am set-standby-bucket com.opencode.companion active 2>&1 | head -n 3`).then(r=> steps.push(`whitelist: ${r.stdout.trim().slice(0,200)}`)).catch(()=>{});
+      return { already:false };
+    }
+    const ens = await ensureOpencode();
+    // poll hasta healthy o timeout 25s
+    let healthy=false;
+    for(let i=0;i<12;i++){
+      await new Promise(r=> setTimeout(r, 2100));
+      const h = await new Promise(resolve=>{
+        http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path:"/global/health", timeout:2000 }, rr=>{
+          let d=""; rr.on("data",c=>d+=c); rr.on("end",()=>{ try{ const j=JSON.parse(d); resolve(!!j.healthy);}catch{ resolve(false)}});
+        }).on("error", ()=> resolve(false)).end();
+      });
+      if(h){ healthy=true; break; }
+    }
+    steps.push(healthy ? "poll: healthy after retry" : "poll: timeout 25s not healthy");
+    return json(res, healthy ? 200 : 202, { started: true, healthy, opencode:`http://${OPENCODE_HOST}:${OPENCODE_PORT}`, steps, alreadyHealthy: ens.already, next:"Poll GET /api/system/status until {ready:true} or GET /api/status for detail" });
+  }
   if(pathname==="/api/status" && req.method==="GET"){
     const rootCheck = await runShell("id; su -c id 2>&1 | head -1; getprop ro.build.version.release 2>&1; getprop ro.product.model 2>&1");
     // probe opencode

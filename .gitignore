@@ -20,3 +20,8 @@ opencode-companion-apk/local.properties
 *.iml
 keepalive.lock
 keepalive.log
+# companion host binaries (copias temporales de /usr/bin/node para debug, no commitear 100MB+)
+opencode-companion/node.bin
+opencode-companion/opencode.cjs
+opencode-companion/opencode.sh
+sdcard/node-host

@@ -1,20 +1,52 @@
 #!/system/bin/sh
 # keepalive loop para hub 8765 + opencode 4096 — resiste simple_lmk / oom y caídas por proxy
 # uso: sh keepalive.sh &  (se auto-backgroundiza)  o  su -c "sh /sdcard/projects/opencode-companion/keepalive.sh"
+# IMPORTANTE: este script debe correr en el mismo mount NS que opencode (host mnt 5294/5522), system init 4359 no ve /usr/bin/node
 HUB_DIR="/sdcard/projects/opencode-companion"
 HUB_PORT="8765"
 OC_PORT="4096"
 OC_HOST="127.0.0.1"
 INTERVAL=10
 LOG="$HUB_DIR/keepalive.log"
+NODE_BIN="/usr/bin/node"
+OPENCODE_BIN="/data/data/com.termux/files/usr/lib/node_modules/opencode-ai/bin/opencode.exe"
+SERVER_JS="$HUB_DIR/server.js"
 
-# doble instancia guard (usa /data/adb/tmp que sí existe en crDroid, fallback a /sdcard)
+# auto-detect host mount donde vive /usr/bin/node (host 5294/5522, system 4359 no lo tiene)
+if [ ! -x "$NODE_BIN" ]; then
+  HOST_PID=""
+  for _pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$' | head -n 400); do
+    if [ -x "/proc/$_pid/root$NODE_BIN" ] 2>/dev/null && grep -q "opencode" "/proc/$_pid/cmdline" 2>/dev/null; then HOST_PID="$_pid"; break; fi
+  done
+  if [ -z "$HOST_PID" ]; then
+    for _pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$' | head -n 400); do
+      if [ -x "/proc/$_pid/root$NODE_BIN" ] 2>/dev/null; then HOST_PID="$_pid"; break; fi
+    done
+  fi
+  if [ -n "$HOST_PID" ]; then
+    echo "[keepalive] re-ejecutando en host mount via nsenter $HOST_PID -m -r (node no visible aquí)" >> "$LOG" 2>&1
+    nsenter -t "$HOST_PID" -m -r -- sh "$0" "$@" >> "$LOG" 2>&1 &
+    echo "[keepalive] relanzado en host pid $! via nsenter $HOST_PID -m -r" | tee -a "$LOG"
+    exit 0
+  fi
+  echo "[keepalive] no hay host con $NODE_BIN aún — esperando 3s y reintentando" >> "$LOG" 2>&1
+  sleep 3
+  if [ ! -x "$NODE_BIN" ]; then echo "[keepalive] aún sin node, abortando hasta próxima invocación" >> "$LOG"; exit 0; fi
+fi
+# OPENCODE_BIN es ELF, no necesita node; si no existe usa symlink /usr/local/bin/opencode
+if [ ! -x "$OPENCODE_BIN" ]; then
+  if [ -x "/usr/local/bin/opencode" ]; then OPENCODE_BIN="/usr/local/bin/opencode"
+  elif [ -x "/proc/self/root$OPENCODE_BIN" ] 2>/dev/null; then : # ok via proc root
+  elif command -v opencode >/dev/null 2>&1; then OPENCODE_BIN="$(command -v opencode)"
+  fi
+fi
+
+# doble instancia guard (usa /data/adb/tmp en host, fallback a /sdcard)
 LOCK="/data/adb/tmp/opencode-keepalive.lock"
 if [ ! -d "$(dirname "$LOCK")" ]; then LOCK="/sdcard/projects/opencode-companion/keepalive.lock"; fi
 if [ -f "$LOCK" ]; then
   OLDPID="$(cat "$LOCK" 2>/dev/null)"
   if [ -n "$OLDPID" ] && kill -0 "$OLDPID" 2>/dev/null; then
-    # si el keepalive ya corre pero no es este proceso, salir (no duplicar)
     MYPID="$$"
     if [ "$OLDPID" != "$MYPID" ]; then
       echo "[keepalive] ya corre pid $OLDPID — no lanzo duplicado (yo $MYPID)" | tee -a "$LOG"
@@ -33,16 +65,13 @@ case "$1" in --no-daemon) shift;; *)
 esac
 
 echo "[keepalive] loop iniciado $(date) pid $$ — intervalo ${INTERVAL}s" | tee -a "$HUB_DIR/keepalive.log"
-# trap para limpiar lock al salir (pero el loop no debe salir)
 trap 'echo "[keepalive] trap exit" >> "$LOG"; rm -f "$LOCK"; exit 0' TERM INT
 
 is_up() {
-  # usa busybox curl si existe, si no wget, si no /dev/tcp
   if command -v curl >/dev/null 2>&1; then
     curl -m 2 -s "http://$OC_HOST:$1/global/health" 2>/dev/null | grep -q healthy
     return $?
   fi
-  # fallback: intenta conectar tcp
   (echo > "/dev/tcp/$OC_HOST/$1") 2>/dev/null && return 0 || return 1
 }
 hub_up() {
@@ -54,22 +83,20 @@ hub_up() {
 }
 
 while true; do
-  # 1) opencode
   if ! is_up "$OC_PORT"; then
     echo "[$(date +%H:%M:%S)] opencode $OC_HOST:$OC_PORT caído — relanzando" >> "$LOG"
     pkill -f "opencode serve.*$OC_PORT" 2>/dev/null || true
     sleep 1
-    nohup opencode serve --port "$OC_PORT" --hostname 0.0.0.0 >> "$HUB_DIR/opencode.log" 2>&1 &
-    echo "  opencode pid $! lanzado" >> "$LOG"
+    # opencode es ELF standalone, no necesita node
+    nohup "$OPENCODE_BIN" serve --port "$OC_PORT" --hostname 0.0.0.0 >> "$HUB_DIR/opencode.log" 2>&1 &
+    echo "  opencode pid $! lanzado ($OPENCODE_BIN)" >> "$LOG"
     sleep 4
   fi
-  # 2) hub
   if ! hub_up; then
     echo "[$(date +%H:%M:%S)] hub 127.0.0.1:$HUB_PORT caído — relanzando (log tail abajo)" >> "$LOG"
     pkill -f "opencode-companion/server.js" 2>/dev/null || true
-    # también mata node huérfano que pudo quedar con puerto ocupado
     sleep 1
-    nohup node "$HUB_DIR/server.js" --port "$HUB_PORT" --opencode-port "$OC_PORT" >> "$HUB_DIR/hub.log" 2>&1 &
+    nohup "$NODE_BIN" "$SERVER_JS" --port "$HUB_PORT" --opencode-port "$OC_PORT" >> "$HUB_DIR/hub.log" 2>&1 &
     echo "  hub pid $! lanzado" >> "$LOG"
     sleep 3
     if hub_up; then
@@ -79,7 +106,6 @@ while true; do
       tail -n 30 "$HUB_DIR/hub.log" 2>/dev/null >> "$LOG" || true
     fi
   fi
-  # 3) companion bridge (no mata batería — solo verifica, no relanza agresivo porque lo maneja system)
   if [ -f "/data/data/com.opencode.companion/files" ] || pm list packages 2>/dev/null | grep -q com.opencode.companion; then
     :
   fi

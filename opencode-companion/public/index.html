@@ -7,6 +7,19 @@
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+<div id="welcome-overlay" class="welcome-overlay" aria-live="polite">
+  <div class="welcome-card">
+    <div class="welcome-icon">◉</div>
+    <h1 class="welcome-title">Opencode Companion</h1>
+    <p class="welcome-sub">POCO F3 · crDroid 15 · ROOT</p>
+    <p class="welcome-desc">Hub voice + Ubuntu + control total del dispositivo. El sistema levanta <code>opencode serve</code> en segundo plano con <code>nsenter</code> y espera salud 200.</p>
+    <button id="btn-start-system" class="btn-start-system">Iniciar Sistema</button>
+    <div id="welcome-status" class="welcome-status" aria-live="polite"></div>
+    <div id="welcome-steps" class="welcome-steps"></div>
+    <div class="welcome-hint"><code>POST /api/system/start</code> → <code>GET /api/system/status</code> polling 2.1s hasta <code>{ready:true}</code> → chat.</div>
+  </div>
+</div>
+
 <div class="topbar">
   <div class="brand">opencode <b>companion</b> <span style="opacity:.6;font-weight:400">· POCO F3 crDroid15</span></div>
   <span class="pill"><span id="dot-hub" class="dot"></span> hub <span id="hub-status">…</span></span>
@@ -17,7 +30,7 @@
   <button class="btn sm ghost" id="btn-clear">limpiar chat</button>
 </div>
 
-<div class="layout">
+<div class="layout" id="main-layout">
   <!-- izquierda: sesiones + proyectos -->
   <div style="display:flex;flex-direction:column;gap:12px">
     <div class="card">

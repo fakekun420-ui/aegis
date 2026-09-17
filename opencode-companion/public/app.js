@@ -326,6 +326,99 @@ async function fetchFind(q){
   }catch(e){ $("#find-results").innerHTML=`<div class="meta">opencode off</div>`; }
 }
 
+// ---------- welcome: Iniciar Sistema → POST /api/system/start → poll /api/system/status → chat ----------
+const welcomeOverlay = $("#welcome-overlay");
+const btnStartSystem = $("#btn-start-system");
+const welcomeStatus = $("#welcome-status");
+const welcomeSteps = $("#welcome-steps");
+let welcomePolling = false;
+function setWelcome(msg, kind=""){
+  if(!welcomeStatus) return;
+  welcomeStatus.textContent = msg;
+  welcomeStatus.className = "welcome-status " + (kind||"");
+}
+function hideWelcome(){
+  if(!welcomeOverlay) return;
+  welcomeOverlay.classList.add("out");
+  setTimeout(()=> welcomeOverlay.classList.add("hidden"), 460);
+  setTimeout(()=> { try{ $("#prompt")?.focus(); }catch(_){} }, 620);
+}
+function showWelcome(){
+  if(!welcomeOverlay) return;
+  welcomeOverlay.classList.remove("hidden","out");
+}
+async function pollSystemStatus(maxAttempts=13, interval=2100){
+  for(let i=0;i<maxAttempts;i++){
+    await new Promise(r=> setTimeout(r, interval));
+    try{
+      const s = await jget("/api/system/status");
+      if(welcomeSteps){
+        welcomeSteps.textContent += `\n[poll ${i+1}/${maxAttempts}] ready=${s.ready} opencode_healthy=${s.opencode?.healthy} bridge_a11y=${s.bridge?.a11y}`;
+        welcomeSteps.scrollTop = welcomeSteps.scrollHeight;
+      }
+      if(s.ready) return s;
+      setWelcome(`Esperando opencode… (${i+1}/${maxAttempts})`, "busy");
+    }catch(e){
+      if(welcomeSteps) welcomeSteps.textContent += `\n[poll ${i+1}] err ${String(e).slice(0,140)}`;
+    }
+  }
+  throw new Error(`Timeout ${maxAttempts*interval/1000}s esperando /api/system/status {ready:true}`);
+}
+async function handleStartSystem(){
+  if(welcomePolling || !btnStartSystem) return;
+  welcomePolling = true;
+  btnStartSystem.disabled = true;
+  const origText = btnStartSystem.textContent;
+  btnStartSystem.textContent = "Iniciando…";
+  setWelcome("Levantando Ubuntu y opencode con nsenter…", "busy");
+  if(welcomeSteps){ welcomeSteps.classList.add("show"); welcomeSteps.textContent = "POST /api/system/start …"; }
+  try{
+    const r = await fetch("/api/system/start", { method:"POST", headers:{ "Content-Type":"application/json" }, body:"{}" });
+    const j = await r.json().catch(()=> ({}));
+    const steps = Array.isArray(j.steps) ? j.steps.join("\n") : "";
+    if(welcomeSteps) welcomeSteps.textContent = (steps ? steps + "\n\n" : "") + `→ HTTP ${r.status} healthy=${j.healthy} alreadyHealthy=${j.alreadyHealthy}\nPolling GET /api/system/status (2.1s)…`;
+    if(!r.ok && r.status!==202) throw new Error(j.error || `HTTP ${r.status} ${JSON.stringify(j).slice(0,400)}`);
+    if(r.ok && j.healthy){
+      setWelcome("✓ Sistema listo — verificando salud…", "busy");
+    } else {
+      setWelcome("Sistema lanzado — verificando salud (polling)…", "busy");
+    }
+    const readyState = r.ok && j.healthy ? j : await pollSystemStatus();
+    // readyState is either j from POST (if healthy) or s from poll
+    const isReady = readyState?.ready ?? readyState?.healthy ?? j.healthy;
+    if(isReady){
+      setWelcome("✓ Sistema listo — entrando al chat", "ok");
+      btnStartSystem.textContent = "✓ Iniciado";
+      // refresh main UI before transition so chat has data instantly
+      try{ await refreshStatus(); await Promise.all([refreshProjects(), refreshSessions(), refreshAgents()]); }catch(_){}
+      setTimeout(hideWelcome, 680);
+    } else {
+      throw new Error("Sistema no alcanzó ready=true");
+    }
+  }catch(e){
+    setWelcome("Error: "+String(e).slice(0,420), "err");
+    if(welcomeSteps) welcomeSteps.textContent += `\nERR: ${String(e).slice(0,600)}`;
+    btnStartSystem.disabled = false;
+    btnStartSystem.textContent = "Reintentar Iniciar Sistema";
+  }finally{
+    welcomePolling = false;
+    if(btnStartSystem && btnStartSystem.textContent==="Iniciando…") btnStartSystem.textContent = origText;
+  }
+}
+if(btnStartSystem){
+  btnStartSystem.addEventListener("click", handleStartSystem);
+  // hint inicial: chequea si ya está ready para cambiar label
+  jget("/api/system/status").then(s=>{
+    if(s.ready){
+      setWelcome("✓ Sistema ya operativo — toca Iniciar Sistema para entrar al chat", "ok");
+      btnStartSystem.textContent = "Entrar al Chat";
+      if(welcomeSteps){ welcomeSteps.classList.add("show"); welcomeSteps.textContent = `Pre-check: ready=true opencode v${s.opencode?.version||""} bridge a11y=${s.bridge?.a11y}\nToca el botón para entrar.`; }
+    } else {
+      setWelcome(`Listo para iniciar — opencode healthy=${s.opencode?.healthy} bridge a11y=${s.bridge?.a11y}`, "");
+    }
+  }).catch(()=> setWelcome("Toca Iniciar Sistema para levantar Ubuntu + opencode", ""));
+}
+
 // ---------- device ----------
 async function deviceShell(cmd){
   const log=$("#device-log"); log.style.display=""; log.textContent="⏳ "+cmd+" …";
