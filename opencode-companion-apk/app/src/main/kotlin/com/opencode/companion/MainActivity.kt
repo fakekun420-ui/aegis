@@ -317,6 +317,82 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         findViewById<MaterialButton>(R.id.btnStopTts).setOnClickListener { tts?.stop() }
     }
 
+    // ---- Wake word listener (hands-free) — SharedPreferences configurable array ----
+    companion object {
+        const val PREF_WAKE = "voice_prefs"
+        const val KEY_WAKE_PHRASES = "wake_phrases_json"
+        val DEFAULT_WAKE = arrayOf("viernes escucha", "hola viernes", "viernes atenta")
+    }
+    fun getWakePhrases(): Array<String> {
+        val p = getSharedPreferences(PREF_WAKE, MODE_PRIVATE)
+        val raw = p.getString(KEY_WAKE_PHRASES, null)
+        return try { if (raw != null) org.json.JSONArray(raw).let { j -> Array(j.length()) { j.getString(it) } } else DEFAULT_WAKE } catch (_:Exception) { DEFAULT_WAKE }
+    }
+    fun saveWakePhrases(arr: Array<String>) {
+        getSharedPreferences(PREF_WAKE, MODE_PRIVATE).edit().putString(KEY_WAKE_PHRASES, org.json.JSONArray(arr.toList()).toString()).apply()
+    }
+
+    private var wakeRecognizer: SpeechRecognizer? = null
+    private var wakeListening = false
+    private fun containsWakeWord(text: String): Boolean {
+        val lower = text.lowercase(Locale.ROOT)
+        return getWakePhrases().any { ph -> lower.contains(ph.lowercase(Locale.ROOT)) }
+    }
+    fun startWakeWordListener() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        if (wakeListening) return
+        wakeListening = true
+        wakeRecognizer?.destroy()
+        wakeRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+            setRecognitionListener(object : android.speech.RecognitionListener {
+                override fun onReadyForSpeech(p: Bundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(v: Float) {}
+                override fun onBufferReceived(b: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onError(e: Int) {
+                    // Auto-restart continuous wake listener
+                    wakeListening = false
+                    webView.postDelayed({ startWakeWordListener() }, 900)
+                }
+                override fun onResults(b: Bundle?) {
+                    val list = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    val text = list?.firstOrNull() ?: ""
+                    if (containsWakeWord(text)) {
+                        // Activate full voice session via WebView JS injection
+                        val esc = text.replace("\\","\\\\").replace("'","\\'").replace("\n"," ")
+                        webView.evaluateJavascript("try{ window.startVoiceSession && window.startVoiceSession(); 'ok' }catch(e){'err:'+e}", null)
+                        speak("Sí? Te escucho")
+                        txtSttResult.text = "Wake: $text → sesión voz"
+                    }
+                    wakeListening = false
+                    webView.postDelayed({ startWakeWordListener() }, 400)
+                }
+                override fun onPartialResults(b: Bundle?) {
+                    val p = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                    if (containsWakeWord(p)) {
+                        // Early trigger on partial to reduce latency
+                        webView.evaluateJavascript("try{ window.startVoiceSession && window.startVoiceSession(); 'ok' }catch(e){'err'}", null)
+                    }
+                }
+                override fun onEvent(t: Int, b: Bundle?) {}
+            })
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        }
+        try { wakeRecognizer?.startListening(intent) } catch (_:Exception) { wakeListening = false }
+    }
+    fun stopWakeWordListener() {
+        try { wakeRecognizer?.destroy() } catch (_:Exception) {}
+        wakeRecognizer = null
+        wakeListening = false
+    }
+
     private fun ensurePermissions(){
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED){
             reqMic.launch(Manifest.permission.RECORD_AUDIO)
@@ -326,6 +402,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 registerForActivityResult(ActivityResultContracts.RequestPermission()){}.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+        // Start background wake word listener after permissions granted — requires mic
+        webView.postDelayed({ if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startWakeWordListener() }, 1800)
     }
 
     private fun startCompanionService(){
@@ -455,6 +533,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun toast(m:String)= Toast.makeText(this,m,Toast.LENGTH_SHORT).show()
-    override fun onDestroy() { tts?.shutdown(); recognizer?.destroy(); super.onDestroy() }
+    override fun onDestroy() { tts?.shutdown(); recognizer?.destroy(); stopWakeWordListener(); super.onDestroy() }
     private fun String.lowercase():String = this.lowercase(Locale.ROOT)
 }

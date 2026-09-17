@@ -1031,20 +1031,33 @@ function initRecognition(){
     const t=finalsBuf.trim();
     finalsBuf="";
     if(t){
-      if(state.voiceMode==="duplex"){
-        // dúplex: auto-enviar
-        promptEl.value = t;
-        autoGrow();
-        sendPrompt();
-      } else {
-        // push: transcribir al input, no auto-enviar
-        promptEl.value = (promptEl.value ? promptEl.value+" " : "") + t;
-        autoGrow(); promptEl.focus(); hidePill();
-      }
+      // Before sending to opencode, check voice command registry (spec 2) — avoids LLM for device actions
+      // Wrap to not break duplex flow; if handled, skip sendPrompt and re-listen
+      (async ()=> {
+        const handled = await voiceHandleText(t);
+        if (handled) {
+          hidePill();
+          if(state.voiceMode==="duplex" && !speaking){
+            setTimeout(()=>{ if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 500);
+          }
+          return;
+        }
+        if(state.voiceMode==="duplex"){
+          promptEl.value = t;
+          autoGrow();
+          sendPrompt();
+        } else {
+          promptEl.value = (promptEl.value ? promptEl.value+" " : "") + t;
+          autoGrow(); promptEl.focus(); hidePill();
+        }
+        if(state.voiceMode==="duplex" && !speaking){
+          setTimeout(()=>{ if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 500);
+        }
+      })();
+      return;
     } else {
       hidePill();
     }
-    // dúplex: re-escucha tras cada turno
     if(state.voiceMode==="duplex" && !speaking){
       setTimeout(()=>{ if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 500);
     }
@@ -1091,6 +1104,194 @@ initRecognition();
 // expose cancelTts for external (e.g., sendPrompt should not cancel, but user speech does)
 window.__cancelTts = cancelTts;
 window.__queueTts = queueTts;
+window.startVoiceSession = startVoiceSession;
+
+// ---- Voice helpers: TTS confirm + log (spec 5-6) ----
+function voiceTtsConfirm(msg) {
+  // Speak confirmation for every executed voice command (spec 5)
+  try { queueTts(msg); } catch {}
+  // Also append as system message for visibility
+  addMsg("system", msg);
+}
+async function voiceLog(recognizedText, matchedCommand, result) {
+  try {
+    await jpost("/api/voice/log", {
+      recognizedText, matchedCommand,
+      result: typeof result === "string" ? result : JSON.stringify(result).slice(0, 1000),
+      projectId: state.currentProjectId || null,
+      sessionId: state.currentSessionId || null
+    });
+  } catch {}
+}
+function normalizeVoiceText(s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/[.,!?;:]+$/g, ""); }
+function fuzzyFindProject(query) {
+  const q = normalizeVoiceText(query);
+  const projs = state.projects || [];
+  let best = null, bestScore = 0;
+  for (const p of projs) {
+    const name = normalizeVoiceText(p.name);
+    if (name === q) return p;
+    if (name.includes(q) || q.includes(name)) {
+      const score = Math.min(name.length, q.length) / Math.max(name.length, q.length);
+      if (score > bestScore) { bestScore = score; best = p; }
+    }
+    // Levenshtein-ish: count shared tokens
+    const qt = q.split(" "); const nt = name.split(" ");
+    const shared = qt.filter(t => nt.some(n => n.startsWith(t) || t.startsWith(n))).length;
+    const score2 = shared / Math.max(qt.length, nt.length);
+    if (score2 > bestScore) { bestScore = score2; best = p; }
+  }
+  return bestScore > 0.3 ? best : null;
+}
+async function voiceHandleText(recognizedText) {
+  const norm = normalizeVoiceText(recognizedText);
+  // Strip leading wake word if present (viernes escucha / hola viernes etc.)
+  const wakeStripped = norm.replace(/^(viernes\s+(escucha|atenta)|hola\s+viernes)\s+/, "").trim() || norm;
+
+  // 1) nuevo proyecto [nombre]
+  let m = wakeStripped.match(/^nuevo proyecto\s+(.+)$/);
+  if (m) {
+    const nombre = m[1].trim();
+    try {
+      const r = await jpost("/api/projects", { name: nombre, description: `Creado por voz: ${recognizedText}` });
+      const proj = r.data || r;
+      // Unwrap if envelope
+      if (r && !r.data && r.id) { /* bare */ }
+      state.currentProjectId = (proj && proj.id) ? proj.id : (r.data && r.data.id ? r.data.id : null);
+      await refreshProjects();
+      if (state.currentProjectId) {
+        persistUi({ projectId: state.currentProjectId });
+        projectExpanded.add(state.currentProjectId);
+        persistExpanded();
+      }
+      const msg = `Proyecto "${nombre}" creado`;
+      voiceTtsConfirm(msg);
+      await voiceLog(recognizedText, "nuevo proyecto", msg);
+    } catch (e) { const msg = `No pude crear proyecto "${nombre}": ${e.message}`; voiceTtsConfirm(msg); await voiceLog(recognizedText, "nuevo proyecto", msg); }
+    return true;
+  }
+
+  // 2) abrir proyecto [nombre] — fuzzy match
+  m = wakeStripped.match(/^abrir proyecto\s+(.+)$/);
+  if (m) {
+    const nombre = m[1].trim();
+    const proj = fuzzyFindProject(nombre);
+    if (!proj) { const msg = `No encontré proyecto "${nombre}"`; voiceTtsConfirm(msg); await voiceLog(recognizedText, "abrir proyecto", msg); return true; }
+    state.currentProjectId = proj.id;
+    state.currentProject = proj.name;
+    persistUi({ projectId: proj.id, project: proj.name });
+    projectExpanded.add(proj.id);
+    persistExpanded();
+    renderDrawer();
+    const msg = `Proyecto "${proj.name}" abierto`;
+    voiceTtsConfirm(msg);
+    await voiceLog(recognizedText, "abrir proyecto", msg);
+    await refreshSkillsUI();
+    return true;
+  }
+
+  // 3) nueva sesión
+  m = wakeStripped.match(/^nueva sesi[oó]n\s*$/);
+  if (m) {
+    if (!state.currentProjectId) { const msg = "Selecciona un proyecto primero para crear sesión"; voiceTtsConfirm(msg); await voiceLog(recognizedText, "nueva sesión", msg); return true; }
+    try {
+      const sid = await createSession();
+      const msg = sid ? `Nueva sesión creada` : "No pude crear sesión";
+      voiceTtsConfirm(msg);
+      await voiceLog(recognizedText, "nueva sesión", msg + (sid ? ` ${sid.slice(0,8)}` : ""));
+    } catch (e) { const msg = `Error creando sesión: ${e.message}`; voiceTtsConfirm(msg); await voiceLog(recognizedText, "nueva sesión", msg); }
+    return true;
+  }
+
+  // 4) abrir [app]
+  m = wakeStripped.match(/^abrir\s+(.+)$/);
+  if (m) {
+    const app = m[1].trim();
+    // Avoid colliding with "abrir proyecto" already handled; fallback to device launch
+    try {
+      const r = await jpost("/api/device/launch", { pkg: app });
+      const ok = r && (r.code === 0 || r.ok || String(r.stdout || "").includes("Starting:"));
+      const msg = ok ? `Abriendo ${app}` : `Intenté abrir ${app}: ${JSON.stringify(r).slice(0,200)}`;
+      voiceTtsConfirm(msg);
+      await voiceLog(recognizedText, "abrir app", msg);
+    } catch (e) { const msg = `No pude abrir ${app}: ${e.message}`; voiceTtsConfirm(msg); await voiceLog(recognizedText, "abrir app", msg); }
+    return true;
+  }
+
+  // 5) tomar captura
+  if (/^(tomar captura|hacer captura|captura de pantalla)/.test(wakeStripped)) {
+    try {
+      const r = await jget("/api/device/screenshot");
+      const data = r && r.data ? r.data : r;
+      const b64 = data.b64 || data.data || "";
+      if (b64) {
+        const img = document.createElement("img");
+        img.src = "data:image/png;base64," + b64;
+        img.style.maxWidth = "100%"; img.style.borderRadius = "12px"; img.style.marginTop = "8px";
+        img.alt = "captura por voz";
+        msgsEl.appendChild(img);
+        msgsEl.scrollTop = msgsEl.scrollHeight;
+      }
+      const msg = b64 ? `Captura tomada ${Math.round(b64.length*0.75/1024)}KB` : "Captura vacía";
+      voiceTtsConfirm(msg);
+      await voiceLog(recognizedText, "tomar captura", msg);
+    } catch (e) { const msg = `Error captura: ${e.message}`; voiceTtsConfirm(msg); await voiceLog(recognizedText, "tomar captura", msg); }
+    return true;
+  }
+
+  // 6) estado del sistema — fetch + TTS
+  if (/^(estado del sistema|como esta el sistema|estado)/.test(wakeStripped)) {
+    try {
+      const s = await jget("/api/system/status");
+      const ready = s.ready ? "listo" : "no listo";
+      const ownership = s.sessionOwnership || s.ownership || "desconocido";
+      const pid = s.sessionInfo && s.sessionInfo.pid ? ` pid ${s.sessionInfo.pid}` : "";
+      const msg = `Sistema ${ready}, propiedad ${ownership}${pid}, hub ${s.hub || ""}`;
+      voiceTtsConfirm(msg);
+      addMsg("system", JSON.stringify(s, null, 2).slice(0, 1200));
+      await voiceLog(recognizedText, "estado del sistema", msg);
+    } catch (e) { const msg = `No pude leer estado: ${e.message}`; voiceTtsConfirm(msg); await voiceLog(recognizedText, "estado del sistema", msg); }
+    return true;
+  }
+
+  // 7) enviar a [contacto] por whatsapp [mensaje]
+  m = wakeStripped.match(/^enviar a\s+(.+?)\s+por whatsapp\s+(.+)$/);
+  if (m) {
+    const contacto = m[1].trim(), mensaje = m[2].trim();
+    try {
+      // Use direct intent then execute flow — parse contact to slot
+      const exec = await jpost("/api/assistant/execute", { action: "whatsapp_send", slots: { contact: contacto, text: mensaje } });
+      const msg = exec && exec.ok ? `WhatsApp a ${contacto} enviado` : `WhatsApp falló: ${exec.error || exec.message || JSON.stringify(exec).slice(0,300)}`;
+      voiceTtsConfirm(msg);
+      if (exec && exec.result && exec.result.b64) { /* no image */ }
+      await voiceLog(recognizedText, "enviar whatsapp", msg);
+      handleAssistantExecResult(exec, { action: "whatsapp_send" });
+    } catch (e) { const msg = `Error WhatsApp: ${e.message}`; voiceTtsConfirm(msg); await voiceLog(recognizedText, "enviar whatsapp", msg); }
+    return true;
+  }
+  // Alternate phrasing: "manda whatsapp a X Y"
+  m = wakeStripped.match(/^(manda|env[ií]a)\s+whatsapp\s+a\s+(.+?)\s+(.+)$/);
+  if (m) {
+    const contacto = m[2].trim(), mensaje = m[3].trim();
+    try {
+      const exec = await jpost("/api/assistant/execute", { action: "whatsapp_send", slots: { contact: contacto, text: mensaje } });
+      const msg = exec && exec.ok ? `WhatsApp a ${contacto} enviado` : `WhatsApp falló: ${exec.error || JSON.stringify(exec).slice(0,200)}`;
+      voiceTtsConfirm(msg);
+      await voiceLog(recognizedText, "enviar whatsapp", msg);
+      handleAssistantExecResult(exec, { action: "whatsapp_send" });
+    } catch (e) { const msg = `Error WhatsApp: ${e.message}`; voiceTtsConfirm(msg); await voiceLog(recognizedText, "enviar whatsapp", msg); }
+    return true;
+  }
+
+  return false;
+}
+function startVoiceSession() {
+  // Called by APK wake word injection or manual voice mode — starts listening and shows UI cue
+  try { showPill("Escuchando… di tu comando", "thinking"); } catch {}
+  // Ensure listening for next STT cycle
+  try { if (state.voiceMode === "duplex" && !state.listening) startListening(); else if (!state.listening) startListening(); } catch {}
+  voiceTtsConfirm("Te escucho");
+}
 
 // ---- Asistente Root: intent → execute → disambiguation tarjetas + chip píldora
 async function tryAssistantIntent(text){

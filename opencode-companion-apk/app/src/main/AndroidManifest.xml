@@ -54,5 +54,27 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- VoiceInteractionService — selectable as default assistant (Settings → Default Apps → Digital Assistant) -->
+        <service
+            android:name=".CompanionVoiceInteractionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service_config" />
+        </service>
+        <service
+            android:name=".CompanionVoiceInteractionSessionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true" />
+        <activity
+            android:name=".CompanionVoiceInteractionSessionActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
     </application>
 </manifest>

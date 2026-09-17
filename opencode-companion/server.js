@@ -89,6 +89,25 @@ function normalizeSessionEntry(s) {
   };
 }
 
+// ---- Voice Registry + Log — TOP-LEVEL persistent storage (outside request callback) ----
+const VOICE_COMMANDS = [
+  { id: "new_project", patterns: ["nuevo proyecto {nombre}"], example: "nuevo proyecto mi app", description: "Crear proyecto (POST /api/projects name=nombre)", handler: "POST /api/projects" },
+  { id: "open_project", patterns: ["abrir proyecto {nombre}"], example: "abrir proyecto mi app", description: "Cambiar proyecto activo por nombre aproximado (fuzzy match)", handler: "PATCH /api/ui/state projectId" },
+  { id: "new_session", patterns: ["nueva sesión", "nueva sesion"], example: "nueva sesión", description: "Crear sesión en proyecto actual (POST /opencode/session)", handler: "POST /opencode/session" },
+  { id: "open_app", patterns: ["abrir {app}"], example: "abrir chrome", description: "Abrir app por alias o paquete (POST /api/device/launch)", handler: "POST /api/device/launch" },
+  { id: "screenshot", patterns: ["tomar captura", "hacer captura", "captura de pantalla"], example: "tomar captura", description: "Captura pantalla y mostrar inline (GET /api/device/screenshot)", handler: "GET /api/device/screenshot" },
+  { id: "system_status", patterns: ["estado del sistema", "como esta el sistema", "estado"], example: "estado del sistema", description: "Leer /api/system/status en voz alta vía TTS", handler: "GET /api/system/status + TTS" },
+  { id: "whatsapp_send", patterns: ["enviar a {contacto} por whatsapp {mensaje}", "manda whatsapp a {contacto} {mensaje}"], example: "enviar a juan por whatsapp hola", description: "Enviar WhatsApp (POST /api/assistant/execute action=whatsapp_send)", handler: "POST /api/assistant/execute" },
+];
+const VOICE_LOG = [];
+const VOICE_LOG_MAX = 50;
+function pushVoiceLog(entry) {
+  const e = { timestamp: nowIso(), ...entry };
+  VOICE_LOG.unshift(e);
+  if (VOICE_LOG.length > VOICE_LOG_MAX) VOICE_LOG.length = VOICE_LOG_MAX;
+  return e;
+}
+
 // ---- Skills + Summaries storage helpers ----
 // Skills are markdown files at skills/{scope}/{name}.skill.md — scope "global" or projectId.
 // Summaries are JSON files at summaries/{projectId}.summary.json with {summary, updatedAt, sessions[]}.
@@ -968,6 +987,34 @@ const server = http.createServer(async (req, res)=>{
     const data = readSummary(id);
     if (!data) return json(res, 404, fail(`no summary for project ${id} — POST /api/projects/${id}/summarize to generate`));
     return json(res, 200, ok(data));
+  }
+
+  // ---- Voice Command Registry + Log (hands-free system) ----
+  // NOTE: VOICE_COMMANDS/LOG are defined at top-level scope outside createServer callback for persistence
+  // (previously inside callback caused per-request reset — now fixed)
+  // GET /api/voice/commands — all registered commands with patterns/descriptions
+  if(pathname==="/api/voice/commands" && req.method==="GET"){
+    return json(res, 200, ok(VOICE_COMMANDS));
+  }
+  // POST /api/voice/log — record a voice command execution (called by app.js after handler)
+  // Body: {recognizedText, matchedCommand, result, projectId?, sessionId?}
+  if(pathname==="/api/voice/log" && req.method==="POST"){
+    try {
+      const raw = await readJsonBody(req, 16*1024);
+      const body = JSON.parse(raw || "{}");
+      const entry = pushVoiceLog({
+        recognizedText: String(body.recognizedText || "").slice(0, 600),
+        matchedCommand: String(body.matchedCommand || body.command || "none").slice(0, 80),
+        result: body.result !== undefined ? String(body.result).slice(0, 2000) : null,
+        projectId: body.projectId || null,
+        sessionId: body.sessionId || null
+      });
+      return json(res, 201, ok(entry));
+    } catch (e) { return json(res, 400, fail(String(e))); }
+  }
+  // GET /api/voice/log — last 50 commands with timestamp/recognizedText/matchedCommand/result
+  if(pathname==="/api/voice/log" && req.method==="GET"){
+    return json(res, 200, ok(VOICE_LOG));
   }
 
   if(pathname==="/api/status" && req.method==="GET"){
