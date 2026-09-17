@@ -96,7 +96,26 @@ hub_up() {
 while true; do
   if ! is_up "$OC_PORT"; then
     echo "[$(date +%H:%M:%S)] opencode $OC_HOST:$OC_PORT caído — relanzando" >> "$LOG"
-    pkill -f "opencode serve.*$OC_PORT" 2>/dev/null || true
+    # SAFE: distinguir TUI interactiva (pts/N) de serve (sin tty) — NUNCA matar TUI
+    # Condición 1: pgrep -f "opencode.*serve" solo lista serve (TUI cmdline="opencode" sin 'serve' → no coincide)
+    # Condición 2: /proc/$pid/stat campo 7 (tty_nr): 0='?' (nohup/daemon)=serve; !=0=pts/N=TUI manual → skip
+    # Condición 3: /proc/$pid/cmdline debe contener 'serve' (verificación extra por si pgrep falso positivo)
+    # Solo los PIDs que pasan 1+2+3 se matan; TUI siempre se salta
+    for _ocpid in $(timeout 5 pgrep -f "opencode.*serve" 2>/dev/null || true); do
+      _tty=$(awk '{print $7}' "/proc/$_ocpid/stat" 2>/dev/null || echo 1)
+      if [ "$_tty" != "0" ]; then
+        echo "  skip TUI pid $_ocpid tty=$_tty (pts, interactiva) — no matar" >> "$LOG"
+        continue
+      fi
+      if ! tr '\0' ' ' < "/proc/$_ocpid/cmdline" 2>/dev/null | grep -q "serve"; then
+        echo "  skip pid $_ocpid sin 'serve' en cmdline" >> "$LOG"
+        continue
+      fi
+      echo "  matando serve stale pid $_ocpid (tty=0, cmdline serve)" >> "$LOG"
+      kill "$_ocpid" 2>/dev/null || true
+      for _k in 1 2 3 4 5; do kill -0 "$_ocpid" 2>/dev/null || break; sleep 1; done
+      kill -9 "$_ocpid" 2>/dev/null || true
+    done
     sleep 1
     # opencode es ELF standalone, no necesita node
     nohup "$OPENCODE_BIN" serve --port "$OC_PORT" --hostname 0.0.0.0 >> "$HUB_DIR/opencode.log" 2>&1 &
@@ -105,7 +124,18 @@ while true; do
   fi
   if ! hub_up; then
     echo "[$(date +%H:%M:%S)] hub 127.0.0.1:$HUB_PORT caído — relanzando (log tail abajo)" >> "$LOG"
-    pkill -f "opencode-companion/server.js" 2>/dev/null || true
+    # FIX pkill hang: pkill -f escanea /proc/*/cmdline y se cuelga 120s por simple_lmk en Android
+    # Reemplazo: kill $(timeout 5 pgrep -f "node server.js") — pgrep ligero + guard 5s evita bloqueo
+    # Condición: timeout 5 asegura que si /proc está lento, no cuelga el loop; pgrep -f matchea cmdline completa
+    _hubpids=$(timeout 5 pgrep -f "node.*opencode-companion/server.js" 2>/dev/null || timeout 5 pgrep -f "node server.js" 2>/dev/null || true)
+    if [ -n "$_hubpids" ]; then
+      echo "  matando hub stale pids: $_hubpids (timeout 5 pgrep guard)" >> "$LOG"
+      kill $_hubpids 2>/dev/null || true
+      for _k in 1 2 3 4 5; do _alive=""; for _p in $_hubpids; do kill -0 "$_p" 2>/dev/null && _alive="$_alive $_p"; done; [ -z "$_alive" ] && break; sleep 1; done
+      for _p in $_hubpids; do kill -0 "$_p" 2>/dev/null && kill -9 "$_p" 2>/dev/null || true; done
+    else
+      echo "  no hub pids encontrados (ya caído)" >> "$LOG"
+    fi
     sleep 1
     nohup "$NODE_BIN" "$SERVER_JS" --port "$HUB_PORT" --opencode-port "$OC_PORT" >> "$HUB_DIR/hub.log" 2>&1 &
     echo "  hub pid $! lanzado" >> "$LOG"
