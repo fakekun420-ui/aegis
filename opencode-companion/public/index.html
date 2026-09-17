@@ -2,149 +2,104 @@
 <html lang="es">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#0a0a0f"/>
 <title>opencode companion — POCO F3</title>
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+
+<!-- Welcome: pantalla limpia, solo 1 botón -->
 <div id="welcome-overlay" class="welcome-overlay" aria-live="polite">
   <div class="welcome-card">
     <div class="welcome-icon">◉</div>
     <h1 class="welcome-title">Opencode Companion</h1>
     <p class="welcome-sub">POCO F3 · crDroid 15 · ROOT</p>
-    <p class="welcome-desc">Hub voice + Ubuntu + control total del dispositivo. El sistema levanta <code>opencode serve</code> en segundo plano con <code>nsenter</code> y espera salud 200.</p>
+    <p class="welcome-desc">Hub voice + Ubuntu + control total del dispositivo. Levanta <code>opencode serve</code> en segundo plano con <code>nsenter</code> y espera 200.</p>
     <button id="btn-start-system" class="btn-start-system">Iniciar Sistema</button>
     <div id="welcome-status" class="welcome-status" aria-live="polite"></div>
     <div id="welcome-steps" class="welcome-steps"></div>
-    <div class="welcome-hint"><code>POST /api/system/start</code> → <code>GET /api/system/status</code> polling 2.1s hasta <code>{ready:true}</code> → chat.</div>
+    <div class="welcome-hint"><code>POST /api/system/start</code> → poll <code>GET /api/system/status</code> → chat.</div>
   </div>
 </div>
 
-<div class="topbar">
-  <div class="brand">opencode <b>companion</b> <span style="opacity:.6;font-weight:400">· POCO F3 crDroid15</span></div>
-  <span class="pill"><span id="dot-hub" class="dot"></span> hub <span id="hub-status">…</span></span>
-  <span class="pill"><span id="dot-oc" class="dot"></span> opencode <span id="oc-status">…</span></span>
-  <span class="pill" id="lan-pill" style="display:none"></span>
-  <div class="spacer"></div>
-  <button class="btn sm" id="btn-status">↻ estado</button>
-  <button class="btn sm ghost" id="btn-clear">limpiar chat</button>
-</div>
+<!-- App flex-column: safe-area-top evita status bar -->
+<div id="app" class="app">
+  <header class="topbar">
+    <button id="btn-hamburger" class="icon-btn" aria-label="Abrir menú" aria-expanded="false">
+      <span class="hamburger" aria-hidden="true"><i></i><i></i><i></i></span>
+    </button>
+    <div class="brand">opencode <b>companion</b></div>
+    <div class="topbar-pills">
+      <span class="pill"><span id="dot-hub" class="dot"></span> <span id="hub-status">…</span></span>
+      <span class="pill"><span id="dot-oc" class="dot"></span> <span id="oc-status">…</span></span>
+    </div>
+    <div class="spacer"></div>
+    <select id="agent-select" class="agent-select" title="agent"></select>
+  </header>
 
-<div class="layout" id="main-layout">
-  <!-- izquierda: sesiones + proyectos -->
-  <div style="display:flex;flex-direction:column;gap:12px">
-    <div class="card">
-      <h3>Sesiones <button class="btn sm" id="btn-new-session">+ nueva</button></h3>
-      <div class="body">
-        <div class="row" style="margin-bottom:8px">
-          <input id="session-search" class="input" placeholder="filtrar…"/>
-        </div>
-        <div id="sessions" class="list"></div>
-        <div class="divider"></div>
-        <div style="font-size:12px;color:var(--muted)">Tip: <span class="kbd">/init</span> crea AGENTS.md en el proyecto activo.</div>
+  <div class="workspace">
+    <!-- Drawer: lista proyectos colapsables + chats sueltos -->
+    <aside id="drawer" class="drawer" aria-label="Navegación">
+      <div class="drawer-head">
+        <div class="drawer-title">Espacio de trabajo</div>
+        <button id="btn-new-session" class="btn primary btn-block">+ Nuevo chat</button>
+        <div class="drawer-search"><input id="session-search" class="input" placeholder="Buscar chats…"/></div>
       </div>
-    </div>
-
-    <div class="card projects">
-      <h3>Proyectos <span class="chip" id="projects-count"></span></h3>
-      <div class="body">
-        <div id="projects" class="list"></div>
-        <div class="divider"></div>
-        <div style="font-size:12px;color:var(--muted)">Root: <code>/sdcard/projects</code>. Selección cambia el proyecto activo en opencode.</div>
+      <div id="drawer-body" class="drawer-body">
+        <section class="drawer-section" data-section="projects">
+          <button class="section-toggle" data-target="projects-list" aria-expanded="true">
+            <span>Proyectos</span>
+            <span class="count" id="projects-count">—</span>
+            <span class="chevron" aria-hidden="true">⌃</span>
+          </button>
+          <div id="projects-list" class="section-body"></div>
+        </section>
+        <section class="drawer-section" data-section="standalone">
+          <button class="section-toggle" data-target="standalone-list" aria-expanded="true">
+            <span>Chats</span>
+            <span class="chevron" aria-hidden="true">⌃</span>
+          </button>
+          <div id="standalone-list" class="section-body"></div>
+        </section>
       </div>
-    </div>
-
-    <div class="card">
-      <h3>Control dispositivo <span class="chip">ROOT</span></h3>
-      <div class="body" style="display:flex;flex-direction:column;gap:8px">
-        <div class="row">
-          <input id="pkg-input" class="input" placeholder="com.bcp.bo.wallet"/>
-          <button class="btn sm" id="btn-launch">abrir app</button>
+      <div class="drawer-foot">
+        <div class="drawer-foot-title">Sistema</div>
+        <div id="sys-info" class="sys-info">cargando…</div>
+        <div class="drawer-foot-links">
+          <span id="hub-pill-foot" class="chip"></span>
+          <span class="muted">/sdcard/projects</span>
         </div>
-        <div class="row">
-          <button class="btn sm" data-key="3">Home</button>
-          <button class="btn sm" data-key="4">Back</button>
-          <button class="btn sm" data-key="187">Recents</button>
-        </div>
-        <div class="row">
-          <input id="shell-input" class="input" placeholder="shell: pm list packages -3"/>
-          <button class="btn sm" id="btn-shell">run</button>
-        </div>
-        <div id="device-log" class="log" style="display:none"></div>
-        <div style="font-size:11px;color:var(--muted)">Apps sistémicas requieren shell ROOT real. Para taps por texto (Yape, Proton) instala el APK Companion (AccessibilityService).</div>
       </div>
-    </div>
-  </div>
+    </aside>
+    <button id="drawer-backdrop" class="drawer-backdrop" aria-label="Cerrar menú" tabindex="-1"></button>
 
-  <!-- centro: chat -->
-  <div class="card chat">
-    <h3>Chat — opencode <span class="pill" id="model-pill" style="font-size:11px">model: auto</span> <select id="agent-select" style="width:140px" class="input" title="agent"></select></h3>
-    <div id="msgs" class="msgs">
-      <div class="msg system">Hub listo. 1) Verifica que <b>opencode serve</b> esté corriendo. 2) Elige proyecto y sesión. 3) Activa el micrófono para hablar o deja “auto-voz” encendido.</div>
-    </div>
-    <div class="composer">
-      <div class="voicebar">
-        <div id="mic-btn" class="mic" title="mantén pulsado o click para hablar">🎙️</div>
-        <div style="flex:1">
-          <div style="font-size:12px;color:var(--muted)">Voz bidireccional</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:4px">
-            <label class="switch"><input type="checkbox" id="stt-auto"/> escucha continua</label>
-            <label class="switch"><input type="checkbox" id="tts-auto" checked/> auto-voz respuesta</label>
-            <label class="switch"><input type="checkbox" id="tts-interim"/> leer mientras escribe</label>
-            <select id="voice-select" style="width:140px;padding:4px 6px" title="voz"></select>
-            <span id="stt-state" class="chip">STT: inactivo</span>
+    <!-- Main: centro mensajes + barra táctil -->
+    <main class="main">
+      <!-- Pill flotante SSE: pensando / leyendo / bash -->
+      <div id="status-pill" class="status-pill hidden" role="status" aria-live="polite">
+        <span class="pill-dot"></span><span id="status-pill-text">Listo</span>
+      </div>
+
+      <div id="msgs" class="msgs"></div>
+
+      <div class="composer">
+        <div class="composer-row">
+          <button id="btn-attach" class="icon-btn attach-btn" aria-label="Adjuntar" title="Adjuntar archivo">+</button>
+          <input id="file-picker" type="file" hidden multiple />
+          <div class="input-wrap">
+            <textarea id="prompt" rows="1" placeholder="Escribe un mensaje…"></textarea>
           </div>
+          <button id="btn-send" class="btn primary send-btn" aria-label="Enviar">↑</button>
+          <button id="btn-mic" class="icon-btn mic-btn" aria-label="Hablar" title="Hablar">🎙</button>
         </div>
-        <button class="btn sm" id="btn-stop-speech">⏹ parar voz</button>
-      </div>
-
-      <textarea id="prompt" placeholder="Escribe o dicta…  Shift+Enter para enviar. @ para mencionar archivo."></textarea>
-      <div class="toolbar">
-        <button class="btn primary" id="btn-send">Enviar ▶</button>
-        <button class="btn" id="btn-abort" style="display:none;background:var(--err);color:white">⏹ abortar</button>
-        <span class="spacer"></span>
-        <span class="kbd">Shift+Enter</span>
-        <label class="switch"><input type="checkbox" id="chk-stream" checked/> stream SSE</label>
-      </div>
-      <div id="stream-status" style="font-size:11px;color:var(--muted)"></div>
-    </div>
-  </div>
-
-  <!-- derecha: detalles + TTS queue -->
-  <div class="side-right" style="display:flex;flex-direction:column;gap:12px">
-    <div class="card">
-      <h3>Respuesta voz <span class="chip" id="tts-chip">TTS listo</span></h3>
-      <div class="body">
-        <div style="display:flex;gap:6px;margin-bottom:8px">
-          <button class="btn sm block" id="btn-replay">🔊 repetir última</button>
-          <button class="btn sm block" id="btn-copy-last">⎘ copiar</button>
+        <div class="composer-meta">
+          <span id="attach-hint" class="muted hidden"></span>
+          <span id="stream-status" class="muted"></span>
+          <span id="stt-state" class="chip hidden"></span>
         </div>
-        <div id="tts-preview" class="log">Sin respuesta aún. Cuando opencode responda y auto-voz esté encendido, el navegador usará speechSynthesis (funciona offline en Android Chrome).</div>
-        <div class="divider"></div>
-        <label style="font-size:12px;color:var(--muted)">Velocidad <input type="range" id="tts-rate" min="0.7" max="1.4" step="0.1" value="1" style="width:100%"/></label>
-        <label style="font-size:12px;color:var(--muted)">Tono <input type="range" id="tts-pitch" min="0.7" max="1.4" step="0.1" value="1" style="width:100%"/></label>
       </div>
-    </div>
-
-    <div class="card">
-      <h3>Archivos / diffs</h3>
-      <div class="body">
-        <input id="find-input" class="input" placeholder="buscar archivos: ej. AGENTS.md"/>
-        <div id="find-results" class="list" style="margin-top:8px"></div>
-        <div id="diff-box" class="log" style="display:none;margin-top:8px"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Sistema</h3>
-      <div class="body" style="font-size:12px;color:var(--muted)">
-        <div id="sys-info" class="log">cargando…</div>
-        <div class="divider"></div>
-        <div>Hub public: <code>/sdcard/projects/opencode-companion/public</code></div>
-        <div>Proxy opencode: <code>/opencode/*</code></div>
-        <div style="margin-top:6px"><b>APK full-control:</b> AccessibilityService + bridge 8766 viene en fase 2. Este hub ya expone <code>/api/device/*</code> (ROOT: tap, key, shell, launch).</div>
-      </div>
-    </div>
+    </main>
   </div>
 </div>
 

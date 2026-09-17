@@ -25,3 +25,4 @@ opencode-companion/node.bin
 opencode-companion/opencode.cjs
 opencode-companion/opencode.sh
 sdcard/node-host
+ui-state.json

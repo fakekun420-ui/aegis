@@ -25,6 +25,14 @@ const HUB_PORT = parseInt(process.env.HUB_PORT || argVal("--port","8765"), 10);
 const OPENCODE_PORT = parseInt(process.env.OPENCODE_PORT || argVal("--opencode-port","4096"), 10);
 const OPENCODE_HOST = process.env.OPENCODE_HOST || "127.0.0.1";
 const PROJECTS_ROOT = "/sdcard/projects";
+const UI_STATE_FILE = path.join(__dirname, "ui-state.json");
+const UI_STATE = (() => {
+  try { if (fs.existsSync(UI_STATE_FILE)) return JSON.parse(fs.readFileSync(UI_STATE_FILE, "utf8")); } catch {}
+  return { project: null, sessionId: null, updatedAt: 0 };
+})();
+function saveUiState() {
+  try { fs.writeFileSync(UI_STATE_FILE, JSON.stringify({ ...UI_STATE, updatedAt: Date.now() }, null, 2)); } catch (e) { console.error("[ui-state] save err", e.message); }
+}
 
 const MIME = {
   ".html":"text/html; charset=utf-8", ".js":"text/javascript; charset=utf-8",
@@ -204,6 +212,19 @@ const server = http.createServer(async (req, res)=>{
     }
     steps.push(healthy ? "poll: healthy after retry" : "poll: timeout 25s not healthy");
     return json(res, healthy ? 200 : 202, { started: true, healthy, opencode:`http://${OPENCODE_HOST}:${OPENCODE_PORT}`, steps, alreadyHealthy: ens.already, next:"Poll GET /api/system/status until {ready:true} or GET /api/status for detail" });
+  }
+  if(pathname==="/api/ui/state" && req.method==="GET"){
+    return json(res, 200, { ...UI_STATE });
+  }
+  if(pathname==="/api/ui/state" && req.method==="PATCH"){
+    try {
+      const raw = await readJsonBody(req, 64*1024);
+      const body = JSON.parse(raw || "{}");
+      if ("project" in body) UI_STATE.project = body.project || null;
+      if ("sessionId" in body) UI_STATE.sessionId = body.sessionId || null;
+      saveUiState();
+      return json(res, 200, { ...UI_STATE });
+    } catch (e) { return json(res, 400, { error: String(e).slice(0,400) }); }
   }
   if(pathname==="/api/status" && req.method==="GET"){
     const rootCheck = await runShell("id; su -c id 2>&1 | head -1; getprop ro.build.version.release 2>&1; getprop ro.product.model 2>&1");
