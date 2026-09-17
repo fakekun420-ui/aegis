@@ -17,7 +17,8 @@ const btnMic = $("#btn-mic"), btnSend = $("#btn-send"), btnAttach = $("#btn-atta
 let state = {
   sessions: [], projects: [],
   currentSessionId: null,
-  currentProject: null,
+  currentProject: null, // legacy folder name
+  currentProjectId: null, // companion managed id (spec 5)
   agents: [], voices: [],
   lastAssistantText: "",
   abortCtrl: null,
@@ -46,10 +47,15 @@ async function jpatch(url, body){
   if(!r.ok) throw new Error(url+" -> "+r.status+" "+await r.text().catch(()=> "")); return r.json();
 }
 function persistUi(patch){
+  // Spec 5: persist active projectId (companion managed) + sessionId + legacy project folder name in ui-state.json
   if("project" in patch){ state.currentProject = patch.project; localStorage.setItem("occ.project", patch.project || ""); }
+  if("projectId" in patch){ state.currentProjectId = patch.projectId; if(patch.projectId) localStorage.setItem("occ.projectId", patch.projectId); else localStorage.removeItem("occ.projectId"); }
   if("sessionId" in patch){ state.currentSessionId = patch.sessionId; if(patch.sessionId) localStorage.setItem("occ.sessionId", patch.sessionId); else localStorage.removeItem("occ.sessionId"); }
   jpatch("/api/ui/state", patch).catch(()=>{});
 }
+// Extract data from {ok:true,data:...} envelope or legacy bare payload
+function unwrap(resp){ if(resp && typeof resp === "object" && "ok" in resp){ if(resp.ok) return resp.data; throw new Error(resp.error || "request failed"); } return resp; }
+async function jgetOk(url){ const r = await fetch(url); if(!r.ok) throw new Error(url+" -> "+r.status+" "+await r.text().catch(()=> "")); const j = await r.json(); return unwrap(j); }
 function humanSize(b){
   if(b<1024) return b+" B";
   if(b<1024*1024) return (b/1024).toFixed(1)+" KB";
@@ -276,13 +282,20 @@ async function refreshStatus(){
   }
 }
 
-// ---- projects + sessions in drawer (colapsable proyectos → chats)
+// ---- projects + sessions — companion managed (projects.json) + opencode sessions ----
 let projectExpanded = new Set(JSON.parse(localStorage.getItem("occ.expandedProjects") || "[]"));
 function persistExpanded(){ localStorage.setItem("occ.expandedProjects", JSON.stringify([...projectExpanded])); }
+// Fetch companion managed projects — unwraps {ok:true,data:[]} envelope and falls back to bare array
+async function fetchManagedProjects(){
+  try { return await jgetOk("/api/projects"); } catch { return []; }
+}
+function fmtDate(d){
+  try { const dt = new Date(d); if(isNaN(dt.getTime())) return String(d).slice(0,10); return dt.toLocaleDateString() + " " + dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); } catch { return String(d).slice(0,16); }
+}
 async function refreshProjects(){
   try{
-    const list = await jget("/api/projects");
-    state.projects = list;
+    const list = await fetchManagedProjects();
+    state.projects = Array.isArray(list) ? list : [];
     renderDrawer();
   }catch(e){
     if(projectsList) projectsList.innerHTML = `<div class="muted" style="padding:8px">err: ${String(e).slice(0,200)}</div>`;
@@ -299,64 +312,133 @@ async function refreshSessions(){
     if(standaloneList) standaloneList.innerHTML = `<div class="muted" style="padding:8px">opencode off</div>`;
   }
 }
-function sessionsForProject(projectName){
-  const p = (projectName||"").toLowerCase();
-  return state.sessions.filter(s=>{
-    const t = String(s.title||s.name||"").toLowerCase();
-    const dir = String(s.directory||s.projectID||"").toLowerCase();
-    return t.includes(p) || dir.includes(p);
+// Sessions for a managed project — resolve via project's sessions array (spec 1: sessions association)
+// Fallback: if project has no managed sessions, use loose title heuristic for ungrouped display
+function sessionsForManagedProject(proj){
+  const ids = new Set((proj.sessions || []).map(s => String(s.sessionId)));
+  const mapped = (proj.sessions || []).map(entry => {
+    // Enrich with live opencode session data if present (title etc.), otherwise use stored entry
+    const live = state.sessions.find(l => String(l.id||l.ID||l.sessionID||l.sessionId) === String(entry.sessionId));
+    if (live) return { _entry: entry, live };
+    return { _entry: entry, live: null };
   });
+  return mapped;
 }
 function renderDrawer(){
   if(!projectsList || !standaloneList) return;
   projectsList.innerHTML = "";
-  const usedIds = new Set();
+  const usedIds = new Set((state.projects || []).flatMap(p => (p.sessions||[]).map(s => String(s.sessionId))).filter(Boolean));
+  // Also mark live sessions that belong to managed projects as used so standalone stays clean
   state.projects.forEach(proj=>{
     const group = el("div","project-group");
-    const isExpanded = projectExpanded.has(proj.name);
+    const expKey = proj.id || proj.name;
+    const isExpanded = projectExpanded.has(expKey);
+    // Header: managed project name + description + session count + archive indicator
     const header = el("button","project-row");
-    header.innerHTML = `<span style="flex:1; min-width:0"><span class="project-name">${proj.name}</span><br><span class="project-meta">${proj.hasPackage?"pkg · ":""}${proj.git?"git":""}</span></span><span class="chevron" style="transform: rotate(${isExpanded?180:0}deg)">⌃</span>`;
-    header.classList.toggle("active", state.currentProject===proj.name);
+    const count = (proj.sessions || []).length;
+    const archivedHint = proj.archivedAt ? " · archivado" : "";
+    header.innerHTML = `<span style="flex:1; min-width:0"><span class="project-name">${proj.name}</span><br><span class="project-meta">${proj.description ? proj.description.slice(0,48) : ""}${count ? ` · ${count} sesión${count!==1?"es":""}` : " · sin sesiones"}${archivedHint}</span></span><span class="chevron" style="transform: rotate(${isExpanded?180:0}deg)">⌃</span>`;
+    const isActive = state.currentProjectId ? (state.currentProjectId === proj.id) : (state.currentProject === proj.name);
+    header.classList.toggle("active", !!isActive);
     header.setAttribute("aria-expanded", String(isExpanded));
     header.onclick = ()=>{
-      state.currentProject = proj.name;
-      persistUi({ project: proj.name });
+      // Spec 5: persist active projectId
+      state.currentProjectId = proj.id;
+      state.currentProject = proj.name; // legacy compat
+      persistUi({ projectId: proj.id, project: proj.name });
       [...projectsList.querySelectorAll(".project-row")].forEach(n=> n.classList.toggle("active", n===header));
-      if(projectExpanded.has(proj.name)) projectExpanded.delete(proj.name); else projectExpanded.add(proj.name);
+      if(projectExpanded.has(expKey)) projectExpanded.delete(expKey); else projectExpanded.add(expKey);
       persistExpanded();
       renderDrawer();
       showPill(`Proyecto: ${proj.name}`, "read");
+    };
+    // Right-click to archive/unarchive quick action
+    header.oncontextmenu = async (e)=>{
+      e.preventDefault();
+      const act = proj.archivedAt ? "restaurar" : "archivar";
+      if(confirm(`${act} proyecto "${proj.name}"?`)){
+        try{
+          if(proj.archivedAt) await jpost(`/api/projects/${encodeURIComponent(proj.id)}`, {}) && await fetch(`/api/projects/${encodeURIComponent(proj.id)}`, {method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({archived:false})}).then(r=>r.json());
+          else await fetch(`/api/projects/${encodeURIComponent(proj.id)}`, {method:"DELETE"}).then(r=>r.json());
+          await refreshProjects();
+        }catch(err){ alert(String(err).slice(0,400)); }
+      }
     };
     group.appendChild(header);
     const list = document.createElement("div");
     list.style.display = isExpanded ? "grid" : "none";
     list.style.gap = "6px";
-    const sess = sessionsForProject(proj.name).slice(0, 10);
-    sess.forEach(s=>{
-      const id = s.id || s.ID || s.sessionID || s.sessionId;
-      usedIds.add(id);
-      list.appendChild(sessionRowEl(s));
-    });
-    if(sess.length===0){
-      const empty = el("div","muted", "sin chats"); empty.style.padding="4px 8px"; empty.style.fontSize="12px";
+    const entries = sessionsForManagedProject(proj).slice(0, 30);
+    if (entries.length === 0) {
+      const empty = el("div","muted", "sin sesiones asociadas");
+      empty.style.padding="4px 8px"; empty.style.fontSize="12px";
       list.appendChild(empty);
+    } else {
+      entries.forEach(({_entry, live})=>{
+        // Use stored title/lastUsed but prefer live title if richer
+        const title = (live && (live.title || live.name)) ? (live.title||live.name) : (_entry.title || _entry.sessionId.slice(0,8));
+        const lastUsed = _entry.lastUsed || _entry.createdAt || (live && (live.updatedAt || live.createdAt)) || "";
+        const s = { id: _entry.sessionId, title, lastUsed, _entry, live };
+        list.appendChild(managedSessionRowEl(s, proj));
+      });
     }
     group.appendChild(list);
     projectsList.appendChild(group);
   });
   if(projectsCountEl) projectsCountEl.textContent = String(state.projects.length);
+  // Standalone: live sessions not yet associated to any managed project
   standaloneList.innerHTML = "";
   const free = state.sessions.filter(s=>{
-    const id = s.id||s.ID||s.sessionID||s.sessionId;
+    const id = String(s.id||s.ID||s.sessionID||s.sessionId);
     return !usedIds.has(id);
   }).slice(0, 60);
   free.forEach(s=> standaloneList.appendChild(sessionRowEl(s)));
   if(free.length===0){
     standaloneList.innerHTML = `<div class="muted" style="padding:8px; font-size:12px">sin chats sueltos</div>`;
+  } else {
+    // Hint: drag association is via New Session flow; standalone sessions can be linked via context menu in future
+    const hint = el("div","muted", `${free.length} sueltos — crea sesión dentro de un proyecto o asocia uno existente vía API`);
+    hint.style.padding="6px 8px"; hint.style.fontSize="11px";
+    standaloneList.appendChild(hint);
   }
   document.querySelectorAll(".session-row").forEach(r=>{
     r.classList.toggle("active", r.dataset.sessionId===state.currentSessionId);
   });
+}
+// Row for managed project session — shows title + lastUsed and loads into composer on click (spec 3)
+function managedSessionRowEl(s, proj){
+  const id = s.id;
+  const row = el("button","session-row");
+  row.dataset.sessionId = id;
+  row.title = id + (s._entry && s._entry.summary ? "\n"+s._entry.summary : "");
+  const when = s.lastUsed ? fmtDate(s.lastUsed) : "";
+  row.innerHTML = `<span class="session-title">${(s.title||id.slice(0,8))}</span><span class="session-sub">${when || new Date(s._entry && s._entry.createdAt || Date.now()).toLocaleDateString()}</span>`;
+  if(state.currentSessionId===id) row.classList.add("active");
+  row.onclick = ()=> {
+    // Spec 3: clicking loads session into composer (selectSession handles project context)
+    // Also persist active projectId/sessionId (spec 5)
+    persistUi({ projectId: proj.id, sessionId: id, project: proj.name });
+    selectSession(id);
+    drawerCtl?.setOpen?.(false);
+  };
+  row.oncontextmenu = async (e)=>{
+    e.preventDefault();
+    if(confirm(`Desasociar sesión "${s.title||id.slice(0,8)}" de "${proj.name}"?`)){
+      try{
+        const r = await fetch(`/api/projects/${encodeURIComponent(proj.id)}/sessions/${encodeURIComponent(id)}`, {method:"DELETE"});
+        const j = await r.json();
+        if(!j.ok) throw new Error(j.error || r.status);
+        // Touch lastUsed locally then re-render
+        await refreshProjects();
+        if(state.currentSessionId===id){
+          persistUi({ sessionId: null });
+          msgsEl.innerHTML = "";
+          addMsg("system", "Sesión desasociada.");
+        }
+      }catch(err){ alert(String(err).slice(0,400)); }
+    }
+  };
+  return row;
 }
 function sessionRowEl(s){
   const id = s.id || s.ID || s.sessionID || s.sessionId;
@@ -364,14 +446,21 @@ function sessionRowEl(s){
   const row = el("button","session-row");
   row.dataset.sessionId = id;
   row.title = id;
-  row.innerHTML = `<span class="session-title">${title}</span><span class="session-sub">${(s.model?.id||s.model||"").toString().slice(0,10) || new Date(s.createdAt||Date.now()).toLocaleDateString()}</span>`;
+  // Standalone session: show lastUsed if present, else model/date
+  const last = s.updatedAt || s.updated_at || s.lastUsed || s.createdAt;
+  row.innerHTML = `<span class="session-title">${title}</span><span class="session-sub">${(s.model?.id||s.model||"").toString().slice(0,10) || (last ? fmtDate(last) : new Date(s.createdAt||Date.now()).toLocaleDateString())}</span>`;
   if(state.currentSessionId===id) row.classList.add("active");
-  row.onclick = ()=> { selectSession(id); drawerCtl?.setOpen?.(false); };
+  row.onclick = ()=> {
+    // Load into composer (spec 3): standalone session loads without project context, but remembers sessionId
+    persistUi({ sessionId: id });
+    selectSession(id);
+    drawerCtl?.setOpen?.(false);
+  };
   row.oncontextmenu = async (e)=>{ e.preventDefault(); if(confirm(`Borrar sesión ${title}?`)){ try{ await fetch(`/opencode/session/${id}`,{method:"DELETE"}); await refreshSessions(); }catch(err){ alert(String(err).slice(0,400)); } } };
   return row;
 }
 
-// ---- sessions load + select (persistencia backend)
+// ---- sessions load + select (persistencia backend) — also touches managed lastUsed ----
 async function selectSession(id){
   state.currentSessionId = id;
   persistUi({ sessionId: id });
@@ -398,6 +487,22 @@ async function selectSession(id){
       addMsg(r, String(text).slice(0,8000));
     });
     hidePill();
+    // Touch lastUsed for managed project association if any
+    if(state.currentProjectId){
+      const proj = state.projects.find(p=>p.id===state.currentProjectId);
+      if(proj && (proj.sessions||[]).some(s=>String(s.sessionId)===String(id))){
+        // Fire-and-forget patch to update lastUsed
+        fetch(`/api/projects/${encodeURIComponent(state.currentProjectId)}/sessions`, {headers:{}}).catch(()=>{});
+        // We'll update via direct dot: patch project to bump lastUsed for this session
+        try {
+          const store = proj.sessions.find(s=>String(s.sessionId)===String(id));
+          if(store){
+            // Use PATCH on project to normalize? Easier: re-associate with updated lastUsed via delete+post is heavy — just update local
+            store.lastUsed = new Date().toISOString();
+          }
+        } catch {}
+      }
+    }
   }catch(e){
     addMsg("system","No se pudo cargar historial: "+String(e).slice(0,500));
     showPill("Error cargando sesión", "thinking");
@@ -410,10 +515,70 @@ async function createSession(){
     const s = await jpost("/opencode/session", { title });
     const id = s.id || s.ID || s.sessionId || s.sessionID;
     await refreshSessions();
-    if(id) await selectSession(id);
+    if(id){
+      await selectSession(id);
+      // If an active managed project is selected, associate the new session to it (spec 2: POST /:id/sessions)
+      if(state.currentProjectId && id){
+        try {
+          await jpost(`/api/projects/${encodeURIComponent(state.currentProjectId)}/sessions`, { sessionId: id, title: title });
+          await refreshProjects();
+        } catch {}
+      }
+    }
     hidePill();
     return id;
   }catch(e){ addMsg("system","Error creando sesión: "+String(e).slice(0,600)); showPill("Error creando chat", "thinking"); return null; }
+}
+
+// New Project inline form — spec 4
+function setupNewProjectForm(){
+  const btnNew = $("#btn-new-project"), form = $("#new-project-form");
+  const nameEl = $("#new-project-name"), descEl = $("#new-project-desc");
+  const btnCreate = $("#btn-create-project"), btnCancel = $("#btn-cancel-project");
+  const errEl = $("#new-project-error");
+  if(!btnNew || !form) return;
+  function openForm(){
+    form.classList.remove("hidden"); form.style.display = "grid";
+    btnNew.classList.add("hidden");
+    nameEl.value = ""; descEl.value = ""; if(errEl) errEl.textContent = "";
+    setTimeout(()=> nameEl.focus(), 50);
+  }
+  function closeForm(){
+    form.classList.add("hidden"); form.style.display = "none";
+    btnNew.classList.remove("hidden");
+    if(errEl) errEl.textContent = "";
+  }
+  btnNew.addEventListener("click", openForm);
+  btnCancel?.addEventListener("click", closeForm);
+  // Escape closes
+  form.addEventListener("keydown", (e)=>{ if(e.key==="Escape") closeForm(); });
+  btnCreate?.addEventListener("click", async ()=>{
+    const name = (nameEl.value || "").trim();
+    const description = (descEl.value || "").trim();
+    if(!name){ if(errEl) errEl.textContent = "Nombre requerido"; nameEl.focus(); return; }
+    btnCreate.disabled = true;
+    if(errEl) errEl.textContent = "Creando…";
+    try {
+      const res = await fetch("/api/projects", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name, description })});
+      const j = await res.json();
+      if(!j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      const proj = j.data;
+      await refreshProjects();
+      // Activate new project
+      state.currentProjectId = proj.id;
+      state.currentProject = proj.name;
+      persistUi({ projectId: proj.id, project: proj.name });
+      projectExpanded.add(proj.id);
+      persistExpanded();
+      closeForm();
+      renderDrawer();
+      showPill(`Proyecto "${proj.name}" creado`, "read");
+    } catch(e){
+      if(errEl) errEl.textContent = String(e.message || e).slice(0,300);
+    } finally { btnCreate.disabled = false; }
+  });
+  // Enter on name creates (with Ctrl/Cmd not needed — simple Enter)
+  nameEl?.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ e.preventDefault(); btnCreate.click(); } });
 }
 
 // ---- composer: input expandible + Enter envía
@@ -1007,17 +1172,23 @@ $("#session-search")?.addEventListener("input", e=>{
   });
 });
 
-// ---- init: carga backend ui-state primero para no sobrescribir
+// Wire new project form before init
+setupNewProjectForm();
+
+// ---- init: carga backend ui-state primero para no sobrescribir (spec 5: projectId + sessionId)
 (async ()=>{
   try{
     const ui = await jget("/api/ui/state").catch(()=> null);
     if(ui){
       if(ui.project) state.currentProject = ui.project;
+      if(ui.projectId) state.currentProjectId = ui.projectId;
       if(ui.sessionId) state.currentSessionId = ui.sessionId;
       if(ui.project) localStorage.setItem("occ.project", ui.project);
+      if(ui.projectId) localStorage.setItem("occ.projectId", ui.projectId);
       if(ui.sessionId) localStorage.setItem("occ.sessionId", ui.sessionId);
     } else {
       state.currentProject = localStorage.getItem("occ.project") || null;
+      state.currentProjectId = localStorage.getItem("occ.projectId") || null;
       state.currentSessionId = localStorage.getItem("occ.sessionId") || null;
     }
   }catch{}

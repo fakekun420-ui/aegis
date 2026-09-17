@@ -28,10 +28,63 @@ const PROJECTS_ROOT = "/sdcard/projects";
 const UI_STATE_FILE = path.join(__dirname, "ui-state.json");
 const UI_STATE = (() => {
   try { if (fs.existsSync(UI_STATE_FILE)) return JSON.parse(fs.readFileSync(UI_STATE_FILE, "utf8")); } catch {}
-  return { project: null, sessionId: null, updatedAt: 0 };
+  // New fields: projectId (companion managed id), sessionId; legacy `project` (folder name) kept for compat
+  const base = { project: null, projectId: null, sessionId: null, updatedAt: 0 };
+  try {
+    const raw = fs.existsSync(UI_STATE_FILE) ? JSON.parse(fs.readFileSync(UI_STATE_FILE, "utf8")) : {};
+    return { ...base, ...raw };
+  } catch { return base; }
 })();
 function saveUiState() {
   try { fs.writeFileSync(UI_STATE_FILE, JSON.stringify({ ...UI_STATE, updatedAt: Date.now() }, null, 2)); } catch (e) { console.error("[ui-state] save err", e.message); }
+}
+
+// ---- Companion Project Management — persistent store projects.json ----
+// Schema per spec (1): { id, name, description, createdAt, archivedAt, sessions:[{sessionId,title,createdAt,lastUsed,summary}], skills:[], linkedProjects:[] }
+// Stored at /sdcard/projects/opencode-companion/projects.json ; soft delete via archivedAt timestamp.
+// Envelope: all /api/projects routes return {ok:true,data:...} or {ok:false,error:...} (spec 6).
+const PROJECTS_STORE_FILE = path.join(__dirname, "projects.json");
+
+// Load projects from disk — returns {projects: []} envelope on disk (or [] legacy).
+function loadProjectsStore() {
+  try {
+    if (!fs.existsSync(PROJECTS_STORE_FILE)) return { projects: [] };
+    const raw = JSON.parse(fs.readFileSync(PROJECTS_STORE_FILE, "utf8"));
+    // Accept both {projects:[]} and [] for backwards compat
+    if (Array.isArray(raw)) return { projects: raw };
+    if (raw && Array.isArray(raw.projects)) return raw;
+    return { projects: [] };
+  } catch (e) { console.error("[projects] load err", e.message); return { projects: [] }; }
+}
+function saveProjectsStore(store) {
+  try { fs.writeFileSync(PROJECTS_STORE_FILE, JSON.stringify(store, null, 2)); } catch (e) { console.error("[projects] save err", e.message); }
+}
+// Generate stable id: timestamp + random suffix, lowercase alphanumeric + hyphen
+function genProjectId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+function sanitizeProjectId(v) { return String(v || "").trim(); }
+function nowIso() { return new Date().toISOString(); }
+// Find project by id (including archived) — caller filters visible if needed
+function findProject(store, id) { return store.projects.find(p => p.id === id) || null; }
+// Validate project payload for create/update
+function validateProjectPayload(body, isCreate) {
+  if (isCreate && (!body.name || !String(body.name).trim())) return "name required";
+  if (body.name !== undefined && !String(body.name).trim()) return "name cannot be empty";
+  if (body.description !== undefined && typeof body.description !== "string") return "description must be string";
+  if (body.skills !== undefined && !Array.isArray(body.skills)) return "skills must be array";
+  if (body.linkedProjects !== undefined && !Array.isArray(body.linkedProjects)) return "linkedProjects must be array";
+  return null;
+}
+// Normalize sessions entry — ensures required fields exist
+function normalizeSessionEntry(s) {
+  return {
+    sessionId: String(s.sessionId || s.id || "").trim(),
+    title: String(s.title || s.sessionId || "untitled").trim(),
+    createdAt: s.createdAt || nowIso(),
+    lastUsed: s.lastUsed || s.createdAt || nowIso(),
+    summary: s.summary || ""
+  };
 }
 
 // ---- Non-destructive session ownership discovery (hub must never kill TUI) ----
@@ -436,12 +489,190 @@ const server = http.createServer(async (req, res)=>{
     try {
       const raw = await readJsonBody(req, 64*1024);
       const body = JSON.parse(raw || "{}");
+      // Legacy folder name compat
       if ("project" in body) UI_STATE.project = body.project || null;
+      // New: active companion project id (spec 5) + session id
+      if ("projectId" in body) UI_STATE.projectId = body.projectId || null;
       if ("sessionId" in body) UI_STATE.sessionId = body.sessionId || null;
       saveUiState();
       return json(res, 200, { ...UI_STATE });
     } catch (e) { return json(res, 400, { error: String(e).slice(0,400) }); }
   }
+
+  // ---- Companion Projects REST — projects.json persistent store (spec 1-2, envelope spec 6) ----
+  // Helper: send ok envelope consistently
+  function ok(data) { return { ok: true, data }; }
+  function fail(error, code) { return { ok: false, error: String(error).slice(0, 800), code }; }
+
+  // GET /api/projects — list all non-archived (includeArchived=1 includes archived)
+  if(pathname==="/api/projects" && req.method==="GET"){
+    // Serve both legacy folder scan and companion managed store depending on query.
+    // Default: companion managed projects (spec: projects.json). Legacy folder scan via ?source=fs
+    const source = url.searchParams.get("source");
+    const includeArchived = url.searchParams.get("includeArchived") === "1" || url.searchParams.get("all") === "1";
+    if (source === "fs") {
+      // Legacy: scan filesystem folders under PROJECTS_ROOT
+      const dirs = await listProjects();
+      const infos = dirs.map(name=>{
+        try{
+          const p = path.join(PROJECTS_ROOT, name);
+          const pkg = fs.existsSync(path.join(p,"package.json")) ? JSON.parse(fs.readFileSync(path.join(p,"package.json"),"utf8")) : null;
+          const git = fs.existsSync(path.join(p,".git"));
+          return { name, path:p, hasPackage:!!pkg, description: pkg?.description||"", git };
+        }catch{ return { name, path: path.join(PROJECTS_ROOT,name) }; }
+      });
+      return json(res, 200, ok(infos));
+    }
+    const store = loadProjectsStore();
+    let list = store.projects;
+    if (!includeArchived) list = list.filter(p => !p.archivedAt);
+    // Sort: active first by createdAt desc, then archived
+    list = [...list].sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    return json(res, 200, ok(list));
+  }
+
+  // POST /api/projects — create {name, description, skills?, linkedProjects?}
+  if(pathname==="/api/projects" && req.method==="POST"){
+    try {
+      const raw = await readJsonBody(req, 64*1024);
+      const body = JSON.parse(raw || "{}");
+      const err = validateProjectPayload(body, true);
+      if (err) return json(res, 400, fail(err));
+      const store = loadProjectsStore();
+      // Duplicate name guard (case-insensitive among non-archived)
+      const normName = String(body.name).trim();
+      if (store.projects.some(p => !p.archivedAt && p.name.toLowerCase() === normName.toLowerCase())) {
+        return json(res, 409, fail(`project name "${normName}" already exists`));
+      }
+      const proj = {
+        id: genProjectId(),
+        name: normName,
+        description: String(body.description || "").trim(),
+        createdAt: nowIso(),
+        archivedAt: null,
+        sessions: [],
+        skills: Array.isArray(body.skills) ? body.skills : [],
+        linkedProjects: Array.isArray(body.linkedProjects) ? body.linkedProjects : []
+      };
+      store.projects.push(proj);
+      saveProjectsStore(store);
+      return json(res, 201, ok(proj));
+    } catch (e) { return json(res, 500, fail(String(e))); }
+  }
+
+  // PATCH /api/projects/:id — update name/description/archive (archivedAt toggle), also skills/linked
+  if(pathname.startsWith("/api/projects/") && req.method==="PATCH" && !pathname.includes("/sessions")){
+    const m = pathname.match(/^\/api\/projects\/([^\/]+)$/);
+    if (!m) return json(res, 404, fail("not found"));
+    const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    try {
+      const raw = await readJsonBody(req, 64*1024);
+      const body = JSON.parse(raw || "{}");
+      const err = validateProjectPayload(body, false);
+      if (err) return json(res, 400, fail(err));
+      const store = loadProjectsStore();
+      const proj = findProject(store, id);
+      if (!proj) return json(res, 404, fail(`project ${id} not found`));
+      if (body.name !== undefined) {
+        const newName = String(body.name).trim();
+        if (!newName) return json(res, 400, fail("name cannot be empty"));
+        // Duplicate guard excluding self
+        if (store.projects.some(p => p.id !== id && !p.archivedAt && p.name.toLowerCase() === newName.toLowerCase())) {
+          return json(res, 409, fail(`project name "${newName}" already exists`));
+        }
+        proj.name = newName;
+      }
+      if (body.description !== undefined) proj.description = String(body.description || "").trim();
+      if (body.archived !== undefined || body.archivedAt !== undefined) {
+        // archived boolean toggles archivedAt timestamp (soft delete spec)
+        const shouldArchive = body.archived === true || (body.archivedAt !== undefined && body.archivedAt !== null);
+        if (shouldArchive && !proj.archivedAt) proj.archivedAt = nowIso();
+        else if (!shouldArchive) proj.archivedAt = null;
+        else if (body.archivedAt) proj.archivedAt = body.archivedAt;
+      }
+      if (body.skills !== undefined) proj.skills = Array.isArray(body.skills) ? body.skills : [];
+      if (body.linkedProjects !== undefined) proj.linkedProjects = Array.isArray(body.linkedProjects) ? body.linkedProjects : [];
+      if (body.sessions !== undefined) {
+        // Allow bulk replace sessions (admin) — normalize each
+        if (!Array.isArray(body.sessions)) return json(res, 400, fail("sessions must be array"));
+        proj.sessions = body.sessions.map(normalizeSessionEntry).filter(s => s.sessionId);
+      }
+      saveProjectsStore(store);
+      return json(res, 200, ok(proj));
+    } catch (e) { return json(res, 500, fail(String(e))); }
+  }
+
+  // DELETE /api/projects/:id — soft delete: set archivedAt timestamp (spec 2)
+  if(pathname.match(/^\/api\/projects\/[^\/]+$/) && req.method==="DELETE" && !pathname.includes("/sessions")){
+    const m = pathname.match(/^\/api\/projects\/([^\/]+)$/);
+    if (!m) return json(res, 404, fail("not found"));
+    const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    const store = loadProjectsStore();
+    const proj = findProject(store, id);
+    if (!proj) return json(res, 404, fail(`project ${id} not found`));
+    if (proj.archivedAt) return json(res, 200, ok(proj)); // already archived idempotent
+    proj.archivedAt = nowIso();
+    saveProjectsStore(store);
+    return json(res, 200, ok(proj));
+  }
+
+  // GET /api/projects/:id/sessions — list sessions for a project
+  if(pathname.match(/^\/api\/projects\/[^\/]+\/sessions$/) && req.method==="GET"){
+    const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions$/);
+    const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    const store = loadProjectsStore();
+    const proj = findProject(store, id);
+    if (!proj) return json(res, 404, fail(`project ${id} not found`));
+    // Return sessions sorted by lastUsed desc
+    const sorted = [...(proj.sessions || [])].sort((a,b) => (b.lastUsed || b.createdAt || "").localeCompare(a.lastUsed || a.createdAt || ""));
+    return json(res, 200, ok(sorted));
+  }
+
+  // POST /api/projects/:id/sessions — associate existing opencode sessionId to project (spec 2)
+  // Body: {sessionId, title?, summary?} — sessionId is opencode session id to link
+  if(pathname.match(/^\/api\/projects\/[^\/]+\/sessions$/) && req.method==="POST"){
+    try {
+      const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions$/);
+      const id = sanitizeProjectId(decodeURIComponent(m[1]));
+      const raw = await readJsonBody(req, 64*1024);
+      const body = JSON.parse(raw || "{}");
+      const sessionId = String(body.sessionId || body.id || "").trim();
+      if (!sessionId) return json(res, 400, fail("sessionId required"));
+      const store = loadProjectsStore();
+      const proj = findProject(store, id);
+      if (!proj) return json(res, 404, fail(`project ${id} not found`));
+      if (proj.archivedAt) return json(res, 409, fail(`project ${id} is archived`));
+      // Avoid duplicate association in same project
+      if ((proj.sessions || []).some(s => s.sessionId === sessionId)) {
+        return json(res, 409, fail(`session ${sessionId} already associated to project ${id}`));
+      }
+      // Remove association from other projects if any (ensure session belongs to at most one project)
+      for (const p of store.projects) {
+        if (p.id !== id) p.sessions = (p.sessions || []).filter(s => s.sessionId !== sessionId);
+      }
+      const entry = normalizeSessionEntry({ sessionId, title: body.title, summary: body.summary, createdAt: body.createdAt, lastUsed: body.lastUsed });
+      proj.sessions = proj.sessions || [];
+      proj.sessions.push(entry);
+      saveProjectsStore(store);
+      return json(res, 201, ok(entry));
+    } catch (e) { return json(res, 500, fail(String(e))); }
+  }
+
+  // DELETE /api/projects/:id/sessions/:sessionId — disassociate session from project
+  if(pathname.match(/^\/api\/projects\/[^\/]+\/sessions\/[^\/]+$/) && req.method==="DELETE"){
+    const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions\/([^\/]+)$/);
+    const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    const sessionId = sanitizeProjectId(decodeURIComponent(m[2]));
+    const store = loadProjectsStore();
+    const proj = findProject(store, id);
+    if (!proj) return json(res, 404, fail(`project ${id} not found`));
+    const before = (proj.sessions || []).length;
+    proj.sessions = (proj.sessions || []).filter(s => s.sessionId !== sessionId);
+    if (proj.sessions.length === before) return json(res, 404, fail(`session ${sessionId} not found in project ${id}`));
+    saveProjectsStore(store);
+    return json(res, 200, ok({ removed: sessionId, projectId: id }));
+  }
+
   if(pathname==="/api/status" && req.method==="GET"){
     const rootCheck = await runShell("id; su -c id 2>&1 | head -1; getprop ro.build.version.release 2>&1; getprop ro.product.model 2>&1");
     // probe opencode
@@ -451,18 +682,6 @@ const server = http.createServer(async (req, res)=>{
       }).on("error", e=> resolve({ error:String(e), reachable:false })).end();
     });
     return json(res, 200, { hub:"ok", hub_port: HUB_PORT, opencode: health, projects_root: PROJECTS_ROOT, projects: await listProjects(), root: rootCheck.stdout.slice(0,1200) });
-  }
-  if(pathname==="/api/projects" && req.method==="GET"){
-    const dirs = await listProjects();
-    const infos = dirs.map(name=>{
-      try{
-        const p = path.join(PROJECTS_ROOT, name);
-        const pkg = fs.existsSync(path.join(p,"package.json")) ? JSON.parse(fs.readFileSync(path.join(p,"package.json"),"utf8")) : null;
-        const git = fs.existsSync(path.join(p,".git"));
-        return { name, path:p, hasPackage:!!pkg, description: pkg?.description||"", git };
-      }catch{ return { name, path: path.join(PROJECTS_ROOT,name) }; }
-    });
-    return json(res, 200, infos);
   }
   if(pathname==="/api/device/shell" && req.method==="POST"){
     try{

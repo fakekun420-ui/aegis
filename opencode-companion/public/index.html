@@ -33,10 +33,21 @@
   </header>
 
   <div class="workspace">
-    <!-- Drawer: lista proyectos colapsables + chats sueltos -->
+    <!-- Drawer: proyectos companion (projects.json) con sesiones asociadas -->
     <aside id="drawer" class="drawer" aria-label="Navegación">
       <div class="drawer-head">
         <div class="drawer-title">Espacio de trabajo</div>
+        <!-- New Project: inline form (spec 4) -->
+        <button id="btn-new-project" class="btn primary btn-block">+ Nuevo proyecto</button>
+        <div id="new-project-form" class="hidden" style="display:grid;gap:8px;border:1px solid var(--border);background:var(--panel2);border-radius:10px;padding:10px;">
+          <input id="new-project-name" class="input" placeholder="Nombre (requerido)" maxlength="80"/>
+          <textarea id="new-project-desc" class="input" placeholder="Descripción (opcional)" rows="2" maxlength="600" style="resize:vertical;"></textarea>
+          <div style="display:flex;gap:8px;">
+            <button id="btn-create-project" class="btn primary" style="flex:1;">Crear</button>
+            <button id="btn-cancel-project" class="btn" style="flex:1;">Cancelar</button>
+          </div>
+          <div id="new-project-error" class="muted" style="color:var(--err);font-size:11px;min-height:14px;"></div>
+        </div>
         <button id="btn-new-session" class="btn primary btn-block">+ Nuevo chat</button>
         <div class="drawer-search"><input id="session-search" class="input" placeholder="Buscar chats…"/></div>
       </div>
