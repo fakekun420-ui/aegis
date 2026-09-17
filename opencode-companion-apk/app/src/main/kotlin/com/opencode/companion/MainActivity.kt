@@ -198,17 +198,24 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         isStartingSystem = true
         showNativeLoading("Iniciando servicios y levantando Hub...")
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            var execExit = -1
+            var execError: String? = null
             try {
-                // 1) Ejecuta keepalive.sh con ROOT — levanta hub 8765 + opencode 4096 + Ubuntu
-                try {
-                    Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /sdcard/projects/opencode-companion/keepalive.sh")).waitFor()
-                } catch (e: Exception) {
-                    // fallback sin su si no hay root (no debería pasar en POCO F3)
-                    try { Runtime.getRuntime().exec(arrayOf("sh", "/sdcard/projects/opencode-companion/keepalive.sh")).waitFor() } catch (_: Exception) {}
+                // No ejecutes keepalive.sh en foreground — desacopla con nohup & y exporta PATH de Termux para que nohup/sh se resuelvan
+                val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; nohup sh /sdcard/projects/opencode-companion/keepalive.sh > /sdcard/projects/opencode-companion/hub-startup.log 2>&1 &"))
+                // Este comando termina al instante por el & ; waitFor no debe bloquear 30s
+                execExit = proc.waitFor()
+                val errText = try { proc.errorStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
+                if (errText.isNotEmpty()) execError = errText
+                android.util.Log.i("OpenCodeBoot", "keepalive exec exit=$execExit err=${errText.take(300)}")
+                if (execExit != 0) {
+                    android.util.Log.e("OpenCodeBoot", "keepalive.sh exec failed exit=$execExit err=$errText")
                 }
             } catch (e: Exception) {
+                execError = e.message
+                android.util.Log.e("OpenCodeBoot", "keepalive exec exception", e)
                 withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    findViewById<TextView>(R.id.nativeStatus)?.text = "Error ejecutando keepalive.sh: ${e.message}"
+                    findViewById<TextView>(R.id.nativeStatus)?.text = "Error ejecutando keepalive.sh: ${e.message} (exit=$execExit)"
                     findViewById<android.widget.ProgressBar>(R.id.nativeProgress)?.visibility = android.view.View.GONE
                     findViewById<MaterialButton>(R.id.btnNativeStart)?.visibility = android.view.View.VISIBLE
                     findViewById<MaterialButton>(R.id.btnNativeStart)?.isEnabled = true
@@ -216,16 +223,40 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
                 return@launch
             }
-            // 2) Polling cada 1s hasta HTTP 200 en /api/system/status
+            if (execExit != 0 && execError != null) {
+                android.util.Log.e("OpenCodeBoot", "keepalive exit=$execExit error=$execError")
+            }
+            // Polling cada 500ms hasta 45s (90 intentos) — no bloquees el hilo UI
             var attempts = 0
             var ready = false
-            while (attempts < 30 && !ready) {
-                kotlinx.coroutines.delay(1000)
+            val maxAttempts = 90 // 45s / 0.5s
+            var startupLogShown = false
+            while (attempts < maxAttempts && !ready) {
+                delay(500)
                 ready = isHubReady()
                 attempts++
                 if (!ready) {
                     withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        findViewById<TextView>(R.id.nativeStatus)?.text = "Iniciando servicios y levantando Hub... (${attempts}s)"
+                        val secs = attempts * 0.5
+                        findViewById<TextView>(R.id.nativeStatus)?.text = "Iniciando servicios y levantando Hub... (${String.format("%.1f", secs)}s)"
+                    }
+                    // Tras 5s (10 intentos) sin 200, muestra últimas 15 líneas de hub-startup.log para diagnóstico exacto
+                    if (attempts == 10 && !startupLogShown) {
+                        startupLogShown = true
+                        try {
+                            val logFile = java.io.File("/sdcard/projects/opencode-companion/hub-startup.log")
+                            val tail = if (logFile.exists()) {
+                                val lines = logFile.readLines()
+                                lines.takeLast(15).joinToString("\n").trim().ifEmpty { "(hub-startup.log vacío)" }
+                            } else "(hub-startup.log no existe aún)"
+                            android.util.Log.e("OpenCodeBoot", "5s sin 200, hub-startup.log tail:\n$tail")
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                val prev = findViewById<TextView>(R.id.nativeStatus)?.text?.toString() ?: ""
+                                findViewById<TextView>(R.id.nativeStatus)?.text = prev + "\n\n[hub-startup.log tail]\n$tail"
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("OpenCodeBoot", "no se pudo leer hub-startup.log", e)
+                        }
                     }
                 }
             }
@@ -236,14 +267,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     findViewById<TextView>(R.id.nativeStatus)?.text = "Hub listo — cargando chat..."
                     hideNativeOverlay()
                     webView.loadUrl("http://127.0.0.1:8765")
-                    // limpia WebView caché congelada que mostraba ERR_CONNECTION_REFUSED
                     webView.clearCache(true)
                     toast("Hub levantado — chat cargado")
                 } else {
-                    findViewById<TextView>(R.id.nativeStatus)?.text = "Timeout: hub no respondió 200 en 30s. Reintenta Iniciar Sistema."
+                    // Lee tail final para mostrar error exacto si falló
+                    var tailHint = ""
+                    try {
+                        val logFile = java.io.File("/sdcard/projects/opencode-companion/hub-startup.log")
+                        if (logFile.exists()) tailHint = "\n\n[hub-startup.log]\n" + logFile.readLines().takeLast(15).joinToString("\n")
+                    } catch (_: Exception) {}
+                    findViewById<TextView>(R.id.nativeStatus)?.text = "Timeout 45s: hub no respondió 200. Reintenta Iniciar Sistema.$tailHint"
                     findViewById<android.widget.ProgressBar>(R.id.nativeProgress)?.visibility = android.view.View.GONE
                     findViewById<MaterialButton>(R.id.btnNativeStart)?.visibility = android.view.View.VISIBLE
                     findViewById<MaterialButton>(R.id.btnNativeStart)?.isEnabled = true
+                    android.util.Log.e("OpenCodeBoot", "timeout 45s sin 200, tail=$tailHint")
                 }
             }
         }
