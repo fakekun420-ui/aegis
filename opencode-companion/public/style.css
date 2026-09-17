@@ -140,6 +140,8 @@ button{font:inherit}
   max-width:min(92%, 560px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .status-pill.hidden{opacity:0; transform:translateX(-50%) translateY(-8px); pointer-events:none}
+.status-pill.root{border-color:rgba(245,158,11,.5); background:rgba(245,158,11,.16); color:#ffd08a}
+.status-pill.root .pill-dot{background:var(--warn); box-shadow:0 0 10px rgba(245,158,11,.5)}
 .pill-dot{width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px rgba(124,92,255,.55); flex:0 0 8px}
 .pill-dot.thinking{animation:pulseDot 1.1s infinite}
 .pill-dot.bash{background:var(--warn)} .pill-dot.read{background:var(--accent2)}
@@ -154,6 +156,15 @@ button{font:inherit}
 .msg.user{ align-self:flex-end; background:linear-gradient(135deg,#6d4dff,#3a2b8a); color:white; border-bottom-right-radius:8px }
 .msg.assistant{ align-self:flex-start; background:var(--panel2); border:1px solid var(--border); border-bottom-left-radius:8px }
 .msg.system{ align-self:center; background:#121210; border:1px dashed #3a3520; color:#d6c27a; font-size:12px }
+.assistant-card{ align-self:flex-start; max-width:92%; display:grid; gap:10px; background:var(--panel2); border:1px solid var(--border); border-radius:16px; padding:12px 14px }
+.card-title{font-weight:700; font-size:13px}
+.card-desc{font-size:13px; color:var(--muted); white-space:pre-wrap}
+.card-options{display:grid; gap:8px}
+.card-option{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:#0f0f14; cursor:pointer; text-align:left}
+.card-option:hover{border-color:var(--accent)}
+.card-option small{color:var(--muted); font-size:11px; display:block}
+.card-actions{display:flex; gap:8px}
+.card-input{width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:#0a0a0f; color:var(--text)}
 
 /* Composer: táctil limpio, sin Shift+Enter, + + input expandible + mic */
 .composer{

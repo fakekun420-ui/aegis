@@ -337,6 +337,277 @@ const server = http.createServer(async (req, res)=>{
     return;
   }
 
+  // 2.5) Asistente Root: interpretar intención → acción NSENTER/8766
+  // Vocabulario directo sin pasar por LLM si la orden ya es comando del sistema
+  const DIRECT_INTENT = [
+    { re: /^abre\s+(.+)/i, action: "launch", slot: "app" },
+    { re: /^abrir\s+(.+)/i, action: "launch", slot: "app" },
+    { re: /^inicia\s+(.+)/i, action: "launch", slot: "app" },
+    { re: /^lanza\s+(.+)/i, action: "launch", slot: "app" },
+    { re: /^(toma|haz|saca)\s+(una\s+)?captura(\s+de\s+pantalla)?/i, action: "screenshot" },
+    { re: /^captura(\s+de\s+pantalla)?/i, action: "screenshot" },
+    { re: /^(sube|aumenta)\s+(el\s+)?volumen/i, action: "volume_up" },
+    { re: /^(baja|disminuye)\s+(el\s+)?volumen/i, action: "volume_down" },
+    { re: /^(silencia|mutea|silenciar)/i, action: "volume_mute" },
+    { re: /^(bloquea|bloquear)\s+(la\s+)?pantalla/i, action: "lock_screen" },
+    { re: /^(desbloquea|desbloquear)/i, action: "unlock_screen" },
+    { re: /^(activa|enciende|prende)\s+(el\s+)?(wifi|wi-?fi)/i, action: "wifi_on" },
+    { re: /^(desactiva|apaga)\s+(el\s+)?(wifi|wi-?fi)/i, action: "wifi_off" },
+    { re: /^(activa|enciende)\s+(el\s+)?bluetooth/i, action: "bluetooth_on" },
+    { re: /^(desactiva|apaga)\s+(el\s+)?bluetooth/i, action: "bluetooth_off" },
+    { re: /^pon\s+alarma/i, action: "set_alarm" },
+    { re: /^llama\s+a\s+(.+)/i, action: "call", slot: "contact" },
+    { re: /^manda\s+(?:un\s+)?mensaje\s+a\s+(.+?)\s*[:\-]\s*(.+)/i, action: "whatsapp_send", slots: ["contact","text"] },
+    { re: /^(manda|env[ií]a)\s+(?:un\s+)?(?:whatsapp|mensaje)\s+a\s+(.+?)\s*[:\-]\s*(.+)/i, action: "whatsapp_send", slots: ["contact","text"] },
+    { re: /^(manda|env[ií]a)\s+(?:un\s+)?(?:whatsapp|mensaje)\s+a\s+(.+)/i, action: "whatsapp_send_prompt", slot: "contact" },
+  ];
+  const APP_ALIASES = {
+    "whatsapp": "com.whatsapp",
+    "wa": "com.whatsapp",
+    "telegram": "org.telegram.messenger",
+    "youtube": "com.google.android.youtube",
+    "chrome": "com.android.chrome",
+    "camara": "com.android.camera2",
+    "cámara": "com.android.camera2",
+    "galeria": "com.google.android.apps.photos",
+    "galería": "com.google.android.apps.photos",
+    "fotos": "com.google.android.apps.photos",
+    "yape": "com.bcp.bo.wallet",
+    "bcp": "com.bcp.bo.wallet",
+    "proton": "ch.protonmail.android",
+    "protonmail": "ch.protonmail.android",
+    "gmail": "com.google.android.gm",
+    "maps": "com.google.android.apps.maps",
+    "spotify": "com.spotify.music",
+    "facebook": "com.facebook.katana",
+    "instagram": "com.instagram.android",
+    "tiktok": "com.zhiliaoapp.musically",
+  };
+  function directIntentOf(text){
+    const t = String(text||"").trim();
+    for(const pat of DIRECT_INTENT){
+      const m = t.match(pat.re);
+      if(m){
+        const slots={};
+        if(pat.slot) slots[pat.slot] = (m[1]||m[m.length-1]||"").trim();
+        if(pat.slots) pat.slots.forEach((k,i)=> slots[k] = (m[i+1]||"").trim());
+        return { action: pat.action, slots, raw: t, via: "direct_regex" };
+      }
+    }
+    return null;
+  }
+  function appPackageFor(name){
+    const k = String(name||"").toLowerCase().trim();
+    if(!k) return null;
+    if(k.includes(".")) return k;
+    if(APP_ALIASES[k]) return APP_ALIASES[k];
+    for(const [alias,pkg] of Object.entries(APP_ALIASES)){
+      if(k.includes(alias)) return pkg;
+    }
+    return k.replace(/\s+/g, ".");
+  }
+
+  // Contactos: query via content provider (READ_CONTACTS) si el permiso existe; fallback vacío
+  async function queryContacts(q){
+    if(!q || q.trim().length<2) return [];
+    // content query contacts — nsenter necesario
+    const safe = q.replace(/'/g, "''").slice(0,60);
+    const cmd = `content query --uri content://com.android.contacts/contacts --where "display_name LIKE '%${safe}%'" --projection display_name:phone 2>&1 | head -n 20`;
+    const out = await runShell(cmd, 8000, 1024*1024);
+    // parse líneas tipo "Row: 3 display_name=Juan, phone=..." — heurística
+    const lines = out.stdout.split("\n").filter(l=> l.includes("display_name") || l.includes("Row:"));
+    const hits=[];
+    for(const line of lines){
+      const nameMatch = line.match(/display_name=([^,]+)/i);
+      const rowMatch = line.match(/Row:\s*\d+\s*([^,=]+)/);
+      const name = (nameMatch?.[1] || rowMatch?.[1] || "").trim();
+      // intenta obtener teléfono en segunda query si name hallado
+      if(name && name.length>1){
+        const cmd2 = `content query --uri content://com.android.contacts/data --where "display_name='${name.replace(/'/g,"''")}'" 2>&1 | grep -i -oE "\\+?[0-9][0-9 \\-]{6,}[0-9]" | head -n 3`;
+        const out2 = await runShell(cmd2, 6000, 1024*1024);
+        const phones = out2.stdout.split("\n").map(s=> s.replace(/[\s\-]/g,"").trim()).filter(s=> s.length>=8);
+        hits.push({ name, phones: [...new Set(phones)].slice(0,2), source: "contacts" });
+      }
+      if(hits.length>=5) break;
+    }
+    // si no hubo hits por content, al menos devuelve el q como contacto tentativo
+    if(hits.length===0){
+      const normalized = q.replace(/[^+0-9a-zA-Z ]/g,"").trim();
+      if(/^\+?[0-9 ]{8,}$/.test(normalized)) hits.push({ name: normalized, phones:[normalized.replace(/ /g,"")], source:"raw_phone" });
+    }
+    return hits.slice(0,5);
+  }
+
+  async function executeAssistantAction(action, slots={}, opts={}){
+    const started = Date.now();
+    let result={};
+    // para acciones que piden confirmación, no ejecutar directo
+    if(action==="whatsapp_send" && slots.contact && !slots.phone && !opts.forcePhone){
+      const hits = await queryContacts(slots.contact);
+      if(hits.length===0){
+        return { ok:false, need:"phone", message:`No encontré "${slots.contact}" en contactos. Indica número con código país (ej: +51999...).`, action, slots };
+      }
+      if(hits.length>1 && !opts.selectedIndex && hits.some(h=> h.phones.length===0 || h.phones.length>1)){
+        return { ok:false, type:"disambiguation", kind:"contacts", action, slots, options: hits.map((h,i)=> ({ idx:i, name:h.name, phones:h.phones, label:`${h.name}${h.phones.length? ` — ${h.phones[0]}`:""}` })), message:`Varios contactos coinciden con "${slots.contact}". Elige uno:` };
+      }
+      const chosen = opts.selectedIndex!=null ? hits[opts.selectedIndex] : hits[0];
+      const phone = chosen.phones[0] || slots.phone;
+      if(!phone) return { ok:false, need:"phone", message:`Contacto "${chosen.name}" sin teléfono. Indica número.`, action, slots, chosen };
+      slots.phone = phone.replace(/[^+0-9]/g,"");
+      slots.contactName = chosen.name;
+    }
+    // también para launch ambiguo: si el nombre no mapea a paquete conocido, pide desambiguación
+    if(action==="launch" && slots.app){
+      const pkg = appPackageFor(slots.app);
+      const out = await runShell(`pm list packages 2>&1 | grep -i -E "${pkg.replace(/\./g,"\\.")}" 2>&1 | head -n 5; echo "---"; pm list packages 2>&1 | grep -i "${String(slots.app).slice(0,12).replace(/"/g,"")}" 2>&1 | head -n 5`, 6000, 1024*1024);
+      const pkgs = out.stdout.split("\n").filter(l=> l.includes("package:")).map(l=> l.replace("package:","").trim());
+      if(pkgs.length===0){
+        return { ok:false, type:"disambiguation", kind:"app", action, slots, options: [], message:`No encontré app "${slots.app}". ¿Quisiste decir WhatsApp, Yape, Cámara, Chrome…?` };
+      }
+      if(pkgs.length>1){
+        const exact = pkgs.find(p=> p===pkg);
+        if(exact) slots.pkg = exact; else {
+          return { ok:false, type:"disambiguation", kind:"app", action, slots, options: pkgs.slice(0,4).map((p,i)=> ({ idx:i, pkg:p, label:p })), message:`Varias apps coinciden con "${slots.app}". Elige:` };
+        }
+      } else {
+        slots.pkg = pkgs[0] || pkg;
+      }
+      const pkgFinal = slots.pkg || pkg;
+      const amCmd = `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p ${pkgFinal} 2>&1 || monkey -p ${pkgFinal} -c android.intent.category.LAUNCHER 1 2>&1 || cmd package resolve-activity --brief -c android.intent.category.LAUNCHER ${pkgFinal} 2>&1`;
+      const r = await runShell(amCmd, 8000);
+      const ok = (r.stdout.includes("Events injected") || r.stdout.includes("Starting:"));
+      result = { ok, pkg: pkgFinal, stdout: r.stdout.slice(0,1200), stderr:r.stderr.slice(0,400) };
+      return { ok, action, slots, result, elapsedMs: Date.now()-started };
+    }
+
+    switch(action){
+      case "launch":
+        return { ok:false, type:"disambiguation", kind:"app", action, slots, options:[], message:"App no especificada" };
+      case "screenshot": {
+        const r = await runShell(`nsenter -t 1 -m -- sh -c 'screencap -p 2>/dev/null | base64 -w 0 2>/dev/null || screencap -p 2>/dev/null | base64 2>/dev/null'`, 25000, MAX_BUFFER);
+        const b64 = r.stdout.trim().replace(/\s/g,"");
+        if(b64.length<1000) return { ok:false, action, error:"screenshot vacío", stdout:r.stdout.slice(0,400) };
+        return { ok:true, action, result:{ b64, len:b64.length, approx_bytes: Math.floor(b64.length*0.75) }, elapsedMs: Date.now()-started };
+      }
+      case "volume_up": {
+        const r = await runShell(`input keyevent 24; input keyevent 24 2>&1; echo vol_up; dumpsys audio 2>&1 | grep -i "STREAM_MUSIC.*level" | head -n 2`, 5000);
+        return { ok:true, action, result:{ stdout:r.stdout.slice(0,800) }, elapsedMs: Date.now()-started };
+      }
+      case "volume_down": {
+        const r = await runShell(`input keyevent 25; input keyevent 25 2>&1; echo vol_down`, 5000);
+        return { ok:true, action, result:{ stdout:r.stdout.slice(0,600) }, elapsedMs: Date.now()-started };
+      }
+      case "volume_mute": {
+        const r = await runShell(`input keyevent 164 2>&1; echo mute; input keyevent 164 2>&1; echo mute2`, 5000);
+        return { ok:true, action, result:{ stdout:r.stdout.slice(0,600) }, elapsedMs: Date.now()-started };
+      }
+      case "lock_screen": {
+        const r = await runShell(`input keyevent 26 2>&1; echo lock`, 4000);
+        return { ok:true, action, result:{ stdout:r.stdout.slice(0,400) }, elapsedMs: Date.now()-started };
+      }
+      case "unlock_screen": {
+        const r = await runShell(`input keyevent 82 2>&1; sleep 0.3; input swipe 540 1800 540 600 300 2>&1; echo unlock_try`, 6000);
+        return { ok:true, action, result:{ stdout:r.stdout.slice(0,600) }, elapsedMs: Date.now()-started };
+      }
+      case "wifi_on": { const r = await runShell(`cmd wifi set-wifi-enabled enabled 2>&1; svc wifi enable 2>&1; echo wifi_on`, 6000); return { ok:true, action, result:{ stdout:r.stdout.slice(0,600)} , elapsedMs: Date.now()-started }; }
+      case "wifi_off": { const r = await runShell(`cmd wifi set-wifi-enabled disabled 2>&1; svc wifi disable 2>&1; echo wifi_off`, 6000); return { ok:true, action, result:{ stdout:r.stdout.slice(0,600)} , elapsedMs: Date.now()-started }; }
+      case "bluetooth_on": { const r = await runShell(`cmd bluetooth_manager enable 2>&1; svc bluetooth enable 2>&1; echo bt_on`, 6000); return { ok:true, action, result:{ stdout:r.stdout.slice(0,600)} , elapsedMs: Date.now()-started }; }
+      case "bluetooth_off": { const r = await runShell(`cmd bluetooth_manager disable 2>&1; svc bluetooth disable 2>&1; echo bt_off`, 6000); return { ok:true, action, result:{ stdout:r.stdout.slice(0,600)} , elapsedMs: Date.now()-started }; }
+      case "whatsapp_send_prompt": {
+        // si el usuario dijo "manda whatsapp a Juan" sin texto, pide texto
+        const hits = await queryContacts(slots.contact||"");
+        if(hits.length===0) return { ok:false, need:"contact", message:`No encontré "${slots.contact}". Indica nombre o número.`, action, slots };
+        if(hits.length>1) return { ok:false, type:"disambiguation", kind:"contacts", action:"whatsapp_send", slots:{...slots, text:""}, options: hits.map((h,i)=> ({ idx:i, name:h.name, phones:h.phones, label:`${h.name}${h.phones[0]? ` — ${h.phones[0]}`:""}` })), message:`Varios contactos coinciden con "${slots.contact}". Elige:` };
+        return { ok:false, type:"disambiguation", kind:"whatsapp_text", action:"whatsapp_send", slots:{ contact: hits[0].name, phone: hits[0].phones[0]||"", text:"" }, options:[], message:`¿Qué mensaje le envío a ${hits[0].name}${hits[0].phones[0]? ` (${hits[0].phones[0]})`:""}?` };
+      }
+      case "whatsapp_send": {
+        const phone = String(slots.phone||"").replace(/[^0-9+]/g,"").replace(/^\+0/,"+");
+        const text = String(slots.text||"").trim();
+        if(!phone) return { ok:false, need:"phone", message:"Falta teléfono", action, slots };
+        if(!text) return { ok:false, need:"text", message:"Falta texto del mensaje", action, slots };
+        const encoded = encodeURIComponent(text);
+        const uri = `https://api.whatsapp.com/send?phone=${phone.replace("+","")}&text=${encoded}`;
+        // am start VIEW con uri — abre WhatsApp con chat listo; si a11y está, puede auto-enviar
+        let r = await runShell(`am start -a android.intent.action.VIEW -d '${uri}' 2>&1 | head -n 20; echo WA_VIEW`, 8000);
+        const ok = r.stdout.includes("Starting:") || r.stdout.includes("WA_VIEW");
+        // intento de auto-enviar via a11y si bridge 8766 está
+        let autoSend = { tried:false };
+        if(ok){
+          autoSend.tried = true;
+          // espera a que WhatsApp cargue y pulsa "enviar" por a11y clickText
+          await new Promise(r2=> setTimeout(r2, 1800));
+          const fwd = await new Promise(resolve=>{
+            const pr = http.request({ hostname:"127.0.0.1", port:8766, path:"/a11y", method:"POST", headers:{"Content-Type":"application/json"} }, rr=>{
+              const c=[]; rr.on("data",x=> c.push(x)); rr.on("end",()=> resolve({ ok:true, body: Buffer.concat(c).toString("utf8") }));
+            });
+            pr.on("error", e=> resolve({ ok:false, error:String(e) }));
+            pr.write(JSON.stringify({ action:"clickText", text:"Enviar" }));
+            pr.end();
+          });
+          if(!fwd.ok){
+            autoSend.result = { error:fwd.error, hint:"WhatsApp abierto — pulsa Enviar manualmente si no se envió solo" };
+          } else {
+            try{ autoSend.result = JSON.parse(fwd.body); }catch{ autoSend.result = { body:fwd.body }; }
+          }
+        }
+        return { ok, action, slots, result:{ uri, stdout:r.stdout.slice(0,800), autoSend }, elapsedMs: Date.now()-started };
+      }
+      case "call": {
+        const hits = await queryContacts(slots.contact||"");
+        if(hits.length===0) return { ok:false, need:"contact", message:`No encontré "${slots.contact}"`, action, slots };
+        if(hits.length>1) return { ok:false, type:"disambiguation", kind:"contacts", action, slots, options: hits.map((h,i)=> ({ idx:i, name:h.name, phones:h.phones, label:`${h.name}${h.phones[0]? ` — ${h.phones[0]}`:""}` })), message:`Varios contactos para "${slots.contact}". Elige:` };
+        const phone = hits[0].phones[0] || "";
+        if(!phone) return { ok:false, need:"phone", message:`Contacto ${hits[0].name} sin teléfono`, action, slots };
+        const r = await runShell(`am start -a android.intent.action.CALL -d tel:${phone.replace(/[^+0-9]/g,"")} 2>&1 | head -n 10; echo CALL`, 6000);
+        return { ok:true, action, slots:{...slots, phone, contactName:hits[0].name}, result:{ stdout:r.stdout.slice(0,600)}, elapsedMs: Date.now()-started };
+      }
+      default: {
+        return { ok:false, error:`acción no soportada: ${action}`, action, slots };
+      }
+    }
+  }
+
+  if(pathname==="/api/assistant/intent" && req.method==="POST"){
+    try{
+      const raw = await readJsonBody(req, 64*1024);
+      const { text, lang } = JSON.parse(raw||"{}");
+      if(!text || !String(text).trim()) return json(res, 400, { error:"text requerido" });
+      const direct = directIntentOf(text);
+      if(direct){
+        // para acciones que necesitan parámetros faltantes, delegar a execute con disambiguation
+        if(direct.action==="whatsapp_send_prompt" || (direct.action==="whatsapp_send" && !direct.slots.text)){
+          // responde disambiguation inmediata sin llamar execute
+          const execRes = await executeAssistantAction(direct.action, direct.slots);
+          if(execRes.type==="disambiguation") return json(res, 200, execRes);
+          return json(res, 200, direct);
+        }
+        // si launch tiene app muy genérica, verificar si necesita disambiguation
+        if(direct.action==="launch"){
+          const check = await executeAssistantAction(direct.action, direct.slots);
+          if(check.type==="disambiguation" && (check.options||[]).length>0) return json(res, 200, check);
+          return json(res, 200, { ...direct, resolved: check });
+        }
+        return json(res, 200, direct);
+      }
+      // ambiguo: pide al LLM que clasifique (si opencode está sano, no gastamos tokens aquí — devolvemos estructura para que frontend llame a LLM)
+      return json(res, 200, { action:"llm_classify", slots:{ text: String(text).slice(0,600) }, hint: "Texto ambiguo — envíalo a opencode como mensaje con contexto assistant_mode. Si el LLM devuelve JSON {action, slots}, reenvía a /api/assistant/execute.", raw: text, lang: lang||"es" });
+    }catch(e){ return json(res, 500, { error:String(e).slice(0,600) }); }
+  }
+  if(pathname==="/api/assistant/execute" && req.method==="POST"){
+    try{
+      const raw = await readJsonBody(req, 64*1024);
+      const { action, slots, options, selectedIndex, forcePhone } = JSON.parse(raw||"{}");
+      if(!action) return json(res, 400, { error:"action requerido" });
+      // chip en progreso: log + header para que pill lo detecte
+      console.log(`[assistant] execute ${action} ${JSON.stringify(slots||{}).slice(0,300)}`);
+      res.setHeader("X-Assistant-Action", action);
+      const r = await executeAssistantAction(action, slots||{}, { selectedIndex: selectedIndex ?? options?.selectedIndex, forcePhone: forcePhone ?? !!slots?.phone });
+      // si es disambiguation, responde 200 con type para que frontend renderice tarjetas
+      const code = r.ok===false && r.type==="disambiguation" ? 200 : (r.ok ? 200 : 400);
+      return json(res, code, r);
+    }catch(e){ return json(res, 500, { error:String(e).slice(0,800) }); }
+  }
+
   // 3) static
   let fp = path.join(__dirname, "public", pathname==="/" ? "index.html" : pathname.slice(1));
   // path traversal guard

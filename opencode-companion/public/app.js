@@ -648,9 +648,175 @@ initRecognition();
 window.__cancelTts = cancelTts;
 window.__queueTts = queueTts;
 
-// ---- send (multimodal)
+// ---- Asistente Root: intent → execute → disambiguation tarjetas + chip píldora
+async function tryAssistantIntent(text){
+  try{
+    const intent = await jpost("/api/assistant/intent", {text});
+    if(!intent || !intent.action) return {handled:false};
+    if(intent.action==="llm_classify") return {handled:false};
+    if(intent.type==="disambiguation"){
+      renderDisambiguation(intent);
+      return {handled:true};
+    }
+    if(intent.action){
+      showPill(`Acción Root: ${intent.action}…`, "bash");
+      statusPill?.classList.add("root");
+      const execRes = await jpost("/api/assistant/execute", {action: intent.action, slots: intent.slots||{}});
+      handleAssistantExecResult(execRes, intent);
+      return {handled:true};
+    }
+    return {handled:false};
+  }catch(e){ console.warn("[assistant] intent err", e); return {handled:false}; }
+}
+function handleAssistantExecResult(r, original){
+  statusPill?.classList.remove("root");
+  if(!r) return;
+  if(r.type==="disambiguation"){
+    renderDisambiguation(r);
+    return;
+  }
+  if(r.ok){
+    const msg = formatAssistantSuccess(r);
+    addMsg("assistant", msg);
+    if(r.action==="screenshot" && r.result?.b64){
+      const img=document.createElement("img");
+      img.src="data:image/png;base64,"+r.result.b64;
+      img.style.maxWidth="100%"; img.style.borderRadius="12px"; img.style.marginTop="8px";
+      img.alt="captura";
+      msgsEl.appendChild(img);
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+    showPill("✓ Acción completada","read");
+    setTimeout(hidePill, 2200);
+    return;
+  }
+  if(r.need==="phone" || r.need==="text" || r.need==="contact"){
+    renderDisambiguation(r);
+    return;
+  }
+  addMsg("system", `Error acción Root: ${r.error||r.message||JSON.stringify(r).slice(0,500)}`);
+  showPill("Error acción Root","thinking");
+}
+function formatAssistantSuccess(r){
+  const s=r.slots||{};
+  switch(r.action){
+    case "launch": return `✓ App abierta: ${s.pkg || s.app || ""} — ${r.result?.stdout?.includes("Events injected")?"OK":"revisa"}`;
+    case "screenshot": return `✓ Captura tomada (${r.result?.b64 ? Math.round(r.result.b64.length*0.75/1024)+"KB" : ""})`;
+    case "volume_up": return "✓ Volumen subido";
+    case "volume_down": return "✓ Volumen bajado";
+    case "volume_mute": return "✓ Silenciado";
+    case "lock_screen": return "✓ Pantalla bloqueada";
+    case "unlock_screen": return "✓ Pantalla desbloqueada (gesto enviado)";
+    case "wifi_on": return "✓ WiFi activado";
+    case "wifi_off": return "✓ WiFi desactivado";
+    case "bluetooth_on": return "✓ Bluetooth activado";
+    case "bluetooth_off": return "✓ Bluetooth desactivado";
+    case "whatsapp_send": return `✓ WhatsApp a ${s.contactName || s.contact || s.phone}: ${s.text ? `"${s.text.slice(0,80)}"` : ""} — ${r.result?.autoSend?.result?.ok ? "enviado" : "abierto, pulsa Enviar si no se envió solo"}`;
+    case "call": return `✓ Llamando a ${s.contactName || s.contact || s.phone}`;
+    default: return `✓ Acción ${r.action} completada`;
+  }
+}
+function renderDisambiguation(data){
+  const card = el("div","assistant-card");
+  const title = el("div","card-title", data.message || "Elige una opción");
+  const desc = el("div","card-desc", `Acción: ${data.action} · ${data.kind||data.need||""}`);
+  const opts = el("div","card-options");
+  const options = Array.isArray(data.options) ? data.options : [];
+  if(options.length){
+    options.forEach(opt=>{
+      const btn = el("button","card-option");
+      const label = opt.label || opt.name || opt.pkg || `Opción ${opt.idx}`;
+      const sub = opt.phones ? opt.phones.join(", ") : opt.pkg || "";
+      btn.innerHTML = `<span><b>${label}</b><small>${sub}</small></span><span>→</span>`;
+      btn.onclick = async ()=>{
+        btn.disabled=true;
+        showPill("Acción Root en progreso…","bash");
+        statusPill?.classList.add("root");
+        try{
+          const execRes = await jpost("/api/assistant/execute", {action: data.action, slots: data.slots||{}, selectedIndex: opt.idx});
+          card.remove();
+          handleAssistantExecResult(execRes, data);
+        }catch(e){ addMsg("system","Error: "+String(e).slice(0,400)); }
+        statusPill?.classList.remove("root");
+        hidePill();
+      };
+      opts.appendChild(btn);
+    });
+  } else if(data.kind==="whatsapp_text" || data.need==="text"){
+    const input = el("input","card-input"); input.placeholder="Escribe el mensaje…";
+    const sendBtn = el("button","btn primary","Enviar WhatsApp"); sendBtn.style.marginTop="8px";
+    opts.appendChild(input); opts.appendChild(sendBtn);
+    setTimeout(()=> input.focus(), 120);
+    sendBtn.onclick = async ()=>{
+      const text = input.value.trim(); if(!text) return;
+      sendBtn.disabled=true;
+      showPill("Acción Root en progreso…","bash"); statusPill?.classList.add("root");
+      try{
+        const execRes = await jpost("/api/assistant/execute", {action: data.action, slots: {...(data.slots||{}), text}});
+        card.remove(); handleAssistantExecResult(execRes, data);
+      }catch(e){ addMsg("system","Error: "+String(e).slice(0,400)); }
+      statusPill?.classList.remove("root"); hidePill();
+    };
+    input.addEventListener("keydown", e=>{ if(e.key==="Enter") sendBtn.click(); });
+  } else if(data.need==="phone"){
+    const input = el("input","card-input"); input.placeholder="+51999…";
+    const btn = el("button","btn primary","Usar número"); btn.style.marginTop="8px";
+    opts.appendChild(input); opts.appendChild(btn);
+    setTimeout(()=> input.focus(), 120);
+    btn.onclick = async ()=>{
+      const phone=input.value.trim(); if(!phone) return;
+      btn.disabled=true; showPill("Acción Root en progreso…","bash"); statusPill?.classList.add("root");
+      try{
+        const execRes = await jpost("/api/assistant/execute", {action: data.action, slots:{...(data.slots||{}), phone}, forcePhone:true});
+        card.remove(); handleAssistantExecResult(execRes, data);
+      }catch(e){ addMsg("system","Error: "+String(e).slice(0,400)); }
+      statusPill?.classList.remove("root"); hidePill();
+    };
+  } else {
+    const hint = el("div","muted", data.message || JSON.stringify(data).slice(0,400));
+    hint.style.fontSize="12px"; opts.appendChild(hint);
+  }
+  card.appendChild(title); card.appendChild(desc); card.appendChild(opts);
+  msgsEl.appendChild(card); msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+// ---- send (multimodal) — con bypass Root directo sin pasar por LLM programático
 async function sendPrompt(){
-  let text = promptEl.value.trim();
+  // bypass directo: si es comando de voz directo (abre X, captura, volumen, whatsapp*) sin adjuntos, no crear sesión LLM
+  const rawText = promptEl.value.trim();
+  // solo si hay texto y no hay archivos adjuntos pesados; si hay adjuntos, siempre va a LLM
+  if(rawText && !state.attachedFiles.length){
+    try{
+      const intentCheck = await jpost("/api/assistant/intent", {text: rawText});
+      const isDirect = intentCheck && intentCheck.action && intentCheck.action!=="llm_classify";
+      if(isDirect){
+        // muestra burbuja usuario igualmente
+        if(state.currentProject && rawText.length < 3000 && !rawText.includes(state.currentProject)){
+          // opcional: mantener contexto visual pero no contaminar intent
+        }
+        addMsg("user", rawText);
+        promptEl.value=""; autoGrow();
+        showPill("Acción Root en progreso…","bash");
+        statusPill?.classList.add("root");
+        if(intentCheck.type==="disambiguation"){
+          renderDisambiguation(intentCheck);
+          statusPill?.classList.remove("root"); hidePill();
+          return;
+        }
+        const execRes = await jpost("/api/assistant/execute", {action: intentCheck.action, slots: intentCheck.slots||{}});
+        handleAssistantExecResult(execRes, intentCheck);
+        statusPill?.classList.remove("root");
+        // duplex: re-escucha
+        if(state.voiceMode==="duplex" && !speaking && !state.listening) setTimeout(()=> startListening(), 500);
+        return;
+      }
+    }catch(e){ /* fallback a LLM */ }
+  }
+
+  // no es intent directo → va a LLM (multimodal)
+  // limpiar estado root pill por si venía de intent directo previo fallido
+  statusPill?.classList.remove("root");
+  let text = rawText;
   const hasFiles = state.attachedFiles.length>0;
   if(!text && !hasFiles) return;
   let sid = state.currentSessionId;
@@ -683,8 +849,7 @@ async function sendPrompt(){
   state.attachedFiles=[]; renderChips(); if(filePicker) filePicker.value="";
 
   promptEl.value=""; autoGrow();
-  addMsg("user", text + (hasFiles ? ` \n[${state.attachedFiles.length} adjuntos]` : ""));
-  // show user chips count in UI? already cleared
+  addMsg("user", text + (hasFiles ? ` \n[${hasFiles ? (state.attachedFiles.length||0) + " adjuntos" : ""}]` : ""));
   showPill("Pensando…", "thinking");
   const agent = agentSel.value || undefined;
   const ac = new AbortController(); state.abortCtrl = ac;
