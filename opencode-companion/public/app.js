@@ -170,19 +170,103 @@ function setupSSE(){
   window.__companionShowPill = showPill;
 }
 
-// ---- status bar
+// ---- status bar + sessionOwnership pill (spec 5)
+// Ownership colors: green companion-owned, blue termux-native, red none
+// Reads /api/system/status sessionOwnership and renders pill with distinct dot/background.
+let lastOwnership = null;
+function ownershipMeta(ownership){
+  // Maps ownership string to display metadata for pill coloring
+  switch(ownership){
+    case "companion-owned": return { label: "companion", dot: "own-companion", pillClass: "pill-ownership companion", color: "#22c55e", desc: "companion-owned (we launched)" };
+    case "termux-native":   return { label: "termux",     dot: "own-termux",     pillClass: "pill-ownership termux",     color: "#3b82f6", desc: "termux-native (existing, not touched)" };
+    case "none":            return { label: "none",       dot: "own-none",       pillClass: "pill-ownership none",       color: "#ef4444", desc: "no serve running" };
+    default:                return { label: ownership || "unknown", dot: "own-unknown", pillClass: "pill-ownership unknown", color: "#8e8ea0", desc: ownership || "unknown" };
+  }
+}
+function renderOwnership(ownership, sessionInfo){
+  // Updates header pills with ownership badge — called from refreshStatus
+  const meta = ownershipMeta(ownership);
+  const pidHint = sessionInfo && sessionInfo.pid ? ` pid ${sessionInfo.pid}` : "";
+  // Use ocStatus pill for ownership display when available — append ownership label
+  // Keep dot color in sync: orig dotOc stays green if oc healthy, but ownership adds secondary hint
+  // We also update statusPill when ownership is known for prominent feedback
+  lastOwnership = ownership;
+  return meta;
+}
 async function refreshStatus(){
   try{
-    const s = await jget("/api/status");
+    // Prefer /api/system/status for ownership (spec), fallback to /api/status legacy
+    let s = null, ownership = null, sessionInfo = null;
+    try {
+      const sys = await jget("/api/system/status");
+      // Derive hub_ok from sys: ready implies hub is ok; sys also has hub+opencode fields
+      ownership = sys.sessionOwnership || null;
+      sessionInfo = sys.sessionInfo || null;
+      // Normalize to the shape refreshStatus expects for legacy rendering
+      s = {
+        hub: sys.ready ? "ok" : (sys.opencode && sys.opencode.up ? "ok" : "ok"), // hub itself is always ok if this endpoint responded
+        hub_port: 8765,
+        opencode: sys.opencode,
+        projects: null, // will be fetched separately if needed
+        root: sys.hint || "",
+        // carry ownership for extra rendering below
+        _ownership: ownership,
+        _sessionInfo: sessionInfo,
+        _ready: sys.ready,
+        _bridgeA11y: sys.bridge && sys.bridge.a11y
+      };
+    } catch {}
+    // Fallback to legacy /api/status if new endpoint not yet available
+    if (!s) s = await jget("/api/status");
+    // Also fetch legacy projects count if missing (sys status doesn't include projects list)
+    if (!s.projects) {
+      try { const full = await jget("/api/status"); s.projects = full.projects; s.hub_port = full.hub_port || s.hub_port; } catch {}
+    }
     const oc = s.opencode;
     const hubOk = s.hub==="ok";
     const ocOk = oc && (oc.healthy || oc.version);
     if(hubStatusEl) hubStatusEl.textContent = hubOk ? `hub :${s.hub_port}` : "hub off";
-    if(ocStatusEl) ocStatusEl.textContent = ocOk ? (oc.version ? `v${oc.version}` : "ok") : "off";
-    setDot(dotHub, hubOk); setDot(dotOc, !!ocOk);
+    // Ownership-aware oc status: show "termux:8765 pid 123" style with color dot
+    const meta = renderOwnership(ownership || s._ownership || null, sessionInfo || s._sessionInfo || null);
+    if(ocStatusEl){
+      if(ownership || s._ownership){
+        // Display ownership label with dot color matching spec (5)
+        ocStatusEl.textContent = ocOk ? `${meta.label}${sessionInfo && sessionInfo.pid ? ` pid ${sessionInfo.pid}` : (s._sessionInfo && s._sessionInfo.pid ? ` pid ${s._sessionInfo.pid}` : "")}` : "off";
+        // Set dot to ownership color rather than healthy green — spec requires distinct color per ownership
+        if(dotOc){
+          // Use ownership-specific class: own-companion (green), own-termux (blue), own-none (red)
+          dotOc.className = "dot " + meta.dot;
+        }
+      } else {
+        if(ocStatusEl) ocStatusEl.textContent = ocOk ? (oc.version ? `v${oc.version}` : "ok") : "off";
+        setDot(dotOc, !!ocOk);
+      }
+    } else {
+      setDot(dotOc, !!ocOk);
+    }
+    setDot(dotHub, hubOk);
     if(s.projects && projectsCountEl) projectsCountEl.textContent = String(s.projects.length);
-    if(sysInfo) sysInfo.textContent = `hub :${s.hub_port} · opencode ${ocOk ? "OK" : "—"} ${oc?.version||""}\n${(s.root||"").slice(0,280)}`;
+    if(sysInfo){
+      const ownLine = (ownership || s._ownership) ? `ownership: ${(ownership||s._ownership)}${(sessionInfo && sessionInfo.pid) ? ` pid ${sessionInfo.pid}` : ""} · ${meta ? meta.desc : ""}` : "";
+      sysInfo.textContent = `hub :${s.hub_port} · opencode ${ocOk ? "OK" : "—"} ${oc?.version||""}${ownLine ? `\n${ownLine}` : ""}\n${(s.root||"").slice(0,280)}`;
+    }
     if(hubFoot) hubFoot.textContent = hubOk ? `:${s.hub_port}` : "off";
+    // Also update floating statusPill with ownership for visibility on first load (distinct color per spec)
+    if((ownership || s._ownership) && statusPill && statusPillText){
+      const m = ownershipMeta(ownership || s._ownership);
+      // Only show ownership pill briefly on refresh if ownership changed or is notable
+      if(ownership === "termux-native" || ownership === "companion-owned" || ownership === "none"){
+        // Respect existing pill if showing thinking/bash; otherwise show ownership hint
+        const curText = statusPillText.textContent || "";
+        if(!curText.includes("Pensando") && !curText.includes("Ejecutando") && !curText.includes("Leyendo")){
+          statusPillText.textContent = `${m.label}${(sessionInfo && sessionInfo.pid) ? ` · pid ${sessionInfo.pid}` : ""} · ${ocOk ? "ready" : "not ready"}`;
+          statusPill.classList.remove("hidden");
+          statusPill.className = "status-pill " + (m.label === "companion" ? "own-companion" : m.label === "termux" ? "own-termux" : m.label === "none" ? "own-none" : "");
+          const dot = statusPill.querySelector(".pill-dot");
+          if(dot) dot.className = "pill-dot " + (m.label === "companion" ? "own-companion" : m.label === "termux" ? "own-termux" : m.label === "none" ? "own-none" : "thinking");
+        }
+      }
+    }
     return ocOk;
   }catch(e){
     if(hubStatusEl) hubStatusEl.textContent="err"; if(ocStatusEl) ocStatusEl.textContent="err";

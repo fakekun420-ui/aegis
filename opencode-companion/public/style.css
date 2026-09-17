@@ -145,9 +145,25 @@ body{ box-sizing:border-box; padding-top: env(safe-area-inset-top); }
 .status-pill.hidden{opacity:0; transform:translateX(-50%) translateY(-8px); pointer-events:none}
 .status-pill.root{border-color:rgba(245,158,11,.5); background:rgba(245,158,11,.16); color:#ffd08a}
 .status-pill.root .pill-dot{background:var(--warn); box-shadow:0 0 10px rgba(245,158,11,.5)}
+/* Ownership pills — spec (5): matching background per ownership state */
+.status-pill.own-companion{border-color:rgba(34,197,94,.5); background:rgba(34,197,94,.16); color:#bbf7d0}
+.status-pill.own-termux{border-color:rgba(59,130,246,.5); background:rgba(59,130,246,.16); color:#bfdbfe}
+.status-pill.own-none{border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.16); color:#fecaca}
+/* Legacy pill-ownership class aliases */
+.status-pill.pill-ownership.companion{border-color:rgba(34,197,94,.5); background:rgba(34,197,94,.16); color:#bbf7d0}
+.status-pill.pill-ownership.termux{border-color:rgba(59,130,246,.5); background:rgba(59,130,246,.16); color:#bfdbfe}
+.status-pill.pill-ownership.none{border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.16); color:#fecaca}
 .pill-dot{width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px rgba(124,92,255,.55); flex:0 0 8px}
 .pill-dot.thinking{animation:pulseDot 1.1s infinite}
 .pill-dot.bash{background:var(--warn)} .pill-dot.read{background:var(--accent2)}
+/* Ownership dots — spec (5): green companion-owned, blue termux-native, red none */
+.pill-dot.own-companion{background:#22c55e; box-shadow:0 0 10px rgba(34,197,94,.55)}
+.pill-dot.own-termux{background:#3b82f6; box-shadow:0 0 10px rgba(59,130,246,.55)}
+.pill-dot.own-none{background:#ef4444; box-shadow:0 0 10px rgba(239,68,68,.55)}
+/* Topbar dots reuse same ownership classes for header pills */
+.dot.own-companion{background:#22c55e; box-shadow:0 0 8px #22c55e}
+.dot.own-termux{background:#3b82f6; box-shadow:0 0 8px #3b82f6}
+.dot.own-none{background:#ef4444}
 @keyframes pulseDot{0%{transform:scale(1)}50%{transform:scale(1.18)}100%{transform:scale(1)}}
 
 .msgs{
