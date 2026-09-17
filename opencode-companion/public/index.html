@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
-<meta name="theme-color" content="#0a0a0f"/>
+<meta name="theme-color" content="#0d0d10"/>
 <title>opencode companion — POCO F3</title>
 <link rel="stylesheet" href="style.css"/>
 </head>
@@ -35,6 +35,14 @@
       <span class="pill"><span id="dot-oc" class="dot"></span> <span id="oc-status">…</span></span>
     </div>
     <div class="spacer"></div>
+    <div class="voice-mode-wrap" title="Modo de voz">
+      <span class="mode-label" data-mode="push">Texto</span>
+      <label class="switch-voice">
+        <input type="checkbox" id="voice-mode"/>
+        <span class="slider"></span>
+      </label>
+      <span class="mode-label" data-mode="duplex">Conversación</span>
+    </div>
     <select id="agent-select" class="agent-select" title="agent"></select>
   </header>
 
@@ -84,9 +92,10 @@
       <div id="msgs" class="msgs"></div>
 
       <div class="composer">
+        <div id="chips" class="chips hidden"></div>
         <div class="composer-row">
-          <button id="btn-attach" class="icon-btn attach-btn" aria-label="Adjuntar" title="Adjuntar archivo">+</button>
-          <input id="file-picker" type="file" hidden multiple />
+          <button id="btn-attach" class="icon-btn attach-btn" aria-label="Adjuntar" title="Adjuntar archivo">＋</button>
+          <input id="file-picker" type="file" hidden multiple accept=".jpg,.jpeg,.png,.webp,.mp4,.wav,.mp3,.txt,.cmd,.pdf,.docx,.sh,.py,.js,.ts,.json,.c,.cpp,.java,.go,.rs,.rb,.php,.bat,.ps1,.mjs,.cjs,.html,.css,.md,.yaml,.yml,.xml,.ini,.toml,.log,image/*,video/mp4,audio/*,.mp4,.MOV,.mov" />
           <div class="input-wrap">
             <textarea id="prompt" rows="1" placeholder="Escribe un mensaje…"></textarea>
           </div>
@@ -94,7 +103,6 @@
           <button id="btn-mic" class="icon-btn mic-btn" aria-label="Hablar" title="Hablar">🎙</button>
         </div>
         <div class="composer-meta">
-          <span id="attach-hint" class="muted hidden"></span>
           <span id="stream-status" class="muted"></span>
           <span id="stt-state" class="chip hidden"></span>
         </div>

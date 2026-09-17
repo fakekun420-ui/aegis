@@ -1,5 +1,6 @@
 // opencode companion — minimalista Claude/ChatGPT
 // drawer + pillow + composer limpio + SSE bidireccional + persistencia backend
+// + multimodal (+ chips) + voz dúplex
 const $ = s => document.querySelector(s);
 const msgsEl = $("#msgs"), promptEl = $("#prompt");
 const projectsList = $("#projects-list"), standaloneList = $("#standalone-list");
@@ -8,8 +9,10 @@ const hubStatusEl = $("#hub-status"), ocStatusEl = $("#oc-status"), dotHub = $("
 const sysInfo = $("#sys-info"), hubFoot = $("#hub-pill-foot");
 const statusPill = $("#status-pill"), statusPillText = $("#status-pill-text");
 const drawer = $("#drawer"), drawerBackdrop = $("#drawer-backdrop"), btnHamburger = $("#btn-hamburger");
-const filePicker = $("#file-picker"), attachHint = $("#attach-hint");
+const filePicker = $("#file-picker"), chipsEl = $("#chips");
 const projectsCountEl = $("#projects-count");
+const voiceModeToggle = $("#voice-mode");
+const btnMic = $("#btn-mic"), btnSend = $("#btn-send"), btnAttach = $("#btn-attach");
 
 let state = {
   sessions: [], projects: [],
@@ -19,7 +22,8 @@ let state = {
   lastAssistantText: "",
   abortCtrl: null,
   listening: false, recognition: null,
-  attachedFiles: [], // {name, textBase64?}
+  attachedFiles: [], // {name,type,size,kind,ext,b64,text,previewUrl}
+  voiceMode: localStorage.getItem("occ.voiceMode") || "push", // push | duplex
 };
 
 // ---- helpers
@@ -29,7 +33,7 @@ function addMsg(role, text, meta=""){
   msgsEl.appendChild(w);
   if(meta){ const m=el("div","muted",meta); m.style.fontSize="11px"; m.style.alignSelf = role==="user" ? "flex-end" : "flex-start"; msgsEl.appendChild(m); }
   msgsEl.scrollTop = msgsEl.scrollHeight;
-  if(role==="assistant"){ state.lastAssistantText = text; }
+  if(role==="assistant"){ state.lastAssistantText = text; queueTts(text); }
 }
 function setDot(elDot, ok){ if(!elDot) return; elDot.className = "dot "+(ok?"ok":"bad"); }
 async function jget(url){ const r=await fetch(url); if(!r.ok) throw new Error(url+" -> "+r.status+" "+await r.text().catch(()=> "")); return r.json(); }
@@ -42,30 +46,60 @@ async function jpatch(url, body){
   if(!r.ok) throw new Error(url+" -> "+r.status+" "+await r.text().catch(()=> "")); return r.json();
 }
 function persistUi(patch){
-  // local fast + backend sin reload
   if("project" in patch){ state.currentProject = patch.project; localStorage.setItem("occ.project", patch.project || ""); }
   if("sessionId" in patch){ state.currentSessionId = patch.sessionId; if(patch.sessionId) localStorage.setItem("occ.sessionId", patch.sessionId); else localStorage.removeItem("occ.sessionId"); }
   jpatch("/api/ui/state", patch).catch(()=>{});
 }
+function humanSize(b){
+  if(b<1024) return b+" B";
+  if(b<1024*1024) return (b/1024).toFixed(1)+" KB";
+  return (b/1024/1024).toFixed(1)+" MB";
+}
+function mimeGuess(ext){
+  const m={jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",webp:"image/webp",gif:"image/gif",mp4:"video/mp4",mov:"video/mp4",webm:"video/webm",wav:"audio/wav",mp3:"audio/mpeg",pdf:"application/pdf",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",txt:"text/plain",md:"text/markdown",json:"application/json"};
+  return m[ext]||"application/octet-stream";
+}
+function getFileKind(file){
+  const mime=(file.type||"").toLowerCase();
+  const name=file.name||"";
+  const ext=name.split(".").pop().toLowerCase();
+  if(mime.startsWith("image/")) return {kind:"image", ext, mime};
+  if(mime.startsWith("video/")) return {kind:"video", ext, mime};
+  if(mime.startsWith("audio/")) return {kind:"audio", ext, mime};
+  const map={jpg:"image",jpeg:"image",png:"image",webp:"image",gif:"image",bmp:"image",svg:"image",mp4:"video",mov:"video",webm:"video",avi:"video",mkv:"video",wav:"audio",mp3:"audio",ogg:"audio",m4a:"audio",flac:"audio",opus:"audio",pdf:"pdf",docx:"docx",doc:"docx",txt:"text",md:"text",log:"text",csv:"text",ini:"text",toml:"text",yaml:"text",yml:"text",xml:"text",json:"text",cmd:"exec",bat:"exec",sh:"exec",bash:"exec",ps1:"exec",py:"code",js:"code",mjs:"code",cjs:"code",ts:"code",jsx:"code",tsx:"code",html:"code",css:"code",c:"code",cpp:"code",h:"code",hpp:"code",java:"code",go:"code",rs:"code",rb:"code",php:"code",pl:"code",lua:"code",swift:"code",kt:"code",dart:"code"};
+  const k=map[ext]||"unknown";
+  return {kind:k, ext, mime: mime || mimeGuess(ext)};
+}
+function fileToBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>{ try{ const s=String(r.result||""); const b64=s.split(",")[1]||""; res(b64);}catch(e){rej(e);} };
+    r.onerror=()=> rej(r.error|| new Error("read error"));
+    r.readAsDataURL(file);
+  });
+}
+function fileToText(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=> res(String(r.result||""));
+    r.onerror=()=> rej(r.error|| new Error("read error"));
+    r.readAsText(file);
+  });
+}
 
 // ---- drawer
 function setupDrawer(){
-  const toggle = (id, force) => {
+  const toggle = (id) => {
     const body = document.getElementById(id);
     const btn = document.querySelector(`.section-toggle[data-target="${id}"]`);
     if(!body || !btn) return;
     const collapsed = body.classList.contains("collapsed");
-    const nextCollapsed = typeof force === "boolean" ? force : !collapsed;
-    // force=false means expand
-    const expand = !nextCollapsed;
-    // we store collapsed=false when expanded
-    if(expand){ body.classList.remove("collapsed"); btn.setAttribute("aria-expanded","true"); }
+    if(collapsed){ body.classList.remove("collapsed"); btn.setAttribute("aria-expanded","true"); }
     else { body.classList.add("collapsed"); btn.setAttribute("aria-expanded","false"); }
   };
   document.querySelectorAll(".section-toggle").forEach(b=>{
     b.addEventListener("click", ()=> toggle(b.dataset.target));
   });
-  // hamburger
   const setOpen = (open) => {
     if(!drawer || !drawerBackdrop) return;
     drawer.classList.toggle("open", open);
@@ -77,14 +111,10 @@ function setupDrawer(){
     setOpen(open);
   });
   drawerBackdrop?.addEventListener("click", ()=> setOpen(false));
-  // close on project/session pick on mobile
   document.addEventListener("keydown", e=>{ if(e.key==="Escape") setOpen(false); });
   return { setOpen, toggle };
 }
 const drawerCtl = setupDrawer();
-function chevronForProject(projectName){
-  return `<span class="chevron" aria-hidden="true">⌃</span>`;
-}
 
 // ---- status + pill (SSE en tiempo real, bidireccional Wizard)
 let pillTimer = null;
@@ -121,7 +151,6 @@ function setupSSE(){
           const d = JSON.parse(e.data);
           const [text, kind] = pillFromSseEvent(d);
           showPill(text, kind);
-          // mirror to top pills if wizard activity
           if(hubStatusEl && d.sessionId) hubStatusEl.textContent = "wizard · " + (text.slice(0,18));
         }catch{}
       };
@@ -138,7 +167,6 @@ function setupSSE(){
     }catch(e){ showPill("SSE no disponible", "thinking"); }
   };
   connect();
-  // also sync pill on fetch: expose showPill for app.js internals
   window.__companionShowPill = showPill;
 }
 
@@ -166,11 +194,7 @@ async function refreshStatus(){
 
 // ---- projects + sessions in drawer (colapsable proyectos → chats)
 let projectExpanded = new Set(JSON.parse(localStorage.getItem("occ.expandedProjects") || "[]"));
-
-function persistExpanded(){
-  localStorage.setItem("occ.expandedProjects", JSON.stringify([...projectExpanded]));
-}
-
+function persistExpanded(){ localStorage.setItem("occ.expandedProjects", JSON.stringify([...projectExpanded])); }
 async function refreshProjects(){
   try{
     const list = await jget("/api/projects");
@@ -187,14 +211,11 @@ async function refreshSessions(){
     list.sort((a,b)=> new Date(b.updatedAt||b.updated_at||b.createdAt||0) - new Date(a.updatedAt||a.updated_at||a.createdAt||0));
     state.sessions = list;
     renderDrawer();
-    // no auto-select here: lo hace init() con /api/ui/state
   }catch(e){
     if(standaloneList) standaloneList.innerHTML = `<div class="muted" style="padding:8px">opencode off</div>`;
   }
 }
-
 function sessionsForProject(projectName){
-  // heurística: title contiene projectName o directory/project-related
   const p = (projectName||"").toLowerCase();
   return state.sessions.filter(s=>{
     const t = String(s.title||s.name||"").toLowerCase();
@@ -202,33 +223,27 @@ function sessionsForProject(projectName){
     return t.includes(p) || dir.includes(p);
   });
 }
-
 function renderDrawer(){
   if(!projectsList || !standaloneList) return;
-  // projects section: cada proyecto colapsable
   projectsList.innerHTML = "";
-  const standalone = [];
   const usedIds = new Set();
-
   state.projects.forEach(proj=>{
     const group = el("div","project-group");
     const isExpanded = projectExpanded.has(proj.name);
     const header = el("button","project-row");
-    header.innerHTML = `<span style="flex:1; min-width:0"><span class="project-name">${proj.name}</span><br><span class="project-meta">${proj.hasPackage?"pkg · ":""}${proj.git?"git":""}</span></span><span class="chevron" style="transform: rotate(${isExpanded?180:0}deg)">${"⌃"}</span>`;
+    header.innerHTML = `<span style="flex:1; min-width:0"><span class="project-name">${proj.name}</span><br><span class="project-meta">${proj.hasPackage?"pkg · ":""}${proj.git?"git":""}</span></span><span class="chevron" style="transform: rotate(${isExpanded?180:0}deg)">⌃</span>`;
     header.classList.toggle("active", state.currentProject===proj.name);
     header.setAttribute("aria-expanded", String(isExpanded));
     header.onclick = ()=>{
       state.currentProject = proj.name;
       persistUi({ project: proj.name });
       [...projectsList.querySelectorAll(".project-row")].forEach(n=> n.classList.toggle("active", n===header));
-      // toggle expand
       if(projectExpanded.has(proj.name)) projectExpanded.delete(proj.name); else projectExpanded.add(proj.name);
       persistExpanded();
       renderDrawer();
       showPill(`Proyecto: ${proj.name}`, "read");
     };
     group.appendChild(header);
-
     const list = document.createElement("div");
     list.style.display = isExpanded ? "grid" : "none";
     list.style.gap = "6px";
@@ -236,8 +251,7 @@ function renderDrawer(){
     sess.forEach(s=>{
       const id = s.id || s.ID || s.sessionID || s.sessionId;
       usedIds.add(id);
-      const row = sessionRowEl(s);
-      list.appendChild(row);
+      list.appendChild(sessionRowEl(s));
     });
     if(sess.length===0){
       const empty = el("div","muted", "sin chats"); empty.style.padding="4px 8px"; empty.style.fontSize="12px";
@@ -247,8 +261,6 @@ function renderDrawer(){
     projectsList.appendChild(group);
   });
   if(projectsCountEl) projectsCountEl.textContent = String(state.projects.length);
-
-  // standalone: sesiones no asociadas a proyecto
   standaloneList.innerHTML = "";
   const free = state.sessions.filter(s=>{
     const id = s.id||s.ID||s.sessionID||s.sessionId;
@@ -258,16 +270,10 @@ function renderDrawer(){
   if(free.length===0){
     standaloneList.innerHTML = `<div class="muted" style="padding:8px; font-size:12px">sin chats sueltos</div>`;
   }
-
-  // also update active session highlight globally
   document.querySelectorAll(".session-row").forEach(r=>{
     r.classList.toggle("active", r.dataset.sessionId===state.currentSessionId);
   });
-  document.querySelectorAll(".project-row").forEach(r=>{
-    // active already handled
-  });
 }
-
 function sessionRowEl(s){
   const id = s.id || s.ID || s.sessionID || s.sessionId;
   const title = s.title || s.name || id.slice(0,8);
@@ -276,10 +282,7 @@ function sessionRowEl(s){
   row.title = id;
   row.innerHTML = `<span class="session-title">${title}</span><span class="session-sub">${(s.model?.id||s.model||"").toString().slice(0,10) || new Date(s.createdAt||Date.now()).toLocaleDateString()}</span>`;
   if(state.currentSessionId===id) row.classList.add("active");
-  row.onclick = ()=> {
-    selectSession(id);
-    drawerCtl?.setOpen?.(false);
-  };
+  row.onclick = ()=> { selectSession(id); drawerCtl?.setOpen?.(false); };
   row.oncontextmenu = async (e)=>{ e.preventDefault(); if(confirm(`Borrar sesión ${title}?`)){ try{ await fetch(`/opencode/session/${id}`,{method:"DELETE"}); await refreshSessions(); }catch(err){ alert(String(err).slice(0,400)); } } };
   return row;
 }
@@ -341,91 +344,358 @@ promptEl.addEventListener("keydown", e=>{
     sendPrompt();
   }
 });
-$("#btn-attach")?.addEventListener("click", ()=> filePicker?.click());
-filePicker?.addEventListener("change", async ()=>{
-  const files = [...(filePicker.files||[])];
+
+// ---- multimodal: chips descartables + Base64
+function renderChips(){
+  if(!chipsEl) return;
+  if(!state.attachedFiles.length){ chipsEl.classList.add("hidden"); chipsEl.innerHTML=""; return; }
+  chipsEl.classList.remove("hidden");
+  chipsEl.innerHTML="";
+  state.attachedFiles.forEach((f, idx)=>{
+    const chip = el("div","chip-file");
+    let thumb="";
+    if(f.kind==="image" && f.previewUrl){
+      thumb=`<img class="thumb" src="${f.previewUrl}" alt="">`;
+    } else {
+      const icons={video:"🎬",audio:"🎵",pdf:"📄",docx:"📝",text:"📄",code:"💻",exec:"⚙️",unknown:"📎"};
+      thumb=`<span style="font-size:14px">${icons[f.kind]||"📎"}</span>`;
+    }
+    const hint = (f.kind==="exec"||f.kind==="code") ? `<span class="chip-doc-hint">${f.ext} ● análisis</span>` : "";
+    chip.innerHTML = `${thumb}<span class="name" title="${f.name}">${f.name}</span><span class="meta">${humanSize(f.size)}</span>${hint}<button class="x" data-idx="${idx}" aria-label="Quitar">×</button>`;
+    chipsEl.appendChild(chip);
+  });
+  chipsEl.querySelectorAll(".x").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const idx=parseInt(btn.dataset.idx);
+      state.attachedFiles.splice(idx,1);
+      renderChips();
+      showPill(state.attachedFiles.length?`Quedan ${state.attachedFiles.length}`:"Sin adjuntos","read");
+    });
+  });
+}
+async function handleFiles(fileList){
+  const files=[...fileList].slice(0,6);
   if(!files.length) return;
-  state.attachedFiles = [];
-  for(const f of files.slice(0,4)){
-    const buf = await f.arrayBuffer().catch(()=> null);
-    if(!buf) continue;
-    // keep as base64 for image, or text snippet
-    const b64 = f.type.startsWith("image/") ? btoa(String.fromCharCode(...new Uint8Array(buf.slice(0, 2_500_000)))) : null;
-    state.attachedFiles.push({ name:f.name, type:f.type, size:f.size, b64: b64 || null });
+  if(state.attachedFiles.length + files.length > 6){
+    showPill("Máximo 6 archivos","thinking");
+    files.splice(6 - state.attachedFiles.length);
   }
-  if(attachHint){
-    attachHint.textContent = state.attachedFiles.length ? `adjuntos: ${state.attachedFiles.map(a=> a.name).join(", ")}` : "";
-    attachHint.classList.toggle("hidden", !state.attachedFiles.length);
+  for(const file of files){
+    const {kind, ext, mime} = getFileKind(file);
+    const limits={image:15*1024*1024, video:30*1024*1024, audio:25*1024*1024, pdf:20*1024*1024, docx:20*1024*1024, text:10*1024*1024, code:10*1024*1024, exec:10*1024*1024, unknown:10*1024*1024};
+    const lim=limits[kind]||10*1024*1024;
+    if(file.size > lim){
+      showPill(`${file.name} muy grande (${humanSize(file.size)} > ${humanSize(lim)}) — se omite`,"thinking");
+      continue;
+    }
+    let entry={name:file.name, type: file.type || mimeGuess(ext) || mime, size:file.size, kind, ext, b64:null, text:null, previewUrl:null};
+    try{
+      if(kind==="image" || kind==="video" || kind==="audio" || kind==="pdf" || kind==="docx"){
+        const b64 = await fileToBase64(file);
+        entry.b64 = b64;
+        if(kind==="image") entry.previewUrl = `data:${entry.type};base64,${b64}`;
+      } else if(kind==="text" || kind==="code" || kind==="exec"){
+        const txt = await fileToText(file);
+        entry.text = txt.slice(0,120000);
+      } else {
+        if(file.size < 2*1024*1024){
+          const txt = await fileToText(file).catch(()=> null);
+          if(txt && txt.trim().length>0) entry.text = txt.slice(0,80000);
+          else entry.b64 = await fileToBase64(file);
+        } else {
+          entry.b64 = await fileToBase64(file);
+        }
+      }
+    }catch(e){
+      showPill(`Error leyendo ${file.name}: ${String(e).slice(0,80)}`,"thinking");
+      continue;
+    }
+    state.attachedFiles.push(entry);
   }
-  showPill(state.attachedFiles.length ? `Adjuntos: ${state.attachedFiles.length}` : "Sin adjuntos", "read");
+  renderChips();
+  showPill(state.attachedFiles.length?`${state.attachedFiles.length} archivo(s) listos`:"Sin archivos","read");
+  if(filePicker) filePicker.value="";
+}
+btnAttach?.addEventListener("click", ()=> filePicker?.click());
+filePicker?.addEventListener("change", async ()=>{
+  const files=[...(filePicker.files||[])];
+  await handleFiles(files);
+});
+// drag & drop sobre composer
+const composerEl = $(".composer");
+composerEl?.addEventListener("dragover", e=>{ e.preventDefault(); composerEl.style.borderColor="var(--accent)"; });
+composerEl?.addEventListener("dragleave", ()=>{ composerEl.style.borderColor=""; });
+composerEl?.addEventListener("drop", async e=>{
+  e.preventDefault(); composerEl.style.borderColor="";
+  const files=[...(e.dataTransfer?.files||[])];
+  if(files.length) await handleFiles(files);
 });
 
-// ---- STT (simple, sin etiquetas) — mic hace speech → prompt
-let recognition = null;
-function initStt(){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR) return;
-  recognition = new SR();
-  recognition.lang = "es-ES";
-  recognition.interimResults = false;
-  recognition.continuous = false;
-  let finals = "";
-  recognition.onstart = ()=> { state.listening=true; $("#btn-mic")?.classList.add("on"); showPill("Escuchando…", "thinking"); };
-  recognition.onresult = e=>{
-    let t=""; for(let i=e.resultIndex;i<e.results.length;i++) if(e.results[i].isFinal) t += e.results[i][0].transcript + " ";
-    finals += t;
+function getExecAnalysisHint(files){
+  const execFiles = files.filter(f=> f.kind==="exec" || f.kind==="code" || f.kind==="text" );
+  if(!execFiles.length) return "";
+  const toolMap={
+    cmd:{label:"Windows Batch (.cmd/.bat)", tools:["wine cmd","cmd.exe","pwsh"], cmd:"wine cmd /c"},
+    bat:{label:"Windows Batch (.bat)", tools:["wine cmd","pwsh"], cmd:"wine cmd /c"},
+    sh:{label:"Shell (.sh)", tools:["bash","shellcheck","shfmt"], cmd:"bash"},
+    bash:{label:"Shell (.sh)", tools:["bash","shellcheck"], cmd:"bash"},
+    ps1:{label:"PowerShell (.ps1)", tools:["pwsh","powershell"], cmd:"pwsh -File"},
+    py:{label:"Python (.py)", tools:["python3","ruff","black","pytest"], cmd:"python3"},
+    js:{label:"JavaScript (.js)", tools:["node","eslint","prettier"], cmd:"node"},
+    mjs:{label:"JavaScript (.mjs)", tools:["node"], cmd:"node"},
+    cjs:{label:"JavaScript (.cjs)", tools:["node"], cmd:"node"},
+    ts:{label:"TypeScript (.ts)", tools:["ts-node","tsc","tsx"], cmd:"npx tsx"},
+    java:{label:"Java (.java)", tools:["javac","java","maven","gradle"], cmd:"javac && java"},
+    go:{label:"Go (.go)", tools:["go run","go build"], cmd:"go run"},
+    rs:{label:"Rust (.rs)", tools:["rustc","cargo run"], cmd:"cargo run"},
+    c:{label:"C (.c)", tools:["gcc","clang","make"], cmd:"gcc"},
+    cpp:{label:"C++ (.cpp)", tools:["g++","clang++","cmake"], cmd:"g++"},
+    html:{label:"HTML", tools:["npx serve","python3 -m http.server"], cmd:"abrir en navegador"},
+    css:{label:"CSS", tools:["prettier","stylelint"], cmd:"prettier"},
+    php:{label:"PHP (.php)", tools:["php"], cmd:"php"},
+    rb:{label:"Ruby (.rb)", tools:["ruby"], cmd:"ruby"},
+    txt:{label:"Texto (.txt)", tools:["cat","less","grep","awk","sed"], cmd:"cat"},
+    md:{label:"Markdown (.md)", tools:["cat","pandoc","glow"], cmd:"cat"},
   };
-  recognition.onend = ()=>{
-    $("#btn-mic")?.classList.remove("on");
+  const lines=["[Archivos adjuntos — análisis Linux solicitado]"];
+  execFiles.forEach(f=>{
+    const info=toolMap[f.ext] || {label:`${f.ext.toUpperCase()} (.${f.ext})`, tools:["cat","less","file"], cmd:"cat"};
+    lines.push(`- ${f.name} (${info.label}, ${humanSize(f.size)}): herramientas sugeridas: ${info.tools.join(", ")}. Comando propuesto: \`${info.cmd} ${f.name}\` — verificar sintaxis con ${info.tools[0]}`);
+  });
+  lines.push("Instrucción para opencode: analiza sintaxis de cada archivo, detecta errores, propón corrección y comando compatible con Linux (POCO F3, proot Ubuntu). Si es Windows-only (.cmd/.bat), sugiere equivalente Linux o ejecución vía wine si está disponible. Indica dependencias (pip, npm, apt).");
+  return lines.join("\n");
+}
+
+// ---- voz bidireccional: switch Texto/Pulsar vs Conversación Continua dúplex
+const voiceModeLabelPush = document.querySelector('.mode-label[data-mode="push"]');
+const voiceModeLabelDuplex = document.querySelector('.mode-label[data-mode="duplex"]');
+function updateVoiceModeLabels(){
+  const isDuplex = state.voiceMode==="duplex";
+  voiceModeLabelPush?.classList.toggle("active", !isDuplex);
+  voiceModeLabelDuplex?.classList.toggle("active", isDuplex);
+  if(voiceModeToggle) voiceModeToggle.checked = isDuplex;
+  if(btnMic) btnMic.title = isDuplex ? "Conversación continua — escucha activa" : "Pulsar para hablar";
+}
+function setVoiceMode(mode){
+  state.voiceMode = mode==="duplex" ? "duplex" : "push";
+  localStorage.setItem("occ.voiceMode", state.voiceMode);
+  updateVoiceModeLabels();
+  // reinit recognition with new continuous flag
+  initRecognition();
+  if(state.voiceMode==="duplex"){
+    showPill("Modo conversación — escucha tras TTS", "thinking");
+    // if not listening, start after short delay
+    setTimeout(()=> { if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 400);
+  } else {
+    showPill("Modo texto — pulsar para hablar", "read");
+    stopListening();
+  }
+}
+voiceModeToggle?.addEventListener("change", ()=>{
+  setVoiceMode(voiceModeToggle.checked ? "duplex" : "push");
+});
+updateVoiceModeLabels();
+
+// TTS: chunks + Web Audio API low latency + interrupción dúplex
+let ttsQueue=[], speaking=false;
+let audioCtx=null;
+function ensureAudioContext(){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx && audioCtx.state==="suspended") audioCtx.resume();
+  }catch{}
+}
+function queueTts(text){
+  if(!text) return;
+  ensureAudioContext();
+  const chunks = text.match(/[^.!?¡¿\n]+[.!?¡¿\n]+|[^.!?¡¿\n]+$/g) || [text];
+  const limited=[];
+  chunks.forEach(c=>{
+    if(c.length>200){
+      c.match(/.{1,200}(?:\s|$)/g)?.forEach(s=> limited.push(s.trim()));
+    } else limited.push(c.trim());
+  });
+  ttsQueue.push(...limited.filter(Boolean));
+  if(!speaking) drainTts();
+}
+function cancelTts(){
+  try{ speechSynthesis.cancel(); }catch{}
+  ttsQueue=[]; speaking=false;
+}
+function drainTts(){
+  if(!ttsQueue.length){ speaking=false; hidePill(); if(state.voiceMode==="duplex"){ setTimeout(()=> { if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 420); } return; }
+  speaking=true;
+  const chunk=ttsQueue.shift();
+  showPill(`🔊 ${chunk.slice(0,42)}… (${ttsQueue.length})`, "thinking");
+  const ut=new SpeechSynthesisUtterance(chunk);
+  // pick es voice
+  const vs=speechSynthesis.getVoices();
+  const pref=vs.find(v=> v.lang.toLowerCase().startsWith("es-419")||v.lang.toLowerCase()==="es-us") || vs.find(v=> v.lang.toLowerCase().startsWith("es"));
+  if(pref) ut.voice=pref;
+  ut.lang= pref?.lang || "es-ES";
+  ut.rate=1; ut.pitch=1;
+  ut.onend=()=> setTimeout(drainTts, 70);
+  ut.onerror=()=> setTimeout(drainTts, 70);
+  speechSynthesis.speak(ut);
+}
+function initVoices(){
+  const load=()=>{
+    const vs=speechSynthesis.getVoices();
+    state.voices=vs;
+  };
+  load(); speechSynthesis.onvoiceschanged=load;
+}
+initVoices();
+
+// STT: Web Speech API + Android bridge compatible, conmutado por voiceMode
+let recognition=null;
+let finalsBuf="";
+function initRecognition(){
+  const SR=window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ if(btnMic) btnMic.disabled=true; return; }
+  if(recognition){ try{ recognition.onend=null; recognition.onresult=null; recognition.onerror=null; recognition.abort(); }catch{} }
+  recognition = new SR();
+  recognition.lang="es-ES";
+  recognition.continuous = state.voiceMode==="duplex";
+  recognition.interimResults = true;
+  recognition.maxAlternatives=1;
+  finalsBuf="";
+  recognition.onstart=()=>{
+    state.listening=true; btnMic?.classList.add("on");
+    showPill(state.voiceMode==="duplex" ? "Escuchando continuo…" : "Escuchando… habla", "thinking");
+  };
+  recognition.onresult=(ev)=>{
+    let interim="", fin="";
+    for(let i=ev.resultIndex;i<ev.results.length;i++){
+      const res=ev.results[i];
+      const txt=res[0].transcript;
+      if(res.isFinal) fin+= txt+" ";
+      else interim+= txt+" ";
+    }
+    // interrupción dúplex: si TTS hablando y hay interim, corta TTS
+    if(speaking && interim.trim().length>1){
+      cancelTts();
+      showPill("Interrumpido — te escucho…", "thinking");
+    }
+    if(fin) finalsBuf+= fin;
+    if(interim) showPill(`…${interim.slice(0,56)}`, "thinking");
+    else if(fin) showPill(`✓ ${fin.slice(0,56)}`, "read");
+  };
+  recognition.onend=()=>{
+    btnMic?.classList.remove("on");
     state.listening=false;
-    if(finals.trim()){
-      promptEl.value = (promptEl.value ? promptEl.value+" " : "") + finals.trim();
-      autoGrow(); hidePill();
+    const t=finalsBuf.trim();
+    finalsBuf="";
+    if(t){
+      if(state.voiceMode==="duplex"){
+        // dúplex: auto-enviar
+        promptEl.value = t;
+        autoGrow();
+        sendPrompt();
+      } else {
+        // push: transcribir al input, no auto-enviar
+        promptEl.value = (promptEl.value ? promptEl.value+" " : "") + t;
+        autoGrow(); promptEl.focus(); hidePill();
+      }
     } else {
       hidePill();
     }
-    finals="";
+    // dúplex: re-escucha tras cada turno
+    if(state.voiceMode==="duplex" && !speaking){
+      setTimeout(()=>{ if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 500);
+    }
   };
-  recognition.onerror = ()=> { $("#btn-mic")?.classList.remove("on"); hidePill(); };
+  recognition.onerror=(e)=>{
+    btnMic?.classList.remove("on");
+    state.listening=false;
+    // no-speech en duplex -> reintenta
+    if(e.error==="no-speech" && state.voiceMode==="duplex"){
+      setTimeout(()=>{ if(state.voiceMode==="duplex") startListening(); }, 700);
+    } else {
+      showPill(`STT: ${e.error||"error"}`, "thinking");
+      if(state.voiceMode==="duplex") setTimeout(()=> startListening(), 900);
+    }
+  };
+  state.recognition=recognition;
 }
-initStt();
-$("#btn-mic")?.addEventListener("click", ()=>{
-  if(!recognition) { showPill("STT no soportado en este navegador", "thinking"); return; }
-  if(state.listening) { try{ recognition.stop(); }catch{} return; }
-  try{ recognition.start(); }catch(e){ showPill(String(e).slice(0,80), "thinking"); }
+function startListening(){
+  ensureAudioContext();
+  if(!recognition) initRecognition();
+  if(!recognition) return;
+  if(state.listening) return;
+  // si TTS está hablando y duplex quiere escuchar, sigue escuchando igual (dúplex permite interrumpir)
+  try{ recognition.start(); }catch(e){ showPill(String(e).slice(0,80),"thinking"); }
+}
+function stopListening(){
+  if(!recognition) return;
+  try{ recognition.stop(); }catch{}
+}
+btnMic?.addEventListener("click", ()=>{
+  ensureAudioContext();
+  if(state.voiceMode==="duplex"){
+    // toggle continuo
+    if(state.listening) stopListening();
+    else startListening();
+  } else {
+    // push
+    if(state.listening) stopListening();
+    else startListening();
+  }
 });
+initRecognition();
 
-// ---- send
+// expose cancelTts for external (e.g., sendPrompt should not cancel, but user speech does)
+window.__cancelTts = cancelTts;
+window.__queueTts = queueTts;
+
+// ---- send (multimodal)
 async function sendPrompt(){
   let text = promptEl.value.trim();
-  if(!text && !state.attachedFiles.length) return;
-  // si no hay sesión, crear
+  const hasFiles = state.attachedFiles.length>0;
+  if(!text && !hasFiles) return;
   let sid = state.currentSessionId;
   if(!sid){ sid = await createSession(); if(!sid) return; }
-  if(state.currentProject && text.length < 3000 && !text.includes(state.currentProject)){
+  if(state.currentProject && text.length < 3000 && text && !text.includes(state.currentProject)){
     text = `[contexto proyecto: ${state.currentProject} en /sdcard/projects/${state.currentProject}]\n` + text;
   }
-  // build parts: text + attached images as file parts (opencode handles)
-  const parts = [{ type:"text", text }];
+  // build parts con streaming: imágenes Base64 sin límite, docs como texto
+  const parts=[{ type:"text", text: text || "(solo archivos adjuntos)" }];
+  // análisis docs
+  const hint = getExecAnalysisHint(state.attachedFiles);
+  if(hint) parts.unshift({ type:"text", text: hint });
   for(const a of state.attachedFiles){
-    if(a.b64 && a.type.startsWith("image/")){
+    if(a.b64 && (a.kind==="image" || a.kind==="video" || a.kind==="audio" || a.kind==="pdf" || a.kind==="docx")){
+      // opencode espera file parts; usamos type file con base64
+      // para imágenes también enviamos como image para compatibilidad
+      if(a.kind==="image"){
+        parts.push({ type:"image", image: a.b64, mime: a.type, filename: a.name });
+      }
       parts.push({ type:"file", mime: a.type, filename: a.name, data: a.b64 });
-    } else {
-      parts.push({ type:"text", text: `[adjunto ${a.name} — ${a.size} bytes]` });
+    } else if(a.text){
+      const lang = a.ext==="py" ? "python" : a.ext==="sh" ? "bash" : a.ext==="js" ? "javascript" : a.ext==="cmd" ? "batch" : a.ext;
+      const header = a.name ? `Archivo: ${a.name} (${a.kind}/${a.ext}, ${humanSize(a.size)})` : `Adjunto ${a.ext}`;
+      parts.push({ type:"text", text: `${header}\n\`\`\`${lang}\n${a.text.slice(0,120000)}\n\`\`\`` });
+    } else if(a.b64){
+      parts.push({ type:"file", mime: a.type, filename: a.name, data: a.b64 });
     }
   }
-  state.attachedFiles = []; if(attachHint){ attachHint.textContent=""; attachHint.classList.add("hidden"); } if(filePicker) filePicker.value="";
+  // clear chips
+  state.attachedFiles=[]; renderChips(); if(filePicker) filePicker.value="";
 
   promptEl.value=""; autoGrow();
-  addMsg("user", text);
-  $("#btn-send").disabled=true;
+  addMsg("user", text + (hasFiles ? ` \n[${state.attachedFiles.length} adjuntos]` : ""));
+  // show user chips count in UI? already cleared
   showPill("Pensando…", "thinking");
   const agent = agentSel.value || undefined;
   const ac = new AbortController(); state.abortCtrl = ac;
+  // stop listening while thinking? In duplex, keep listening for interruption but pause? duplex keeps listening, push pauses.
+  const wasListening = state.listening;
+  if(state.voiceMode==="push" && wasListening) stopListening();
 
   try{
     const body = { parts };
     if(agent) body.agent = agent;
+    // streaming via chunks: fetch will chunk automatically (no limit) — server.js hace req.pipe(pr) sin truncar
     const r = await fetch(`/opencode/session/${sid}/message`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body), signal: ac.signal });
     if(!r.ok){
       const t = await r.text();
@@ -444,9 +714,12 @@ async function sendPrompt(){
     if(e.name==="AbortError") { addMsg("system","Envío abortado."); showPill("Abortado", "thinking"); }
     else { addMsg("system","Error enviando: "+String(e).slice(0,800)); showPill("Error enviando", "thinking"); }
   }finally{
-    $("#btn-send").disabled=false; state.abortCtrl=null;
+    if(btnSend) btnSend.disabled=false; state.abortCtrl=null;
     await refreshSessions();
-    hidePill();
+    // duplex: TTS ya se encargará de re-escuchar al terminar; push: no auto
+    if(state.voiceMode==="duplex" && !speaking && !state.listening){
+      setTimeout(()=> startListening(), 600);
+    }
   }
 }
 function handleMessageResponse(data, rawFallback){
@@ -522,7 +795,7 @@ jget("/api/system/status").then(s=>{
 
 // ---- wiring chat
 $("#btn-new-session")?.addEventListener("click", createSession);
-$("#btn-send")?.addEventListener("click", sendPrompt);
+btnSend?.addEventListener("click", sendPrompt);
 $("#session-search")?.addEventListener("input", e=>{
   const q = e.target.value.toLowerCase();
   document.querySelectorAll(".session-row").forEach(r=>{
@@ -541,18 +814,15 @@ $("#session-search")?.addEventListener("input", e=>{
       if(ui.project) localStorage.setItem("occ.project", ui.project);
       if(ui.sessionId) localStorage.setItem("occ.sessionId", ui.sessionId);
     } else {
-      // fallback local
       state.currentProject = localStorage.getItem("occ.project") || null;
       state.currentSessionId = localStorage.getItem("occ.sessionId") || null;
     }
   }catch{}
-  // expanded projects restore handled via localStorage (UI only)
   await refreshStatus();
   await Promise.all([refreshProjects(), refreshSessions(), refreshAgents()]);
   if(state.currentSessionId && state.sessions.find(s=> (s.id||s.ID||s.sessionID||s.sessionId)===state.currentSessionId)){
     await selectSession(state.currentSessionId);
   } else if(state.sessions.length){
-    // keep sessionId from backend if any, else first
     const first = state.sessions[0].id || state.sessions[0].ID || state.sessions[0].sessionId;
     if(!state.currentSessionId) persistUi({ sessionId: first });
   }

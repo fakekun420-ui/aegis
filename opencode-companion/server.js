@@ -49,9 +49,17 @@ function json(res, code, obj){ send(res, code, JSON.stringify(obj), {"Content-Ty
 
 function proxyToOpencode(req, res){
   const targetPath = req.url.replace(/^\/opencode/, "") || "/";
+  // streaming sin límite ni truncamiento: reenvía body por chunks (64KB) con backpressure
+  // soporta payloads multimodales grandes (JPG/PNG/WEBP, MP4, WAV/MP3, PDF/DOCX, .cmd/.sh/.py) en Base64
   const opts = { hostname: OPENCODE_HOST, port: OPENCODE_PORT, path: targetPath, method: req.method, headers: { ...req.headers, host: `${OPENCODE_HOST}:${OPENCODE_PORT}` } };
   delete opts.headers["accept-encoding"];
-  // anti-hang: si ninguna parte escribe, responde 502 en 8s
+  // preservar Content-Length si existe; si no, chunked (sin límite)
+  const contentLength = req.headers["content-length"] ? parseInt(req.headers["content-length"]) : null;
+  if(contentLength && contentLength > 0){
+    console.log(`[proxy] ${req.method} ${targetPath} streaming ${Math.round(contentLength/1024)}KB via chunks`);
+  } else if(req.method==="POST" || req.method==="PUT" || req.method==="PATCH"){
+    console.log(`[proxy] ${req.method} ${targetPath} streaming chunked (sin Content-Length)`);
+  }
   const guard = setTimeout(() => {
     if (!res.headersSent) {
       try { json(res, 502, { error: 'opencode timeout', hint: `opencode serve no respondió en 8s en ${OPENCODE_HOST}:${OPENCODE_PORT}` }); } catch (_) {}
@@ -75,11 +83,10 @@ function proxyToOpencode(req, res){
     } else try{ res.end(); }catch(_){}
   });
   req.on('error', e => { clearTimeout(guard); console.error('[proxy] req error', e.message); try { pr.destroy(); } catch (_) {} });
-  // backpressure-safe pipe (mantiene memoria < 64KB chunks)
+  // stream por chunks con backpressure — sin límite de tamaño, sin truncar Base64
   try { req.pipe(pr); } catch (e) { clearTimeout(guard); console.error('[proxy] pipe err', e.message); }
-  // timeout largo para streaming LLM con imágenes (60s)
-  pr.setTimeout(65000, ()=> { clearTimeout(guard); console.error('[proxy] timeout 65s'); try{ pr.destroy(); }catch(_){} });
-  res.setTimeout(70000, () => { clearTimeout(guard); console.error('[proxy] res timeout 70s'); try { res.destroy(); } catch (_) {} });
+  pr.setTimeout(120000, ()=> { clearTimeout(guard); console.error('[proxy] timeout 120s (payload grande)'); try{ pr.destroy(); }catch(_){} });
+  res.setTimeout(130000, () => { clearTimeout(guard); console.error('[proxy] res timeout 130s'); try { res.destroy(); } catch (_) {} });
 }
 
 // device helpers — portable + Android namespace aware
@@ -145,8 +152,8 @@ async function listProjects(){
 }
 
 const server = http.createServer(async (req, res)=>{
-  // harden against slowloris / header attacks
-  req.setTimeout(65000, () => { console.error('[hub] req timeout 65s', req.url?.slice(0,120)); try { res.destroy(); } catch (_) {} });
+  // timeouts largos para payloads multimodales grandes (video/audio/docs en Base64)
+  req.setTimeout(125000, () => { console.error('[hub] req timeout 125s (multimodal)', req.url?.slice(0,140)); try { res.destroy(); } catch (_) {} });
   res.on('close', () => { /* cleanup */ });
   if(req.method==="OPTIONS"){ return send(res, 204, ""); }
   let url;
@@ -358,16 +365,16 @@ server.on('clientError', (err, socket) => {
   console.error('[hub] clientError', String(err).slice(0,300));
   try { socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'); } catch (_) {}
 });
-server.keepAliveTimeout = 65000;
-server.headersTimeout = 66000;
-server.requestTimeout = 70000;
+server.keepAliveTimeout = 125000;
+server.headersTimeout = 130000;
+server.requestTimeout = 135000;
 server.maxHeadersCount = 100;
 server.listen(HUB_PORT, "0.0.0.0", ()=>{
   console.log(`\n[opencode-companion] hub listening http://0.0.0.0:${HUB_PORT}`);
   console.log(`  local  : http://127.0.0.1:${HUB_PORT}`);
   console.log(`  proxy  : /opencode/* -> http://${OPENCODE_HOST}:${OPENCODE_PORT}`);
   console.log(`  api    : /api/status  /api/device/*`);
-  console.log(`  pid    : ${process.pid}  node ${process.version}  keepAlive 65s`);
+  console.log(`  pid    : ${process.pid}  node ${process.version}  keepAlive 125s (multimodal streaming)`);
   // try auto-start opencode if not healthy
   http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path:"/global/health", timeout:2000 }, r=>{
     let d=""; r.on("data",c=>d+=c); r.on("end",()=>{

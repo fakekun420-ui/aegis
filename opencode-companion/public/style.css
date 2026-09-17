@@ -101,6 +101,24 @@ button{font:inherit}
 .sys-info{font:11px ui-monospace, monospace; color:var(--muted); white-space:pre-wrap; max-height:92px; overflow:auto; background:#0a0a0f; border:1px solid var(--border); border-radius:10px; padding:8px}
 .drawer-foot-links{display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap}
 
+.voice-mode-wrap{display:flex; align-items:center; gap:6px; margin-left:8px; font-size:11px; color:var(--muted)}
+.mode-label{opacity:.6; transition:opacity .18s, color .18s} .mode-label.active{opacity:1; color:var(--text); font-weight:700}
+.switch-voice{position:relative; width:44px; height:24px; display:inline-block}
+.switch-voice input{opacity:0; width:0; height:0}
+.switch-voice .slider{position:absolute; inset:0; background:var(--panel3); border:1px solid var(--border); border-radius:999px; transition:.2s}
+.switch-voice .slider:before{content:""; position:absolute; width:18px; height:18px; left:2px; top:2px; background:white; border-radius:50%; transition:.2s; box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.switch-voice input:checked + .slider{background:linear-gradient(135deg,var(--accent),#3ad0ff); border-color:transparent}
+.switch-voice input:checked + .slider:before{transform:translateX(20px)}
+
+.chips{display:flex; flex-wrap:wrap; gap:6px; max-width: var(--max); width:100%; margin:0 auto 8px}
+.chip-file{display:inline-flex; align-items:center; gap:6px; padding:6px 8px; border-radius:999px; background:var(--panel3); border:1px solid var(--border2); font-size:12px; max-width:220px}
+.chip-file .name{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.chip-file .meta{font-size:11px; color:var(--muted)}
+.chip-file .x{width:18px; height:18px; border-radius:50%; border:0; background:rgba(255,255,255,.08); color:var(--muted); cursor:pointer; display:grid; place-items:center; font-size:12px}
+.chip-file .x:hover{background:var(--err); color:white}
+.chip-file img.thumb{width:22px; height:22px; border-radius:6px; object-fit:cover; flex:0 0 22px}
+.chip-doc-hint{font-size:11px; color:var(--accent2); background:rgba(124,92,255,.12); border:1px dashed rgba(124,92,255,.28); padding:4px 8px; border-radius:999px}
+
 .drawer-backdrop{
   display:none; position:fixed; inset:0; top: calc(56px + env(safe-area-inset-top));
   background:rgba(0,0,0,.42); border:0; z-index:15;
