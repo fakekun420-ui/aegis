@@ -350,6 +350,7 @@ function renderDrawer(){
       if(projectExpanded.has(expKey)) projectExpanded.delete(expKey); else projectExpanded.add(expKey);
       persistExpanded();
       renderDrawer();
+      refreshSkillsUI();
       showPill(`Proyecto: ${proj.name}`, "read");
     };
     // Right-click to archive/unarchive quick action
@@ -579,6 +580,200 @@ function setupNewProjectForm(){
   });
   // Enter on name creates (with Ctrl/Cmd not needed — simple Enter)
   nameEl?.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ e.preventDefault(); btnCreate.click(); } });
+}
+
+// ---- Skills + Linked Projects UI (drawer Project Settings panel) ----
+async function fetchSkills(projectId){
+  try {
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    const r = await fetch(`/api/skills${qs}`);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    // j.data is {skills, projectId, counts}
+    return j.data;
+  } catch (e) { console.warn("[skills] fetch", e.message); return { skills: [], counts: {} }; }
+}
+async function refreshSkillsUI(){
+  const pid = state.currentProjectId;
+  const hint = $("#project-settings-hint");
+  const listEl = $("#skills-list");
+  const linkedList = $("#linked-projects-list");
+  const selectEl = $("#linked-project-select");
+  if (!pid) {
+    if (hint) hint.textContent = "Selecciona un proyecto para ver skills y vínculos.";
+    if (listEl) listEl.innerHTML = `<div class="muted" style="font-size:11px;padding:4px;">—</div>`;
+    if (linkedList) linkedList.innerHTML = `<div class="muted" style="font-size:11px;padding:4px;">—</div>`;
+    if (selectEl) selectEl.innerHTML = "";
+    return;
+  }
+  const proj = state.projects.find(p => p.id === pid);
+  if (hint) hint.textContent = proj ? `${proj.name}${proj.description ? " — " + proj.description.slice(0,60) : ""}` : pid;
+  // Skills
+  try {
+    const data = await fetchSkills(pid);
+    const skills = data.skills || [];
+    listEl.innerHTML = "";
+    if (!skills.length) listEl.innerHTML = `<div class="muted" style="font-size:11px;padding:4px;">Sin skills (global o del proyecto).</div>`;
+    for (const s of skills) {
+      const row = el("div", "");
+      row.style.cssText = "display:flex;flex-direction:column;gap:4px;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--panel2);";
+      const head = el("div", "");
+      head.style.cssText = "display:flex;gap:6px;align-items:center;";
+      const badge = el("span", "chip", s.scope === "global" ? "global" : "proyecto");
+      badge.style.fontSize = "10px";
+      const title = el("span", "", s.name);
+      title.style.cssText = "font-weight:700;font-size:12px;flex:1;";
+      const btnEdit = el("button", "btn", "Editar");
+      btnEdit.style.cssText = "padding:2px 6px;font-size:11px;";
+      const btnDel = el("button", "btn", "×");
+      btnDel.style.cssText = "padding:2px 6px;font-size:12px;color:var(--err);";
+      head.append(badge, title, btnEdit, btnDel);
+      const preview = el("div", "muted");
+      preview.style.cssText = "font-size:11px;white-space:pre-wrap;max-height:80px;overflow:auto;background:#0a0a0f;border:1px solid var(--border);border-radius:6px;padding:6px;";
+      preview.textContent = (s.content || "").slice(0, 400);
+      row.append(head, preview);
+      // Edit flow — reuse add form populated
+      btnEdit.onclick = () => {
+        $("#skill-scope").value = s.scope === "global" ? "global" : "project";
+        $("#skill-name").value = s.name;
+        $("#skill-name").dataset.editScope = s.scope;
+        $("#skill-name").dataset.editName = s.name;
+        $("#skill-content").value = s.content || "";
+        const form = $("#add-skill-form");
+        form.classList.remove("hidden"); form.style.display = "grid";
+        $("#skill-content").focus();
+      };
+      btnDel.onclick = async () => {
+        if (!confirm(`Eliminar skill "${s.name}" [${s.scope}]?`)) return;
+        try {
+          const r = await fetch(`/api/skills/${encodeURIComponent(s.scope)}/${encodeURIComponent(s.name)}`, { method: "DELETE" });
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error);
+          showPill(`Skill "${s.name}" eliminada`, "read");
+          await refreshSkillsUI();
+        } catch (e) { alert(String(e.message).slice(0,400)); }
+      };
+      listEl.appendChild(row);
+    }
+  } catch (e) { listEl.innerHTML = `<div class="muted" style="color:var(--err);font-size:11px;">${String(e.message).slice(0,200)}</div>`; }
+  // Linked Projects
+  try {
+    const proj2 = state.projects.find(p => p.id === pid);
+    const linked = (proj2 && proj2.linkedProjects) || [];
+    linkedList.innerHTML = "";
+    if (!linked.length) linkedList.innerHTML = `<div class="muted" style="font-size:11px;padding:4px;">Sin proyectos vinculados.</div>`;
+    else {
+      for (const lid of linked) {
+        const lp = state.projects.find(p => p.id === lid);
+        const name = lp ? lp.name : lid;
+        const row = el("div", "");
+        row.style.cssText = "display:flex;gap:6px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:6px;background:var(--panel2);";
+        const label = el("span", "", name);
+        label.style.cssText = "flex:1;font-size:12px;";
+        const btnRm = el("button", "btn", "×");
+        btnRm.style.cssText = "padding:2px 6px;";
+        btnRm.onclick = async () => {
+          const next = linked.filter(x => x !== lid);
+          try {
+            const r = await fetch(`/api/projects/${encodeURIComponent(pid)}`, { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ linkedProjects: next }) });
+            const j = await r.json(); if (!j.ok) throw new Error(j.error);
+            await refreshProjects(); await refreshSkillsUI();
+          } catch (e) { alert(String(e.message).slice(0,300)); }
+        };
+        row.append(label, btnRm);
+        linkedList.appendChild(row);
+      }
+    }
+    // Populate select with available projects not yet linked and not self/archived
+    const available = state.projects.filter(p => p.id !== pid && !p.archivedAt && !linked.includes(p.id));
+    selectEl.innerHTML = available.length ? "" : `<option value="">(no hay proyectos)</option>`;
+    for (const p of available) {
+      const opt = document.createElement("option");
+      opt.value = p.id; opt.textContent = p.name;
+      selectEl.appendChild(opt);
+    }
+  } catch {}
+}
+function setupSkillsUI(){
+  const btnAdd = $("#btn-add-skill"), form = $("#add-skill-form");
+  const scopeEl = $("#skill-scope"), nameEl = $("#skill-name"), contentEl = $("#skill-content");
+  const btnSave = $("#btn-save-skill"), btnCancel = $("#btn-cancel-skill");
+  const errEl = $("#add-skill-error");
+  if (!btnAdd || !form) return;
+  btnAdd.onclick = () => {
+    form.classList.remove("hidden"); form.style.display = "grid";
+    if (nameEl) { nameEl.value = ""; delete nameEl.dataset.editScope; delete nameEl.dataset.editName; }
+    if (contentEl) contentEl.value = "";
+    if (errEl) errEl.textContent = "";
+    setTimeout(() => nameEl.focus(), 50);
+  };
+  btnCancel.onclick = () => {
+    form.classList.add("hidden"); form.style.display = "none";
+    if (errEl) errEl.textContent = "";
+    if (nameEl) { delete nameEl.dataset.editScope; delete nameEl.dataset.editName; }
+  };
+  btnSave.onclick = async () => {
+    const rawScope = scopeEl ? scopeEl.value : "global";
+    const scope = rawScope === "project" ? (state.currentProjectId || "global") : "global";
+    const name = (nameEl.value || "").trim();
+    const content = contentEl ? contentEl.value : "";
+    if (!state.currentProjectId && scope !== "global") { if (errEl) errEl.textContent = "Selecciona un proyecto primero"; return; }
+    if (!name) { if (errEl) errEl.textContent = "Nombre requerido"; nameEl.focus(); return; }
+    if (errEl) errEl.textContent = "Guardando…";
+    btnSave.disabled = true;
+    try {
+      const isEdit = !!(nameEl.dataset.editScope && nameEl.dataset.editName);
+      if (isEdit) {
+        const es = nameEl.dataset.editScope, en = nameEl.dataset.editName;
+        const r = await fetch(`/api/skills/${encodeURIComponent(es)}/${encodeURIComponent(en)}`, { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ content }) });
+        const j = await r.json(); if (!j.ok) throw new Error(j.error);
+        // If user changed name/scope during edit, we keep original location; rename not supported via edit — inform
+        if (es !== scope || en !== name) {
+          // Create new and keep old — simplest: also create new
+          const r2 = await fetch(`/api/skills`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ scope, name, content }) });
+          const j2 = await r2.json(); if (!j2.ok) throw new Error(j2.error);
+        }
+      } else {
+        const r = await fetch(`/api/skills`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ scope, name, content }) });
+        const j = await r.json(); if (!j.ok) throw new Error(j.error);
+      }
+      form.classList.add("hidden"); form.style.display = "none";
+      if (nameEl) { delete nameEl.dataset.editScope; delete nameEl.dataset.editName; }
+      if (errEl) errEl.textContent = "";
+      showPill(`Skill "${name}" guardada [${scope}]`, "read");
+      await refreshSkillsUI();
+    } catch (e) { if (errEl) errEl.textContent = String(e.message).slice(0,400); }
+    finally { btnSave.disabled = false; }
+  };
+  $("#btn-link-project")?.addEventListener("click", async () => {
+    const pid = state.currentProjectId;
+    if (!pid) { $("#linked-error").textContent = "Selecciona un proyecto"; return; }
+    const sel = $("#linked-project-select");
+    const target = sel ? sel.value : "";
+    if (!target) return;
+    const proj = state.projects.find(p => p.id === pid);
+    const cur = (proj && proj.linkedProjects) || [];
+    if (cur.includes(target)) return;
+    try {
+      const next = [...cur, target];
+      const r = await fetch(`/api/projects/${encodeURIComponent(pid)}`, { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ linkedProjects: next }) });
+      const j = await r.json(); if (!j.ok) throw new Error(j.error);
+      await refreshProjects(); await refreshSkillsUI();
+      $("#linked-error").textContent = "";
+    } catch (e) { $("#linked-error").textContent = String(e.message).slice(0,300); }
+  });
+  $("#btn-summarize-project")?.addEventListener("click", async () => {
+    const pid = state.currentProjectId;
+    if (!pid) { $("#linked-error").textContent = "Selecciona un proyecto"; return; }
+    $("#linked-error").textContent = "Generando resumen…";
+    try {
+      const r = await fetch(`/api/projects/${encodeURIComponent(pid)}/summarize`, { method: "POST", headers: {"Content-Type":"application/json"}, body: "{}" });
+      const j = await r.json(); if (!j.ok) throw new Error(j.error);
+      $("#linked-error").textContent = "";
+      showPill(`Resumen generado: ${(j.data && j.data.summary || "").slice(0,60)}…`, "read");
+      await refreshSkillsUI();
+    } catch (e) { $("#linked-error").textContent = String(e.message).slice(0,300); }
+  });
 }
 
 // ---- composer: input expandible + Enter envía
@@ -1172,8 +1367,9 @@ $("#session-search")?.addEventListener("input", e=>{
   });
 });
 
-// Wire new project form before init
+  // Wire new project form + skills UI before init
 setupNewProjectForm();
+setupSkillsUI();
 
 // ---- init: carga backend ui-state primero para no sobrescribir (spec 5: projectId + sessionId)
 (async ()=>{
@@ -1194,6 +1390,7 @@ setupNewProjectForm();
   }catch{}
   await refreshStatus();
   await Promise.all([refreshProjects(), refreshSessions(), refreshAgents()]);
+  await refreshSkillsUI();
   if(state.currentSessionId && state.sessions.find(s=> (s.id||s.ID||s.sessionID||s.sessionId)===state.currentSessionId)){
     await selectSession(state.currentSessionId);
   } else if(state.sessions.length){

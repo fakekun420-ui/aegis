@@ -26,6 +26,8 @@ const OPENCODE_PORT = parseInt(process.env.OPENCODE_PORT || argVal("--opencode-p
 const OPENCODE_HOST = process.env.OPENCODE_HOST || "127.0.0.1";
 const PROJECTS_ROOT = "/sdcard/projects";
 const UI_STATE_FILE = path.join(__dirname, "ui-state.json");
+const SKILLS_ROOT = path.join(__dirname, "skills");
+const SUMMARIES_DIR = path.join(__dirname, "summaries");
 const UI_STATE = (() => {
   try { if (fs.existsSync(UI_STATE_FILE)) return JSON.parse(fs.readFileSync(UI_STATE_FILE, "utf8")); } catch {}
   // New fields: projectId (companion managed id), sessionId; legacy `project` (folder name) kept for compat
@@ -85,6 +87,108 @@ function normalizeSessionEntry(s) {
     lastUsed: s.lastUsed || s.createdAt || nowIso(),
     summary: s.summary || ""
   };
+}
+
+// ---- Skills + Summaries storage helpers ----
+// Skills are markdown files at skills/{scope}/{name}.skill.md — scope "global" or projectId.
+// Summaries are JSON files at summaries/{projectId}.summary.json with {summary, updatedAt, sessions[]}.
+
+function sanitizeScope(v) { return String(v || "").trim(); }
+function sanitizeName(v) { return String(v || "").trim(); }
+function isValidScope(scope) {
+  if (scope === "global") return true;
+  // projectId scopes must correspond to an existing project id (or we allow any alphanumeric hyphen)
+  return /^[a-z0-9][a-z0-9-]*$/i.test(scope);
+}
+function isValidSkillName(name) {
+  return /^[a-z0-9][a-z0-9 _-]*$/i.test(name) && name.length <= 80;
+}
+function skillPath(scope, name) {
+  // Prevent path traversal — sanitize
+  const s = scope.replace(/[^a-zA-Z0-9_-]/g, "");
+  const n = name.replace(/[^a-zA-Z0-9 _-]/g, "").replace(/\.+/g, "");
+  return path.join(SKILLS_ROOT, s, `${n}.skill.md`);
+}
+function listSkills(scope) {
+  const dir = path.join(SKILLS_ROOT, scope);
+  try {
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir).filter(f => f.endsWith(".skill.md")).map(f => {
+      const name = f.replace(/\.skill\.md$/, "");
+      const full = path.join(dir, f);
+      const stat = fs.statSync(full);
+      const content = fs.readFileSync(full, "utf8");
+      return { scope, name, content, updatedAt: stat.mtime.toISOString(), size: content.length };
+    });
+  } catch { return []; }
+}
+function listAllSkillsMerged(projectId) {
+  // Returns global skills + project-specific skills merged (global first)
+  const global = listSkills("global");
+  const project = projectId ? listSkills(projectId) : [];
+  return [...global, ...project];
+}
+function writeSkill(scope, name, content) {
+  const p = skillPath(scope, name);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, String(content || ""), "utf8");
+  return { scope, name, content: String(content || ""), path: p };
+}
+function deleteSkill(scope, name) {
+  const p = skillPath(scope, name);
+  if (!fs.existsSync(p)) return false;
+  fs.unlinkSync(p);
+  // Remove empty scope dir
+  try { if (fs.readdirSync(path.dirname(p)).length === 0) fs.rmdirSync(path.dirname(p)); } catch {}
+  return true;
+}
+function readSummary(projectId) {
+  const p = path.join(SUMMARIES_DIR, `${projectId}.summary.json`);
+  try { if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, "utf8")); } catch {}
+  return null;
+}
+function writeSummary(projectId, summary) {
+  fs.mkdirSync(SUMMARIES_DIR, { recursive: true });
+  const p = path.join(SUMMARIES_DIR, `${projectId}.summary.json`);
+  const obj = { projectId, summary: String(summary || "").trim(), updatedAt: nowIso() };
+  fs.writeFileSync(p, JSON.stringify(obj, null, 2));
+  return obj;
+}
+function buildCrossProjectContext(projectId) {
+  // Include one-paragraph summary of each linked project's last 3 sessions equivalent — here using summary.json
+  if (!projectId) return "";
+  const store = loadProjectsStore();
+  const proj = findProject(store, projectId);
+  if (!proj || !proj.linkedProjects || proj.linkedProjects.length === 0) return "";
+  const paragraphs = [];
+  for (const linkedId of proj.linkedProjects.slice(0, 8)) {
+    const linked = findProject(store, linkedId);
+    const title = linked ? linked.name : linkedId;
+    const summ = readSummary(linkedId);
+    if (summ && summ.summary) {
+      paragraphs.push(`Project "${title}" (${linkedId}): ${summ.summary}`);
+    } else {
+      // Fallback: list last 3 session titles if no summary yet
+      const last = linked && linked.sessions ? linked.sessions.slice(-3).map(s => s.title || s.sessionId) : [];
+      if (last.length) paragraphs.push(`Project "${title}" (${linkedId}) recent sessions: ${last.join(" | ")} — no summary yet.`);
+      else paragraphs.push(`Project "${title}" (${linkedId}): no summary or sessions.`);
+    }
+  }
+  return paragraphs.join("\n\n");
+}
+function buildSkillsContext(projectId) {
+  const skills = listAllSkillsMerged(projectId);
+  if (!skills.length) return "";
+  return skills.map(s => `### Skill: ${s.name} [${s.scope}]\n${s.content}`).join("\n\n---\n\n");
+}
+function buildSystemContextBlock(projectId) {
+  // Compose skills + cross-project context into a single system block
+  const parts = [];
+  const skillsBlock = buildSkillsContext(projectId);
+  if (skillsBlock) parts.push(`# Active Skills\n${skillsBlock}`);
+  const crossBlock = buildCrossProjectContext(projectId);
+  if (crossBlock) parts.push(`# Cross-Project Context (linked projects)\n${crossBlock}`);
+  return parts.join("\n\n");
 }
 
 // ---- Non-destructive session ownership discovery (hub must never kill TUI) ----
@@ -234,19 +338,107 @@ function send(res, code, body, headers={}){
 }
 function json(res, code, obj){ send(res, code, JSON.stringify(obj), {"Content-Type":"application/json; charset=utf-8"}); }
 
+async function proxyWithInjection(req, resRaw, originalBodyBuf) {
+  // For opencode message routes (/session/:id/message, /session/:id/prompt etc.), prepend system context block if project has skills.
+  // Only runs when Content-Type is JSON and targetPath looks like a message send, so GETs/streaming unaffected.
+  const targetPathCheck = req.url.replace(/^\/opencode/, "") || "/";
+  const isMessageRoute = /\/session\/[^\/]+\/(message|prompt|chat)/.test(targetPathCheck);
+  if (!isMessageRoute || req.method !== "POST" || !originalBodyBuf || originalBodyBuf.length === 0) return null;
+  let parsed;
+  try { parsed = JSON.parse(originalBodyBuf.toString("utf8")); } catch { return null; }
+  // Resolve projectId for this message: from body.projectId, or from sessionId association via projects.json, or header X-Project-Id
+  let projectId = parsed.projectId || parsed.projectID || req.headers["x-project-id"] || null;
+  const sessionId = parsed.sessionId || parsed.sessionID || targetPathCheck.match(/\/session\/([^\/]+)/)?.[1] || null;
+  if (!projectId && sessionId) {
+    try {
+      const store = loadProjectsStore();
+      for (const p of store.projects) {
+        if ((p.sessions || []).some(s => String(s.sessionId) === String(sessionId))) { projectId = p.id; break; }
+      }
+    } catch {}
+  }
+  // Also fallback to UI_STATE projectId if header missing (client persisted active project)
+  if (!projectId && UI_STATE && UI_STATE.projectId) projectId = UI_STATE.projectId;
+  if (!projectId) return null;
+  const block = buildSystemContextBlock(projectId);
+  if (!block) return null;
+  // Build system-prepend injection — opencode messages expect parts[]. Prepend a system parts entry.
+  // Format: {parts: [{type:"text", text: block}], ...} else top-level text field we also wrap.
+  if (Array.isArray(parsed.parts)) {
+    parsed.parts = [{ type: "text", text: `[SYSTEM CONTEXT — skills + linked projects]\n${block}` }, ...parsed.parts];
+  } else if (typeof parsed.text === "string") {
+    parsed.text = `[SYSTEM CONTEXT — skills + linked projects]\n${block}\n\n---\n\n${parsed.text}`;
+  } else if (typeof parsed.prompt === "string") {
+    parsed.prompt = `[SYSTEM CONTEXT]\n${block}\n\n---\n\n${parsed.prompt}`;
+  } else {
+    // Generic fallback: stash in systemContext field for observability; don't break unknown shapes
+    parsed.systemContext = `[SYSTEM CONTEXT]\n${block}`;
+  }
+  // Mark for logging
+  parsed._injectedProjectId = projectId;
+  return Buffer.from(JSON.stringify(parsed));
+}
+
 function proxyToOpencode(req, res){
   const targetPath = req.url.replace(/^\/opencode/, "") || "/";
-  // streaming sin límite ni truncamiento: reenvía body por chunks (64KB) con backpressure
-  // soporta payloads multimodales grandes (JPG/PNG/WEBP, MP4, WAV/MP3, PDF/DOCX, .cmd/.sh/.py) en Base64
   const opts = { hostname: OPENCODE_HOST, port: OPENCODE_PORT, path: targetPath, method: req.method, headers: { ...req.headers, host: `${OPENCODE_HOST}:${OPENCODE_PORT}` } };
   delete opts.headers["accept-encoding"];
-  // preservar Content-Length si existe; si no, chunked (sin límite)
   const contentLength = req.headers["content-length"] ? parseInt(req.headers["content-length"]) : null;
   if(contentLength && contentLength > 0){
     console.log(`[proxy] ${req.method} ${targetPath} streaming ${Math.round(contentLength/1024)}KB via chunks`);
   } else if(req.method==="POST" || req.method==="PUT" || req.method==="PATCH"){
     console.log(`[proxy] ${req.method} ${targetPath} streaming chunked (sin Content-Length)`);
   }
+  // Early intercept for message routes that need skill injection — buffer and create request lazily
+  // to avoid creating an initial pr whose 8s guard would race with the injected pr2.
+  const len = req.headers["content-length"] ? parseInt(req.headers["content-length"]) : 0;
+  const shouldTryInject = len > 0 && len < 512 * 1024 && req.method === "POST" && /\/session\/[^\/]+\/(message|prompt|chat)/.test(targetPath);
+  if (shouldTryInject) {
+    return (async () => {
+      // For LLM-backed message routes, wait up to 60s (injected guard) — 8s was too short and caused premature 502 before LLM replied
+      const guard = setTimeout(() => {
+        if (!res.headersSent) {
+          try { json(res, 502, { error: 'opencode timeout (injected)', hint: `opencode serve no respondió en 60s en ${OPENCODE_HOST}:${OPENCODE_PORT}` }); } catch (_) {}
+        }
+      }, 60000);
+      try {
+        const chunks = [];
+        for await (const c of req) chunks.push(c);
+        const buf = Buffer.concat(chunks);
+        const injected = await proxyWithInjection(req, res, buf);
+        const outBuf = injected || buf;
+        if (injected) console.log(`[proxy] injected system context for project ${_projectHint(injected)} (${injected.length} bytes)`);
+        const injOpts = { ...opts, headers: { ...opts.headers, "content-length": String(outBuf.length), "Content-Length": String(outBuf.length) } };
+        delete injOpts.headers["transfer-encoding"];
+        delete injOpts.headers["Transfer-Encoding"];
+        const pr2 = http.request(injOpts, (prRes2)=>{
+          clearTimeout(guard);
+          const h = { ...prRes2.headers, "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"*", "Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS" };
+          if (!res.headersSent) res.writeHead(prRes2.statusCode, h);
+          prRes2.on('error', e => { console.error('[proxy inj] prRes error', e.message); try { res.destroy(); } catch (_) {} });
+          prRes2.pipe(res);
+        });
+        pr2.on("error", e=> {
+          clearTimeout(guard);
+          console.error('[proxy inj] error', e.message);
+          if(!res.headersSent) try { json(res, 502, { error:"opencode unreachable (injected)", detail:String(e) }); } catch(_){}
+          else try{ res.end(); }catch(_){}
+        });
+        pr2.setTimeout(120000, ()=> { clearTimeout(guard); console.error('[proxy inj] timeout 120s'); try{ pr2.destroy(); }catch(_){} });
+        res.setTimeout(130000, () => { clearTimeout(guard); try { res.destroy(); } catch (_) {} });
+        pr2.write(outBuf);
+        pr2.end();
+      } catch (e) {
+        clearTimeout(guard);
+        console.error(`[proxy] injection path error ${e.message}`);
+        if(!res.headersSent) try { json(res, 502, { error:"injection error", detail:String(e) }); } catch(_){}
+      }
+      function _projectHint(buf) {
+        try { const j = JSON.parse(buf.toString("utf8")); return j._injectedProjectId || j.projectId || "unknown"; } catch { return "unknown"; }
+      }
+    })();
+  }
+  // Non-injected path — original streaming with guard
   const guard = setTimeout(() => {
     if (!res.headersSent) {
       try { json(res, 502, { error: 'opencode timeout', hint: `opencode serve no respondió en 8s en ${OPENCODE_HOST}:${OPENCODE_PORT}` }); } catch (_) {}
@@ -270,7 +462,6 @@ function proxyToOpencode(req, res){
     } else try{ res.end(); }catch(_){}
   });
   req.on('error', e => { clearTimeout(guard); console.error('[proxy] req error', e.message); try { pr.destroy(); } catch (_) {} });
-  // stream por chunks con backpressure — sin límite de tamaño, sin truncar Base64
   try { req.pipe(pr); } catch (e) { clearTimeout(guard); console.error('[proxy] pipe err', e.message); }
   pr.setTimeout(120000, ()=> { clearTimeout(guard); console.error('[proxy] timeout 120s (payload grande)'); try{ pr.destroy(); }catch(_){} });
   res.setTimeout(130000, () => { clearTimeout(guard); console.error('[proxy] res timeout 130s'); try { res.destroy(); } catch (_) {} });
@@ -671,6 +862,112 @@ const server = http.createServer(async (req, res)=>{
     if (proj.sessions.length === before) return json(res, 404, fail(`session ${sessionId} not found in project ${id}`));
     saveProjectsStore(store);
     return json(res, 200, ok({ removed: sessionId, projectId: id }));
+  }
+
+  // ---- Skills + Cross-Project Context + Session Summaries ----
+
+  // GET /api/skills?projectId=X — merged global + project-specific skills
+  if(pathname==="/api/skills" && req.method==="GET"){
+    const projectId = url.searchParams.get("projectId") || url.searchParams.get("project") || null;
+    const scopeFilter = url.searchParams.get("scope");
+    if (scopeFilter) {
+      const list = listSkills(scopeFilter);
+      return json(res, 200, ok(list));
+    }
+    const merged = listAllSkillsMerged(projectId);
+    // Return {ok:true, data:[{scope,name,content,...}], meta:{projectId, counts}}
+    return json(res, 200, ok({ skills: merged, projectId, counts: { global: listSkills("global").length, project: projectId ? listSkills(projectId).length : 0, total: merged.length } }));
+  }
+
+  // POST /api/skills — create skill {scope, name, content}
+  if(pathname==="/api/skills" && req.method==="POST"){
+    try {
+      const raw = await readJsonBody(req, 64*1024);
+      const body = JSON.parse(raw || "{}");
+      const scope = sanitizeScope(body.scope);
+      const name = sanitizeName(body.name);
+      const content = body.content !== undefined ? String(body.content) : "";
+      if (!scope) return json(res, 400, fail("scope required: global or projectId"));
+      if (!isValidScope(scope)) return json(res, 400, fail(`invalid scope "${scope}" — use "global" or a valid projectId`));
+      if (scope !== "global") {
+        const s = loadProjectsStore();
+        if (!findProject(s, scope)) return json(res, 404, fail(`scope project ${scope} not found`));
+      }
+      if (!name) return json(res, 400, fail("name required"));
+      if (!isValidSkillName(name)) return json(res, 400, fail(`invalid skill name "${name}" — alphanumeric, spaces, hyphens, max 80`));
+      const existing = skillPath(scope, name);
+      if (fs.existsSync(existing)) return json(res, 409, fail(`skill "${name}" already exists in scope "${scope}"`));
+      const created = writeSkill(scope, name, content);
+      return json(res, 201, ok({ scope: created.scope, name: created.name, content: created.content, size: created.content.length }));
+    } catch (e) { return json(res, 500, fail(String(e))); }
+  }
+
+  // PATCH /api/skills/:scope/:name — update content
+  if(pathname.startsWith("/api/skills/") && req.method==="PATCH"){
+    const m = pathname.match(/^\/api\/skills\/([^\/]+)\/([^\/]+)$/);
+    if (!m) return json(res, 404, fail("not found — use /api/skills/:scope/:name"));
+    const scope = sanitizeScope(decodeURIComponent(m[1]));
+    const name = sanitizeName(decodeURIComponent(m[2]));
+    try {
+      const p = skillPath(scope, name);
+      if (!fs.existsSync(p)) return json(res, 404, fail(`skill "${name}" not found in scope "${scope}"`));
+      const raw = await readJsonBody(req, 64*1024);
+      const body = JSON.parse(raw || "{}");
+      const newContent = body.content !== undefined ? String(body.content) : fs.readFileSync(p, "utf8");
+      const updated = writeSkill(scope, name, newContent);
+      return json(res, 200, ok({ scope: updated.scope, name: updated.name, content: updated.content, size: updated.content.length }));
+    } catch (e) { return json(res, 500, fail(String(e))); }
+  }
+
+  // DELETE /api/skills/:scope/:name
+  if(pathname.match(/^\/api\/skills\/[^\/]+\/[^\/]+$/) && req.method==="DELETE"){
+    const m = pathname.match(/^\/api\/skills\/([^\/]+)\/([^\/]+)$/);
+    const scope = sanitizeScope(decodeURIComponent(m[1]));
+    const name = sanitizeName(decodeURIComponent(m[2]));
+    const okDel = deleteSkill(scope, name);
+    if (!okDel) return json(res, 404, fail(`skill "${name}" not found in scope "${scope}"`));
+    return json(res, 200, ok({ removed: name, scope }));
+  }
+
+  // POST /api/projects/:id/summarize — generate/update project summary + summaries/<id>.summary.json
+  // Body: {summary?} — if summary provided, use it; otherwise auto-build from last 3 sessions + description
+  if(pathname.match(/^\/api\/projects\/[^\/]+\/summarize$/) && req.method==="POST"){
+    const m = pathname.match(/^\/api\/projects\/([^\/]+)\/summarize$/);
+    const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    const store = loadProjectsStore();
+    const proj = findProject(store, id);
+    if (!proj) return json(res, 404, fail(`project ${id} not found`));
+    try {
+      const raw = await readJsonBody(req, 64*1024).catch(()=> "{}");
+      let body = {};
+      try { body = JSON.parse(raw || "{}"); } catch {}
+      let summary = body.summary ? String(body.summary).trim() : "";
+      if (!summary) {
+        // Auto-generate one-paragraph summary from project metadata + last 3 sessions
+        const last = (proj.sessions || []).slice(-3);
+        const sessLines = last.map(s => `${s.title || s.sessionId}${s.summary ? `: ${s.summary}` : ""}`).join(" | ");
+        const desc = proj.description ? `${proj.description}. ` : "";
+        const sessPart = last.length ? `Recent sessions (${last.length}): ${sessLines}.` : "No sessions yet.";
+        summary = `${desc}${sessPart}`.trim();
+        if (!summary) summary = `Project ${proj.name} — no sessions or description yet.`;
+      }
+      // Persist project summary back into projects.json for quick cross-project access
+      proj._summaryParagraph = summary;
+      proj._summaryUpdatedAt = nowIso();
+      saveProjectsStore(store);
+      // Also write summaries/<id>.summary.json as specified
+      const fileObj = writeSummary(id, summary);
+      return json(res, 200, ok({ projectId: id, summary: fileObj.summary, updatedAt: fileObj.updatedAt, sessionsCount: (proj.sessions||[]).length }));
+    } catch (e) { return json(res, 500, fail(String(e))); }
+  }
+
+  // GET /api/projects/:id/summary — read summary (optional fetch helper)
+  if(pathname.match(/^\/api\/projects\/[^\/]+\/summary$/) && req.method==="GET"){
+    const m = pathname.match(/^\/api\/projects\/([^\/]+)\/summary$/);
+    const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    const data = readSummary(id);
+    if (!data) return json(res, 404, fail(`no summary for project ${id} — POST /api/projects/${id}/summarize to generate`));
+    return json(res, 200, ok(data));
   }
 
   if(pathname==="/api/status" && req.method==="GET"){

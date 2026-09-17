@@ -96,22 +96,30 @@ hub_up() {
 while true; do
   if ! is_up "$OC_PORT"; then
     echo "[$(date +%H:%M:%S)] opencode $OC_HOST:$OC_PORT caído — relanzando" >> "$LOG"
-    # SAFE: distinguir TUI interactiva (pts/N) de serve (sin tty) — NUNCA matar TUI
-    # Condición 1: pgrep -f "opencode.*serve" solo lista serve (TUI cmdline="opencode" sin 'serve' → no coincide)
+    # SAFE: distinguir TUI interactiva (pts/N) de serve (sin tty) — NUNCA matar TUI ni hub
+    # Condición 1: isRealServe — argv[0] basename opencode/opencode.exe + argv[1]=="serve" (no substring "server.js")
+    # Evita falso positivo del hub: su cmdline "node .../opencode-companion/server.js" contiene "opencode" y "server.js"
+    # con pgrep "opencode.*serve" coincidía por substring "serve" dentro de "server.js". Ahora filtramos estricto.
     # Condición 2: /proc/$pid/stat campo 7 (tty_nr): 0='?' (nohup/daemon)=serve; !=0=pts/N=TUI manual → skip
-    # Condición 3: /proc/$pid/cmdline debe contener 'serve' (verificación extra por si pgrep falso positivo)
-    # Solo los PIDs que pasan 1+2+3 se matan; TUI siempre se salta
+    # Condición 3: hub node detectado por cmdline que contiene "server.js" → nunca matar como serve
     for _ocpid in $(timeout 5 pgrep -f "opencode.*serve" 2>/dev/null || true); do
+      # Filtro estricto: solo opencode serve real, no node server.js del hub
+      _cmd=$(tr '\0' ' ' < "/proc/$_ocpid/cmdline" 2>/dev/null)
+      case "$_cmd" in *server.js*) echo "  skip hub pid $_ocpid (server.js) — no es opencode serve" >> "$LOG"; continue;; esac
+      # Parse argv: debe tener argv[1]=="serve" literal, no solo contener "serve" en path
+      if ! tr '\0' '\n' < "/proc/$_ocpid/cmdline" 2>/dev/null | head -n 2 | tail -n 1 | grep -qx "serve"; then
+        # fallback para casos node-wrapped opencode: verificar " serve " con espacios
+        if ! echo "$_cmd" | grep -q " opencode.* serve "; then
+          echo "  skip pid $_ocpid sin argv serve literal (cmd: $(echo "$_cmd" | cut -c1-80))" >> "$LOG"
+          continue
+        fi
+      fi
       _tty=$(awk '{print $7}' "/proc/$_ocpid/stat" 2>/dev/null || echo 1)
       if [ "$_tty" != "0" ]; then
         echo "  skip TUI pid $_ocpid tty=$_tty (pts, interactiva) — no matar" >> "$LOG"
         continue
       fi
-      if ! tr '\0' ' ' < "/proc/$_ocpid/cmdline" 2>/dev/null | grep -q "serve"; then
-        echo "  skip pid $_ocpid sin 'serve' en cmdline" >> "$LOG"
-        continue
-      fi
-      echo "  matando serve stale pid $_ocpid (tty=0, cmdline serve)" >> "$LOG"
+      echo "  matando serve stale pid $_ocpid (tty=0, argv serve)" >> "$LOG"
       kill "$_ocpid" 2>/dev/null || true
       for _k in 1 2 3 4 5; do kill -0 "$_ocpid" 2>/dev/null || break; sleep 1; done
       kill -9 "$_ocpid" 2>/dev/null || true
