@@ -29,9 +29,21 @@ if [ ! -x "$NODE_BIN" ]; then
     echo "[keepalive] relanzado en host pid $! via nsenter $HOST_PID -m" | tee -a "$LOG"
     exit 0
   fi
-  echo "[keepalive] no hay host con $NODE_BIN aún — esperando 3s y reintentando" >> "$LOG" 2>&1
-  sleep 3
-  if [ ! -x "$NODE_BIN" ]; then echo "[keepalive] aún sin node, abortando hasta próxima invocación" >> "$LOG"; exit 0; fi
+  echo "[keepalive] no hay host con $NODE_BIN aún — esperando host mount (reintenta 10x 3s)" >> "$LOG" 2>&1
+  for _w in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 3
+    if [ -x "$NODE_BIN" ]; then break; fi
+    # re-scan por si apareció un host pid con node
+    for _pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$' | head -n 400); do
+      if [ -x "/proc/$_pid/root$NODE_BIN" ] 2>/dev/null; then
+        echo "[keepalive] host con $NODE_BIN apareció pid $_pid — re-ejecutando" >> "$LOG" 2>&1
+        nsenter -t "$_pid" -m -- sh "$0" "$@" >> "$LOG" 2>&1 &
+        echo "[keepalive] relanzado en host pid $! via nsenter $_pid -m" | tee -a "$LOG"
+        exit 0
+      fi
+    done
+  done
+  if [ ! -x "$NODE_BIN" ]; then echo "[keepalive] aún sin node tras 30s, abortando hasta próxima invocación" >> "$LOG"; exit 0; fi
 fi
 # OPENCODE_BIN es ELF, no necesita node; si no existe usa symlink /usr/local/bin/opencode
 if [ ! -x "$OPENCODE_BIN" ]; then

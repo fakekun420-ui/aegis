@@ -203,7 +203,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             try {
                 // No ejecutes keepalive.sh en foreground — desacopla con nohup & y exporta PATH de Termux para que nohup/sh se resuelvan
                 val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; nohup sh /sdcard/projects/opencode-companion/keepalive.sh > /sdcard/projects/opencode-companion/hub-startup.log 2>&1 &"))
-                // Este comando termina al instante por el & ; waitFor no debe bloquear 30s
                 execExit = proc.waitFor()
                 val errText = try { proc.errorStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
                 if (errText.isNotEmpty()) execError = errText
@@ -289,12 +288,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         lifecycleScope.launch {
             val ready = isHubReady()
             if (ready) {
+                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=true — carga directa WebView sin overlay")
                 hideNativeOverlay()
-                webView.loadUrl("http://127.0.0.1:8765")
+                // carga directa sin pintar overlay
+                webView.post { webView.loadUrl("http://127.0.0.1:8765") }
             } else {
-                // sistema desconectado — muestra overlay con botón Iniciar Sistema
+                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=false — muestra Iniciar Sistema")
                 showNativeOfflineOverlay()
-                // no cargues webView hasta que usuario pulse o hub esté listo (evita ERR_CONNECTION_REFUSED feo)
             }
         }
     }
