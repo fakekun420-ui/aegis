@@ -1017,6 +1017,67 @@ const server = http.createServer(async (req, res)=>{
     return json(res, 200, ok(VOICE_LOG));
   }
 
+  // GET /api/health — full diagnostic (opencode, bridge, disk, uptime, sessionOwnership, active project, last voice)
+  if(pathname==="/api/health" && req.method==="GET"){
+    const healthProbe = await probeOpencodeHealth();
+    clearStaleCompanionMetaIfNeeded();
+    const servePids = scanServePids();
+    const ownership = classifyOwnership(healthProbe, servePids);
+    const uptimePid = servePids[0] || (companionMeta && companionMeta.pid) || null;
+    const uptime = uptimePid ? getProcessUptime(uptimePid) : null;
+
+    // Bridge reachable (port 8766)
+    const bridgeProbe = await new Promise(resolve=>{
+      http.get({ hostname:"127.0.0.1", port:8766, path:"/status", timeout:1500 }, r=>{
+        let d=""; r.on("data",c=>d+=c); r.on("end",()=>{ try{ const j=JSON.parse(d); resolve({ reachable:true, a11y: !!j.a11y, raw:j }); }catch{ resolve({ reachable:true, a11y:false, raw:d }); } });
+      }).on("error", e=> resolve({ reachable:false, error:String(e.message || e).slice(0,300) })).end();
+    });
+
+    // Disk space /sdcard (df)
+    let disk = null;
+    try {
+      const out = await shellExecRaw("df -h /sdcard 2>&1 | tail -n1", 4000, 4096);
+      const line = (out.stdout || "").trim().split("\n").pop() || "";
+      const parts = line.trim().split(/\s+/);
+      // Expected: /dev/... size used avail use% mount
+      disk = { raw: line, filesystem: parts[0]||null, size: parts[1]||null, used: parts[2]||null, avail: parts[3]||null, usePct: parts[4]||null, mount: parts[5]||"/sdcard" };
+    } catch (e) { disk = { error: String(e).slice(0,300) }; }
+
+    // Hub uptime (process.uptime)
+    const hubUptime = Math.floor(process.uptime());
+
+    // Active project from UI_STATE (projectId + project name)
+    let activeProject = null;
+    try {
+      const s = loadProjectsStore();
+      if (UI_STATE.projectId) {
+        const p = findProject(s, UI_STATE.projectId);
+        if (p) activeProject = { id: p.id, name: p.name, description: p.description || "", updatedAt: p.updatedAt || p.createdAt || null, sessionsCount: (p.sessions||[]).length };
+        else activeProject = { id: UI_STATE.projectId, name: UI_STATE.project || null, note: "projectId not found in store" };
+      } else if (UI_STATE.project) {
+        activeProject = { id: null, name: UI_STATE.project, note: "legacy folder name, no projectId" };
+      }
+    } catch (e) { activeProject = { error: String(e).slice(0,300) }; }
+
+    // Last voice command (most recent VOICE_LOG entry)
+    const lastVoice = VOICE_LOG[0] || null;
+
+    const opencodeReachable = !!(healthProbe && healthProbe.up && healthProbe.healthy);
+    const bridgeReachable = !!bridgeProbe.reachable;
+
+    return json(res, 200, ok({
+      ok: opencodeReachable && bridgeReachable,
+      opencode: { reachable: opencodeReachable, healthy: !!healthProbe.healthy, version: healthProbe.version || null, pid: servePids[0] || null, allPids: servePids, ownership },
+      bridge: bridgeReachable ? { reachable: true, a11y: !!bridgeProbe.a11y } : { reachable: false, error: bridgeProbe.error || "bridge not reachable" },
+      disk,
+      uptime: { hub: hubUptime, opencode: uptime },
+      sessionOwnership: ownership,
+      activeProject,
+      lastVoice,
+      now: nowIso()
+    }));
+  }
+
   if(pathname==="/api/status" && req.method==="GET"){
     const rootCheck = await runShell("id; su -c id 2>&1 | head -1; getprop ro.build.version.release 2>&1; getprop ro.product.model 2>&1");
     // probe opencode
@@ -1302,24 +1363,52 @@ const server = http.createServer(async (req, res)=>{
         // am start VIEW con uri — abre WhatsApp con chat listo; si a11y está, puede auto-enviar
         let r = await runShell(`am start -a android.intent.action.VIEW -d '${uri}' 2>&1 | head -n 20; echo WA_VIEW`, 8000);
         const ok = r.stdout.includes("Starting:") || r.stdout.includes("WA_VIEW");
-        // intento de auto-enviar via a11y si bridge 8766 está
-        let autoSend = { tried:false };
+        // auto-enviar via a11y polling loop — retry clickText("Enviar") up to 5 times with 600ms intervals (spec 5)
+        let autoSend = { tried:false, attempts: 0, success: false };
         if(ok){
           autoSend.tried = true;
-          // espera a que WhatsApp cargue y pulsa "enviar" por a11y clickText
-          await new Promise(r2=> setTimeout(r2, 1800));
-          const fwd = await new Promise(resolve=>{
-            const pr = http.request({ hostname:"127.0.0.1", port:8766, path:"/a11y", method:"POST", headers:{"Content-Type":"application/json"} }, rr=>{
-              const c=[]; rr.on("data",x=> c.push(x)); rr.on("end",()=> resolve({ ok:true, body: Buffer.concat(c).toString("utf8") }));
+          let lastResult = null;
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            await new Promise(r2=> setTimeout(r2, 600));
+            const fwd = await new Promise(resolve=>{
+              const pr = http.request({ hostname:"127.0.0.1", port:8766, path:"/a11y", method:"POST", headers:{"Content-Type":"application/json"} }, rr=>{
+                const c=[]; rr.on("data",x=> c.push(x)); rr.on("end",()=> resolve({ ok:true, status: rr.statusCode, body: Buffer.concat(c).toString("utf8") }));
+              });
+              pr.on("error", e=> resolve({ ok:false, error:String(e) }));
+              pr.write(JSON.stringify({ action:"clickText", text:"Enviar" }));
+              pr.end();
             });
-            pr.on("error", e=> resolve({ ok:false, error:String(e) }));
-            pr.write(JSON.stringify({ action:"clickText", text:"Enviar" }));
-            pr.end();
-          });
-          if(!fwd.ok){
-            autoSend.result = { error:fwd.error, hint:"WhatsApp abierto — pulsa Enviar manualmente si no se envió solo" };
-          } else {
-            try{ autoSend.result = JSON.parse(fwd.body); }catch{ autoSend.result = { body:fwd.body }; }
+            autoSend.attempts = attempt;
+            if (!fwd.ok) {
+              lastResult = { ok: false, error: fwd.error, attempt };
+            } else {
+              try { lastResult = JSON.parse(fwd.body); } catch { lastResult = { body: fwd.body, attempt }; }
+              // Check if click succeeded — CompanionService returns {ok:true} when click found
+              const clickedOk = lastResult && (lastResult.ok === true || lastResult.clicked === true || String(lastResult).includes('"ok":true'));
+              // Also consider status 200 as potential success — but verify ok field
+              if (fwd.status === 200 && (lastResult.ok === true || lastResult.status === 200)) {
+                autoSend.success = true;
+                autoSend.result = { ...lastResult, attempts: attempt, success: true };
+                break;
+              }
+              // Fallback: if a11y returned 200 with any body, treat as success on last attempt only if no error
+              if (fwd.status === 200 && !lastResult.error) {
+                autoSend.success = lastResult.ok !== false;
+                autoSend.result = { ...lastResult, attempts: attempt, success: autoSend.success };
+                if (autoSend.success) break;
+              }
+              autoSend.result = { ...lastResult, attempts: attempt, success: false };
+            }
+            // If bridge offline (fwd.ok false with ECONNREFUSED), stop retrying and hint manual
+            if (!fwd.ok && String(fwd.error || "").includes("ECONNREFUSED")) {
+              autoSend.result = { error: fwd.error, hint:"Bridge 8766 offline — pulsa Enviar manualmente", attempts: attempt, success: false };
+              break;
+            }
+          }
+          if (!autoSend.success && !autoSend.result) {
+            autoSend.result = { error: "max retries reached", hint:"WhatsApp abierto — pulsa Enviar manualmente si no se envió solo", attempts: 5, success: false };
+          } else if (!autoSend.success && autoSend.result && !autoSend.result.hint) {
+            autoSend.result.hint = "WhatsApp abierto — pulsa Enviar manualmente si no se envió solo";
           }
         }
         return { ok, action, slots, result:{ uri, stdout:r.stdout.slice(0,800), autoSend }, elapsedMs: Date.now()-started };

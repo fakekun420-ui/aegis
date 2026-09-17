@@ -42,6 +42,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if(ok) toast("Micrófono concedido")
         else toast("Micrófono denegado — STT no funcionará")
     }
+    private val reqContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()){ ok ->
+        if(ok) toast("Contactos concedidos")
+        else toast("Contactos denegados — WhatsApp por nombre no funcionará")
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -396,6 +400,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun ensurePermissions(){
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED){
             reqMic.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        if(ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED){
+            reqContacts.launch(Manifest.permission.READ_CONTACTS)
         }
         if(Build.VERSION.SDK_INT >= 33){
             if(ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED){

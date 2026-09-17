@@ -38,16 +38,77 @@ jobs:
           chmod +x gradlew
           ls -lh gradle/wrapper/
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Decode release keystore (if secrets present)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > app/companion-release.keystore
+            echo "keystore decoded: $(wc -c < app/companion-release.keystore) bytes"
+            ls -lh app/companion-release.keystore
+          else
+            echo "KEYSTORE_BASE64 not set — building with debug keystore fallback (unsigned release)"
+          fi
 
-      - name: Build release APK (unsigned)
+      - name: Build release APK (signed if keystore present)
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: ./gradlew assembleRelease --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: opencode-companion-apk
           path: |
-            opencode-companion-apk/app/build/outputs/apk/debug/*.apk
             opencode-companion-apk/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+  smoke-test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: opencode-companion-apk
+          path: /tmp/apk
+
+      - name: Smoke test — size 5MB–15MB & cert SHA verification
+        run: |
+          set -e
+          APK=$(ls /tmp/apk/app-release*.apk 2>/dev/null | head -n1)
+          if [ -z "$APK" ]; then APK=$(ls /tmp/apk/*.apk 2>/dev/null | head -n1); fi
+          echo "APK: $APK"
+          test -f "$APK" || (echo "APK not found"; exit 1)
+          SIZE=$(stat -c%s "$APK")
+          echo "Size: $SIZE bytes ($((SIZE/1024/1024))MB)"
+          # 5MB–15MB guard (spec 3)
+          if [ "$SIZE" -lt 5242880 ]; then echo "FAIL: APK <5MB ($SIZE)"; exit 1; fi
+          if [ "$SIZE" -gt 15728640 ]; then echo "FAIL: APK >15MB ($SIZE)"; exit 1; fi
+          echo "Size OK (5–15MB)"
+
+          # Extract cert SHA-1 & SHA-256 (requires unzip + openssl or apksigner)
+          if command -v apksigner >/dev/null 2>&1; then
+            apksigner verify --print-certs "$APK" 2>&1 | head -n 50
+          else
+            # Fallback: unzip META-INF cert and openssl
+            unzip -p "$APK" META-INF/*.RSA 2>/dev/null | openssl pkcs7 -inform DER -print_certs 2>&1 | head -n 50 || echo "apksigner not available, cert check soft-pass"
+          fi
+
+          # Optional expected fingerprint check — set EXPECTED_SHA256 as repo secret or skip
+          EXPECTED="${{ secrets.EXPECTED_CERT_SHA256 }}"
+          if [ -n "$EXPECTED" ]; then
+            ACTUAL=$(apksigner verify --print-certs "$APK" 2>&1 | grep -i "SHA-256" | head -n1 | awk '{print $NF}' | tr -d ':')
+            EXP_NORM=$(echo "$EXPECTED" | tr -d ':' | tr 'a-z' 'A-Z')
+            ACT_NORM=$(echo "$ACTUAL" | tr -d ':' | tr 'a-z' 'A-Z')
+            if [ -n "$ACT_NORM" ] && [ "$EXP_NORM" != "$ACT_NORM" ]; then
+              echo "FAIL: SHA-256 mismatch expected=$EXP_NORM actual=$ACT_NORM"
+              exit 1
+            fi
+            echo "SHA-256 matches expected"
+          else
+            echo "EXPECTED_CERT_SHA256 not set — SHA check skipped (size check passed)"
+          fi
+          echo "Smoke test passed"

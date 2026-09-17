@@ -9,14 +9,28 @@ android {
         applicationId = "com.opencode.companion"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // Auto-increment versionCode via BUILD_NUMBER (GitHub run_number) — each CI build unique (spec 2)
+        versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    signingConfigs {
+        create("release") {
+            // CI injects companion-release.keystore via KEYSTORE_BASE64 secret decode (spec 1)
+            val ksFile = file("companion-release.keystore")
+            if (ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("KEY_PASSWORD") ?: ""
+                keyAlias = System.getenv("KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            }
+        }
     }
     buildTypes {
         release {
             isMinifyEnabled = false
-            // signing handled in CI or via debug keystore for local builds
+            // Use release keystore if present (CI), otherwise fallback to debug keystore locally
+            signingConfig = signingConfigs.findByName("release")?.takeIf { file("companion-release.keystore").exists() } ?: signingConfigs.getByName("debug")
         }
         debug {
             isDebuggable = true
