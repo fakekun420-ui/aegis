@@ -9,15 +9,22 @@ import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import android.widget.TextView
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
@@ -35,7 +42,39 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // crDroid 15 edge-to-edge: NO usar FLAG_LAYOUT_NO_LIMITS sin insets — respeta status bar vía WindowCompat + WindowInsetsCompat
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // status bar transparente pero con contraste (no invade contenido)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isStatusBarContrastEnforced = true
+            window.isNavigationBarContrastEnforced = true
+        }
         setContentView(R.layout.activity_main)
+        // aplica WindowInsetsCompat al contenedor raíz del WebView para desplazar todo bajo el notch y que la barra quede limpia en crDroid 15
+        val root = findViewById<androidx.coordinatorlayout.widget.CoordinatorLayout>(R.id.root)
+        // AppBarLayout necesita su top inset separado para no quedar bajo la status bar
+        val appBar = findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.appbar)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            // root: solo statusBar top + nav+ime bottom; appBar recibe su propio paddingTop para no duplicar
+            v.updatePadding(top = statusBars.top, bottom = maxOf(navBars.bottom, ime.bottom))
+            appBar?.updatePadding(top = statusBars.top)
+            // WebView contenedor: desplaza contenido bajo el notch (statusBars top ya aplicado en root)
+            val swipe = findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.swipe)
+            swipe?.updatePadding(top = 0)
+            findViewById<WebView>(R.id.webview)?.let { wv ->
+                ViewCompat.setOnApplyWindowInsetsListener(wv) { vw, ins ->
+                    val b = ins.getInsets(WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.ime())
+                    vw.updatePadding(bottom = b.bottom)
+                    ins
+                }
+            }
+            insets
+        }
 
         txtStatus = findViewById(R.id.txtStatus)
         txtVoice = findViewById(R.id.txtVoice)
@@ -55,11 +94,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun setupWebView(){
+        WebView.setWebContentsDebuggingEnabled(true)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.settings.allowFileAccess = true
+        webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
+        webView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        webView.clearCache(true)
         webView.webViewClient = WebViewClient()
-        // load hub if running on this device, else show help
         val hubUrl = "http://127.0.0.1:8765"
         webView.loadUrl(hubUrl)
         val swipe = findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.swipe)

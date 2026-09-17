@@ -1,7 +1,10 @@
 <resources>
     <style name="Theme.OpencodeCompanion" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- NO usar android:windowTranslucentStatus ni windowLayoutNoLimits sin WindowInsetsCompat — contamina status bar en crDroid 15 -->
         <item name="colorPrimary">#7C5CFF</item>
-        <item name="android:statusBarColor">#0A0A0F</item>
-        <item name="android:navigationBarColor">#0A0A0F</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">false</item>
     </style>
 </resources>

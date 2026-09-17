@@ -13,20 +13,23 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/
 a{color:var(--accent2)}
 button{font:inherit}
 
-/* App: flex-column, safe-area-top */
+/* App: flex-column, safe-area-top — body también respeta notch, sin invadir status bar */
+body{ box-sizing:border-box; padding-top: env(safe-area-inset-top); }
 .app{
   min-height:100dvh;
   display:flex;
   flex-direction:column;
   padding-top: env(safe-area-inset-top);
+  box-sizing:border-box;
 }
 .topbar{
   position:sticky; top:0; z-index:20;
   display:flex; align-items:center; gap:10px;
   padding:10px 12px;
-  padding-top: calc(10px + env(safe-area-inset-top) * 0.35);
-  background:rgba(13,13,16,.92); backdrop-filter: blur(12px);
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background:rgba(13,13,16,.96); backdrop-filter: blur(12px);
   border-bottom:1px solid var(--border);
+  box-sizing:border-box;
 }
 .icon-btn{
   width:40px; height:40px; border-radius:12px; border:1px solid transparent;
@@ -198,8 +201,8 @@ button{font:inherit}
 .btn:hover{border-color:var(--border2)} .btn.primary{background:linear-gradient(135deg,var(--accent),#5a3bff); border-color:transparent; color:white}
 .btn.block{width:100%} .btn:active{transform:scale(.98)} .input{width:100%}
 
-/* Welcome overlay */
-.welcome-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:radial-gradient(900px 500px at 50% -10%, rgba(124,92,255,.22), transparent 60%), var(--bg);padding:24px; padding-top: calc(24px + env(safe-area-inset-top))}
+/* Welcome overlay — respeta safe-area, sin contaminación barra sistema */
+.welcome-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:radial-gradient(900px 500px at 50% -10%, rgba(124,92,255,.22), transparent 60%), var(--bg);padding:24px; padding-top: calc(24px + env(safe-area-inset-top)); box-sizing:border-box}
 .welcome-overlay.hidden{display:none}
 .welcome-card{width:min(560px, 92vw);background:var(--panel);border:1px solid var(--border);border-radius:22px;padding:28px 24px;box-shadow:var(--shadow);text-align:center}
 .welcome-icon{width:54px;height:54px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),#3ad0ff);color:white;font-size:22px;box-shadow:0 12px 30px rgba(124,92,255,.45)}

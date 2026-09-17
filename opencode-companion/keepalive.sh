@@ -24,9 +24,9 @@ if [ ! -x "$NODE_BIN" ]; then
     done
   fi
   if [ -n "$HOST_PID" ]; then
-    echo "[keepalive] re-ejecutando en host mount via nsenter $HOST_PID -m -r (node no visible aquí)" >> "$LOG" 2>&1
-    nsenter -t "$HOST_PID" -m -r -- sh "$0" "$@" >> "$LOG" 2>&1 &
-    echo "[keepalive] relanzado en host pid $! via nsenter $HOST_PID -m -r" | tee -a "$LOG"
+    echo "[keepalive] re-ejecutando en host mount via nsenter $HOST_PID -m (node no visible aquí)" >> "$LOG" 2>&1
+    nsenter -t "$HOST_PID" -m -- sh "$0" "$@" >> "$LOG" 2>&1 &
+    echo "[keepalive] relanzado en host pid $! via nsenter $HOST_PID -m" | tee -a "$LOG"
     exit 0
   fi
   echo "[keepalive] no hay host con $NODE_BIN aún — esperando 3s y reintentando" >> "$LOG" 2>&1
@@ -41,9 +41,8 @@ if [ ! -x "$OPENCODE_BIN" ]; then
   fi
 fi
 
-# doble instancia guard (usa /data/adb/tmp en host, fallback a /sdcard)
-LOCK="/data/adb/tmp/opencode-keepalive.lock"
-if [ ! -d "$(dirname "$LOCK")" ]; then LOCK="/sdcard/projects/opencode-companion/keepalive.lock"; fi
+# doble instancia guard (usa /sdcard/projects/opencode-companion/keepalive.lock compartido host+system
+LOCK="/sdcard/projects/opencode-companion/keepalive.lock"
 if [ -f "$LOCK" ]; then
   OLDPID="$(cat "$LOCK" 2>/dev/null)"
   if [ -n "$OLDPID" ] && kill -0 "$OLDPID" 2>/dev/null; then

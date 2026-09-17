@@ -15,7 +15,7 @@ cmd deviceidle whitelist +com.opencode.companion 2>/dev/null || true
 
 # Lanza keepalive (system init 4359 no ve /usr/bin/node — host 5294/5522 sí).
 # service.d corre en init 4359, así que busca host pid con node visible y nsenter ahí.
-# Fix: usa -r (keep wd) porque /proc/$pid/root/usr/bin/node no es ejecutable directamente desde init.
+# Fix: usa -m (sin -r, host mount 5294).
 
 HOST_PID=""
 for _try in 1 2 3 4 5; do
@@ -31,7 +31,7 @@ for _try in 1 2 3 4 5; do
 done
 
 if [ -n "$HOST_PID" ]; then
-  nsenter -t "$HOST_PID" -m -r -- sh /sdcard/projects/opencode-companion/keepalive.sh > /sdcard/projects/opencode-companion/keepalive.log 2>&1 &
+  nsenter -t "$HOST_PID" -m -- sh /sdcard/projects/opencode-companion/keepalive.sh > /sdcard/projects/opencode-companion/keepalive.log 2>&1 &
 else
   # fallback: lanza directo (keepalive se auto-re-ejecuta en host si detecta que node no existe)
   nohup sh /sdcard/projects/opencode-companion/keepalive.sh > /sdcard/projects/opencode-companion/keepalive.log 2>&1 &

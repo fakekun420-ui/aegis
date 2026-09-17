@@ -915,6 +915,14 @@ const welcomeOverlay = $("#welcome-overlay"), btnStartSystem = $("#btn-start-sys
 let welcomePolling=false;
 function setWelcome(msg,kind=""){ if(!welcomeStatus) return; welcomeStatus.textContent=msg; welcomeStatus.className="welcome-status "+(kind||""); }
 function hideWelcome(){ if(!welcomeOverlay) return; welcomeOverlay.classList.add("out"); setTimeout(()=> welcomeOverlay.classList.add("hidden"), 460); }
+function hideWelcomeOverlay(){ hideWelcome(); }
+async function checkStatus(){
+  try{
+    const s = await jget("/api/system/status");
+    if(s.ready) { hideWelcomeOverlay(); return s; }
+    return s;
+  }catch(e){ throw e; }
+}
 async function pollSystemStatus(maxAttempts=13, interval=2100){
   for(let i=0;i<maxAttempts;i++){
     await new Promise(r=> setTimeout(r, interval));
@@ -933,13 +941,32 @@ async function handleStartSystem(){
   setWelcome("Levantando sistema…", "busy");
   if(welcomeSteps){ welcomeSteps.classList.add("show"); welcomeSteps.textContent="POST /api/system/start …"; }
   try{
+    // fallback instantáneo: si /api/system/status ya está 200, oculta overlay sin quedarse esperando
+    try{
+      const pre = await jget("/api/system/status");
+      if(pre.ready){
+        setWelcome("✓ Sistema ya listo — entrando…", "ok");
+        hideWelcomeOverlay();
+        try{ await refreshStatus(); await Promise.all([refreshProjects(), refreshSessions(), refreshAgents()]); }catch(_){}
+        btnStartSystem.textContent="✓ Iniciado";
+        return;
+      }
+    }catch(_){}
     const r = await fetch("/api/system/start", {method:"POST", headers:{"Content-Type":"application/json"}, body:"{}"});
     const j = await r.json().catch(()=> ({}));
     const steps = Array.isArray(j.steps)? j.steps.join("\n") : "";
     if(welcomeSteps) welcomeSteps.textContent = (steps?steps+"\n\n":"") + `→ HTTP ${r.status} healthy=${j.healthy}\nPolling GET /api/system/status…`;
     if(!r.ok && r.status!==202) throw new Error(j.error || `HTTP ${r.status}`);
-    if(r.ok && j.healthy) setWelcome("✓ Sistema listo — verificando…", "busy"); else setWelcome("Sistema lanzado — verificando…", "busy");
-    const readyState = r.ok && j.healthy ? j : await pollSystemStatus();
+    if(r.ok && j.healthy) {
+      setWelcome("✓ Sistema listo — entrando…", "ok"); hideWelcomeOverlay();
+      try{ await refreshStatus(); await Promise.all([refreshProjects(), refreshSessions(), refreshAgents()]); }catch(_){}
+      btnStartSystem.textContent="✓ Iniciado";
+      // poll en background sin bloquear entrada
+      pollSystemStatus().catch(()=>{});
+      return;
+    }
+    setWelcome("Sistema lanzado — verificando…", "busy");
+    const readyState = await pollSystemStatus();
     const isReady = readyState?.ready ?? readyState?.healthy ?? j.healthy;
     if(isReady){
       setWelcome("✓ Listo — entrando al chat", "ok"); btnStartSystem.textContent="✓ Iniciado";
@@ -947,6 +974,12 @@ async function handleStartSystem(){
       setTimeout(hideWelcome, 680);
     } else throw new Error("No alcanzó ready:true");
   }catch(e){
+    console.error("[btn-start-system] ", e);
+    // fallback checkStatus inmediato antes de mostrar error
+    try{
+      const chk = await checkStatus();
+      if(chk && chk.ready){ setWelcome("✓ Listo (fallback) — entrando…", "ok"); hideWelcomeOverlay(); return; }
+    }catch(_){}
     setWelcome("Error: "+String(e).slice(0,400), "err");
     if(welcomeSteps) welcomeSteps.textContent += `\nERR: ${String(e).slice(0,500)}`;
     btnStartSystem.disabled=false; btnStartSystem.textContent="Reintentar Iniciar Sistema";
