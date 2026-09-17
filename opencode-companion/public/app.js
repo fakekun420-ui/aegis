@@ -985,7 +985,28 @@ async function handleStartSystem(){
     btnStartSystem.disabled=false; btnStartSystem.textContent="Reintentar Iniciar Sistema";
   }finally{ welcomePolling=false; if(btnStartSystem.textContent==="Iniciando…") btnStartSystem.textContent=orig; }
 }
-btnStartSystem?.addEventListener("click", handleStartSystem);
+btnStartSystem?.addEventListener("click", async ()=>{
+  try{
+    const _ov = document.getElementById('welcome-overlay');
+    if(_ov){
+      _ov.style.setProperty('display', 'none', 'important');
+      _ov.style.setProperty('opacity', '0', 'important');
+      _ov.style.setProperty('pointer-events', 'none', 'important');
+      _ov.style.setProperty('visibility', 'hidden', 'important');
+      setTimeout(()=>{ try{ _ov.remove(); }catch{} }, 80);
+    }
+  }catch{}
+  try{
+    await handleStartSystem();
+  }catch(e){
+    console.error("[btn-start-system click]", e);
+    try{
+      const chk = await checkStatus();
+      if(chk && chk.ready) hideWelcomeOverlay();
+    }catch(err){ console.error("[btn-start-system fallback]", err); }
+    try{ const _ov2 = document.getElementById('welcome-overlay'); if(_ov2){ _ov2.style.setProperty('display','none','important'); _ov2.remove(); } }catch{}
+  }
+});
 jget("/api/system/status").then(s=>{
   if(s.ready){ setWelcome("✓ Sistema operativo — toca para entrar", "ok"); if(btnStartSystem) btnStartSystem.textContent="Entrar al Chat"; if(welcomeSteps){ welcomeSteps.classList.add("show"); welcomeSteps.textContent=`ready=true v${s.opencode?.version||""} bridge a11y=${s.bridge?.a11y}\nToca para entrar.`; } }
   else setWelcome(`Listo para iniciar — healthy=${s.opencode?.healthy}`, "");

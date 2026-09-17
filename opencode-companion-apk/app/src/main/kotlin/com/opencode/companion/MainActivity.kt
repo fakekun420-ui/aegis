@@ -85,9 +85,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         setupWebView()
         setupButtons()
+        // botón nativo Iniciar Sistema — dispara keepalive.sh con ROOT + polling 1s hasta 200
+        findViewById<MaterialButton>(R.id.btnNativeStart)?.setOnClickListener {
+            it.isEnabled = false
+            startRootSystemAndPoll()
+        }
         ensurePermissions()
         startCompanionService()
         refreshStatus()
+
+        // Flujo autónomo: si hub ya está 200, carga chat directo; si no, muestra overlay nativo Iniciar Sistema
+        checkHubOnStart()
 
         // auto-refresh
         webView.postDelayed({ refreshStatus() }, 1500)
@@ -101,13 +109,153 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
         webView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         webView.clearCache(true)
-        webView.webViewClient = WebViewClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
+                if (request.isForMainFrame) {
+                    val desc = error.description?.toString() ?: ""
+                    val code = error.errorCode
+                    if (code == ERROR_CONNECT || code == ERROR_HOST_LOOKUP || code == ERROR_TIMEOUT
+                        || desc.contains("ERR_CONNECTION_REFUSED") || desc.contains("ERR_CONNECTION_TIMED_OUT")
+                        || desc.contains("ERR_NAME_NOT_RESOLVED")) {
+                        view.post { showNativeOfflineOverlay() }
+                    }
+                }
+                super.onReceivedError(view, request, error)
+            }
+            @Suppress("DEPRECATION")
+            override fun onReceivedError(view: WebView, errorCode: Int, description: String?, failingUrl: String?) {
+                if (description?.contains("ERR_CONNECTION_REFUSED") == true
+                    || errorCode == ERROR_CONNECT || errorCode == ERROR_HOST_LOOKUP) {
+                    view.post { showNativeOfflineOverlay() }
+                }
+                super.onReceivedError(view, errorCode, description, failingUrl)
+            }
+            override fun onPageFinished(view: WebView?, url: String?) { super.onPageFinished(view, url) }
+        }
         val hubUrl = "http://127.0.0.1:8765"
-        webView.loadUrl(hubUrl)
+        // Carga diferida: onCreate decide si cargar directo o mostrar overlay nativo; no cargar aquí incondicionalmente
+        // webView.loadUrl(hubUrl) se llama tras checkHubReady()
         val swipe = findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.swipe)
         swipe?.setOnRefreshListener {
-            webView.reload()
-            swipe.isRefreshing = false
+            // pull-to-refresh también respeta estado: si hub caído, reintenta check en vez de reload error
+            lifecycleScope.launch {
+                if (isHubReady()) {
+                    hideNativeOverlay()
+                    webView.loadUrl(hubUrl)
+                } else {
+                    webView.reload()
+                }
+                swipe.isRefreshing = false
+            }
+        }
+    }
+
+    // ---- Arranque autónomo desde APK (ROOT) ----
+    private var isStartingSystem = false
+    private fun showNativeOfflineOverlay() {
+        val overlay = findViewById<android.view.View>(R.id.nativeOverlay) ?: return
+        val progress = findViewById<android.widget.ProgressBar>(R.id.nativeProgress)
+        val txt = findViewById<TextView>(R.id.nativeStatus)
+        val btn = findViewById<MaterialButton>(R.id.btnNativeStart)
+        overlay.visibility = android.view.View.VISIBLE
+        progress?.visibility = android.view.View.GONE
+        txt?.text = "Sistema desconectado — hub 8765 no responde. Pulsa Iniciar Sistema para levantar Ubuntu y OpenCode con ROOT."
+        btn?.visibility = android.view.View.VISIBLE
+        btn?.isEnabled = true
+    }
+    private fun hideNativeOverlay() {
+        findViewById<android.view.View>(R.id.nativeOverlay)?.visibility = android.view.View.GONE
+    }
+    private fun showNativeLoading(msg: String = "Iniciando servicios y levantando Hub...") {
+        val overlay = findViewById<android.view.View>(R.id.nativeOverlay) ?: return
+        val progress = findViewById<android.widget.ProgressBar>(R.id.nativeProgress)
+        val txt = findViewById<TextView>(R.id.nativeStatus)
+        val btn = findViewById<MaterialButton>(R.id.btnNativeStart)
+        overlay.visibility = android.view.View.VISIBLE
+        progress?.visibility = android.view.View.VISIBLE
+        txt?.text = msg
+        btn?.visibility = android.view.View.GONE
+    }
+    private suspend fun isHubReady(): Boolean = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val url = java.net.URL("http://127.0.0.1:8765/api/system/status")
+            (url.openConnection() as java.net.HttpURLConnection).run {
+                connectTimeout = 1500; readTimeout = 1500; requestMethod = "GET"
+                val code = responseCode
+                if (code == 200) {
+                    val body = inputStream.bufferedReader().readText()
+                    // listo = ready:true y healthy:true
+                    body.contains("\"ready\":true")
+                } else false
+            }
+        } catch (_: Exception) { false }
+    }
+    private fun startRootSystemAndPoll() {
+        if (isStartingSystem) return
+        isStartingSystem = true
+        showNativeLoading("Iniciando servicios y levantando Hub...")
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                // 1) Ejecuta keepalive.sh con ROOT — levanta hub 8765 + opencode 4096 + Ubuntu
+                try {
+                    Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /sdcard/projects/opencode-companion/keepalive.sh")).waitFor()
+                } catch (e: Exception) {
+                    // fallback sin su si no hay root (no debería pasar en POCO F3)
+                    try { Runtime.getRuntime().exec(arrayOf("sh", "/sdcard/projects/opencode-companion/keepalive.sh")).waitFor() } catch (_: Exception) {}
+                }
+            } catch (e: Exception) {
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    findViewById<TextView>(R.id.nativeStatus)?.text = "Error ejecutando keepalive.sh: ${e.message}"
+                    findViewById<android.widget.ProgressBar>(R.id.nativeProgress)?.visibility = android.view.View.GONE
+                    findViewById<MaterialButton>(R.id.btnNativeStart)?.visibility = android.view.View.VISIBLE
+                    findViewById<MaterialButton>(R.id.btnNativeStart)?.isEnabled = true
+                    isStartingSystem = false
+                }
+                return@launch
+            }
+            // 2) Polling cada 1s hasta HTTP 200 en /api/system/status
+            var attempts = 0
+            var ready = false
+            while (attempts < 30 && !ready) {
+                kotlinx.coroutines.delay(1000)
+                ready = isHubReady()
+                attempts++
+                if (!ready) {
+                    withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        findViewById<TextView>(R.id.nativeStatus)?.text = "Iniciando servicios y levantando Hub... (${attempts}s)"
+                    }
+                }
+            }
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                isStartingSystem = false
+                if (ready) {
+                    findViewById<android.widget.ProgressBar>(R.id.nativeProgress)?.visibility = android.view.View.GONE
+                    findViewById<TextView>(R.id.nativeStatus)?.text = "Hub listo — cargando chat..."
+                    hideNativeOverlay()
+                    webView.loadUrl("http://127.0.0.1:8765")
+                    // limpia WebView caché congelada que mostraba ERR_CONNECTION_REFUSED
+                    webView.clearCache(true)
+                    toast("Hub levantado — chat cargado")
+                } else {
+                    findViewById<TextView>(R.id.nativeStatus)?.text = "Timeout: hub no respondió 200 en 30s. Reintenta Iniciar Sistema."
+                    findViewById<android.widget.ProgressBar>(R.id.nativeProgress)?.visibility = android.view.View.GONE
+                    findViewById<MaterialButton>(R.id.btnNativeStart)?.visibility = android.view.View.VISIBLE
+                    findViewById<MaterialButton>(R.id.btnNativeStart)?.isEnabled = true
+                }
+            }
+        }
+    }
+    private fun checkHubOnStart() {
+        lifecycleScope.launch {
+            val ready = isHubReady()
+            if (ready) {
+                hideNativeOverlay()
+                webView.loadUrl("http://127.0.0.1:8765")
+            } else {
+                // sistema desconectado — muestra overlay con botón Iniciar Sistema
+                showNativeOfflineOverlay()
+                // no cargues webView hasta que usuario pulse o hub esté listo (evita ERR_CONNECTION_REFUSED feo)
+            }
         }
     }
 
