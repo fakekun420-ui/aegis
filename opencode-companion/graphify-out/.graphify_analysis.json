@@ -1,0 +1,335 @@
+{
+  "nodes": [
+    {
+      "path": "opencode-companion/server.js",
+      "role": "hub: Node zero-deps HTTP 8765 -> proxy 4096, device bridge, multimodal, assistant, skills, summaries, voice registry",
+      "deps": [
+        "public/index.html",
+        "public/app.js",
+        "public/style.css",
+        "keepalive.sh"
+      ],
+      "info": {
+        "size": 92594,
+        "ext": ".js",
+        "hash": "9f80ff80"
+      }
+    },
+    {
+      "path": "opencode-companion/public/index.html",
+      "role": "SPA shell: drawer + composer + skills/linked UI",
+      "deps": [
+        "public/app.js",
+        "public/style.css"
+      ],
+      "info": {
+        "size": 8965,
+        "ext": ".html",
+        "hash": "282909f9"
+      }
+    },
+    {
+      "path": "opencode-companion/public/app.js",
+      "role": "SPA logic: drawer/projects/sessions, multimodal, voice duplex, skills/linked, SSE",
+      "deps": [
+        "server.js:api/projects",
+        "server.js:api/skills",
+        "server.js:proxy"
+      ],
+      "info": {
+        "size": 86178,
+        "ext": ".js",
+        "hash": "f8fb684e"
+      }
+    },
+    {
+      "path": "opencode-companion/public/style.css",
+      "role": "Theme + layout + status pills",
+      "deps": [],
+      "info": {
+        "size": 14759,
+        "ext": ".css",
+        "hash": "d63c0d8d"
+      }
+    },
+    {
+      "path": "opencode-companion/keepalive.sh",
+      "role": "Keepalive loop host-mount nsenter, guards TUI vs serve, hub pkill fix",
+      "deps": [
+        "server.js"
+      ],
+      "info": {
+        "size": 8136,
+        "ext": ".sh",
+        "hash": "b648d506"
+      }
+    },
+    {
+      "path": "opencode-companion/start-hub.sh",
+      "role": "Manual starter opencode serve + node server.js",
+      "deps": [
+        "server.js"
+      ],
+      "info": {
+        "size": 1519,
+        "ext": ".sh",
+        "hash": "3624d333"
+      }
+    },
+    {
+      "path": "opencode-companion/service.d-99-opencode-hub.sh",
+      "role": "Magisk boot hook",
+      "deps": [
+        "keepalive.sh"
+      ],
+      "info": {
+        "size": 2059,
+        "ext": ".sh",
+        "hash": "74b90185"
+      }
+    },
+    {
+      "path": "opencode-companion/package.json",
+      "role": "Hub manifest",
+      "deps": [],
+      "info": {
+        "size": 323,
+        "ext": ".json",
+        "hash": "50bf6740"
+      }
+    },
+    {
+      "path": "opencode-companion/ui-state.json",
+      "role": "Runtime UI state (gitignored)",
+      "deps": [],
+      "info": {
+        "size": 82,
+        "ext": ".json",
+        "hash": "5d1f5b17"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/app/src/main/AndroidManifest.xml",
+      "role": "Manifest: INTERNET, RECORD_AUDIO, READ_CONTACTS, BIND_VOICE_INTERACTION",
+      "deps": [],
+      "info": {
+        "size": 3957,
+        "ext": ".xml",
+        "hash": "22586e4b"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "role": "MainActivity: WebView + wake word (SharedPrefs) + STT/TTS + keepalive poll",
+      "deps": [
+        "CompanionService.kt",
+        "CompanionVoiceInteractionService.kt"
+      ],
+      "info": {
+        "size": 36830,
+        "ext": ".kt",
+        "hash": "6c799cd4"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionService.kt",
+      "role": "Foreground bridge :8766 (a11y/shell/launch)",
+      "deps": [
+        "OpencodeAccessibilityService.kt"
+      ],
+      "info": {
+        "size": 9105,
+        "ext": ".kt",
+        "hash": "4b691766"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionVoiceInteractionService.kt",
+      "role": "VoiceInteractionService assistant (long-press home)",
+      "deps": [
+        "MainActivity.kt"
+      ],
+      "info": {
+        "size": 6924,
+        "ext": ".kt",
+        "hash": "7d18be5b"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/OpencodeAccessibilityService.kt",
+      "role": "A11y: clickByText, gestures",
+      "deps": [],
+      "info": {
+        "size": 5099,
+        "ext": ".kt",
+        "hash": "637a033e"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/RootShell.kt",
+      "role": "RootShell: su -c fallbacks",
+      "deps": [],
+      "info": {
+        "size": 2168,
+        "ext": ".kt",
+        "hash": "e111a950"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/app/src/main/res/layout/activity_main.xml",
+      "role": "Layout: coordinator + WebView + overlay",
+      "deps": [],
+      "info": {
+        "size": 11658,
+        "ext": ".xml",
+        "hash": "d3965bdd"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/app/src/main/res/xml/voice_interaction_service_config.xml",
+      "role": "Voice config: supportsAssist",
+      "deps": [],
+      "info": {
+        "size": 400,
+        "ext": ".xml",
+        "hash": "8676e0ab"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/app/build.gradle.kts",
+      "role": "Gradle: versionCode BUILD_NUMBER, signingConfigs release, deps",
+      "deps": [],
+      "info": {
+        "size": 2429,
+        "ext": ".kts",
+        "hash": "2ea95527"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/build.gradle.kts",
+      "role": "Top-level AGP",
+      "deps": [],
+      "info": {
+        "size": 155,
+        "ext": ".kts",
+        "hash": "6c997379"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/settings.gradle.kts",
+      "role": "Settings include :app",
+      "deps": [],
+      "info": {
+        "size": 336,
+        "ext": ".kts",
+        "hash": "1b138af6"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/README.md",
+      "role": "APK docs: hub standalone vs a11y",
+      "deps": [],
+      "info": {
+        "size": 2629,
+        "ext": ".md",
+        "hash": "383a68ba"
+      }
+    },
+    {
+      "path": "opencode-companion-apk/install-su.sh",
+      "role": "Su installer: pm grant + a11y + whitelist",
+      "deps": [],
+      "info": {
+        "size": 4787,
+        "ext": ".sh",
+        "hash": "de60f389"
+      }
+    },
+    {
+      "path": ".github/workflows/build-apk.yml",
+      "role": "CI: decode keystore, BUILD_NUMBER, smoke 3–15MB, cert SHA",
+      "deps": [],
+      "info": {
+        "size": 4384,
+        "ext": ".yml",
+        "hash": "67cf0512"
+      }
+    },
+    {
+      "path": ".gitignore",
+      "role": "Ignores: *.keystore, node_modules, logs, ui-state.json",
+      "deps": [],
+      "info": {
+        "size": 652,
+        "ext": "",
+        "hash": "321115c2"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "opencode-companion/server.js",
+      "to": "public/index.html"
+    },
+    {
+      "from": "opencode-companion/server.js",
+      "to": "public/app.js"
+    },
+    {
+      "from": "opencode-companion/server.js",
+      "to": "public/style.css"
+    },
+    {
+      "from": "opencode-companion/server.js",
+      "to": "keepalive.sh"
+    },
+    {
+      "from": "opencode-companion/public/index.html",
+      "to": "public/app.js"
+    },
+    {
+      "from": "opencode-companion/public/index.html",
+      "to": "public/style.css"
+    },
+    {
+      "from": "opencode-companion/public/app.js",
+      "to": "server.js:api/projects"
+    },
+    {
+      "from": "opencode-companion/public/app.js",
+      "to": "server.js:api/skills"
+    },
+    {
+      "from": "opencode-companion/public/app.js",
+      "to": "server.js:proxy"
+    },
+    {
+      "from": "opencode-companion/keepalive.sh",
+      "to": "server.js"
+    },
+    {
+      "from": "opencode-companion/start-hub.sh",
+      "to": "server.js"
+    },
+    {
+      "from": "opencode-companion/service.d-99-opencode-hub.sh",
+      "to": "keepalive.sh"
+    },
+    {
+      "from": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "to": "CompanionService.kt"
+    },
+    {
+      "from": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "to": "CompanionVoiceInteractionService.kt"
+    },
+    {
+      "from": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionService.kt",
+      "to": "OpencodeAccessibilityService.kt"
+    },
+    {
+      "from": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionVoiceInteractionService.kt",
+      "to": "MainActivity.kt"
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "app/build.gradle.kts": {
+    "mtime": 1789688616.520912,
+    "seen": 1789698294.7379518,
+    "ast_hash": "2ea955271b25cea38ec8aa026013f901",
+    "semantic_hash": "2ea955271b25cea38ec8aa026013f901"
+  },
+  "app/src/main/kotlin/com/opencode/companion/CompanionService.kt": {
+    "mtime": 1789502488.4939823,
+    "seen": 1789698294.7379684,
+    "ast_hash": "929595823c75c9d461b0177e8e55878b",
+    "semantic_hash": "929595823c75c9d461b0177e8e55878b"
+  },
+  "app/src/main/kotlin/com/opencode/companion/CompanionVoiceInteractionService.kt": {
+    "mtime": 1789690228.1890602,
+    "seen": 1789698294.7379758,
+    "ast_hash": "7130d5ef9c431ce1bc6bdfed9dbd77c6",
+    "semantic_hash": "7130d5ef9c431ce1bc6bdfed9dbd77c6"
+  },
+  "app/src/main/kotlin/com/opencode/companion/MainActivity.kt": {
+    "mtime": 1789695688.722261,
+    "seen": 1789698294.737982,
+    "ast_hash": "34fff8d490beb6849aa1bfc459f56158",
+    "semantic_hash": "34fff8d490beb6849aa1bfc459f56158"
+  },
+  "app/src/main/kotlin/com/opencode/companion/OpencodeAccessibilityService.kt": {
+    "mtime": 1789493629.4439857,
+    "seen": 1789698294.7379878,
+    "ast_hash": "290265a907d95730b9dece01a8dd2129",
+    "semantic_hash": "290265a907d95730b9dece01a8dd2129"
+  },
+  "app/src/main/kotlin/com/opencode/companion/RootShell.kt": {
+    "mtime": 1789493620.4439857,
+    "seen": 1789698294.737994,
+    "ast_hash": "e111a9507e95398803adc4bd2c9bf8ba",
+    "semantic_hash": "e111a9507e95398803adc4bd2c9bf8ba"
+  },
+  "build.gradle.kts": {
+    "mtime": 1789493567.0639856,
+    "seen": 1789698294.738001,
+    "ast_hash": "6c9973794726356de280882949706ec7",
+    "semantic_hash": "6c9973794726356de280882949706ec7"
+  },
+  "install-su.sh": {
+    "mtime": 1789502929.573982,
+    "seen": 1789698294.738007,
+    "ast_hash": "cbc3650ed45c7d549cd5c1e01476abb4",
+    "semantic_hash": "cbc3650ed45c7d549cd5c1e01476abb4"
+  },
+  "settings.gradle.kts": {
+    "mtime": 1789493563.0039856,
+    "seen": 1789698294.7380123,
+    "ast_hash": "1b138af66021278d0337fa15c49fe564",
+    "semantic_hash": "1b138af66021278d0337fa15c49fe564"
+  }
+}

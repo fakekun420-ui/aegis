@@ -1,0 +1,38 @@
+{
+  "keepalive.sh": {
+    "mtime": 1789683660.0567317,
+    "seen": 1789698255.5609686,
+    "ast_hash": "406419933847943b9afe47d40a8b4d68",
+    "semantic_hash": "406419933847943b9afe47d40a8b4d68"
+  },
+  "package.json": {
+    "mtime": 1789493120.0439858,
+    "seen": 1789698255.5609884,
+    "ast_hash": "50bf67405238f05fdbc0d034728c8515",
+    "semantic_hash": "50bf67405238f05fdbc0d034728c8515"
+  },
+  "public/app.js": {
+    "mtime": 1789697100.1722605,
+    "seen": 1789698255.560997,
+    "ast_hash": "952b20a7b07888fe44ef660d667c5e70",
+    "semantic_hash": "952b20a7b07888fe44ef660d667c5e70"
+  },
+  "server.js": {
+    "mtime": 1789692505.0790594,
+    "seen": 1789698255.5610049,
+    "ast_hash": "ba737e78ccd6b471a943cc2ad26ec937",
+    "semantic_hash": "ba737e78ccd6b471a943cc2ad26ec937"
+  },
+  "service.d-99-opencode-hub.sh": {
+    "mtime": 1789659379.8533494,
+    "seen": 1789698255.5610123,
+    "ast_hash": "74b90185f3d86892c2f076c30ecec40e",
+    "semantic_hash": "74b90185f3d86892c2f076c30ecec40e"
+  },
+  "start-hub.sh": {
+    "mtime": 1789493504.3039856,
+    "seen": 1789698255.5610204,
+    "ast_hash": "3624d3330a687ab85881d97e077145d6",
+    "semantic_hash": "3624d3330a687ab85881d97e077145d6"
+  }
+}

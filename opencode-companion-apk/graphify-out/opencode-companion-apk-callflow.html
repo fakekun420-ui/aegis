@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>opencode-companion-apk — Complete Call Flow &amp; Architecture Documentation</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg: #0f172a; --surface: #1e293b; --border: #334155;
+  --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+  --warn: #fbbf24; --err: #f87171; --ok: #34d399;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+.container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+h1 { font-size: 2.4rem; margin-bottom: 8px; background: linear-gradient(135deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+h2 { font-size: 1.7rem; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+h3 { font-size: 1.25rem; margin: 32px 0 12px; color: var(--accent); }
+h4 { font-size: 1.05rem; margin: 20px 0 8px; color: var(--warn); }
+p { margin: 8px 0; color: var(--muted); }
+.subtitle { color: var(--muted); font-size: 1.1rem; margin-bottom: 32px; }
+.mermaid { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin: 20px 0; overflow-x: auto; position: relative; }
+.mermaid.is-enhanced { padding: 0; overflow: hidden; min-height: 260px; }
+.mermaid-viewport { padding: 54px 24px 24px; overflow: hidden; cursor: grab; touch-action: none; min-height: 260px; }
+.mermaid-viewport.is-dragging { cursor: grabbing; }
+.mermaid-viewport svg { max-width: none !important; height: auto; transform-origin: 0 0; transition: transform 120ms ease; }
+.mermaid-toolbar { position: absolute; top: 10px; right: 10px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px; background: rgba(15,23,42,0.92); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
+.mermaid-toolbar button, .mermaid-toolbar .zoom-level { height: 28px; min-width: 32px; border: 1px solid var(--border); border-radius: 6px; background: #1e293b; color: var(--text); font: 600 0.78rem system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; }
+.mermaid-toolbar button { cursor: pointer; }
+.mermaid-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+.mermaid-toolbar .zoom-level { min-width: 52px; color: var(--muted); background: transparent; }
+.call-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.92rem; }
+.call-table th { background: #1a2744; color: var(--accent); text-align: left; padding: 10px 14px; border: 1px solid var(--border); }
+.call-table td { padding: 8px 14px; border: 1px solid var(--border); vertical-align: top; }
+.call-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.tag-async { background: #7c3aed33; color: #a78bfa; }
+.tag-class { background: #05966933; color: var(--ok); }
+.tag-func { background: #2563eb33; color: var(--accent); }
+.tag-cmd { background: #d9770633; color: var(--warn); }
+.tag-endpoint { background: #dc262633; color: var(--err); }
+.tag-hook { background: #db277733; color: #f472b6; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin: 16px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin: 16px 0; }
+.arrow-chain { font-family: 'Fira Code', monospace; font-size: 0.85rem; color: var(--accent); padding: 10px; background: rgba(56,189,248,0.06); border-radius: 6px; }
+code { font-family: 'Fira Code', 'Cascadia Code', monospace; background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 3px; font-size: 0.88em; }
+ul, ol { margin: 8px 0 8px 24px; color: var(--muted); }
+li { margin: 4px 0; }
+a { color: var(--accent); }
+hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+.nav { position: sticky; top: 0; background: var(--bg); z-index: 10; padding: 12px 0; border-bottom: 1px solid var(--border); display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.9rem; }
+.nav a { text-decoration: none; }
+.nav a:hover { text-decoration: underline; }
+@media (max-width: 768px) { .container { padding: 16px; } h1 { font-size: 1.8rem; } }
+
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>opencode-companion-apk — Complete Call Flow &amp; Architecture Documentation</h1>
+<p class="subtitle">Generated from graphify knowledge graph: 186 nodes, 320 edges, 11 communities. Commit: 1c66ed4</p>
+
+<div class="nav">
+    <a href="#overview">Architecture Overview</a>
+    <a href="#build-graph">Graph Build</a>
+    <a href="#cli-skills">CLI &amp; Skill Installers</a>
+    <a href="#settingsgradlekts">Settingsgradlekts</a>
+</div>
+
+<!-- ====== Architecture Overview ====== -->
+<h2 id="overview">1. Architecture Overview</h2>
+
+<div class="mermaid">
+
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    BUILD_GRAPH_321CBB04("Graph Build<br/><small>2 nodes</small>")
+    class BUILD_GRAPH_321CBB04 module;
+    CLI_SKILLS_9964CBB8("CLI &amp; Skill Installers<br/><small>183 nodes</small>")
+    class CLI_SKILLS_9964CBB8 module;
+    SETTINGSGRADLEKTS_BF427DD9("Settingsgradlekts<br/><small>1 nodes</small>")
+    class SETTINGSGRADLEKTS_BF427DD9 module;
+    BUILD_GRAPH_321CBB04 -.-> CLI_SKILLS_9964CBB8
+    CLI_SKILLS_9964CBB8 -.-> SETTINGSGRADLEKTS_BF427DD9
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h4>Architecture Layers</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>Layer</th><th>Nodes</th><th>Communities</th></tr>
+      <tr><td>Graph Build</td><td>2</td><td><code>8, 9</code></td></tr><tr><td>CLI &amp; Skill Installers</td><td>183</td><td><code>0, 1, 2, 3, 4, 5, 6, 7</code></td></tr><tr><td>Settingsgradlekts</td><td>1</td><td><code>10</code></td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Core Flow</h4>
+    <div class="arrow-chain">Graph Build -&gt; CLI &amp; Skill Installers -&gt; Settingsgradlekts</div>
+  </div>
+</div>
+<hr>
+<!-- ====== 2. Graph Build ====== -->
+<h2 id="build-graph">2. Graph Build</h2>
+<p>Graph Build groups implementation around buildgradlekts, app, mostly in app/build.gradle.kts, build.gradle.kts. This section covers 2 nodes and 0 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Graph Build (2 nodes, 0 edges)
+    app_build_gradle_d5080885("app/build.gradle.kts")
+    build_gradle_877734b9("build.gradle.kts")
+    class app_build_gradle_d5080885 function;
+    class build_gradle_877734b9 function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>app/build.gradle.kts</code><br><small style="color:var(--muted)">app/build.gradle.kts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>app/build.gradle.kts node in app/build.gradle.kts.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>build.gradle.kts</code><br><small style="color:var(--muted)">build.gradle.kts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>build.gradle.kts node in build.gradle.kts.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>app/build.gradle.kts</code></td><td>1 nodes</td></tr>
+<tr><td><code>build.gradle.kts</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: No high-confidence call edges detected. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 3. CLI & Skill Installers ====== -->
+<h2 id="cli-skills">3. CLI &amp; Skill Installers</h2>
+<p>CLI &amp; Skill Installers groups implementation around app, kotlin, com, opencode, mostly in opencode/companion/MainActivity.kt, opencode/companion/CompanionVoiceInteractionService.kt, opencode/companion/OpencodeAccessibilityService.kt. This section covers 183 nodes and 320 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: CLI &amp; Skill Installers (183 nodes, 320 edges)
+    subgraph cli_skills_opencode_companion_CompanionVoiceInte_d2834c21["opencode/companion/CompanionVoiceInteractionService.kt"]
+        app_src_main_kotlin_com_opencode_companion_compa_09ed5753("CompanionVoiceInteractionService.kt")
+        app_src_main_kotlin_com_opencode_companion_compa_855bfce4("CompanionVoiceInteractionService<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_60f85afb("onReady()<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_d800f828("CompanionVoiceInteractionSessionActivity<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_53dbab9b("onCreate()<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_38884314("CompanionVoiceInteractionSessionService<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_b01b8f8d("onNewSession()<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_10d86942("CompanionVoiceSession<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_2d19258b("speak()<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_daef1b50("onInit()<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_bbf9c4d5("onDestroy()<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_be2972e0("onCreate()<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+        app_src_main_kotlin_com_opencode_companion_compa_91c10536("onHandleAssist()<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
+    end
+    subgraph cli_skills_opencode_companion_CompanionService_k_abaaffc6["opencode/companion/CompanionService.kt"]
+        app_src_main_kotlin_com_opencode_companion_compa_e4344549("CompanionService.kt")
+        app_src_main_kotlin_com_opencode_companion_compa_06d4025e("CompanionService<br/><small>opencode/companion/CompanionService.kt</small>")
+    end
+    subgraph cli_skills_opencode_companion_MainActivity_kt_6d1ae47e["opencode/companion/MainActivity.kt"]
+        app_src_main_kotlin_com_opencode_companion_maina_de319b17("MainActivity.kt")
+        app_src_main_kotlin_com_opencode_companion_maina_e5e39a0f("MainActivity<br/><small>opencode/companion/MainActivity.kt</small>")
+    end
+    app_src_main_kotlin_com_opencode_companion_openc_e8b72dd4("OpencodeAccessibilityService<br/><small>opencode/companion/OpencodeAccessibilityService.kt</small>")
+    app_src_main_kotlin_com_opencode_companion_compa_855bfce4 -->|method| app_src_main_kotlin_com_opencode_companion_compa_60f85afb
+    app_src_main_kotlin_com_opencode_companion_compa_d800f828 -->|method| app_src_main_kotlin_com_opencode_companion_compa_53dbab9b
+    app_src_main_kotlin_com_opencode_companion_compa_38884314 -->|method| app_src_main_kotlin_com_opencode_companion_compa_b01b8f8d
+    app_src_main_kotlin_com_opencode_companion_compa_10d86942 -->|method| app_src_main_kotlin_com_opencode_companion_compa_2d19258b
+    app_src_main_kotlin_com_opencode_companion_compa_10d86942 -->|method| app_src_main_kotlin_com_opencode_companion_compa_daef1b50
+    app_src_main_kotlin_com_opencode_companion_compa_10d86942 -->|method| app_src_main_kotlin_com_opencode_companion_compa_bbf9c4d5
+    app_src_main_kotlin_com_opencode_companion_compa_10d86942 -->|method| app_src_main_kotlin_com_opencode_companion_compa_be2972e0
+    app_src_main_kotlin_com_opencode_companion_compa_10d86942 -->|method| app_src_main_kotlin_com_opencode_companion_compa_91c10536
+    app_src_main_kotlin_com_opencode_companion_compa_60f85afb -->|calls| app_src_main_kotlin_com_opencode_companion_compa_60f85afb
+    app_src_main_kotlin_com_opencode_companion_compa_53dbab9b -->|calls| app_src_main_kotlin_com_opencode_companion_compa_53dbab9b
+    app_src_main_kotlin_com_opencode_companion_compa_b01b8f8d -->|calls| app_src_main_kotlin_com_opencode_companion_compa_10d86942
+    app_src_main_kotlin_com_opencode_companion_compa_be2972e0 -->|calls| app_src_main_kotlin_com_opencode_companion_compa_53dbab9b
+    app_src_main_kotlin_com_opencode_companion_compa_bbf9c4d5 -->|calls| app_src_main_kotlin_com_opencode_companion_compa_bbf9c4d5
+    app_src_main_kotlin_com_opencode_companion_compa_91c10536 -->|calls| app_src_main_kotlin_com_opencode_companion_compa_91c10536
+    app_src_main_kotlin_com_opencode_companion_compa_2d19258b -->|calls| app_src_main_kotlin_com_opencode_companion_compa_2d19258b
+    %% Omitted for readability: 165 nodes, 0 edges
+    class app_src_main_kotlin_com_opencode_companion_compa_09ed5753 klass;
+    class app_src_main_kotlin_com_opencode_companion_compa_855bfce4 klass;
+    class app_src_main_kotlin_com_opencode_companion_compa_60f85afb function;
+    class app_src_main_kotlin_com_opencode_companion_compa_d800f828 klass;
+    class app_src_main_kotlin_com_opencode_companion_compa_53dbab9b function;
+    class app_src_main_kotlin_com_opencode_companion_compa_38884314 klass;
+    class app_src_main_kotlin_com_opencode_companion_compa_b01b8f8d function;
+    class app_src_main_kotlin_com_opencode_companion_compa_10d86942 klass;
+    class app_src_main_kotlin_com_opencode_companion_compa_2d19258b function;
+    class app_src_main_kotlin_com_opencode_companion_compa_daef1b50 function;
+    class app_src_main_kotlin_com_opencode_companion_compa_bbf9c4d5 function;
+    class app_src_main_kotlin_com_opencode_companion_compa_be2972e0 function;
+    class app_src_main_kotlin_com_opencode_companion_compa_91c10536 function;
+    class app_src_main_kotlin_com_opencode_companion_compa_e4344549 klass;
+    class app_src_main_kotlin_com_opencode_companion_compa_06d4025e klass;
+    class app_src_main_kotlin_com_opencode_companion_maina_de319b17 klass;
+    class app_src_main_kotlin_com_opencode_companion_maina_e5e39a0f klass;
+    class app_src_main_kotlin_com_opencode_companion_openc_e8b72dd4 klass;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>CompanionVoiceInteractionService</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>onReady()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>CompanionVoiceInteractionService node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>CompanionVoiceInteractionSessionActivity</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>onCreate()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>CompanionVoiceInteractionSessionActivity node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>CompanionVoiceInteractionSessionService</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>onNewSession()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>CompanionVoiceInteractionSessionService node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>CompanionVoiceSession</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>onNewSession()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>onCreate()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onDestroy()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onHandleAssist()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br>+4 more</td>
+  <td>CompanionVoiceSession node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>onBeginningOfSpeech()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onBufferReceived()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onEndOfSpeech()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br>+6 more</td>
+  <td>RecognitionListener node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>.onReady()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceInteractionService</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onReady()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>onReady()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.onReady() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>.onCreate()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceInteractionSessionActivity</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onCreate()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onCreate()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>onCreate()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.onCreate() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>.onNewSession()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceInteractionSessionService</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>CompanionVoiceSession</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.onNewSession() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>.onCreate()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceSession</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>onCreate()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.onCreate() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>.onDestroy()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceSession</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onDestroy()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>onDestroy()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.onDestroy() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>.onHandleAssist()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceSession</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onHandleAssist()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>onHandleAssist()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>startAssistListening()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.onHandleAssist() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>.onInit()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceSession</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>No direct outbound edge</td>
+  <td>.onInit() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>.onShow()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceSession</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onShow()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>onShow()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>startAssistListening()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.onShow() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>.speak()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceSession</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onError()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onResults()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br>+2 more</td>
+  <td><code>speak()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.speak() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>.startAssistListening()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CompanionVoiceSession</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onHandleAssist()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small><br><code>onShow()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>speak()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.startAssistListening() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>.onBeginningOfSpeech()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>No direct outbound edge</td>
+  <td>.onBeginningOfSpeech() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>.onBufferReceived()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>No direct outbound edge</td>
+  <td>.onBufferReceived() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>.onEndOfSpeech()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>No direct outbound edge</td>
+  <td>.onEndOfSpeech() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>.onError()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>speak()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.onError() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>.onEvent()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>No direct outbound edge</td>
+  <td>.onEvent() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>.onPartialResults()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>No direct outbound edge</td>
+  <td>.onPartialResults() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>.onReadyForSpeech()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>No direct outbound edge</td>
+  <td>.onReadyForSpeech() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>.onResults()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><code>speak()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>.onResults() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>.onRmsChanged()</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>No direct outbound edge</td>
+  <td>.onRmsChanged() node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>CompanionVoiceInteractionService.kt</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>AssistContent</code><br><code>AssistStructure</code><br><code>Bundle</code><br>+8 more</td>
+  <td>CompanionVoiceInteractionService.kt node in opencode/companion/CompanionVoiceInteractionService.kt.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>AppCompatActivity</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>AppCompatActivity node in project.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>Bundle</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>CompanionVoiceInteractionService.kt</code><br><small style="color:var(--muted)">opencode/companion/CompanionVoiceInteractionService.kt</small></td>
+  <td>No direct outbound edge</td>
+  <td>Bundle node in project.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>ByteArray</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>ByteArray node in project.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>OnInitListener</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>OnInitListener node in project.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>RecognitionListener</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>RecognitionListener node in project.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>opencode/companion/MainActivity.kt</code></td><td>53 nodes</td></tr>
+<tr><td><code>opencode/companion/CompanionVoiceInteractionService.kt</code></td><td>25 nodes</td></tr>
+<tr><td><code>opencode/companion/OpencodeAccessibilityService.kt</code></td><td>18 nodes</td></tr>
+<tr><td><code>opencode/companion/CompanionService.kt</code></td><td>14 nodes</td></tr>
+<tr><td><code>opencode/companion/RootShell.kt</code></td><td>8 nodes</td></tr>
+<tr><td><code>install-su.sh</code></td><td>2 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: method x98, calls x85, imports x61, references x45. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 4. Settingsgradlekts ====== -->
+<h2 id="settingsgradlekts">4. Settingsgradlekts</h2>
+<p>Settingsgradlekts groups implementation around settingsgradlekts, mostly in settings.gradle.kts. This section covers 1 nodes and 0 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Settingsgradlekts (1 nodes, 0 edges)
+    settings_gradle_6d67144b("settings.gradle.kts")
+    class settings_gradle_6d67144b function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>settings.gradle.kts</code><br><small style="color:var(--muted)">settings.gradle.kts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>settings.gradle.kts node in settings.gradle.kts.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>settings.gradle.kts</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: No high-confidence call edges detected. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<h2 id="stats">Project Statistics</h2>
+
+<div class="grid">
+  <div class="card">
+    <h4>Graph</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><td>Nodes</td><td>186</td></tr>
+      <tr><td>Edges</td><td>320</td></tr>
+      <tr><td>Hyperedges</td><td>0</td></tr>
+      <tr><td>Communities</td><td>11</td></tr>
+      <tr><td>Documented Sections</td><td>3</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Edge Confidence</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><td>EXTRACTED</td><td>320</td></tr>
+      <tr><td>INFERRED</td><td>0</td></tr>
+      <tr><td>AMBIGUOUS</td><td>0</td></tr>
+    </table>
+  </div>
+</div>
+
+<div style="text-align:center; padding:40px 0; color: var(--muted); font-size:0.9rem;">
+  <p>opencode-companion-apk — Architecture Documentation</p>
+  <p>Generated: 2026-09-18 02:25 UTC · graphify callflow-html</p>
+</div>
+
+</div><!-- .container -->
+
+<script>
+(function () {
+  const mermaidConfig = {
+    startOnLoad: false,
+    theme: 'dark',
+    securityLevel: 'loose',
+    flowchart: { htmlLabels: true, useMaxWidth: true },
+    themeVariables: {
+      primaryColor: '#1e293b',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#38bdf8',
+      secondaryColor: '#0f172a',
+      tertiaryColor: '#334155',
+      lineColor: '#64748b',
+      textColor: '#e2e8f0',
+    }
+  };
+
+  mermaid.initialize(mermaidConfig);
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function enhanceMermaidDiagrams() {
+    document.querySelectorAll('.mermaid').forEach((container) => {
+      if (container.dataset.zoomReady === 'true') return;
+      const svg = container.querySelector('svg');
+      if (!svg) return;
+
+      container.dataset.zoomReady = 'true';
+      container.classList.add('is-enhanced');
+
+      const viewport = document.createElement('div');
+      viewport.className = 'mermaid-viewport';
+      svg.parentNode.insertBefore(viewport, svg);
+      viewport.appendChild(svg);
+
+      const toolbar = document.createElement('div');
+      toolbar.className = 'mermaid-toolbar';
+      toolbar.innerHTML = [
+        '<button type="button" data-action="zoom-out" title="Zoom out">-</button>',
+        '<span class="zoom-level" data-role="level">100%</span>',
+        '<button type="button" data-action="zoom-in" title="Zoom in">+</button>',
+        '<button type="button" data-action="fit" title="Fit width">Fit</button>',
+        '<button type="button" data-action="reset" title="Reset view">Reset</button>'
+      ].join('');
+      container.insertBefore(toolbar, viewport);
+
+      const state = { scale: 1, x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
+      const level = toolbar.querySelector('[data-role="level"]');
+
+      function applyTransform() {
+        svg.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+        level.textContent = `${Math.round(state.scale * 100)}%`;
+      }
+
+      function zoomBy(delta) {
+        state.scale = clamp(state.scale + delta, 0.25, 3);
+        applyTransform();
+      }
+
+      function reset() {
+        state.scale = 1;
+        state.x = 0;
+        state.y = 0;
+        applyTransform();
+      }
+
+      function fitWidth() {
+        const rawWidth = svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width
+          ? svg.viewBox.baseVal.width
+          : svg.getBoundingClientRect().width / state.scale;
+        if (!rawWidth) {
+          reset();
+          return;
+        }
+        state.scale = clamp((viewport.clientWidth - 48) / rawWidth, 0.25, 1.4);
+        state.x = 0;
+        state.y = 0;
+        applyTransform();
+      }
+
+      toolbar.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const action = button.dataset.action;
+        if (action === 'zoom-in') zoomBy(0.15);
+        if (action === 'zoom-out') zoomBy(-0.15);
+        if (action === 'fit') fitWidth();
+        if (action === 'reset') reset();
+      });
+
+      viewport.addEventListener('wheel', (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? 0.1 : -0.1);
+      }, { passive: false });
+
+      viewport.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        state.dragging = true;
+        state.startX = event.clientX;
+        state.startY = event.clientY;
+        state.originX = state.x;
+        state.originY = state.y;
+        viewport.classList.add('is-dragging');
+        viewport.setPointerCapture(event.pointerId);
+      });
+
+      viewport.addEventListener('pointermove', (event) => {
+        if (!state.dragging) return;
+        state.x = state.originX + event.clientX - state.startX;
+        state.y = state.originY + event.clientY - state.startY;
+        applyTransform();
+      });
+
+      function endDrag(event) {
+        if (!state.dragging) return;
+        state.dragging = false;
+        viewport.classList.remove('is-dragging');
+        if (viewport.hasPointerCapture(event.pointerId)) {
+          viewport.releasePointerCapture(event.pointerId);
+        }
+      }
+
+      viewport.addEventListener('pointerup', endDrag);
+      viewport.addEventListener('pointercancel', endDrag);
+      applyTransform();
+    });
+  }
+
+  function renderMermaid() {
+    const result = mermaid.run
+      ? mermaid.run({ querySelector: '.mermaid' })
+      : Promise.resolve();
+    Promise.resolve(result)
+      .then(enhanceMermaidDiagrams)
+      .catch((error) => {
+        console.error('Mermaid render failed:', error);
+        enhanceMermaidDiagrams();
+      });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderMermaid);
+  } else {
+    renderMermaid();
+  }
+})();
+</script>
+
+</body>
+</html>
