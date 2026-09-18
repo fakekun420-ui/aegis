@@ -966,6 +966,8 @@ function setVoiceMode(mode, persist=true){
   state.voiceMode = mode==="duplex" ? "duplex" : "push";
   if (persist) localStorage.setItem("occ.voiceMode", state.voiceMode);
   updateVoiceModeLabels();
+  // Notify native wake gate (fix 2) — native reads duplex flag via bridge
+  try { if (window.NativeBridge && window.NativeBridge.onVoiceModeChanged) window.NativeBridge.onVoiceModeChanged(state.voiceMode==="duplex"); } catch(_){}
   // reinit recognition with new continuous flag
   initRecognition();
   if(state.voiceMode==="duplex"){

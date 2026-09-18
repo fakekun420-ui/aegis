@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
@@ -113,6 +114,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.settings.allowFileAccess = true
+        webView.addJavascriptInterface(this, "NativeBridge")
         webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
         webView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         webView.clearCache(true)
@@ -137,7 +139,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
                 super.onReceivedError(view, errorCode, description, failingUrl)
             }
-            override fun onPageFinished(view: WebView?, url: String?) { super.onPageFinished(view, url) }
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                // FIX (2): only start wake listening after WebView chat loaded and Conversación enabled
+                view?.postDelayed({
+                    // Also sync duplex flag from WebView localStorage (app.js occ.voiceMode)
+                    view.evaluateJavascript("(function(){try{return localStorage.getItem('occ.voiceMode')}catch(e){return null}})()") { v ->
+                        val duplex = v?.contains("duplex") == true
+                        if (duplex) duplexEnabledInSession = true
+                        if (!isNativeOverlayVisible() && shouldWakeListen()) {
+                            android.util.Log.i("OpenCodeWake", "onPageFinished — starting wake listener (Conversación mode, duplex=$duplex)")
+                            startWakeWordListener()
+                        } else {
+                            android.util.Log.d("OpenCodeWake", "onPageFinished — wake not started (duplex=$duplex, overlay=${isNativeOverlayVisible()})")
+                        }
+                    }
+                }, 800)
+            }
         }
         val hubUrl = "http://127.0.0.1:8765"
         // Carga diferida: onCreate decide si cargar directo o mostrar overlay nativo; no cargar aquí incondicionalmente
@@ -172,6 +190,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
     private fun hideNativeOverlay() {
         findViewById<android.view.View>(R.id.nativeOverlay)?.visibility = android.view.View.GONE
+        // FIX (2): ensure wake word stays off in Texto mode after overlay hides — only Conversación enables it
+        // (onPageFinished will handle starting it if duplex was persisted)
     }
     private fun showNativeLoading(msg: String = "Iniciando servicios y levantando Hub...") {
         val overlay = findViewById<android.view.View>(R.id.nativeOverlay) ?: return
@@ -183,7 +203,31 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         txt?.text = msg
         btn?.visibility = android.view.View.GONE
     }
-    // Único criterio: HTTP 200 en /api/system/status (spec punto 2/4) — no filtrar por ready:true para evitar duplicar lógica web
+    // Criterio termux-native: si /api/system/status devuelve ready:true (termux-native o companion-owned), ocultar overlay y cargar WebView directo
+    private suspend fun checkSystemReady(): Pair<Boolean,String> = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val url = java.net.URL("http://127.0.0.1:8765/api/system/status")
+            val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                connectTimeout = 3000; readTimeout = 3000; requestMethod = "GET"
+            }
+            val code = conn.responseCode
+            if (code != 200) return@withContext Pair(false, "http:$code")
+            val body = conn.inputStream.bufferedReader().readText()
+            val ready = body.contains("\"ready\":true")
+            val ownership = when {
+                body.contains("\"sessionOwnership\":\"termux-native\"") -> "termux-native"
+                body.contains("\"sessionOwnership\":\"companion-owned\"") -> "companion-owned"
+                body.contains("\"sessionOwnership\":\"none\"") -> "none"
+                else -> "unknown"
+            }
+            android.util.Log.i("OpenCodeBoot", "checkSystemReady ready=$ready ownership=$ownership code=200")
+            return@withContext Pair(ready, ownership)
+        } catch (e: Exception) {
+            android.util.Log.w("OpenCodeBoot", "checkSystemReady fail: ${e.message}")
+            return@withContext Pair(false, "error:${e.message?.take(60)}")
+        }
+    }
+    // Legacy 200-only check for polling after user pressed Iniciar Sistema — still HTTP 200 gate
     private suspend fun isHubReady(): Boolean = withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
             val url = java.net.URL("http://127.0.0.1:8765/api/system/status")
@@ -286,14 +330,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
     private fun checkHubOnStart() {
         lifecycleScope.launch {
-            val ready = isHubReady()
+            // FIX (1): 3s max timeout — si /api/system/status tarda, no dejar overlay colgado
+            val result = withTimeoutOrNull(3000L) { checkSystemReady() }
+            val (ready, info) = result ?: Pair(false, "timeout:3s")
             if (ready) {
-                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=true — carga directa WebView sin overlay")
+                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=true ($info) — carga directa WebView sin overlay")
                 hideNativeOverlay()
                 // carga directa sin pintar overlay
                 webView.post { webView.loadUrl("http://127.0.0.1:8765") }
             } else {
-                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=false — muestra Iniciar Sistema")
+                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=false ($info) — muestra Iniciar Sistema")
+                if (result == null) android.util.Log.w("OpenCodeBoot", "checkHubOnStart timed out after 3s — treating as offline")
                 showNativeOfflineOverlay()
             }
         }
@@ -342,28 +389,82 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val lower = text.lowercase(Locale.ROOT)
         return getWakePhrases().any { ph -> lower.contains(ph.lowercase(Locale.ROOT)) }
     }
+    private fun isNativeOverlayVisible(): Boolean {
+        val v = findViewById<android.view.View>(R.id.nativeOverlay) ?: return false
+        return v.visibility == android.view.View.VISIBLE
+    }
+    private fun shouldWakeListen(): Boolean {
+        // FIX (2): wake word ONLY when WebView chat is loaded AND Conversación mode persisted
+        // During native overlay or Texto mode, keep mic fully OFF to avoid loop sound
+        if (isNativeOverlayVisible()) return false
+        if (webView.url == null) return false
+        // Web stores occ.voiceMode (push/duplex) in localStorage, mirrored to native via shouldWakeListen
+        // We check both the WebView's localStorage mirror (occ_web_prefs) and the Activity's own flag
+        // For now, require that duplex was persisted; Texto mode (null/push) = no wake listening
+        // Correct key is occ.voiceMode as used in public/app.js: localStorage.getItem("occ.voiceMode")
+        val mode = try {
+            // Try reading WebView localStorage via native bridge is async, so we check native-cached copy
+            // MainActivity caches the last known mode via shouldWakeListen — fallback to SharedPreferences
+            // Primary source: app.js writes to localStorage "occ.voiceMode"; native mirrors via JS injection could be added,
+            // but we approximate by checking if any duplex was ever persisted in native prefs
+            getSharedPreferences("voice_prefs", MODE_PRIVATE).getString("wake_duplex", null)
+        } catch (_:Exception) { null }
+        // Actually app.js persists to localStorage "occ.voiceMode" which is not SharedPreferences.
+        // So we expose a helper: window.localStorage can be read via evaluateJavascript async, not sync.
+        // As a sync approximation, we check if the user ever toggled duplex in this session via a memory flag
+        if (duplexEnabledInSession) return true
+        // Otherwise remain silent — wake will be enabled when user toggles Conversación and we set the flag
+        return false
+    }
+    // Tracks whether user explicitly enabled Conversación in this session (or hub loaded with duplex)
+    // Flipped to true when WebView reports localStorage occ.voiceMode=="duplex" in onPageFinished
+    private var duplexEnabledInSession: Boolean = false
+    // Called from JS bridge when user toggles Conversación in WebView (app.js setVoiceMode)
+    @android.webkit.JavascriptInterface
+    fun onVoiceModeChanged(duplex: Boolean) {
+        duplexEnabledInSession = duplex
+        android.util.Log.i("OpenCodeWake", "onVoiceModeChanged duplex=$duplex")
+        if (duplex && !isNativeOverlayVisible()) {
+            webView.post { startWakeWordListener() }
+        } else if (!duplex) {
+            stopWakeWordListener()
+        }
+    }
     fun startWakeWordListener() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        // FIX (2): do NOT start while native overlay is visible or Texto mode is active
+        if (isNativeOverlayVisible()) {
+            android.util.Log.d("OpenCodeWake", "wake skip: overlay visible")
+            return
+        }
+        if (!shouldWakeListen()) {
+            android.util.Log.d("OpenCodeWake", "wake skip: shouldWakeListen=false webUrl=${webView.url} overlay=${isNativeOverlayVisible()}")
+            return
+        }
         if (wakeListening) return
         wakeListening = true
         wakeRecognizer?.destroy()
+        android.util.Log.d("OpenCodeWake", "wake startListening")
         wakeRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
             setRecognitionListener(object : android.speech.RecognitionListener {
-                override fun onReadyForSpeech(p: Bundle?) {}
-                override fun onBeginningOfSpeech() {}
+                override fun onReadyForSpeech(p: Bundle?) { android.util.Log.d("OpenCodeWake", "wake onReadyForSpeech") }
+                override fun onBeginningOfSpeech() { android.util.Log.d("OpenCodeWake", "wake onBeginningOfSpeech") }
                 override fun onRmsChanged(v: Float) {}
                 override fun onBufferReceived(b: ByteArray?) {}
-                override fun onEndOfSpeech() {}
+                override fun onEndOfSpeech() { android.util.Log.d("OpenCodeWake", "wake onEndOfSpeech") }
                 override fun onError(e: Int) {
-                    // Auto-restart continuous wake listener
+                    android.util.Log.d("OpenCodeWake", "wake onError=$e")
+                    // Auto-restart only if still should listen
                     wakeListening = false
-                    webView.postDelayed({ startWakeWordListener() }, 900)
+                    if (shouldWakeListen()) webView.postDelayed({ startWakeWordListener() }, 900)
                 }
                 override fun onResults(b: Bundle?) {
                     val list = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val text = list?.firstOrNull() ?: ""
+                    android.util.Log.d("OpenCodeWake", "wake onResults: $text")
                     if (containsWakeWord(text)) {
+                        android.util.Log.i("OpenCodeWake", "wake word detected: $text")
                         // Activate full voice session via WebView JS injection
                         val esc = text.replace("\\","\\\\").replace("'","\\'").replace("\n"," ")
                         webView.evaluateJavascript("try{ window.startVoiceSession && window.startVoiceSession(); 'ok' }catch(e){'err:'+e}", null)
@@ -371,11 +472,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         txtSttResult.text = "Wake: $text → sesión voz"
                     }
                     wakeListening = false
-                    webView.postDelayed({ startWakeWordListener() }, 400)
+                    if (shouldWakeListen()) webView.postDelayed({ startWakeWordListener() }, 400)
                 }
                 override fun onPartialResults(b: Bundle?) {
                     val p = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
                     if (containsWakeWord(p)) {
+                        android.util.Log.i("OpenCodeWake", "wake partial word: $p")
                         // Early trigger on partial to reduce latency
                         webView.evaluateJavascript("try{ window.startVoiceSession && window.startVoiceSession(); 'ok' }catch(e){'err'}", null)
                     }
@@ -389,7 +491,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         }
-        try { wakeRecognizer?.startListening(intent) } catch (_:Exception) { wakeListening = false }
+        try { wakeRecognizer?.startListening(intent) } catch (e:Exception) { android.util.Log.w("OpenCodeWake", "wake startListening fail: ${e.message}"); wakeListening = false }
     }
     fun stopWakeWordListener() {
         try { wakeRecognizer?.destroy() } catch (_:Exception) {}
@@ -409,8 +511,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 registerForActivityResult(ActivityResultContracts.RequestPermission()){}.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
-        // Start background wake word listener after permissions granted — requires mic
-        webView.postDelayed({ if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startWakeWordListener() }, 1800)
+        // Wake word no longer auto-started here — gated in onPageFinished + shouldWakeListen (fix 2)
+        // Previously this caused mic loop while overlay was visible even in Texto mode
     }
 
     private fun startCompanionService(){
