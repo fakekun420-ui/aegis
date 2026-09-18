@@ -72,8 +72,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             v.updatePadding(top = statusBars.top, bottom = maxOf(navBars.bottom, ime.bottom))
             appBar?.updatePadding(top = statusBars.top)
             // WebView contenedor: desplaza contenido bajo el notch (statusBars top ya aplicado en root)
-            val swipe = findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.swipe)
-            swipe?.updatePadding(top = 0)
             findViewById<WebView>(R.id.webview)?.let { wv ->
                 ViewCompat.setOnApplyWindowInsetsListener(wv) { vw, ins ->
                     val b = ins.getInsets(WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.ime())
@@ -166,19 +164,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val hubUrl = "http://127.0.0.1:8765"
         // Carga diferida: onCreate decide si cargar directo o mostrar overlay nativo; no cargar aquí incondicionalmente
         // webView.loadUrl(hubUrl) se llama tras checkHubReady()
-        val swipe = findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.swipe)
-        swipe?.setOnRefreshListener {
-            // pull-to-refresh también respeta estado: si hub caído, reintenta check en vez de reload error
-            lifecycleScope.launch {
-                if (isHubReady()) {
-                    hideNativeOverlay()
-                    webView.loadUrl(hubUrl)
-                } else {
-                    webView.reload()
-                }
-                swipe.isRefreshing = false
-            }
-        }
+        // SwipeRefreshLayout removed: app has no pull-to-refresh (was stealing scroll gestures and breaking WebView scroll)
     }
 
     // ---- Arranque autónomo desde APK (ROOT) ----

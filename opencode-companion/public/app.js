@@ -30,7 +30,25 @@ let state = {
 // ---- helpers
 function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!==undefined) e.textContent=text; return e; }
 function escapeHtml(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-function scrollToBottom(){ if(!msgsEl) return; msgsEl.scrollTop = msgsEl.scrollHeight; requestAnimationFrame(()=>{ if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; }); setTimeout(()=>{ if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; }, 60); }
+let scrollRaf = 0, scrollTimer = 0;
+function scrollToBottom(){
+  if(!msgsEl) return;
+  cancelAnimationFrame(scrollRaf);
+  clearTimeout(scrollTimer);
+  const doScroll = () => { if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; };
+  doScroll();
+  scrollRaf = requestAnimationFrame(() => {
+    doScroll();
+    requestAnimationFrame(doScroll);
+    scrollTimer = setTimeout(doScroll, 120);
+    // Also observe layout shifts (images/code blocks) for 1.5s
+    if(window.ResizeObserver && msgsEl){
+      const ro = new ResizeObserver(() => doScroll());
+      ro.observe(msgsEl);
+      setTimeout(() => ro.disconnect(), 1500);
+    }
+  });
+}
 function isMemoryContext(text){
   const t = String(text || "");
   return t.trim().startsWith("<memory_context") || t.includes("<project_knowledge") || t.includes("<memory relevance=");
@@ -184,17 +202,6 @@ function fileToText(file){
 
 // ---- drawer
 function setupDrawer(){
-  // fix #3: prevent pull-to-refresh / scroll-bounce from triggering refresh via overscroll
-  const db = document.getElementById("drawer-body");
-  if(db){
-    db.addEventListener("touchmove", (e)=>{
-      // allow native scroll inside drawer-body, but stop propagation at edges
-      const atTop = db.scrollTop <= 0;
-      const atBottom = db.scrollTop + db.clientHeight >= db.scrollHeight - 2;
-      const deltaY = e.touches && e.touches[0] ? 0 : 0;
-      if((atTop && deltaY > 0) || (atBottom && deltaY < 0)) e.preventDefault();
-    }, {passive:false});
-  }
   const toggle = (id) => {
     const body = document.getElementById(id);
     const btn = document.querySelector(`.section-toggle[data-target="${id}"]`);
@@ -497,7 +504,7 @@ function renderDrawer(){
     header.classList.toggle("active", !!isActive);
     header.setAttribute("aria-expanded", String(isExpanded));
     header.onclick = ()=>{
-      // Spec 5: persist active projectId
+      // Spec 5: persist active projectId + open dedicated project view (B)
       state.currentProjectId = proj.id;
       state.currentProject = proj.name; // legacy compat
       persistUi({ projectId: proj.id, project: proj.name });
@@ -506,6 +513,7 @@ function renderDrawer(){
       persistExpanded();
       renderDrawer();
       refreshSkillsUI();
+      openProjectView(proj.id);
       showPill(`Proyecto: ${proj.name}`, "read");
     };
     // Right-click to archive/unarchive quick action
@@ -720,6 +728,9 @@ async function selectSession(id){
   state.currentSessionId = id;
   persistUi({ sessionId: id });
   document.querySelectorAll(".session-row").forEach(r=> r.classList.toggle("active", r.dataset.sessionId===id));
+  // When project view is open, selecting a session should leave project view (back to chat)
+  const prevView = state.viewMode;
+  if(state.viewMode === "project") hideProjectView();
   msgsEl.innerHTML="";
   addMsg("system", `Sesión ${id.slice(0,8)} — cargando…`);
   showPill("Cargando sesión…", "read");
@@ -728,6 +739,12 @@ async function selectSession(id){
     const items = Array.isArray(data) ? data : (data.messages || data.data || []);
     msgsEl.innerHTML="";
     if(!items.length) addMsg("system","Sesión vacía — escribe abajo.");
+    // Batch DOM: use fragment to avoid layout thrash, then single scroll
+    const frag = document.createDocumentFragment();
+    const tmpMsgs = msgsEl;
+    // Temporarily suppress per-addMsg scroll by batching
+    let batchCount = 0;
+    const _origAppend = tmpMsgs.appendChild.bind(tmpMsgs);
     items.forEach(m=>{
       const info = m.info || m.message || m;
       const parts = m.parts || m.content || [];
@@ -739,8 +756,25 @@ async function selectSession(id){
       else text = info.content || info.text || JSON.stringify(m).slice(0,700);
       if(!String(text).trim()) return;
       const r = role==="user"||role==="human" ? "user" : (role==="system"?"system":"assistant");
-      addMsg(r, String(text).slice(0,8000));
+      // Inline add without triggering intermediate scrolls — build fragment then scroll once
+      const raw = String(text).slice(0,8000);
+      const isMem = isMemoryContext(raw);
+      if(isMem){
+        const stripped = stripMemoryContext(raw);
+        if(!stripped) return;
+        if(stripped !== raw){
+          batchCount++;
+          // Let addMsg handle memory collapse by calling it directly (it already scrolls, but we suppress via flag)
+          // Instead, defer scroll: call addMsg but it will call scrollToBottom which we debounce via scrollRaf
+          addMsg(r, raw);
+          return;
+        }
+      }
+      batchCount++;
+      addMsg(r, raw);
     });
+    // Ensure final scroll happens strictly after all messages + layout (double rAF)
+    await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
     scrollToBottom();
     hidePill();
     // Touch lastUsed for managed project association if any
@@ -949,6 +983,198 @@ async function refreshSkillsUI(){
     }
   } catch {}
 }
+// ---- Project detail view (B): independent workspace per project ----
+Object.assign(state, { viewMode: "chat", projectViewId: null }); // chat | project
+const projectViewEl = () => document.getElementById("project-view");
+function openProjectView(projectId){
+  const proj = state.projects.find(p=>p.id===projectId);
+  if(!proj) return;
+  state.viewMode = "project";
+  state.projectViewId = projectId;
+  state.currentProjectId = projectId;
+  state.currentProject = proj.name;
+  persistUi({ projectId, project: proj.name });
+  const pv = projectViewEl();
+  const msgs = document.getElementById("msgs");
+  const composer = document.querySelector(".composer");
+  if(pv) pv.classList.remove("hidden");
+  if(msgs) msgs.classList.add("hidden");
+  if(composer) composer.classList.add("hidden");
+  document.getElementById("project-view-title").textContent = proj.name;
+  document.getElementById("project-view-desc").textContent = proj.description || "—";
+  document.getElementById("project-view-count").textContent = `${(proj.sessions||[]).length} sesión${(proj.sessions||[]).length!==1?"es":""}`;
+  renderProjectSessions(projectId);
+  refreshSkillsUI(); // populates both drawer and project-view settings via updated function
+  renderProjectSettings(projectId);
+  drawerCtl?.setOpen?.(false);
+}
+function hideProjectView(){
+  state.viewMode = "chat";
+  const pv = projectViewEl();
+  const msgs = document.getElementById("msgs");
+  const composer = document.querySelector(".composer");
+  if(pv) pv.classList.add("hidden");
+  if(msgs) msgs.classList.remove("hidden");
+  if(composer) composer.classList.remove("hidden");
+}
+function renderProjectSessions(projectId){
+  const proj = state.projects.find(p=>p.id===projectId);
+  const listEl = document.getElementById("project-view-sessions-list");
+  if(!proj || !listEl) return;
+  listEl.innerHTML = "";
+  const entries = (proj.sessions||[]).slice().sort((a,b)=>(b.lastUsed||b.createdAt||"").localeCompare(a.lastUsed||a.createdAt||""));
+  if(!entries.length){
+    listEl.innerHTML = `<div class="muted" style="padding:12px;font-size:13px;">Sin sesiones — escribe abajo para crear la primera.</div>`;
+    return;
+  }
+  entries.forEach(entry=>{
+    const live = state.sessions.find(s=> String(s.id||s.ID||s.sessionID||s.sessionId)===String(entry.sessionId));
+    const title = (live && (live.title||live.name)) ? (live.title||live.name) : (entry.title || entry.sessionId.slice(0,8));
+    const when = entry.lastUsed ? fmtDate(entry.lastUsed) : (entry.createdAt ? fmtDate(entry.createdAt) : "");
+    const row = el("button","project-session-row");
+    row.innerHTML = `<span class="session-title">${title}</span><span class="session-sub">${when}</span>`;
+    row.title = entry.sessionId;
+    row.onclick = ()=> selectSession(entry.sessionId);
+    listEl.appendChild(row);
+  });
+}
+async function renderProjectSettings(projectId){
+  const proj = state.projects.find(p=>p.id===projectId);
+  const hint = document.getElementById("project-view-settings-hint");
+  const listEl = document.getElementById("project-skills-list");
+  const linkedList = document.getElementById("project-linked-projects-list");
+  const selectEl = document.getElementById("project-linked-project-select");
+  if(!proj){
+    if(hint) hint.textContent = "—";
+    return;
+  }
+  if(hint) hint.textContent = `${proj.name}${proj.description ? " — "+proj.description.slice(0,60) : ""}`;
+  try{
+    const data = await fetchSkills(projectId);
+    const skills = data.skills || [];
+    if(listEl){
+      listEl.innerHTML = "";
+      if(!skills.length) listEl.innerHTML = `<div class="muted" style="font-size:11px;padding:4px;">Sin skills (global o del proyecto).</div>`;
+      for(const s of skills){
+        const row = el("div",""); row.style.cssText="display:flex;flex-direction:column;gap:4px;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--panel2);";
+        const head = el("div",""); head.style.cssText="display:flex;gap:6px;align-items:center;";
+        const badge = el("span","chip", s.scope==="global" ? "global" : "proyecto"); badge.style.fontSize="10px";
+        const title = el("span","", s.name); title.style.cssText="font-weight:700;font-size:12px;flex:1;";
+        const btnEdit = el("button","btn","Editar"); btnEdit.style.cssText="padding:2px 6px;font-size:11px;";
+        const btnDel = el("button","btn","×"); btnDel.style.cssText="padding:2px 6px;font-size:12px;color:var(--err);";
+        head.append(badge, title, btnEdit, btnDel);
+        const preview = el("div","muted"); preview.style.cssText="font-size:11px;white-space:pre-wrap;max-height:80px;overflow:auto;background:#0a0a0f;border:1px solid var(--border);border-radius:6px;padding:6px;"; preview.textContent=(s.content||"").slice(0,400);
+        row.append(head, preview);
+        btnEdit.onclick = ()=>{
+          const se = document.getElementById("project-skill-scope"), ne = document.getElementById("project-skill-name"), ce = document.getElementById("project-skill-content");
+          if(se) se.value = s.scope==="global"?"global":"project";
+          if(ne){ ne.value=s.name; ne.dataset.editScope=s.scope; ne.dataset.editName=s.name; }
+          if(ce) ce.value=s.content||"";
+          const form = document.getElementById("project-add-skill-form"); if(form){ form.classList.remove("hidden"); form.style.display="grid"; }
+        };
+        btnDel.onclick = async ()=>{
+          if(!confirm(`Eliminar skill "${s.name}" [${s.scope}]?`)) return;
+          try{ const r=await fetch(`/api/skills/${encodeURIComponent(s.scope)}/${encodeURIComponent(s.name)}`,{method:"DELETE"}); const j=await r.json(); if(!j.ok) throw new Error(j.error); await renderProjectSettings(projectId); await refreshSkillsUI(); }catch(e){ alert(String(e.message).slice(0,400)); }
+        };
+        listEl.appendChild(row);
+      }
+    }
+  }catch(e){ if(listEl) listEl.innerHTML = `<div class="muted" style="color:var(--err);font-size:11px;">${String(e.message).slice(0,200)}</div>`; }
+  try{
+    const linked = (proj && proj.linkedProjects) || [];
+    if(linkedList){
+      linkedList.innerHTML = "";
+      if(!linked.length) linkedList.innerHTML = `<div class="muted" style="font-size:11px;padding:4px;">Sin proyectos vinculados.</div>`;
+      else for(const lid of linked){
+        const lp = state.projects.find(p=>p.id===lid); const name = lp ? lp.name : lid;
+        const row = el("div",""); row.style.cssText="display:flex;gap:6px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:6px;background:var(--panel2);";
+        const label = el("span","",name); label.style.cssText="flex:1;font-size:12px;";
+        const btnRm = el("button","btn","×"); btnRm.style.cssText="padding:2px 6px;";
+        btnRm.onclick = async ()=>{ const next=linked.filter(x=>x!==lid); try{ const r=await fetch(`/api/projects/${encodeURIComponent(projectId)}`,{method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({linkedProjects: next})}); const j=await r.json(); if(!j.ok) throw new Error(j.error); await refreshProjects(); await renderProjectSettings(projectId); await refreshSkillsUI(); }catch(e){ alert(String(e.message).slice(0,300)); } };
+        row.append(label, btnRm); linkedList.appendChild(row);
+      }
+    }
+    const available = state.projects.filter(p=> p.id!==projectId && !p.archivedAt && !linked.includes(p.id));
+    if(selectEl){ selectEl.innerHTML = available.length? "" : `<option value="">(no hay proyectos)</option>`; for(const p of available){ const o=document.createElement("option"); o.value=p.id; o.textContent=p.name; selectEl.appendChild(o); } }
+  }catch{}
+}
+function setupProjectView(){
+  document.getElementById("btn-project-back")?.addEventListener("click", hideProjectView);
+  document.querySelectorAll(".project-tab").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const tab = btn.dataset.tab;
+      document.querySelectorAll(".project-tab").forEach(b=> b.classList.toggle("active", b===btn));
+      document.getElementById("project-view-sessions")?.classList.toggle("hidden", tab!=="sessions");
+      document.getElementById("project-view-settings")?.classList.toggle("hidden", tab!=="settings");
+    });
+  });
+  // project composer: send creates NEW session auto-linked to project
+  const pPrompt = document.getElementById("project-prompt"), pSend = document.getElementById("btn-project-send"), pAttach = document.getElementById("btn-project-attach");
+  function pAutoGrow(){ if(!pPrompt) return; pPrompt.style.height="auto"; pPrompt.style.height=Math.min(pPrompt.scrollHeight,140)+"px"; }
+  pPrompt?.addEventListener("input", pAutoGrow);
+  pPrompt?.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendProjectPrompt(); }});
+  pSend?.addEventListener("click", sendProjectPrompt);
+  // project composer uses same filePicker/chips logic via shared helper — reuse chipsEl for project via separate container
+  async function sendProjectPrompt(){
+    const text = (pPrompt?.value||"").trim();
+    if(!text) return;
+    const pid = state.projectViewId || state.currentProjectId;
+    if(!pid){ showPill("Selecciona un proyecto","thinking"); return; }
+    const proj = state.projects.find(p=>p.id===pid);
+    pPrompt.value=""; pAutoGrow();
+    showPill("Creando sesión…","thinking");
+    try{
+      const title = `companion:${proj ? proj.name : pid}:${Date.now()%100000}`;
+      const s = await jpost("/opencode/session", { title });
+      const sid = s.id || s.ID || s.sessionId || s.sessionID;
+      if(!sid) throw new Error("no session id");
+      try{ await jpost(`/api/projects/${encodeURIComponent(pid)}/sessions`, { sessionId: sid, title }); }catch(e){ console.warn("link session fail", e.message); }
+      await refreshProjects(); await refreshSessions();
+      // switch to chat view and send the message in that new session
+      state.currentProjectId = pid;
+      if(proj) state.currentProject = proj.name;
+      persistUi({ projectId: pid, sessionId: sid });
+      hideProjectView();
+      await selectSession(sid);
+      // Now send the text via same flow as sendPrompt but with known sid
+      promptEl.value = text; autoGrow();
+      await sendPrompt();
+      renderProjectSessions(pid);
+    }catch(e){ addMsg("system","Error creando sesión de proyecto: "+String(e).slice(0,600)); showPill("Error","thinking"); }
+  }
+  // project skills form
+  const psAdd = document.getElementById("btn-project-add-skill"), psForm = document.getElementById("project-add-skill-form");
+  const psScope = document.getElementById("project-skill-scope"), psName = document.getElementById("project-skill-name"), psContent = document.getElementById("project-skill-content");
+  const psSave = document.getElementById("btn-project-save-skill"), psCancel = document.getElementById("btn-project-cancel-skill"), psErr = document.getElementById("project-add-skill-error");
+  psAdd?.addEventListener("click", ()=>{ if(psForm){ psForm.classList.remove("hidden"); psForm.style.display="grid"; } if(psName){ psName.value=""; delete psName.dataset.editScope; delete psName.dataset.editName; } if(psContent) psContent.value=""; if(psErr) psErr.textContent=""; setTimeout(()=> psName?.focus(), 50); });
+  psCancel?.addEventListener("click", ()=>{ if(psForm){ psForm.classList.add("hidden"); psForm.style.display="none"; } if(psErr) psErr.textContent=""; });
+  psSave?.addEventListener("click", async ()=>{
+    const rawScope = psScope ? psScope.value : "global";
+    const scope = rawScope==="project" ? (state.projectViewId || state.currentProjectId || "global") : "global";
+    const name = (psName?.value||"").trim(); const content = psContent ? psContent.value : "";
+    if(!name){ if(psErr) psErr.textContent="Nombre requerido"; psName?.focus(); return; }
+    if(psErr) psErr.textContent="Guardando…"; psSave.disabled=true;
+    try{
+      const isEdit = !!(psName.dataset.editScope && psName.dataset.editName);
+      if(isEdit){ const es=psName.dataset.editScope, en=psName.dataset.editName; const r=await fetch(`/api/skills/${encodeURIComponent(es)}/${encodeURIComponent(en)}`,{method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({content})}); const j=await r.json(); if(!j.ok) throw new Error(j.error); if(es!==scope || en!==name){ const r2=await fetch(`/api/skills`,{method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({scope,name,content})}); const j2=await r2.json(); if(!j2.ok) throw new Error(j2.error); } }
+      else { const r=await fetch(`/api/skills`,{method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({scope,name,content})}); const j=await r.json(); if(!j.ok) throw new Error(j.error); }
+      if(psForm){ psForm.classList.add("hidden"); psForm.style.display="none"; }
+      showPill(`Skill "${name}" guardada [${scope}]`,"read"); await renderProjectSettings(state.projectViewId || state.currentProjectId); await refreshSkillsUI();
+    }catch(e){ if(psErr) psErr.textContent=String(e.message).slice(0,400); } finally{ psSave.disabled=false; }
+  });
+  document.getElementById("btn-project-link-project")?.addEventListener("click", async ()=>{
+    const pid = state.projectViewId || state.currentProjectId; if(!pid){ document.getElementById("project-linked-error").textContent="Selecciona un proyecto"; return; }
+    const sel = document.getElementById("project-linked-project-select"); const target = sel ? sel.value : ""; if(!target) return;
+    const proj2 = state.projects.find(p=>p.id===pid); const cur=(proj2 && proj2.linkedProjects)||[]; if(cur.includes(target)) return;
+    try{ const next=[...cur, target]; const r=await fetch(`/api/projects/${encodeURIComponent(pid)}`,{method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({linkedProjects: next})}); const j=await r.json(); if(!j.ok) throw new Error(j.error); await refreshProjects(); await renderProjectSettings(pid); await refreshSkillsUI(); document.getElementById("project-linked-error").textContent=""; }catch(e){ document.getElementById("project-linked-error").textContent=String(e.message).slice(0,300); }
+  });
+  document.getElementById("btn-project-summarize")?.addEventListener("click", async ()=>{
+    const pid = state.projectViewId || state.currentProjectId; if(!pid){ document.getElementById("project-linked-error").textContent="Selecciona un proyecto"; return; }
+    document.getElementById("project-linked-error").textContent="Generando resumen…";
+    try{ const r=await fetch(`/api/projects/${encodeURIComponent(pid)}/summarize`,{method:"POST", headers:{"Content-Type":"application/json"}, body:"{}"}); const j=await r.json(); if(!j.ok) throw new Error(j.error); document.getElementById("project-linked-error").textContent=""; showPill(`Resumen: ${(j.data && j.data.summary||"").slice(0,60)}…`,"read"); await renderProjectSettings(pid); }catch(e){ document.getElementById("project-linked-error").textContent=String(e.message).slice(0,300); }
+  });
+}
+
 function setupSkillsUI(){
   const btnAdd = $("#btn-add-skill"), form = $("#add-skill-form");
   const scopeEl = $("#skill-scope"), nameEl = $("#skill-name"), contentEl = $("#skill-content");
@@ -1904,9 +2130,10 @@ document.getElementById("drawer-body")?.addEventListener("click", e => {
   }
 });
 
-  // Wire new project form + skills UI before init
+  // Wire new project form + skills UI + project view before init
 setupNewProjectForm();
 setupSkillsUI();
+setupProjectView();
 
 // ---- init: carga backend ui-state primero para no sobrescribir (spec 5: projectId + sessionId)
 (async ()=>{

@@ -59,14 +59,12 @@ body{ box-sizing:border-box; padding-top: env(safe-area-inset-top); }
   width:300px; flex:0 0 300px;
   background:var(--panel); border-right:1px solid var(--border);
   display:flex; flex-direction:column; min-height:0;
-  overscroll-behavior:contain;
   transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .22s ease;
 }
-html,body{overscroll-behavior-y:contain}
 .drawer-head{padding:12px; border-bottom:1px solid var(--border); display:grid; gap:10px}
 .drawer-title{font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700}
 .drawer-search .input{width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:#0f0f14; color:var(--text)}
-.drawer-body{ flex:1; overflow:auto; padding:8px 8px 10px; display:grid; gap:14px; align-content:start; min-height:0; overscroll-behavior:contain; overscroll-behavior-y:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch }
+.drawer-body{ flex:1; overflow:auto; padding:8px 8px 10px; display:grid; gap:14px; align-content:start; min-height:0 }
 .drawer-section{ border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--panel2) }
 .section-toggle{
   width:100%; display:flex; align-items:center; gap:8px;
@@ -182,7 +180,6 @@ html,body{overscroll-behavior-y:contain}
   flex:1; min-height:0; overflow:auto; padding:18px 14px 10px;
   display:flex; flex-direction:column; gap:12px;
   max-width: var(--max); width:100%; margin:0 auto;
-  overscroll-behavior:contain;
 }
 .msg{ max-width:86%; padding:12px 14px; border-radius:16px; white-space:pre-wrap; word-break:break-word; line-height:1.55 }
 .msg.user{ align-self:flex-end; background:linear-gradient(135deg,#6d4dff,#3a2b8a); color:white; border-bottom-right-radius:8px }
@@ -236,6 +233,25 @@ html,body{overscroll-behavior-y:contain}
 .send-btn{ width:40px; height:40px; padding:0; border-radius:12px; display:grid; place-items:center; font-size:18px }
 .composer-meta{ max-width: var(--max); margin:6px auto 0; width:100%; display:flex; gap:8px; align-items:center; flex-wrap:wrap; min-height:18px }
 .hidden{display:none !important}
+
+/* Project detail view — independent workspace */
+.project-view{ flex:1; min-height:0; display:flex; flex-direction:column; background:var(--bg); position:relative; overflow:hidden }
+.project-view.hidden{ display:none }
+.project-view-head{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); background:rgba(20,20,28,.6) }
+.project-view-title{ font-weight:800; font-size:16px; color:var(--text); line-height:1.2 }
+.project-view-desc{ font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52vw }
+.project-view-title-wrap{ flex:1; min-width:0 }
+.project-view-tabs{ display:flex; gap:6px; padding:8px 12px; border-bottom:1px solid var(--border); background:var(--panel) }
+.project-tab{ padding:7px 12px; border-radius:999px; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; font-size:12px; font-weight:650 }
+.project-tab.active{ background:rgba(124,92,255,.14); border-color:rgba(124,92,255,.28); color:var(--text) }
+.project-view-panel{ flex:1; min-height:0; overflow:auto; padding:12px; display:grid; gap:8px; align-content:start }
+.project-view-panel.hidden{ display:none }
+.project-sessions-list{ display:grid; gap:8px }
+.project-session-row{ display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:var(--panel2); cursor:pointer; text-align:left; color:var(--text) }
+.project-session-row:hover{ border-color:var(--border2); background:var(--panel3) }
+.project-session-row .session-title{ flex:1; min-width:0; font-size:13px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.project-session-row .session-sub{ font-size:11px; color:var(--muted) }
+.project-composer{ position:sticky; bottom:0; padding:10px 10px 12px; padding-bottom:calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--border); background:rgba(13,13,16,.96); backdrop-filter:blur(10px) }
 
 /* Cards compat (si quedan) */
 .card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden}
