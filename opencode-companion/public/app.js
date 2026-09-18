@@ -24,7 +24,7 @@ let state = {
   abortCtrl: null,
   listening: false, recognition: null,
   attachedFiles: [], // {name,type,size,kind,ext,b64,text,previewUrl}
-  voiceMode: localStorage.getItem("occ.voiceMode") || "push", // push | duplex
+  voiceMode: "push", // default OFF (Texto) — duplex only after explicit toggle (fix 1)
 };
 
 // ---- helpers
@@ -203,6 +203,7 @@ async function refreshStatus(){
   try{
     // Prefer /api/system/status for ownership (spec), fallback to /api/status legacy
     let s = null, ownership = null, sessionInfo = null;
+    let lastErr = null;
     try {
       const sys = await jget("/api/system/status");
       // Derive hub_ok from sys: ready implies hub is ok; sys also has hub+opencode fields
@@ -221,12 +222,15 @@ async function refreshStatus(){
         _ready: sys.ready,
         _bridgeA11y: sys.bridge && sys.bridge.a11y
       };
-    } catch {}
+    } catch (e) { lastErr = e; }
     // Fallback to legacy /api/status if new endpoint not yet available
-    if (!s) s = await jget("/api/status");
+    if (!s) {
+      try { s = await jget("/api/status"); }
+      catch (e) { lastErr = e; throw e; }
+    }
     // Also fetch legacy projects count if missing (sys status doesn't include projects list)
     if (!s.projects) {
-      try { const full = await jget("/api/status"); s.projects = full.projects; s.hub_port = full.hub_port || s.hub_port; } catch {}
+      try { const full = await jget("/api/status"); s.projects = full.projects; s.hub_port = full.hub_port || s.hub_port; } catch (e) { lastErr = e; }
     }
     const oc = s.opencode;
     const hubOk = s.hub==="ok";
@@ -275,9 +279,11 @@ async function refreshStatus(){
     }
     return ocOk;
   }catch(e){
+    const msg = String(e).slice(0,400);
     if(hubStatusEl) hubStatusEl.textContent="err"; if(ocStatusEl) ocStatusEl.textContent="err";
     setDot(dotHub,false); setDot(dotOc,false);
-    if(sysInfo) sysInfo.textContent = "hub no responde: "+String(e).slice(0,400);
+    if(sysInfo) sysInfo.textContent = `hub no responde: ${msg}`;
+    showToast(`SISTEMA: ${msg}`, "error");
     return false;
   }
 }
@@ -292,24 +298,58 @@ async function fetchManagedProjects(){
 function fmtDate(d){
   try { const dt = new Date(d); if(isNaN(dt.getTime())) return String(d).slice(0,10); return dt.toLocaleDateString() + " " + dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); } catch { return String(d).slice(0,16); }
 }
+// Toast system for visible errors (fix 5)
+function showToast(msg, kind="error") {
+  const t = el("div", "toast " + kind);
+  t.textContent = msg;
+  t.style.cssText = "position:fixed;right:12px;bottom:16px;max-width:88vw;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow);font-size:12px;z-index:9999;white-space:pre-wrap;word-break:break-word;";
+  if (kind === "error") t.style.borderColor = "rgba(239,68,68,.6)";
+  document.body.appendChild(t);
+  setTimeout(()=> t.remove(), 5200);
+  // Also pill
+  showPill(msg.slice(0,42), kind === "error" ? "thinking" : "read");
+}
+
 async function refreshProjects(){
   try{
     const list = await fetchManagedProjects();
     state.projects = Array.isArray(list) ? list : [];
+    // Warm SISTEMA on success so drawer doesn't stay "cargando"
     renderDrawer();
   }catch(e){
-    if(projectsList) projectsList.innerHTML = `<div class="muted" style="padding:8px">err: ${String(e).slice(0,200)}</div>`;
+    const err = String(e).slice(0,400);
+    if(projectsList) projectsList.innerHTML = `<div class="muted" style="padding:8px;color:var(--err)">Error proyectos: ${err.slice(0,200)}</div>`;
+    if(sysInfo && sysInfo.textContent.includes("cargando")) sysInfo.textContent = `Error proyectos: ${err}`;
+    showToast(`Proyectos: ${err}`, "error");
   }
 }
 async function refreshSessions(){
-  try{
-    const data = await jget("/opencode/session");
-    const list = Array.isArray(data) ? data : (data.sessions || data.data || []);
-    list.sort((a,b)=> new Date(b.updatedAt||b.updated_at||b.createdAt||0) - new Date(a.updatedAt||a.updated_at||a.createdAt||0));
-    state.sessions = list;
+  // Primary: companion /api/opencode/sessions (live opencode proxy, fix 4), fallback to legacy /opencode/session
+  const endpoints = ["/api/opencode/sessions", "/opencode/session"];
+  for (const ep of endpoints) {
+    try{
+      const data = await jget(ep);
+      const list = Array.isArray(data) ? data : (data.sessions || data.data || []);
+      if (Array.isArray(list) && list.length > 0 || ep === endpoints[endpoints.length-1]) {
+        list.sort((a,b)=> new Date(b.updatedAt||b.updated_at||b.createdAt||0) - new Date(a.updatedAt||a.updated_at||a.createdAt||0));
+        state.sessions = list;
+        renderDrawer();
+        return;
+      }
+      // If empty, try next endpoint (covers empty companion list but live has data)
+      if (list.length === 0) continue;
+    }catch(e){
+      if (ep === endpoints[endpoints.length-1]) {
+        if(standaloneList) standaloneList.innerHTML = `<div class="muted" style="padding:8px;color:var(--err)">Error sesiones: ${String(e).slice(0,200)}</div>`;
+        showToast(`Sesiones: ${String(e).slice(0,200)}`, "error");
+      }
+      // try next
+    }
+  }
+  // If both returned empty, render empty state
+  if (!state.sessions || state.sessions.length === 0) {
+    state.sessions = [];
     renderDrawer();
-  }catch(e){
-    if(standaloneList) standaloneList.innerHTML = `<div class="muted" style="padding:8px">opencode off</div>`;
   }
 }
 // Sessions for a managed project — resolve via project's sessions array (spec 1: sessions association)
@@ -412,6 +452,7 @@ function managedSessionRowEl(s, proj){
   const row = el("button","session-row");
   row.dataset.sessionId = id;
   row.title = id + (s._entry && s._entry.summary ? "\n"+s._entry.summary : "");
+  row.dataset.hasHandler = "1";
   const when = s.lastUsed ? fmtDate(s.lastUsed) : "";
   row.innerHTML = `<span class="session-title">${(s.title||id.slice(0,8))}</span><span class="session-sub">${when || new Date(s._entry && s._entry.createdAt || Date.now()).toLocaleDateString()}</span>`;
   if(state.currentSessionId===id) row.classList.add("active");
@@ -447,6 +488,7 @@ function sessionRowEl(s){
   const row = el("button","session-row");
   row.dataset.sessionId = id;
   row.title = id;
+  row.dataset.hasHandler = "1";
   // Standalone session: show lastUsed if present, else model/date
   const last = s.updatedAt || s.updated_at || s.lastUsed || s.createdAt;
   row.innerHTML = `<span class="session-title">${title}</span><span class="session-sub">${(s.model?.id||s.model||"").toString().slice(0,10) || (last ? fmtDate(last) : new Date(s.createdAt||Date.now()).toLocaleDateString())}</span>`;
@@ -920,15 +962,15 @@ function updateVoiceModeLabels(){
   if(voiceModeToggle) voiceModeToggle.checked = isDuplex;
   if(btnMic) btnMic.title = isDuplex ? "Conversación continua — escucha activa" : "Pulsar para hablar";
 }
-function setVoiceMode(mode){
+function setVoiceMode(mode, persist=true){
   state.voiceMode = mode==="duplex" ? "duplex" : "push";
-  localStorage.setItem("occ.voiceMode", state.voiceMode);
+  if (persist) localStorage.setItem("occ.voiceMode", state.voiceMode);
   updateVoiceModeLabels();
   // reinit recognition with new continuous flag
   initRecognition();
   if(state.voiceMode==="duplex"){
     showPill("Modo conversación — escucha tras TTS", "thinking");
-    // if not listening, start after short delay
+    // if not listening, start after short delay — only on explicit toggle or wake word, not on load (fix 1)
     setTimeout(()=> { if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 400);
   } else {
     showPill("Modo texto — pulsar para hablar", "read");
@@ -938,7 +980,18 @@ function setVoiceMode(mode){
 voiceModeToggle?.addEventListener("change", ()=>{
   setVoiceMode(voiceModeToggle.checked ? "duplex" : "push");
 });
-updateVoiceModeLabels();
+// On load: respect stored preference only if it was duplex (explicit opt-in persisted); otherwise force Texto (fix 1)
+(function initVoiceModeOnLoad(){
+  const stored = localStorage.getItem("occ.voiceMode");
+  if (stored === "duplex") {
+    state.voiceMode = "duplex";
+    updateVoiceModeLabels();
+  } else {
+    state.voiceMode = "push";
+    if (voiceModeToggle) voiceModeToggle.checked = false;
+    updateVoiceModeLabels();
+  }
+})();
 
 // TTS: chunks + Web Audio API low latency + interrupción dúplex
 let ttsQueue=[], speaking=false;
@@ -1104,7 +1157,11 @@ initRecognition();
 // expose cancelTts for external (e.g., sendPrompt should not cancel, but user speech does)
 window.__cancelTts = cancelTts;
 window.__queueTts = queueTts;
-window.startVoiceSession = startVoiceSession;
+window.startVoiceSession = function() {
+  // Wake word entry: switch to duplex and start listening explicitly
+  if (state.voiceMode !== "duplex") setVoiceMode("duplex");
+  startVoiceSession();
+};
 
 // ---- Voice helpers: TTS confirm + log (spec 5-6) ----
 function voiceTtsConfirm(msg) {
@@ -1557,15 +1614,72 @@ async function refreshAgents(){
 
 // Arranque delegado exclusivamente a MainActivity.kt (overlay nativo) — web arranca directo en chat sin welcome
 
-// ---- wiring chat
-$("#btn-new-session")?.addEventListener("click", createSession);
-btnSend?.addEventListener("click", sendPrompt);
-$("#session-search")?.addEventListener("input", e=>{
-  const q = e.target.value.toLowerCase();
-  document.querySelectorAll(".session-row").forEach(r=>{
-    const t = r.textContent.toLowerCase();
-    r.style.display = t.includes(q) ? "" : "none";
+// ---- wiring chat — delegated bindings to survive refreshDrawer innerHTML rebuilds (fix 2)
+// Use delegated listener on drawer-body for session rows and project rows? Primary buttons are static header elements, but we rebind defensively.
+function bindPrimaryButtons() {
+  // Remove-and-rebind guard: clone or use {once:false} with dedup via dataset flag
+  const bind = (sel, evt, handler) => {
+    const el = document.querySelector(sel);
+    if (!el || el.dataset.bound === "1") return;
+    el.addEventListener(evt, handler);
+    el.dataset.bound = "1";
+  };
+  // Also bind via direct on delegated root as fallback for any late-rendered elements
+  bind("#btn-new-session", "click", createSession);
+  bind("#btn-send", "click", sendPrompt);
+  // Search filter
+  const searchEl = document.querySelector("#session-search");
+  if (searchEl && searchEl.dataset.bound !== "1") {
+    searchEl.addEventListener("input", e=>{
+      const q = e.target.value.toLowerCase();
+      document.querySelectorAll(".session-row").forEach(r=>{
+        const t = r.textContent.toLowerCase();
+        r.style.display = t.includes(q) ? "" : "none";
+      });
+    });
+    searchEl.dataset.bound = "1";
+  }
+  // File + mic bindings (also guarded)
+  if (btnAttach && btnAttach.dataset.bound !== "1") {
+    btnAttach.addEventListener("click", ()=> filePicker?.click());
+    btnAttach.dataset.bound = "1";
+  }
+  if (btnMic && btnMic.dataset.bound !== "1") {
+    btnMic.addEventListener("click", ()=>{
+      ensureAudioContext();
+      if(state.voiceMode==="duplex"){
+        if(state.listening) stopListening();
+        else startListening();
+      } else {
+        if(state.listening) stopListening();
+        else startListening();
+      }
+    });
+    btnMic.dataset.bound = "1";
+  }
+}
+// Handle prompt Enter without shift (also guarded)
+if (promptEl && promptEl.dataset.bound !== "1") {
+  promptEl.addEventListener("keydown", e=>{
+    if(e.key==="Enter" && !e.shiftKey){
+      e.preventDefault();
+      sendPrompt();
+    }
   });
+  promptEl.dataset.bound = "1";
+}
+bindPrimaryButtons();
+// Also delegate on drawer body for any session rows that might be recreated without explicit onclick (extra safety)
+document.getElementById("drawer-body")?.addEventListener("click", e => {
+  const row = (e.target instanceof Element) ? e.target.closest(".session-row") : null;
+  if (row && row.dataset.sessionId) {
+    e.preventDefault();
+    const id = row.dataset.sessionId;
+    // Let existing row.onclick handle via its own listener; this is fallback only if onclick was lost
+    if (!row.dataset.hasHandler) {
+      selectSession(id);
+    }
+  }
 });
 
   // Wire new project form + skills UI before init

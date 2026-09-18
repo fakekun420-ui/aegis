@@ -980,9 +980,28 @@ const server = http.createServer(async (req, res)=>{
     } catch (e) { return json(res, 500, fail(String(e))); }
   }
 
+  // GET /api/opencode/sessions — proxy live opencode session list (fix 4: surface existing chats)
+  if(pathname==="/api/opencode/sessions" && req.method==="GET"){
+    try {
+      const ocRes = await new Promise((resolve, reject)=>{
+        const r = http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path: "/session", timeout: 4000 }, rs=>{
+          let d=""; rs.on("data",c=>d+=c); rs.on("end",()=> resolve({ status: rs.statusCode, body: d }));
+        });
+        r.on("error", reject);
+        r.setTimeout(4000, ()=> { try{ r.destroy(); }catch{} reject(new Error("timeout /session")); });
+      });
+      const payload = JSON.parse(ocRes.body || "[]");
+      // Normalize to array
+      const list = Array.isArray(payload) ? payload : (payload.sessions || payload.data || []);
+      return json(res, 200, ok(list));
+    } catch (e) {
+      return json(res, 500, fail(`opencode /session proxy failed: ${String(e).slice(0,400)}`));
+    }
+  }
+
   // GET /api/projects/:id/summary — read summary (optional fetch helper)
   if(pathname.match(/^\/api\/projects\/[^\/]+\/summary$/) && req.method==="GET"){
-    const m = pathname.match(/^\/api\/projects\/([^\/]+)\/summary$/);
+    const m = pathname.match(/^\/api\/projects\/[^\/]+\/summary$/);
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
     const data = readSummary(id);
     if (!data) return json(res, 404, fail(`no summary for project ${id} — POST /api/projects/${id}/summarize to generate`));
