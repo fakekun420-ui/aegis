@@ -1021,6 +1021,7 @@ function ensureAudioContext(){
 }
 function queueTts(text){
   if(!text) return;
+  if (typeof speechSynthesis === 'undefined') { try { console.warn("[queueTts] no speechSynthesis, skip"); } catch{} return; }
   ensureAudioContext();
   const chunks = text.match(/[^.!?¡¿\n]+[.!?¡¿\n]+|[^.!?¡¿\n]+$/g) || [text];
   const limited=[];
@@ -1033,33 +1034,36 @@ function queueTts(text){
   if(!speaking) drainTts();
 }
 function cancelTts(){
-  try{ speechSynthesis.cancel(); }catch{}
+  if (typeof speechSynthesis !== 'undefined') { try{ speechSynthesis.cancel(); }catch{} }
   ttsQueue=[]; speaking=false;
 }
 function drainTts(){
   if(!ttsQueue.length){ speaking=false; hidePill(); if(state.voiceMode==="duplex"){ setTimeout(()=> { if(state.voiceMode==="duplex" && !state.listening && !speaking) startListening(); }, 600); } return; }
+  if (typeof speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') { console.warn("[drainTts] no speechSynthesis/Utterance"); speaking=false; hidePill(); return; }
   speaking=true;
   const chunk=ttsQueue.shift();
   showPill(`🔊 ${chunk.slice(0,42)}… (${ttsQueue.length})`, "thinking");
-  const ut=new SpeechSynthesisUtterance(chunk);
+  let ut; try { ut=new SpeechSynthesisUtterance(chunk); } catch(e){ console.error("[drainTts] Utterance", e); speaking=false; setTimeout(drainTts, 70); return; }
   // pick es voice
-  const vs=speechSynthesis.getVoices();
-  const pref=vs.find(v=> v.lang.toLowerCase().startsWith("es-419")||v.lang.toLowerCase()==="es-us") || vs.find(v=> v.lang.toLowerCase().startsWith("es"));
+  let pref=null; try { const vs=speechSynthesis.getVoices(); pref=vs.find(v=> v.lang.toLowerCase().startsWith("es-419")||v.lang.toLowerCase()==="es-us") || vs.find(v=> v.lang.toLowerCase().startsWith("es")); } catch{}
   if(pref) ut.voice=pref;
   ut.lang= pref?.lang || "es-ES";
   ut.rate=1; ut.pitch=1;
   ut.onend=()=> setTimeout(drainTts, 70);
   ut.onerror=()=> setTimeout(drainTts, 70);
-  speechSynthesis.speak(ut);
+  try { speechSynthesis.speak(ut); } catch(e){ console.error("[drainTts] speak", e); speaking=false; setTimeout(drainTts, 70); }
 }
 function initVoices(){
+  if (typeof speechSynthesis === 'undefined') {
+    console.warn("[initVoices] speechSynthesis not available in WebView — TTS via Web will be silent, native TTS still works");
+    return;
+  }
   const load=()=>{
-    const vs=speechSynthesis.getVoices();
-    state.voices=vs;
+    try { const vs=speechSynthesis.getVoices(); state.voices=vs; } catch(e){ console.warn("[initVoices] getVoices", e); }
   };
-  load(); speechSynthesis.onvoiceschanged=load;
+  try { load(); speechSynthesis.onvoiceschanged=load; } catch(e){ console.warn("[initVoices] onvoiceschanged", e); }
 }
-initVoices();
+try { initVoices(); } catch(e){ console.error("[initVoices] uncaught", e); }
 
 // STT: Web Speech API + Android bridge compatible, conmutado por voiceMode
 let recognition=null;
