@@ -972,8 +972,8 @@ function setVoiceMode(mode, persist=true){
   initRecognition();
   if(state.voiceMode==="duplex"){
     showPill("Modo conversación — escucha tras TTS", "thinking");
-    // if not listening, start after short delay — only on explicit toggle or wake word, not on load (fix 1)
-    setTimeout(()=> { if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 400);
+    // Only on explicit toggle — add 600ms debounce to avoid immediate mic pop (fix 4)
+    setTimeout(()=> { if(state.voiceMode==="duplex" && !state.listening && !speaking) startListening(); }, 600);
   } else {
     showPill("Modo texto — pulsar para hablar", "read");
     stopListening();
@@ -1022,7 +1022,7 @@ function cancelTts(){
   ttsQueue=[]; speaking=false;
 }
 function drainTts(){
-  if(!ttsQueue.length){ speaking=false; hidePill(); if(state.voiceMode==="duplex"){ setTimeout(()=> { if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 420); } return; }
+  if(!ttsQueue.length){ speaking=false; hidePill(); if(state.voiceMode==="duplex"){ setTimeout(()=> { if(state.voiceMode==="duplex" && !state.listening && !speaking) startListening(); }, 600); } return; }
   speaking=true;
   const chunk=ttsQueue.shift();
   showPill(`🔊 ${chunk.slice(0,42)}… (${ttsQueue.length})`, "thinking");
@@ -1080,6 +1080,13 @@ function initRecognition(){
     if(interim) showPill(`…${interim.slice(0,56)}`, "thinking");
     else if(fin) showPill(`✓ ${fin.slice(0,56)}`, "read");
   };
+  // Debounced duplex restart — prevents tight mic on/off loop (fix 4)
+  function scheduleDuplexRestart(delay=500) {
+    if (state.voiceMode !== "duplex") return;
+    if (speaking) return; // stay silent while TTS plays
+    if (state.listening) return;
+    setTimeout(()=>{ if(state.voiceMode==="duplex" && !state.listening && !speaking) startListening(); }, delay);
+  }
   recognition.onend=()=>{
     btnMic?.classList.remove("on");
     state.listening=false;
@@ -1087,14 +1094,12 @@ function initRecognition(){
     finalsBuf="";
     if(t){
       // Before sending to opencode, check voice command registry (spec 2) — avoids LLM for device actions
-      // Wrap to not break duplex flow; if handled, skip sendPrompt and re-listen
+      // Wrap to not break duplex flow; if handled, skip sendPrompt and re-listen with debounce
       (async ()=> {
         const handled = await voiceHandleText(t);
         if (handled) {
           hidePill();
-          if(state.voiceMode==="duplex" && !speaking){
-            setTimeout(()=>{ if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 500);
-          }
+          scheduleDuplexRestart(800);
           return;
         }
         if(state.voiceMode==="duplex"){
@@ -1105,27 +1110,25 @@ function initRecognition(){
           promptEl.value = (promptEl.value ? promptEl.value+" " : "") + t;
           autoGrow(); promptEl.focus(); hidePill();
         }
-        if(state.voiceMode==="duplex" && !speaking){
-          setTimeout(()=>{ if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 500);
-        }
+        scheduleDuplexRestart(900);
       })();
       return;
     } else {
       hidePill();
     }
-    if(state.voiceMode==="duplex" && !speaking){
-      setTimeout(()=>{ if(state.voiceMode==="duplex" && !state.listening) startListening(); }, 500);
-    }
+    scheduleDuplexRestart(700);
   };
   recognition.onerror=(e)=>{
     btnMic?.classList.remove("on");
     state.listening=false;
-    // no-speech en duplex -> reintenta
-    if(e.error==="no-speech" && state.voiceMode==="duplex"){
-      setTimeout(()=>{ if(state.voiceMode==="duplex") startListening(); }, 700);
+    if(e.error==="no-speech"){
+      // No speech — back off before retry to avoid tight loop (fix 4)
+      showPill(state.voiceMode==="duplex" ? `Escuchando…` : `STT: ${e.error||"error"}`, "thinking");
+      if(state.voiceMode==="duplex") scheduleDuplexRestart(1200);
+      else hidePill();
     } else {
       showPill(`STT: ${e.error||"error"}`, "thinking");
-      if(state.voiceMode==="duplex") setTimeout(()=> startListening(), 900);
+      if(state.voiceMode==="duplex") scheduleDuplexRestart(1500);
     }
   };
   state.recognition=recognition;
