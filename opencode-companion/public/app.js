@@ -1021,7 +1021,7 @@ function ensureAudioContext(){
 }
 function queueTts(text){
   if(!text) return;
-  if (typeof speechSynthesis === 'undefined') { try { console.warn("[queueTts] no speechSynthesis, skip"); } catch{} return; }
+  if (typeof speechSynthesis === 'undefined') return; // silent in WebView without Web Speech API — native TTS handles voice
   ensureAudioContext();
   const chunks = text.match(/[^.!?¡¿\n]+[.!?¡¿\n]+|[^.!?¡¿\n]+$/g) || [text];
   const limited=[];
