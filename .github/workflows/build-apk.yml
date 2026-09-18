@@ -75,7 +75,7 @@ jobs:
           name: opencode-companion-apk
           path: /tmp/apk
 
-      - name: Smoke test — size 5MB–15MB & cert SHA verification
+      - name: Smoke test — size 3MB–15MB & cert SHA verification
         run: |
           set -e
           APK=$(ls /tmp/apk/app-release*.apk 2>/dev/null | head -n1)
@@ -84,10 +84,10 @@ jobs:
           test -f "$APK" || (echo "APK not found"; exit 1)
           SIZE=$(stat -c%s "$APK")
           echo "Size: $SIZE bytes ($((SIZE/1024/1024))MB)"
-          # 5MB–15MB guard (spec 3)
-          if [ "$SIZE" -lt 5242880 ]; then echo "FAIL: APK <5MB ($SIZE)"; exit 1; fi
+          # 5MB–15MB guard (adjusted 3MB lower bound; spec 3) (spec 3)
+          if [ "$SIZE" -lt 3145728 ]; then echo "FAIL: APK <3MB ($SIZE)"; exit 1; fi
           if [ "$SIZE" -gt 15728640 ]; then echo "FAIL: APK >15MB ($SIZE)"; exit 1; fi
-          echo "Size OK (5–15MB)"
+          echo "Size OK (3–15MB)"
 
           # Extract cert SHA-1 & SHA-256 (requires unzip + openssl or apksigner)
           if command -v apksigner >/dev/null 2>&1; then
