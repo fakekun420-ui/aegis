@@ -18,10 +18,10 @@
     "semantic_hash": "7130d5ef9c431ce1bc6bdfed9dbd77c6"
   },
   "app/src/main/kotlin/com/opencode/companion/MainActivity.kt": {
-    "mtime": 1789695688.722261,
-    "seen": 1789698294.737982,
-    "ast_hash": "34fff8d490beb6849aa1bfc459f56158",
-    "semantic_hash": "34fff8d490beb6849aa1bfc459f56158"
+    "mtime": 1789700035.6722593,
+    "seen": 1789700408.2727313,
+    "ast_hash": "50cb43761a5f43c07a06b451c9e50df5",
+    "semantic_hash": "50cb43761a5f43c07a06b451c9e50df5"
   },
   "app/src/main/kotlin/com/opencode/companion/OpencodeAccessibilityService.kt": {
     "mtime": 1789493629.4439857,

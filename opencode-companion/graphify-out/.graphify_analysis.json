@@ -37,7 +37,7 @@
         "server.js:proxy"
       ],
       "info": {
-        "size": 86178,
+        "size": 87375,
         "ext": ".js",
         "hash": "f8fb684e"
       }
@@ -126,7 +126,7 @@
         "CompanionVoiceInteractionService.kt"
       ],
       "info": {
-        "size": 36830,
+        "size": 37183,
         "ext": ".kt",
         "hash": "6c799cd4"
       }

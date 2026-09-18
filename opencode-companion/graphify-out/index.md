@@ -1,6 +1,6 @@
 # OpenCode Companion — Graphify Index
 
-Generated: 2026-09-18T02:27:10.284251Z
+Generated: 2026-09-18T03:01:12.502840Z
 Root: /sdcard/projects
 
 ## Files → Role → Deps
@@ -9,7 +9,7 @@ Root: /sdcard/projects
 |---|---|---|---|
 | `opencode-companion/server.js` | hub: Node zero-deps HTTP 8765 -> proxy 4096, device bridge, multimodal, assistant, skills, summaries, voice registry | public/index.html, public/app.js, public/style.css, keepalive.sh | 92594 |
 | `opencode-companion/public/index.html` | SPA shell: drawer + composer + skills/linked UI | public/app.js, public/style.css | 8965 |
-| `opencode-companion/public/app.js` | SPA logic: drawer/projects/sessions, multimodal, voice duplex, skills/linked, SSE | server.js:api/projects, server.js:api/skills, server.js:proxy | 86178 |
+| `opencode-companion/public/app.js` | SPA logic: drawer/projects/sessions, multimodal, voice duplex, skills/linked, SSE | server.js:api/projects, server.js:api/skills, server.js:proxy | 87375 |
 | `opencode-companion/public/style.css` | Theme + layout + status pills | — | 14759 |
 | `opencode-companion/keepalive.sh` | Keepalive loop host-mount nsenter, guards TUI vs serve, hub pkill fix | server.js | 8136 |
 | `opencode-companion/start-hub.sh` | Manual starter opencode serve + node server.js | server.js | 1519 |
@@ -17,7 +17,7 @@ Root: /sdcard/projects
 | `opencode-companion/package.json` | Hub manifest | — | 323 |
 | `opencode-companion/ui-state.json` | Runtime UI state (gitignored) | — | 82 |
 | `opencode-companion-apk/app/src/main/AndroidManifest.xml` | Manifest: INTERNET, RECORD_AUDIO, READ_CONTACTS, BIND_VOICE_INTERACTION | — | 3957 |
-| `opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.kt` | MainActivity: WebView + wake word (SharedPrefs) + STT/TTS + keepalive poll | CompanionService.kt, CompanionVoiceInteractionService.kt | 36830 |
+| `opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.kt` | MainActivity: WebView + wake word (SharedPrefs) + STT/TTS + keepalive poll | CompanionService.kt, CompanionVoiceInteractionService.kt | 37183 |
 | `opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionService.kt` | Foreground bridge :8766 (a11y/shell/launch) | OpencodeAccessibilityService.kt | 9105 |
 | `opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionVoiceInteractionService.kt` | VoiceInteractionService assistant (long-press home) | MainActivity.kt | 6924 |
 | `opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/OpencodeAccessibilityService.kt` | A11y: clickByText, gestures | — | 5099 |

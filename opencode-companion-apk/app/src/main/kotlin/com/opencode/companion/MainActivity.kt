@@ -111,6 +111,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private fun setupWebView(){
         WebView.setWebContentsDebuggingEnabled(true)
+        webView.webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onConsoleMessage(cm: android.webkit.ConsoleMessage): Boolean {
+                android.util.Log.d("ChromiumConsole", "${cm.message()} -- ${cm.sourceId()}:${cm.lineNumber()} [${cm.messageLevel()}]")
+                return true
+            }
+        }
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.settings.allowFileAccess = true

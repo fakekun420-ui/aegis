@@ -60,7 +60,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 <div class="container">
 
 <h1>opencode-companion — Complete Call Flow &amp; Architecture Documentation</h1>
-<p class="subtitle">Generated from graphify knowledge graph: 179 nodes, 389 edges, 18 communities. Commit: 1c66ed4</p>
+<p class="subtitle">Generated from graphify knowledge graph: 179 nodes, 389 edges, 18 communities. Commit: 0089193</p>
 
 <div class="nav">
     <a href="#overview">Architecture Overview</a>
@@ -571,6 +571,7 @@ flowchart LR
     public_app_updatevoicemodelabels_da917a43("updateVoiceModeLabels()<br/><small>public/app.js</small>")
     public_app_statuspill_4cbcb7e7("statusPill<br/><small>public/app.js</small>")
     public_app_statuspilltext_b0998ca7("statusPillText<br/><small>public/app.js</small>")
+    public_app_ttsqueue_feaafe78("ttsQueue<br/><small>public/app.js</small>")
     public_app_initvoices_7fe1b03f("initVoices()<br/><small>public/app.js</small>")
     public_app_btnhamburger_0e49498d("btnHamburger<br/><small>public/app.js</small>")
     public_app_drawer_62727655("drawer<br/><small>public/app.js</small>")
@@ -584,10 +585,10 @@ flowchart LR
     public_app_btnattach_66743b34("btnAttach<br/><small>public/app.js</small>")
     public_app_btnmic_232d397f("btnMic<br/><small>public/app.js</small>")
     public_app_btnsend_6171c8cb("btnSend<br/><small>public/app.js</small>")
-    public_app_state_eed9f9c4("state<br/><small>public/app.js</small>")
     public_app_fd8505ea -->|contains| public_app_updatevoicemodelabels_da917a43
     public_app_fd8505ea -->|contains| public_app_statuspill_4cbcb7e7
     public_app_fd8505ea -->|contains| public_app_statuspilltext_b0998ca7
+    public_app_fd8505ea -->|contains| public_app_ttsqueue_feaafe78
     public_app_fd8505ea -->|contains| public_app_initvoices_7fe1b03f
     public_app_fd8505ea -->|contains| public_app_btnhamburger_0e49498d
     public_app_fd8505ea -->|contains| public_app_drawer_62727655
@@ -601,12 +602,12 @@ flowchart LR
     public_app_fd8505ea -->|contains| public_app_btnattach_66743b34
     public_app_fd8505ea -->|contains| public_app_btnmic_232d397f
     public_app_fd8505ea -->|contains| public_app_btnsend_6171c8cb
-    public_app_fd8505ea -->|contains| public_app_state_eed9f9c4
     %% Omitted for readability: 17 nodes, 0 edges
     class public_app_fd8505ea module;
     class public_app_updatevoicemodelabels_da917a43 function;
     class public_app_statuspill_4cbcb7e7 function;
     class public_app_statuspilltext_b0998ca7 function;
+    class public_app_ttsqueue_feaafe78 function;
     class public_app_initvoices_7fe1b03f function;
     class public_app_btnhamburger_0e49498d function;
     class public_app_drawer_62727655 function;
@@ -620,7 +621,6 @@ flowchart LR
     class public_app_btnattach_66743b34 function;
     class public_app_btnmic_232d397f function;
     class public_app_btnsend_6171c8cb function;
-    class public_app_state_eed9f9c4 function;
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -2629,7 +2629,7 @@ flowchart LR
 
 <div style="text-align:center; padding:40px 0; color: var(--muted); font-size:0.9rem;">
   <p>opencode-companion — Architecture Documentation</p>
-  <p>Generated: 2026-09-18 02:25 UTC · graphify callflow-html</p>
+  <p>Generated: 2026-09-18 03:00 UTC · graphify callflow-html</p>
 </div>
 
 </div><!-- .container -->

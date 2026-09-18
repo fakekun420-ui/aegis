@@ -204,8 +204,10 @@ async function refreshStatus(){
     // Prefer /api/system/status for ownership (spec), fallback to /api/status legacy
     let s = null, ownership = null, sessionInfo = null;
     let lastErr = null;
+    console.log("[refreshStatus] fetching /api/system/status");
     try {
       const sys = await jget("/api/system/status");
+      console.log(`[refreshStatus] /api/system/status ready=${sys.ready} ownership=${sys.sessionOwnership}`);
       // Derive hub_ok from sys: ready implies hub is ok; sys also has hub+opencode fields
       ownership = sys.sessionOwnership || null;
       sessionInfo = sys.sessionInfo || null;
@@ -222,7 +224,7 @@ async function refreshStatus(){
         _ready: sys.ready,
         _bridgeA11y: sys.bridge && sys.bridge.a11y
       };
-    } catch (e) { lastErr = e; }
+    } catch (e) { lastErr = e; try{ console.error(`[refreshStatus] /api/system/status fail: ${String(e).slice(0,300)}`);}catch{} }
     // Fallback to legacy /api/status if new endpoint not yet available
     if (!s) {
       try { s = await jget("/api/status"); }
@@ -298,7 +300,13 @@ async function fetchManagedProjects(){
 function fmtDate(d){
   try { const dt = new Date(d); if(isNaN(dt.getTime())) return String(d).slice(0,10); return dt.toLocaleDateString() + " " + dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); } catch { return String(d).slice(0,16); }
 }
-// Toast system for visible errors (fix 5)
+// Toast system for visible errors (fix 5) + console forwarding for logcat (diagnostic)
+try {
+  const _origError = console.error;
+  console.error = function(...args) { try { _origError.apply(console, args); } catch{}; /* WebChromeClient forwards to logcat */ };
+  const _origLog = console.log;
+  console.log = function(...args) { try { _origLog.apply(console, args); } catch{}; };
+} catch {}
 function showToast(msg, kind="error") {
   const t = el("div", "toast " + kind);
   t.textContent = msg;
@@ -306,18 +314,22 @@ function showToast(msg, kind="error") {
   if (kind === "error") t.style.borderColor = "rgba(239,68,68,.6)";
   document.body.appendChild(t);
   setTimeout(()=> t.remove(), 5200);
-  // Also pill
+  // Also pill + logcat
+  try { console.error(`[toast:${kind}] ${msg.slice(0,300)}`); } catch {}
   showPill(msg.slice(0,42), kind === "error" ? "thinking" : "read");
 }
 
 async function refreshProjects(){
   try{
+    console.log("[refreshProjects] fetching /api/projects");
     const list = await fetchManagedProjects();
+    console.log(`[refreshProjects] -> ${Array.isArray(list) ? list.length : 'non-array'}`);
     state.projects = Array.isArray(list) ? list : [];
     // Warm SISTEMA on success so drawer doesn't stay "cargando"
     renderDrawer();
   }catch(e){
     const err = String(e).slice(0,400);
+    try { console.error(`[refreshProjects] error: ${err}`); } catch {}
     if(projectsList) projectsList.innerHTML = `<div class="muted" style="padding:8px;color:var(--err)">Error proyectos: ${err.slice(0,200)}</div>`;
     if(sysInfo && sysInfo.textContent.includes("cargando")) sysInfo.textContent = `Error proyectos: ${err}`;
     showToast(`Proyectos: ${err}`, "error");
@@ -328,8 +340,10 @@ async function refreshSessions(){
   const endpoints = ["/api/opencode/sessions", "/opencode/session"];
   for (const ep of endpoints) {
     try{
+      console.log(`[refreshSessions] fetching ${ep}`);
       const data = await jget(ep);
       const list = Array.isArray(data) ? data : (data.sessions || data.data || []);
+      try { console.log(`[refreshSessions] ${ep} -> ${Array.isArray(list) ? list.length : 'non-array'}`); } catch {}
       if (Array.isArray(list) && list.length > 0 || ep === endpoints[endpoints.length-1]) {
         list.sort((a,b)=> new Date(b.updatedAt||b.updated_at||b.createdAt||0) - new Date(a.updatedAt||a.updated_at||a.createdAt||0));
         state.sessions = list;
@@ -339,6 +353,7 @@ async function refreshSessions(){
       // If empty, try next endpoint (covers empty companion list but live has data)
       if (list.length === 0) continue;
     }catch(e){
+      try { console.error(`[refreshSessions] ${ep} error: ${String(e).slice(0,300)}`); } catch {}
       if (ep === endpoints[endpoints.length-1]) {
         if(standaloneList) standaloneList.innerHTML = `<div class="muted" style="padding:8px;color:var(--err)">Error sesiones: ${String(e).slice(0,200)}</div>`;
         showToast(`Sesiones: ${String(e).slice(0,200)}`, "error");

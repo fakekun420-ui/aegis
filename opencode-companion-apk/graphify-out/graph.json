@@ -64,52 +64,64 @@
       "source_location": "L48"
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "label": "RecognitionListener",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": "recognitionlistener",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L559"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "label": "RecognitionListener",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": "recognitionlistener",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L450"
-    },
-    {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity",
       "label": "MainActivity",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": "mainactivity",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
       "source_location": "L33"
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121",
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webchromeclient_l114",
+      "label": "WebChromeClient",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 1,
+      "file_type": "code",
+      "norm_label": "webchromeclient",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L114"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127",
       "label": "WebViewClient",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 1,
+      "file_type": "code",
+      "norm_label": "webviewclient",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L127"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "label": "RecognitionListener",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 2,
       "file_type": "code",
-      "norm_label": "webviewclient",
+      "norm_label": "recognitionlistener",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L121"
+      "source_location": "L565"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "label": "RecognitionListener",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": "recognitionlistener",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L456"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_companionservice_companionservice",
@@ -393,363 +405,66 @@
       "source_location": "L51"
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_containswakeword",
-      "label": ".containsWakeWord()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".containswakeword()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L388"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_getwakephrases",
-      "label": ".getWakePhrases()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".getwakephrases()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L377"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_handlevoicecommand",
-      "label": ".handleVoiceCommand()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".handlevoicecommand()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L592"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_isnativeoverlayvisible",
-      "label": ".isNativeOverlayVisible()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".isnativeoverlayvisible()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L392"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_lowercase",
-      "label": ".lowercase()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".lowercase()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L646"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onpagefinished",
-      "label": ".onPageFinished()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onpagefinished()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L142"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_shouldwakelisten",
-      "label": ".shouldWakeListen()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".shouldwakelisten()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L396"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_speak",
-      "label": ".speak()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".speak()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L544"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onbeginningofspeech",
-      "label": ".onBeginningOfSpeech()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onbeginningofspeech()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L561"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onbufferreceived",
-      "label": ".onBufferReceived()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onbufferreceived()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L563"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onendofspeech",
-      "label": ".onEndOfSpeech()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onendofspeech()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L564"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onerror",
-      "label": ".onError()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onerror()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L565"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onevent",
-      "label": ".onEvent()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onevent()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L579"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onpartialresults",
-      "label": ".onPartialResults()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onpartialresults()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L575"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onreadyforspeech",
-      "label": ".onReadyForSpeech()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onreadyforspeech()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L560"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onresults",
-      "label": ".onResults()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onresults()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L566"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onrmschanged",
-      "label": ".onRmsChanged()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onrmschanged()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L562"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener",
-      "label": ".startWakeWordListener()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".startwakewordlistener()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L433"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onbeginningofspeech",
-      "label": ".onBeginningOfSpeech()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onbeginningofspeech()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L452"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onbufferreceived",
-      "label": ".onBufferReceived()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onbufferreceived()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L454"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onendofspeech",
-      "label": ".onEndOfSpeech()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onendofspeech()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L455"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onerror",
-      "label": ".onError()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onerror()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L456"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onevent",
-      "label": ".onEvent()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onevent()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L485"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onpartialresults",
-      "label": ".onPartialResults()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onpartialresults()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L477"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onreadyforspeech",
-      "label": ".onReadyForSpeech()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onreadyforspeech()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L451"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onresults",
-      "label": ".onResults()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onresults()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L462"
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onrmschanged",
-      "label": ".onRmsChanged()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 1,
-      "file_type": "code",
-      "norm_label": ".onrmschanged()",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L453"
-    },
-    {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_checkhubonstart",
       "label": ".checkHubOnStart()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".checkhubonstart()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L331"
+      "source_location": "L337"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_checksystemready",
       "label": ".checkSystemReady()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".checksystemready()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L207"
+      "source_location": "L213"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_ensurepermissions",
       "label": ".ensurePermissions()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".ensurepermissions()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L502"
+      "source_location": "L508"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_hidenativeoverlay",
       "label": ".hideNativeOverlay()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".hidenativeoverlay()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L191"
+      "source_location": "L197"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_ishubready",
       "label": ".isHubReady()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".ishubready()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L231"
+      "source_location": "L237"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_oncreate",
       "label": ".onCreate()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".oncreate()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
@@ -760,165 +475,473 @@
       "label": ".onDestroy()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".ondestroy()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L645"
+      "source_location": "L651"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_oninit",
       "label": ".onInit()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".oninit()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L538"
+      "source_location": "L544"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_onvoicemodechanged",
       "label": ".onVoiceModeChanged()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".onvoicemodechanged()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L423"
+      "source_location": "L429"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_refreshstatus",
       "label": ".refreshStatus()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".refreshstatus()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L523"
+      "source_location": "L529"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_savewakephrases",
       "label": ".saveWakePhrases()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".savewakephrases()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L382"
+      "source_location": "L388"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupbuttons",
       "label": ".setupButtons()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".setupbuttons()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L349"
+      "source_location": "L355"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview",
       "label": ".setupWebView()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".setupwebview()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
       "source_location": "L112"
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onreceivederror",
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webchromeclient_l114_onconsolemessage",
+      "label": ".onConsoleMessage()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 1,
+      "file_type": "code",
+      "norm_label": ".onconsolemessage()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L115"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onreceivederror",
       "label": ".onReceivedError()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".onreceivederror()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L122"
+      "source_location": "L128"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_shownativeloading",
       "label": ".showNativeLoading()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".shownativeloading()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L196"
+      "source_location": "L202"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_shownativeofflineoverlay",
       "label": ".showNativeOfflineOverlay()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".shownativeofflineoverlay()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L180"
+      "source_location": "L186"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startcompanionservice",
       "label": ".startCompanionService()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".startcompanionservice()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L518"
+      "source_location": "L524"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening",
       "label": ".startListening()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".startlistening()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L550"
+      "source_location": "L556"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startrootsystemandpoll",
       "label": ".startRootSystemAndPoll()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".startrootsystemandpoll()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L240"
+      "source_location": "L246"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_stopwakewordlistener",
       "label": ".stopWakeWordListener()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".stopwakewordlistener()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L496"
+      "source_location": "L502"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_toast",
       "label": ".toast()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
+      "community": 1,
       "file_type": "code",
       "norm_label": ".toast()",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L644"
+      "source_location": "L650"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_containswakeword",
+      "label": ".containsWakeWord()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".containswakeword()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L394"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_getwakephrases",
+      "label": ".getWakePhrases()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".getwakephrases()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L383"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_handlevoicecommand",
+      "label": ".handleVoiceCommand()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".handlevoicecommand()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L598"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_isnativeoverlayvisible",
+      "label": ".isNativeOverlayVisible()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".isnativeoverlayvisible()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L398"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_lowercase",
+      "label": ".lowercase()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".lowercase()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L652"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onpagefinished",
+      "label": ".onPageFinished()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onpagefinished()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L148"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_shouldwakelisten",
+      "label": ".shouldWakeListen()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".shouldwakelisten()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L402"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_speak",
+      "label": ".speak()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".speak()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L550"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onbeginningofspeech",
+      "label": ".onBeginningOfSpeech()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onbeginningofspeech()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L567"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onbufferreceived",
+      "label": ".onBufferReceived()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onbufferreceived()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L569"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onendofspeech",
+      "label": ".onEndOfSpeech()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onendofspeech()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L570"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onerror",
+      "label": ".onError()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onerror()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L571"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onevent",
+      "label": ".onEvent()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onevent()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L585"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onpartialresults",
+      "label": ".onPartialResults()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onpartialresults()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L581"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onreadyforspeech",
+      "label": ".onReadyForSpeech()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onreadyforspeech()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L566"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onresults",
+      "label": ".onResults()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onresults()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L572"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onrmschanged",
+      "label": ".onRmsChanged()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onrmschanged()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L568"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener",
+      "label": ".startWakeWordListener()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".startwakewordlistener()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L439"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onbeginningofspeech",
+      "label": ".onBeginningOfSpeech()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onbeginningofspeech()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L458"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onbufferreceived",
+      "label": ".onBufferReceived()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onbufferreceived()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L460"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onendofspeech",
+      "label": ".onEndOfSpeech()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onendofspeech()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L461"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onerror",
+      "label": ".onError()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onerror()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L462"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onevent",
+      "label": ".onEvent()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onevent()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L491"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onpartialresults",
+      "label": ".onPartialResults()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onpartialresults()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L483"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onreadyforspeech",
+      "label": ".onReadyForSpeech()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onreadyforspeech()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L457"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onresults",
+      "label": ".onResults()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onresults()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L468"
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onrmschanged",
+      "label": ".onRmsChanged()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 2,
+      "file_type": "code",
+      "norm_label": ".onrmschanged()",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L459"
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_companionservice_companionservice_handlea11y",
@@ -1392,32 +1415,72 @@
       "source_location": ""
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
-      "label": "Bundle",
+      "id": "android",
+      "label": "android",
       "_origin": "ast",
       "community": 1,
       "file_type": "code",
-      "norm_label": "bundle",
+      "norm_label": "android",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bytearray",
-      "label": "ByteArray",
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_appcompatactivity",
+      "label": "AppCompatActivity",
       "_origin": "ast",
       "community": 1,
       "file_type": "code",
-      "norm_label": "bytearray",
+      "norm_label": "appcompatactivity",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_recognitionlistener",
-      "label": "RecognitionListener",
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_oninitlistener",
+      "label": "OnInitListener",
       "_origin": "ast",
       "community": 1,
       "file_type": "code",
-      "norm_label": "recognitionlistener",
+      "norm_label": "oninitlistener",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_speechrecognizer",
+      "label": "SpeechRecognizer",
+      "_origin": "ast",
+      "community": 1,
+      "file_type": "code",
+      "norm_label": "speechrecognizer",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_texttospeech",
+      "label": "TextToSpeech",
+      "_origin": "ast",
+      "community": 1,
+      "file_type": "code",
+      "norm_label": "texttospeech",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "textview",
+      "label": "TextView",
+      "_origin": "ast",
+      "community": 1,
+      "file_type": "code",
+      "norm_label": "textview",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "webview",
+      "label": "WebView",
+      "_origin": "ast",
+      "community": 1,
+      "file_type": "code",
+      "norm_label": "webview",
       "source_file": "",
       "source_location": ""
     },
@@ -1432,72 +1495,32 @@
       "source_location": "L1"
     },
     {
-      "id": "android",
-      "label": "android",
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
+      "label": "Bundle",
       "_origin": "ast",
       "community": 2,
       "file_type": "code",
-      "norm_label": "android",
+      "norm_label": "bundle",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_appcompatactivity",
-      "label": "AppCompatActivity",
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bytearray",
+      "label": "ByteArray",
       "_origin": "ast",
       "community": 2,
       "file_type": "code",
-      "norm_label": "appcompatactivity",
+      "norm_label": "bytearray",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_oninitlistener",
-      "label": "OnInitListener",
+      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_recognitionlistener",
+      "label": "RecognitionListener",
       "_origin": "ast",
       "community": 2,
       "file_type": "code",
-      "norm_label": "oninitlistener",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_speechrecognizer",
-      "label": "SpeechRecognizer",
-      "_origin": "ast",
-      "community": 2,
-      "file_type": "code",
-      "norm_label": "speechrecognizer",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_texttospeech",
-      "label": "TextToSpeech",
-      "_origin": "ast",
-      "community": 2,
-      "file_type": "code",
-      "norm_label": "texttospeech",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "textview",
-      "label": "TextView",
-      "_origin": "ast",
-      "community": 2,
-      "file_type": "code",
-      "norm_label": "textview",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "webview",
-      "label": "WebView",
-      "_origin": "ast",
-      "community": 2,
-      "file_type": "code",
-      "norm_label": "webview",
+      "norm_label": "recognitionlistener",
       "source_file": "",
       "source_location": ""
     },
@@ -1692,6 +1715,7 @@
     {
       "id": "locale",
       "label": "locale",
+      "_origin": "semantic",
       "community": 0,
       "external": true,
       "file_type": "concept",
@@ -1702,6 +1726,7 @@
     {
       "id": "recognizerintent",
       "label": "recognizerintent",
+      "_origin": "semantic",
       "community": 0,
       "external": true,
       "file_type": "concept",
@@ -1712,6 +1737,7 @@
     {
       "id": "executors",
       "label": "executors",
+      "_origin": "semantic",
       "community": 3,
       "external": true,
       "file_type": "concept",
@@ -1722,6 +1748,7 @@
     {
       "id": "jsonobject",
       "label": "jsonobject",
+      "_origin": "semantic",
       "community": 3,
       "external": true,
       "file_type": "concept",
@@ -1732,6 +1759,7 @@
     {
       "id": "notification",
       "label": "notification",
+      "_origin": "semantic",
       "community": 3,
       "external": true,
       "file_type": "concept",
@@ -1742,6 +1770,7 @@
     {
       "id": "notificationchannel",
       "label": "notificationchannel",
+      "_origin": "semantic",
       "community": 3,
       "external": true,
       "file_type": "concept",
@@ -1752,6 +1781,7 @@
     {
       "id": "notificationcompat",
       "label": "notificationcompat",
+      "_origin": "semantic",
       "community": 3,
       "external": true,
       "file_type": "concept",
@@ -1762,6 +1792,7 @@
     {
       "id": "notificationmanager",
       "label": "notificationmanager",
+      "_origin": "semantic",
       "community": 3,
       "external": true,
       "file_type": "concept",
@@ -1772,6 +1803,7 @@
     {
       "id": "build",
       "label": "build",
+      "_origin": "semantic",
       "community": 4,
       "external": true,
       "file_type": "concept",
@@ -1782,6 +1814,7 @@
     {
       "id": "path",
       "label": "path",
+      "_origin": "semantic",
       "community": 4,
       "external": true,
       "file_type": "concept",
@@ -1792,6 +1825,7 @@
     {
       "id": "rect",
       "label": "rect",
+      "_origin": "semantic",
       "community": 4,
       "external": true,
       "file_type": "concept",
@@ -1802,6 +1836,7 @@
     {
       "id": "activityresultcontracts",
       "label": "activityresultcontracts",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1812,6 +1847,7 @@
     {
       "id": "contextcompat",
       "label": "contextcompat",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1822,6 +1858,7 @@
     {
       "id": "delay",
       "label": "delay",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1832,6 +1869,7 @@
     {
       "id": "dispatchers",
       "label": "dispatchers",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1842,6 +1880,7 @@
     {
       "id": "launch",
       "label": "launch",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1852,6 +1891,7 @@
     {
       "id": "lifecyclescope",
       "label": "lifecyclescope",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1862,6 +1902,7 @@
     {
       "id": "manifest",
       "label": "manifest",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1872,6 +1913,7 @@
     {
       "id": "materialbutton",
       "label": "materialbutton",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1882,6 +1924,7 @@
     {
       "id": "packagemanager",
       "label": "packagemanager",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1892,6 +1935,7 @@
     {
       "id": "settings",
       "label": "settings",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1902,6 +1946,7 @@
     {
       "id": "toast",
       "label": "toast",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1912,6 +1957,7 @@
     {
       "id": "updatepadding",
       "label": "updatepadding",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1922,6 +1968,7 @@
     {
       "id": "viewcompat",
       "label": "viewcompat",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1932,6 +1979,7 @@
     {
       "id": "websettings",
       "label": "websettings",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1942,6 +1990,7 @@
     {
       "id": "windowcompat",
       "label": "windowcompat",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1952,6 +2001,7 @@
     {
       "id": "windowinsetscompat",
       "label": "windowinsetscompat",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1962,6 +2012,7 @@
     {
       "id": "withcontext",
       "label": "withcontext",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1972,6 +2023,7 @@
     {
       "id": "withtimeoutornull",
       "label": "withtimeoutornull",
+      "_origin": "semantic",
       "community": 5,
       "external": true,
       "file_type": "concept",
@@ -1982,6 +2034,7 @@
     {
       "id": "bufferedreader",
       "label": "bufferedreader",
+      "_origin": "semantic",
       "community": 6,
       "external": true,
       "file_type": "concept",
@@ -1992,6 +2045,7 @@
     {
       "id": "inputstreamreader",
       "label": "inputstreamreader",
+      "_origin": "semantic",
       "community": 6,
       "external": true,
       "file_type": "concept",
@@ -2274,7 +2328,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L334",
+      "source_location": "L340",
       "weight": 1.0
     },
     {
@@ -2286,7 +2340,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L338",
+      "source_location": "L344",
       "weight": 1.0
     },
     {
@@ -2298,7 +2352,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L344",
+      "source_location": "L350",
       "weight": 1.0
     },
     {
@@ -2310,7 +2364,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L389",
+      "source_location": "L395",
       "weight": 1.0
     },
     {
@@ -2322,7 +2376,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L390",
+      "source_location": "L396",
       "weight": 1.0
     },
     {
@@ -2334,7 +2388,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L606",
+      "source_location": "L612",
       "weight": 1.0
     },
     {
@@ -2346,7 +2400,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L608",
+      "source_location": "L614",
       "weight": 1.0
     },
     {
@@ -2358,7 +2412,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L646",
+      "source_location": "L652",
       "weight": 1.0
     },
     {
@@ -2466,7 +2520,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L645",
+      "source_location": "L651",
       "weight": 1.0
     },
     {
@@ -2478,7 +2532,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L645",
+      "source_location": "L651",
       "weight": 1.0
     },
     {
@@ -2490,7 +2544,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L428",
+      "source_location": "L434",
       "weight": 1.0
     },
     {
@@ -2502,7 +2556,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L430",
+      "source_location": "L436",
       "weight": 1.0
     },
     {
@@ -2514,7 +2568,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L352",
+      "source_location": "L358",
       "weight": 1.0
     },
     {
@@ -2526,7 +2580,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L353",
+      "source_location": "L359",
       "weight": 1.0
     },
     {
@@ -2538,7 +2592,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L367",
+      "source_location": "L373",
       "weight": 1.0
     },
     {
@@ -2550,7 +2604,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L167",
+      "source_location": "L173",
       "weight": 1.0
     },
     {
@@ -2562,23 +2616,23 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L168",
+      "source_location": "L174",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onpagefinished",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onpagefinished",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onpagefinished",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onpagefinished",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L143",
+      "source_location": "L149",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onpagefinished",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onpagefinished",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_shouldwakelisten",
       "relation": "calls",
       "_origin": "ast",
@@ -2586,11 +2640,11 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L150",
+      "source_location": "L156",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onpagefinished",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onpagefinished",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener",
       "relation": "calls",
       "_origin": "ast",
@@ -2598,11 +2652,11 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L152",
+      "source_location": "L158",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onpagefinished",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onpagefinished",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_isnativeoverlayvisible",
       "relation": "calls",
       "_origin": "ast",
@@ -2610,11 +2664,11 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L154",
+      "source_location": "L160",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onreceivederror",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onreceivederror",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_shownativeofflineoverlay",
       "relation": "calls",
       "_origin": "ast",
@@ -2622,19 +2676,19 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L129",
+      "source_location": "L135",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onreceivederror",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onreceivederror",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onreceivederror",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onreceivederror",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L132",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -2646,7 +2700,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L399",
+      "source_location": "L405",
       "weight": 1.0
     },
     {
@@ -2658,7 +2712,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L545",
+      "source_location": "L551",
       "weight": 1.0
     },
     {
@@ -2670,7 +2724,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L552",
+      "source_location": "L558",
       "weight": 1.0
     },
     {
@@ -2682,11 +2736,11 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L588",
+      "source_location": "L594",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onerror",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onerror",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_toast",
       "relation": "calls",
       "_origin": "ast",
@@ -2694,11 +2748,11 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L565",
+      "source_location": "L571",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onresults",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_handlevoicecommand",
       "relation": "calls",
       "_origin": "ast",
@@ -2706,7 +2760,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L573",
+      "source_location": "L579",
       "weight": 1.0
     },
     {
@@ -2718,7 +2772,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L243",
+      "source_location": "L249",
       "weight": 1.0
     },
     {
@@ -2730,7 +2784,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L279",
+      "source_location": "L285",
       "weight": 1.0
     },
     {
@@ -2742,7 +2796,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L311",
+      "source_location": "L317",
       "weight": 1.0
     },
     {
@@ -2754,7 +2808,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L314",
+      "source_location": "L320",
       "weight": 1.0
     },
     {
@@ -2766,7 +2820,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L437",
+      "source_location": "L443",
       "weight": 1.0
     },
     {
@@ -2778,48 +2832,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L494",
+      "source_location": "L500",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onerror",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onerror",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_shouldwakelisten",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L460",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onerror",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L460",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onpartialresults",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_containswakeword",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L479",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onresults",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_containswakeword",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -2830,31 +2848,7 @@
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onresults",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_speak",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L471",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onresults",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_shouldwakelisten",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L475",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onerror",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener",
       "relation": "calls",
       "_origin": "ast",
@@ -2862,7 +2856,67 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L475",
+      "source_location": "L466",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onpartialresults",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_containswakeword",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L485",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onresults",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_containswakeword",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L472",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onresults",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_speak",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L477",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onresults",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_shouldwakelisten",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L481",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onresults",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L481",
       "weight": 1.0
     },
     {
@@ -3030,7 +3084,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L644",
+      "source_location": "L650",
       "weight": 1.0
     },
     {
@@ -3102,7 +3156,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L386",
+      "source_location": "L392",
       "weight": 1.0
     },
     {
@@ -3656,7 +3710,7 @@
     },
     {
       "source": "app_src_main_kotlin_com_opencode_companion_mainactivity",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127",
       "relation": "imports",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -4225,19 +4279,7 @@
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onpagefinished",
-      "target": "webview",
-      "relation": "references",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "parameter_type",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L142",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onreceivederror",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webchromeclient_l114_onconsolemessage",
       "target": "android",
       "relation": "references",
       "_origin": "ast",
@@ -4245,11 +4287,11 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L122",
+      "source_location": "L115",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onreceivederror",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onpagefinished",
       "target": "webview",
       "relation": "references",
       "_origin": "ast",
@@ -4257,11 +4299,35 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L134",
+      "source_location": "L148",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onbufferreceived",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onreceivederror",
+      "target": "android",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "parameter_type",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L128",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onreceivederror",
+      "target": "webview",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "parameter_type",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L140",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onbufferreceived",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bytearray",
       "relation": "references",
       "_origin": "ast",
@@ -4269,11 +4335,11 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L563",
+      "source_location": "L569",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onevent",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onevent",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
       "relation": "references",
       "_origin": "ast",
@@ -4281,11 +4347,11 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L579",
+      "source_location": "L585",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onpartialresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onpartialresults",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
       "relation": "references",
       "_origin": "ast",
@@ -4293,23 +4359,11 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L575",
+      "source_location": "L581",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onreadyforspeech",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
-      "relation": "references",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "parameter_type",
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L560",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onreadyforspeech",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
       "relation": "references",
       "_origin": "ast",
@@ -4321,7 +4375,19 @@
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onbufferreceived",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onresults",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "parameter_type",
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L572",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onbufferreceived",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bytearray",
       "relation": "references",
       "_origin": "ast",
@@ -4329,11 +4395,11 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L454",
+      "source_location": "L460",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onevent",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onevent",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
       "relation": "references",
       "_origin": "ast",
@@ -4341,11 +4407,11 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L485",
+      "source_location": "L491",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onpartialresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onpartialresults",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
       "relation": "references",
       "_origin": "ast",
@@ -4353,11 +4419,11 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L477",
+      "source_location": "L483",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onreadyforspeech",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onreadyforspeech",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
       "relation": "references",
       "_origin": "ast",
@@ -4365,11 +4431,11 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L451",
+      "source_location": "L457",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onresults",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
       "relation": "references",
       "_origin": "ast",
@@ -4377,7 +4443,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L462",
+      "source_location": "L468",
       "weight": 1.0
     },
     {
@@ -4578,35 +4644,46 @@
     },
     {
       "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webchromeclient_l114",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L121",
+      "source_location": "L114",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L127",
       "weight": 1.0
     },
     {
       "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L559",
+      "source_location": "L565",
       "weight": 1.0
     },
     {
       "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L450",
+      "source_location": "L456",
       "weight": 1.0
     },
     {
@@ -4698,25 +4775,25 @@
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_recognitionlistener",
       "relation": "implements",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L559",
+      "source_location": "L565",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
       "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_recognitionlistener",
       "relation": "implements",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L450",
+      "source_location": "L456",
       "weight": 1.0
     },
     {
@@ -4797,14 +4874,25 @@
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webchromeclient_l114",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webchromeclient_l114",
       "relation": "inherits",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L121",
+      "source_location": "L114",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127",
+      "relation": "inherits",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L127",
       "weight": 1.0
     },
     {
@@ -5178,7 +5266,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L180",
+      "source_location": "L186",
       "weight": 1.0
     },
     {
@@ -5189,7 +5277,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L191",
+      "source_location": "L197",
       "weight": 1.0
     },
     {
@@ -5200,7 +5288,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L196",
+      "source_location": "L202",
       "weight": 1.0
     },
     {
@@ -5211,7 +5299,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L207",
+      "source_location": "L213",
       "weight": 1.0
     },
     {
@@ -5222,7 +5310,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L231",
+      "source_location": "L237",
       "weight": 1.0
     },
     {
@@ -5233,7 +5321,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L240",
+      "source_location": "L246",
       "weight": 1.0
     },
     {
@@ -5244,7 +5332,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L331",
+      "source_location": "L337",
       "weight": 1.0
     },
     {
@@ -5255,7 +5343,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L349",
+      "source_location": "L355",
       "weight": 1.0
     },
     {
@@ -5266,7 +5354,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L377",
+      "source_location": "L383",
       "weight": 1.0
     },
     {
@@ -5277,7 +5365,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L382",
+      "source_location": "L388",
       "weight": 1.0
     },
     {
@@ -5288,7 +5376,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L388",
+      "source_location": "L394",
       "weight": 1.0
     },
     {
@@ -5299,7 +5387,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L392",
+      "source_location": "L398",
       "weight": 1.0
     },
     {
@@ -5310,7 +5398,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L396",
+      "source_location": "L402",
       "weight": 1.0
     },
     {
@@ -5321,7 +5409,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L423",
+      "source_location": "L429",
       "weight": 1.0
     },
     {
@@ -5332,7 +5420,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L433",
+      "source_location": "L439",
       "weight": 1.0
     },
     {
@@ -5343,7 +5431,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L496",
+      "source_location": "L502",
       "weight": 1.0
     },
     {
@@ -5354,7 +5442,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L502",
+      "source_location": "L508",
       "weight": 1.0
     },
     {
@@ -5376,7 +5464,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L518",
+      "source_location": "L524",
       "weight": 1.0
     },
     {
@@ -5387,7 +5475,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L523",
+      "source_location": "L529",
       "weight": 1.0
     },
     {
@@ -5398,7 +5486,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L538",
+      "source_location": "L544",
       "weight": 1.0
     },
     {
@@ -5409,7 +5497,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L544",
+      "source_location": "L550",
       "weight": 1.0
     },
     {
@@ -5420,7 +5508,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L550",
+      "source_location": "L556",
       "weight": 1.0
     },
     {
@@ -5431,7 +5519,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L592",
+      "source_location": "L598",
       "weight": 1.0
     },
     {
@@ -5442,7 +5530,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L645",
+      "source_location": "L651",
       "weight": 1.0
     },
     {
@@ -5453,100 +5541,45 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L646",
+      "source_location": "L652",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onreceivederror",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webchromeclient_l114",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webchromeclient_l114_onconsolemessage",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L134",
+      "source_location": "L115",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l121_onpagefinished",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onreceivederror",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L142",
+      "source_location": "L140",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onreadyforspeech",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_setupwebview_object_webviewclient_l127_onpagefinished",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L560",
+      "source_location": "L148",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onbeginningofspeech",
-      "relation": "method",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L561",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onrmschanged",
-      "relation": "method",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L562",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onbufferreceived",
-      "relation": "method",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L563",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onendofspeech",
-      "relation": "method",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L564",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onerror",
-      "relation": "method",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L565",
-      "weight": 1.0
-    },
-    {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onreadyforspeech",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -5556,96 +5589,151 @@
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onpartialresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onbeginningofspeech",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L575",
+      "source_location": "L567",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l559_onevent",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onrmschanged",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L579",
+      "source_location": "L568",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onreadyforspeech",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onbufferreceived",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L451",
+      "source_location": "L569",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onbeginningofspeech",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onendofspeech",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L452",
+      "source_location": "L570",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onrmschanged",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onerror",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L453",
+      "source_location": "L571",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onbufferreceived",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onresults",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L454",
+      "source_location": "L572",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onendofspeech",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onpartialresults",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L455",
+      "source_location": "L581",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onerror",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening_object_recognitionlistener_l565_onevent",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L456",
+      "source_location": "L585",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onreadyforspeech",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L457",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onbeginningofspeech",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L458",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onrmschanged",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L459",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onbufferreceived",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L460",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onendofspeech",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L461",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onerror",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -5655,25 +5743,36 @@
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onpartialresults",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onresults",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L477",
+      "source_location": "L468",
       "weight": 1.0
     },
     {
-      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450",
-      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l450_onevent",
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onpartialresults",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "source_location": "L485",
+      "source_location": "L483",
+      "weight": 1.0
+    },
+    {
+      "source": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456",
+      "target": "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l456_onevent",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
+      "source_location": "L491",
       "weight": 1.0
     },
     {
@@ -5898,5 +5997,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1c66ed4052ce4b675c85f81ff3a42ec721622a2e"
+  "built_at_commit": "0089193cb11786887d1cdf1763f248dbf9e06b9c"
 }

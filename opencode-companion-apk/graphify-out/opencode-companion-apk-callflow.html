@@ -60,7 +60,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 <div class="container">
 
 <h1>opencode-companion-apk — Complete Call Flow &amp; Architecture Documentation</h1>
-<p class="subtitle">Generated from graphify knowledge graph: 186 nodes, 320 edges, 11 communities. Commit: 1c66ed4</p>
+<p class="subtitle">Generated from graphify knowledge graph: 188 nodes, 324 edges, 11 communities. Commit: 0089193</p>
 
 <div class="nav">
     <a href="#overview">Architecture Overview</a>
@@ -78,7 +78,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 flowchart LR
     BUILD_GRAPH_321CBB04("Graph Build<br/><small>2 nodes</small>")
     class BUILD_GRAPH_321CBB04 module;
-    CLI_SKILLS_9964CBB8("CLI &amp; Skill Installers<br/><small>183 nodes</small>")
+    CLI_SKILLS_9964CBB8("CLI &amp; Skill Installers<br/><small>185 nodes</small>")
     class CLI_SKILLS_9964CBB8 module;
     SETTINGSGRADLEKTS_BF427DD9("Settingsgradlekts<br/><small>1 nodes</small>")
     class SETTINGSGRADLEKTS_BF427DD9 module;
@@ -100,7 +100,7 @@ flowchart LR
     <h4>Architecture Layers</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>Layer</th><th>Nodes</th><th>Communities</th></tr>
-      <tr><td>Graph Build</td><td>2</td><td><code>8, 9</code></td></tr><tr><td>CLI &amp; Skill Installers</td><td>183</td><td><code>0, 1, 2, 3, 4, 5, 6, 7</code></td></tr><tr><td>Settingsgradlekts</td><td>1</td><td><code>10</code></td></tr>
+      <tr><td>Graph Build</td><td>2</td><td><code>8, 9</code></td></tr><tr><td>CLI &amp; Skill Installers</td><td>185</td><td><code>0, 1, 2, 3, 4, 5, 6, 7</code></td></tr><tr><td>Settingsgradlekts</td><td>1</td><td><code>10</code></td></tr>
     </table>
   </div>
   <div class="card">
@@ -178,12 +178,12 @@ flowchart LR
 
 <!-- ====== 3. CLI & Skill Installers ====== -->
 <h2 id="cli-skills">3. CLI &amp; Skill Installers</h2>
-<p>CLI &amp; Skill Installers groups implementation around app, kotlin, com, opencode, mostly in opencode/companion/MainActivity.kt, opencode/companion/CompanionVoiceInteractionService.kt, opencode/companion/OpencodeAccessibilityService.kt. This section covers 183 nodes and 320 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<p>CLI &amp; Skill Installers groups implementation around app, kotlin, com, opencode, mostly in opencode/companion/MainActivity.kt, opencode/companion/CompanionVoiceInteractionService.kt, opencode/companion/OpencodeAccessibilityService.kt. This section covers 185 nodes and 324 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: CLI &amp; Skill Installers (183 nodes, 320 edges)
+    %% Section: CLI &amp; Skill Installers (185 nodes, 324 edges)
     subgraph cli_skills_opencode_companion_CompanionVoiceInte_d2834c21["opencode/companion/CompanionVoiceInteractionService.kt"]
         app_src_main_kotlin_com_opencode_companion_compa_09ed5753("CompanionVoiceInteractionService.kt")
         app_src_main_kotlin_com_opencode_companion_compa_855bfce4("CompanionVoiceInteractionService<br/><small>opencode/companion/CompanionVoiceInteractionService.kt</small>")
@@ -223,7 +223,7 @@ flowchart LR
     app_src_main_kotlin_com_opencode_companion_compa_bbf9c4d5 -->|calls| app_src_main_kotlin_com_opencode_companion_compa_bbf9c4d5
     app_src_main_kotlin_com_opencode_companion_compa_91c10536 -->|calls| app_src_main_kotlin_com_opencode_companion_compa_91c10536
     app_src_main_kotlin_com_opencode_companion_compa_2d19258b -->|calls| app_src_main_kotlin_com_opencode_companion_compa_2d19258b
-    %% Omitted for readability: 165 nodes, 0 edges
+    %% Omitted for readability: 167 nodes, 0 edges
     class app_src_main_kotlin_com_opencode_companion_compa_09ed5753 klass;
     class app_src_main_kotlin_com_opencode_companion_compa_855bfce4 klass;
     class app_src_main_kotlin_com_opencode_companion_compa_60f85afb function;
@@ -510,7 +510,7 @@ flowchart LR
     <h4>Key Files</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>opencode/companion/MainActivity.kt</code></td><td>53 nodes</td></tr>
+      <tr><td><code>opencode/companion/MainActivity.kt</code></td><td>55 nodes</td></tr>
 <tr><td><code>opencode/companion/CompanionVoiceInteractionService.kt</code></td><td>25 nodes</td></tr>
 <tr><td><code>opencode/companion/OpencodeAccessibilityService.kt</code></td><td>18 nodes</td></tr>
 <tr><td><code>opencode/companion/CompanionService.kt</code></td><td>14 nodes</td></tr>
@@ -520,7 +520,7 @@ flowchart LR
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: method x98, calls x85, imports x61, references x45. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: method x99, calls x85, imports x61, references x46. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
@@ -587,8 +587,8 @@ flowchart LR
   <div class="card">
     <h4>Graph</h4>
     <table style="width:100%;font-size:0.85rem;">
-      <tr><td>Nodes</td><td>186</td></tr>
-      <tr><td>Edges</td><td>320</td></tr>
+      <tr><td>Nodes</td><td>188</td></tr>
+      <tr><td>Edges</td><td>324</td></tr>
       <tr><td>Hyperedges</td><td>0</td></tr>
       <tr><td>Communities</td><td>11</td></tr>
       <tr><td>Documented Sections</td><td>3</td></tr>
@@ -597,7 +597,7 @@ flowchart LR
   <div class="card">
     <h4>Edge Confidence</h4>
     <table style="width:100%;font-size:0.85rem;">
-      <tr><td>EXTRACTED</td><td>320</td></tr>
+      <tr><td>EXTRACTED</td><td>324</td></tr>
       <tr><td>INFERRED</td><td>0</td></tr>
       <tr><td>AMBIGUOUS</td><td>0</td></tr>
     </table>
@@ -606,7 +606,7 @@ flowchart LR
 
 <div style="text-align:center; padding:40px 0; color: var(--muted); font-size:0.9rem;">
   <p>opencode-companion-apk — Architecture Documentation</p>
-  <p>Generated: 2026-09-18 02:25 UTC · graphify callflow-html</p>
+  <p>Generated: 2026-09-18 03:00 UTC · graphify callflow-html</p>
 </div>
 
 </div><!-- .container -->
