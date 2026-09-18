@@ -359,12 +359,19 @@ function json(res, code, obj){ send(res, code, JSON.stringify(obj), {"Content-Ty
 
 async function proxyWithInjection(req, resRaw, originalBodyBuf) {
   // For opencode message routes (/session/:id/message, /session/:id/prompt etc.), prepend system context block if project has skills.
-  // Only runs when Content-Type is JSON and targetPath looks like a message send, so GETs/streaming unaffected.
+  // Defensive: sanitize, size-cap, dedup, and never leak debug fields to provider.
   const targetPathCheck = req.url.replace(/^\/opencode/, "") || "/";
   const isMessageRoute = /\/session\/[^\/]+\/(message|prompt|chat)/.test(targetPathCheck);
   if (!isMessageRoute || req.method !== "POST" || !originalBodyBuf || originalBodyBuf.length === 0) return null;
   let parsed;
   try { parsed = JSON.parse(originalBodyBuf.toString("utf8")); } catch { return null; }
+  // Dedup: if caller already injected (retry) skip to avoid double prefix blowing up size
+  try {
+    const firstPartText = Array.isArray(parsed.parts) && parsed.parts[0] && typeof parsed.parts[0].text === "string" ? parsed.parts[0].text : "";
+    if (firstPartText.startsWith("[SYSTEM CONTEXT") || firstPartText.includes("---\n\n[SYSTEM CONTEXT")) return null;
+    if (typeof parsed.text === "string" && parsed.text.includes("[SYSTEM CONTEXT")) return null;
+    if (typeof parsed.prompt === "string" && parsed.prompt.includes("[SYSTEM CONTEXT")) return null;
+  } catch {}
   // Resolve projectId for this message: from body.projectId, or from sessionId association via projects.json, or header X-Project-Id
   let projectId = parsed.projectId || parsed.projectID || req.headers["x-project-id"] || null;
   const sessionId = parsed.sessionId || parsed.sessionID || targetPathCheck.match(/\/session\/([^\/]+)/)?.[1] || null;
@@ -379,10 +386,25 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
   // Also fallback to UI_STATE projectId if header missing (client persisted active project)
   if (!projectId && UI_STATE && UI_STATE.projectId) projectId = UI_STATE.projectId;
   if (!projectId) return null;
-  const block = buildSystemContextBlock(projectId);
+  let block = buildSystemContextBlock(projectId);
   if (!block) return null;
+  // Defensive sanitization: remove control chars that break JSON/provider validation, keep \n \r \t
+  // Also normalize: skills/summaries may contain unescaped quotes/backticks/binary
+  block = String(block).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, " ");
+  // Size cap: prevent oversized injection exceeding provider limit (12KB text ~3k tokens)
+  const MAX_BLOCK_CHARS = 12000;
+  if (block.length > MAX_BLOCK_CHARS) {
+    block = block.slice(0, MAX_BLOCK_CHARS) + "\n\n[truncated: context exceeds 12KB cap]";
+  }
+  // Final size guard: if full payload would exceed 512KB (shouldTryInject boundary), truncate further
+  const approxPayloadLen = originalBodyBuf.length + block.length + 256;
+  if (approxPayloadLen > 512 * 1024) {
+    // Skip injection rather than risk 400 from oversized body
+    console.log(`[proxy] skip injection: payload would exceed 512KB cap (${approxPayloadLen} bytes) for project ${projectId}`);
+    return null;
+  }
   // Build system-prepend injection — opencode messages expect parts[]. Prepend a system parts entry.
-  // Format: {parts: [{type:"text", text: block}], ...} else top-level text field we also wrap.
+  // JSON.stringify will properly escape all characters in block; no manual escaping needed.
   if (Array.isArray(parsed.parts)) {
     parsed.parts = [{ type: "text", text: `[SYSTEM CONTEXT — skills + linked projects]\n${block}` }, ...parsed.parts];
   } else if (typeof parsed.text === "string") {
@@ -393,9 +415,11 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
     // Generic fallback: stash in systemContext field for observability; don't break unknown shapes
     parsed.systemContext = `[SYSTEM CONTEXT]\n${block}`;
   }
-  // Mark for logging
-  parsed._injectedProjectId = projectId;
-  return Buffer.from(JSON.stringify(parsed));
+  // Do NOT add debug fields to payload sent to provider; keep meta for logging only via header/log
+  const outBuf = Buffer.from(JSON.stringify(parsed));
+  // Attach project hint for log line via a separate variable, not inside payload
+  outBuf._injectedProjectId = projectId;
+  return outBuf;
 }
 
 function proxyToOpencode(req, res){
@@ -426,7 +450,7 @@ function proxyToOpencode(req, res){
         const buf = Buffer.concat(chunks);
         const injected = await proxyWithInjection(req, res, buf);
         const outBuf = injected || buf;
-        if (injected) console.log(`[proxy] injected system context for project ${_projectHint(injected)} (${injected.length} bytes)`);
+        if (injected) console.log(`[proxy] injected system context for project ${_projectHint(injected)} (${injected.length} bytes) sanitized+capped`);
         const injOpts = { ...opts, headers: { ...opts.headers, "content-length": String(outBuf.length), "Content-Length": String(outBuf.length) } };
         delete injOpts.headers["transfer-encoding"];
         delete injOpts.headers["Transfer-Encoding"];
@@ -453,7 +477,8 @@ function proxyToOpencode(req, res){
         if(!res.headersSent) try { json(res, 502, { error:"injection error", detail:String(e) }); } catch(_){}
       }
       function _projectHint(buf) {
-        try { const j = JSON.parse(buf.toString("utf8")); return j._injectedProjectId || j.projectId || "unknown"; } catch { return "unknown"; }
+        if (buf && buf._injectedProjectId) return buf._injectedProjectId;
+        try { const j = JSON.parse(buf.toString("utf8")); return j.projectId || j.projectID || "unknown"; } catch { return "unknown"; }
       }
     })();
   }

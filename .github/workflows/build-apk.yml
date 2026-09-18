@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - 'opencode-companion-apk/**'
+      - 'opencode-companion/public/**'
+      - 'opencode-companion/server.js'
       - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 

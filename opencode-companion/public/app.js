@@ -29,12 +29,101 @@ let state = {
 
 // ---- helpers
 function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!==undefined) e.textContent=text; return e; }
+function escapeHtml(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function scrollToBottom(){ if(!msgsEl) return; msgsEl.scrollTop = msgsEl.scrollHeight; requestAnimationFrame(()=>{ if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; }); setTimeout(()=>{ if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; }, 60); }
+function isMemoryContext(text){
+  const t = String(text || "");
+  return t.trim().startsWith("<memory_context") || t.includes("<project_knowledge") || t.includes("<memory relevance=");
+}
+function stripMemoryContext(text){
+  let t = String(text || "");
+  t = t.replace(/<memory_context[\s\S]*?<\/memory_context>/gi, "").trim();
+  t = t.replace(/<project_knowledge[\s\S]*?<\/project_knowledge>/gi, "").trim();
+  return t;
+}
+function renderMarkdown(src){
+  let s = String(src || "");
+  s = s.replace(/\r\n/g, "\n");
+  const codeBlocks = [];
+  s = s.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(`<pre><code>${escapeHtml(code)}</code></pre>`);
+    return `@@CODEBLOCK_${idx}@@`;
+  });
+  s = escapeHtml(s);
+  s = s.replace(/^###\s+(.+)$/gm, "<h3>$1</h3>");
+  s = s.replace(/^##\s+(.+)$/gm, "<h2>$1</h2>");
+  s = s.replace(/^#\s+(.+)$/gm, "<h1>$1</h1>");
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  s = s.replace(/`(.+?)`/g, "<code>$1</code>");
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // lists: lines starting with - or * or numbered
+  const lines = s.split("\n");
+  let out = ""; let inUl=false, inOl=false;
+  function closeLists(){ if(inUl){ out += "</ul>"; inUl=false; } if(inOl){ out += "</ol>"; inOl=false; } }
+  for (let i=0;i<lines.length;i++){
+    const line = lines[i];
+    const trimmed = line.trim();
+    if(/^@@CODEBLOCK_\d+@@$/.test(trimmed)){ closeLists(); const idx=parseInt(trimmed.match(/(\d+)/)[1],10); out += codeBlocks[idx]; continue; }
+    if(trimmed.startsWith("<h") || trimmed.startsWith("<pre") || trimmed.startsWith("<blockquote") || !trimmed){ closeLists(); if(!trimmed) out+="<p></p>"; else out+= line.includes("<h")||line.includes("<pre") ? line : `<p>${line}</p>`; continue; }
+    if(/^[-*]\s+/.test(trimmed)){ if(!inUl){ closeLists(); out+="<ul>"; inUl=true; } out+= `<li>${trimmed.replace(/^[-*]\s+/, "")}</li>`; continue; }
+    if(/^\d+\.\s+/.test(trimmed)){ if(!inOl){ closeLists(); out+="<ol>"; inOl=true; } out+= `<li>${trimmed.replace(/^\d+\.\s+/, "")}</li>`; continue; }
+    if(trimmed.startsWith("&gt;") || trimmed.startsWith(">")){ closeLists(); out+= `<blockquote>${trimmed.replace(/^&gt;\s?/, "").replace(/^&gt;/,"")}</blockquote>`; continue; }
+    // default paragraph continuation: if previous was list, close
+    closeLists();
+    out += `<p>${line}</p>`;
+  }
+  closeLists();
+  // restore code blocks that were inside out as placeholder paragraphs
+  out = out.replace(/<p>@@CODEBLOCK_(\d+)@@<\/p>/g, (_, n)=> codeBlocks[parseInt(n,10)]);
+  return out;
+}
 function addMsg(role, text, meta=""){
-  const w = el("div","msg "+role); w.textContent = text;
+  const raw = String(text || "");
+  const isMem = isMemoryContext(raw);
+  if(isMem){
+    const stripped = stripMemoryContext(raw);
+    if(!stripped){
+      const det = el("details","mem-toggle");
+      const sum = el("summary", "", "contexto interno (oculto)");
+      det.appendChild(sum);
+      const pre = el("pre","", raw.slice(0, 4000));
+      pre.style.whiteSpace = "pre-wrap"; pre.style.wordBreak = "break-word"; pre.style.color = "var(--muted)"; pre.style.background = "#0a0a0f"; pre.style.border = "1px solid var(--border)"; pre.style.borderRadius = "8px"; pre.style.padding = "8px";
+      det.appendChild(pre);
+      msgsEl.appendChild(det);
+      scrollToBottom();
+      return;
+    }
+    if(stripped !== raw){
+      const det = el("details","mem-toggle");
+      const sum = el("summary", "", "contexto interno — ver original");
+      det.appendChild(sum);
+      const pre = el("pre","", raw.slice(0, 4000));
+      pre.style.whiteSpace = "pre-wrap"; pre.style.wordBreak = "break-word"; pre.style.color = "var(--muted)"; pre.style.background = "#0a0a0f"; pre.style.border = "1px solid var(--border)"; pre.style.borderRadius = "8px"; pre.style.padding = "8px";
+      det.appendChild(pre);
+      msgsEl.appendChild(det);
+      // render stripped as actual message
+      const w2 = el("div","msg "+role);
+      if(role==="assistant"){ w2.classList.add("md"); w2.innerHTML = renderMarkdown(stripped); } else w2.textContent = stripped;
+      msgsEl.appendChild(w2);
+      if(meta){ const m=el("div","muted",meta); m.style.fontSize="11px"; m.style.alignSelf = role==="user" ? "flex-end" : "flex-start"; msgsEl.appendChild(m); }
+      scrollToBottom();
+      if(role==="assistant"){ state.lastAssistantText = stripped; queueTts(stripped); }
+      return;
+    }
+  }
+  const w = el("div","msg "+role);
+  if(role==="assistant"){
+    w.classList.add("md");
+    w.innerHTML = renderMarkdown(raw);
+  } else {
+    w.textContent = raw;
+  }
   msgsEl.appendChild(w);
   if(meta){ const m=el("div","muted",meta); m.style.fontSize="11px"; m.style.alignSelf = role==="user" ? "flex-end" : "flex-start"; msgsEl.appendChild(m); }
-  msgsEl.scrollTop = msgsEl.scrollHeight;
-  if(role==="assistant"){ state.lastAssistantText = text; queueTts(text); }
+  scrollToBottom();
+  if(role==="assistant"){ state.lastAssistantText = raw; queueTts(raw); }
 }
 function setDot(elDot, ok){ if(!elDot) return; elDot.className = "dot "+(ok?"ok":"bad"); }
 async function jget(url){ const r=await fetch(url); if(!r.ok) throw new Error(url+" -> "+r.status+" "+await r.text().catch(()=> "")); return r.json(); }
@@ -95,6 +184,17 @@ function fileToText(file){
 
 // ---- drawer
 function setupDrawer(){
+  // fix #3: prevent pull-to-refresh / scroll-bounce from triggering refresh via overscroll
+  const db = document.getElementById("drawer-body");
+  if(db){
+    db.addEventListener("touchmove", (e)=>{
+      // allow native scroll inside drawer-body, but stop propagation at edges
+      const atTop = db.scrollTop <= 0;
+      const atBottom = db.scrollTop + db.clientHeight >= db.scrollHeight - 2;
+      const deltaY = e.touches && e.touches[0] ? 0 : 0;
+      if((atTop && deltaY > 0) || (atBottom && deltaY < 0)) e.preventDefault();
+    }, {passive:false});
+  }
   const toggle = (id) => {
     const body = document.getElementById(id);
     const btn = document.querySelector(`.section-toggle[data-target="${id}"]`);
@@ -461,23 +561,114 @@ function renderDrawer(){
     r.classList.toggle("active", r.dataset.sessionId===state.currentSessionId);
   });
 }
+// ---- session row helpers: kebab menu (fix #2) ----
+function closeAllSessionMenus(){ document.querySelectorAll(".session-menu").forEach(m=> m.classList.add("hidden")); }
+document.addEventListener("click", (e)=>{
+  const inside = e.target instanceof Element && e.target.closest(".session-row");
+  if(!inside) closeAllSessionMenus();
+});
+function sessionMenuForRow(sessionId, title, opts){
+  const menu = el("div","session-menu hidden");
+  menu.style.cssText = "position:absolute; right:6px; top:36px; background:var(--panel2); border:1px solid var(--border2); border-radius:10px; overflow:hidden; min-width:170px; box-shadow:var(--shadow); z-index:90;";
+  function item(label, handler){
+    const b = el("button","session-menu-item", label);
+    b.style.cssText = "width:100%; text-align:left; padding:9px 12px; background:transparent; border:0; color:var(--text); cursor:pointer; font-size:13px;";
+    b.addEventListener("click", (ev)=>{ ev.stopPropagation(); closeAllSessionMenus(); handler(); });
+    return b;
+  }
+  const btnSave = item("Guardar", async ()=>{
+    try{ await jpost(`/api/projects/${encodeURIComponent(opts?.projectId||state.currentProjectId||"")}/sessions`, {sessionId, title}).catch(()=>{}); }catch{}
+    showPill(`Guardado "${(title||sessionId).slice(0,28)}"`, "read");
+    addMsg("system", `Sesión ${(title||sessionId).slice(0,32)} marcada como guardada.`);
+  });
+  const btnDelete = item("Borrar", async ()=>{
+    if(!confirm(`Borrar sesión "${(title||sessionId).slice(0,32)}"?`)) return;
+    try{
+      // If managed, first disassociate from its project
+      if(opts && opts.projectId){
+        try{ await fetch(`/api/projects/${encodeURIComponent(opts.projectId)}/sessions/${encodeURIComponent(sessionId)}`, {method:"DELETE"}); }catch{}
+      }
+      await fetch(`/opencode/session/${encodeURIComponent(sessionId)}`, {method:"DELETE"});
+      showPill("Sesión borrada", "read");
+      await refreshSessions(); await refreshProjects();
+      if(state.currentSessionId===sessionId){ persistUi({sessionId:null}); msgsEl.innerHTML=""; addMsg("system","Sesión borrada."); }
+    }catch(err){ alert(String(err).slice(0,400)); }
+  });
+  const btnLink = item("Vincular a proyecto", ()=>{
+    // open inline picker
+    showLinkPicker(sessionId, title);
+  });
+  menu.append(btnSave, btnDelete, btnLink);
+  return menu;
+}
+function showLinkPicker(sessionId, title){
+  closeAllSessionMenus();
+  // create floating picker card centered in drawer or as overlay
+  const existing = document.getElementById("session-link-picker");
+  if(existing) existing.remove();
+  const picker = el("div","");
+  picker.id = "session-link-picker";
+  picker.style.cssText = "position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); background:var(--panel); border:1px solid var(--border2); border-radius:12px; padding:14px; min-width:280px; max-width:88vw; z-index:99; box-shadow:var(--shadow); display:grid; gap:10px;";
+  const h = el("div","", `Vincular "${(title||sessionId).slice(0,28)}" a proyecto`);
+  h.style.cssText = "font-weight:700; font-size:13px; color:var(--text);";
+  const sel = document.createElement("select");
+  sel.className = "input"; sel.style.width="100%";
+  const none = document.createElement("option"); none.value=""; none.textContent="— elige proyecto —"; sel.appendChild(none);
+  const available = (state.projects||[]).filter(p=> !p.archivedAt);
+  for(const p of available){ const o=document.createElement("option"); o.value=p.id; o.textContent=p.name; sel.appendChild(o); }
+  const rowBtns = el("div",""); rowBtns.style.cssText="display:flex; gap:8px;";
+  const btnOk = el("button","btn primary", "Vincular"); btnOk.style.flex="1";
+  const btnCancel = el("button","btn","Cancelar"); btnCancel.style.flex="1";
+  const err = el("div","muted",""); err.style.cssText="font-size:11px; color:var(--err); min-height:12px;";
+  rowBtns.append(btnOk, btnCancel);
+  picker.append(h, sel, rowBtns, err);
+  document.body.appendChild(picker);
+  sel.focus();
+  btnCancel.onclick = ()=> picker.remove();
+  picker.addEventListener("keydown", e=>{ if(e.key==="Escape") picker.remove(); });
+  // click outside closes
+  setTimeout(()=>{
+    const onDoc = (e)=>{ if(e.target instanceof Element && !picker.contains(e.target)){ picker.remove(); document.removeEventListener("click", onDoc, true); } };
+    document.addEventListener("click", onDoc, true);
+  }, 50);
+  btnOk.onclick = async ()=>{
+    const pid = sel.value;
+    if(!pid){ err.textContent="Selecciona un proyecto"; return; }
+    btnOk.disabled=true; err.textContent="Vinculando…";
+    try{
+      const r = await fetch(`/api/projects/${encodeURIComponent(pid)}/sessions`, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({sessionId, title})});
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.error||r.status);
+      picker.remove();
+      await refreshProjects(); renderDrawer();
+      showPill(`Vinculado a "${(state.projects.find(p=>p.id===pid)?.name||pid).slice(0,28)}"`, "read");
+    }catch(e){ err.textContent=String(e.message||e).slice(0,300); btnOk.disabled=false; }
+  };
+}
 // Row for managed project session — shows title + lastUsed and loads into composer on click (spec 3)
 function managedSessionRowEl(s, proj){
   const id = s.id;
-  const row = el("button","session-row");
+  const row = el("div","session-row");
   row.dataset.sessionId = id;
-  row.title = id + (s._entry && s._entry.summary ? "\n"+s._entry.summary : "");
   row.dataset.hasHandler = "1";
   const when = s.lastUsed ? fmtDate(s.lastUsed) : "";
-  row.innerHTML = `<span class="session-title">${(s.title||id.slice(0,8))}</span><span class="session-sub">${when || new Date(s._entry && s._entry.createdAt || Date.now()).toLocaleDateString()}</span>`;
   if(state.currentSessionId===id) row.classList.add("active");
-  row.onclick = ()=> {
-    // Spec 3: clicking loads session into composer (selectSession handles project context)
-    // Also persist active projectId/sessionId (spec 5)
+  const main = el("button","session-row-main");
+  main.title = id + (s._entry && s._entry.summary ? "\n"+s._entry.summary : "");
+  main.innerHTML = `<span class="session-title">${(s.title||id.slice(0,8))}</span><span class="session-sub">${when || new Date(s._entry && s._entry.createdAt || Date.now()).toLocaleDateString()}</span>`;
+  main.onclick = (e)=> {
+    e.stopPropagation();
+    if(e.target.closest(".session-kebab") || e.target.closest(".session-menu")) return;
     persistUi({ projectId: proj.id, sessionId: id, project: proj.name });
     selectSession(id);
     drawerCtl?.setOpen?.(false);
   };
+  const kebab = el("button","session-kebab","⋮");
+  kebab.title = "Acciones";
+  kebab.setAttribute("aria-label","Más acciones");
+  const menu = sessionMenuForRow(id, s.title||id.slice(0,8), {projectId: proj.id});
+  kebab.onclick = (e)=>{ e.stopPropagation(); const wasHidden = menu.classList.contains("hidden"); closeAllSessionMenus(); if(wasHidden) menu.classList.remove("hidden"); };
+  row.append(main, kebab, menu);
   row.oncontextmenu = async (e)=>{
     e.preventDefault();
     if(confirm(`Desasociar sesión "${s.title||id.slice(0,8)}" de "${proj.name}"?`)){
@@ -485,7 +676,6 @@ function managedSessionRowEl(s, proj){
         const r = await fetch(`/api/projects/${encodeURIComponent(proj.id)}/sessions/${encodeURIComponent(id)}`, {method:"DELETE"});
         const j = await r.json();
         if(!j.ok) throw new Error(j.error || r.status);
-        // Touch lastUsed locally then re-render
         await refreshProjects();
         if(state.currentSessionId===id){
           persistUi({ sessionId: null });
@@ -500,20 +690,27 @@ function managedSessionRowEl(s, proj){
 function sessionRowEl(s){
   const id = s.id || s.ID || s.sessionID || s.sessionId;
   const title = s.title || s.name || id.slice(0,8);
-  const row = el("button","session-row");
+  const row = el("div","session-row");
   row.dataset.sessionId = id;
-  row.title = id;
   row.dataset.hasHandler = "1";
-  // Standalone session: show lastUsed if present, else model/date
-  const last = s.updatedAt || s.updated_at || s.lastUsed || s.createdAt;
-  row.innerHTML = `<span class="session-title">${title}</span><span class="session-sub">${(s.model?.id||s.model||"").toString().slice(0,10) || (last ? fmtDate(last) : new Date(s.createdAt||Date.now()).toLocaleDateString())}</span>`;
   if(state.currentSessionId===id) row.classList.add("active");
-  row.onclick = ()=> {
-    // Load into composer (spec 3): standalone session loads without project context, but remembers sessionId
+  const last = s.updatedAt || s.updated_at || s.lastUsed || s.createdAt;
+  const sub = (s.model?.id||s.model||"").toString().slice(0,10) || (last ? fmtDate(last) : new Date(s.createdAt||Date.now()).toLocaleDateString());
+  const main = el("button","session-row-main");
+  main.title = id;
+  main.innerHTML = `<span class="session-title">${title}</span><span class="session-sub">${sub}</span>`;
+  main.onclick = (e)=>{
+    e.stopPropagation();
+    if(e.target.closest(".session-kebab") || e.target.closest(".session-menu")) return;
     persistUi({ sessionId: id });
     selectSession(id);
     drawerCtl?.setOpen?.(false);
   };
+  const kebab = el("button","session-kebab","⋮");
+  kebab.title = "Acciones";
+  const menu = sessionMenuForRow(id, title, {});
+  kebab.onclick = (e)=>{ e.stopPropagation(); const wasHidden = menu.classList.contains("hidden"); closeAllSessionMenus(); if(wasHidden) menu.classList.remove("hidden"); };
+  row.append(main, kebab, menu);
   row.oncontextmenu = async (e)=>{ e.preventDefault(); if(confirm(`Borrar sesión ${title}?`)){ try{ await fetch(`/opencode/session/${id}`,{method:"DELETE"}); await refreshSessions(); }catch(err){ alert(String(err).slice(0,400)); } } };
   return row;
 }
@@ -544,6 +741,7 @@ async function selectSession(id){
       const r = role==="user"||role==="human" ? "user" : (role==="system"?"system":"assistant");
       addMsg(r, String(text).slice(0,8000));
     });
+    scrollToBottom();
     hidePill();
     // Touch lastUsed for managed project association if any
     if(state.currentProjectId){
