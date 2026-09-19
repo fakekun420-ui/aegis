@@ -235,7 +235,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         return false
     }
 
-    @androidx.webkit.JavascriptInterface
+    @android.webkit.JavascriptInterface
     fun onVoiceModeChanged(duplex: Boolean) {
         duplexEnabledInSession = duplex
         android.util.Log.i("OpenCodeWake", "onVoiceModeChanged duplex=$duplex")
