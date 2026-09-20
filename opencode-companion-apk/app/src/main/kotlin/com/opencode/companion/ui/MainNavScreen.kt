@@ -86,7 +86,8 @@ fun MainNavScreen(
                     sessionId = "",
                     vm = draftVm,
                     onBack = { },
-                    onVoice = { }
+                    onVoice = { },
+                    showTopBar = false
                 )
             }
         }

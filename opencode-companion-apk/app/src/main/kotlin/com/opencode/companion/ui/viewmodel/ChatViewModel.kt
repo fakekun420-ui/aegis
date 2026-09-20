@@ -5,10 +5,16 @@ import androidx.lifecycle.viewModelScope
 import com.opencode.companion.data.ApiClient
 import com.opencode.companion.data.AttachedFile
 import com.opencode.companion.data.Message
+import com.opencode.companion.data.MessageDeliveryStatus
+import com.opencode.companion.data.MessageInfo
+import com.opencode.companion.data.MessagePart
 import com.opencode.companion.data.ModelOption
 import com.opencode.companion.data.SendMessageRequest
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 
@@ -30,11 +36,24 @@ class ChatViewModel : ViewModel() {
     private val _selectedModel = MutableStateFlow<String?>(null)
     val selectedModel: StateFlow<String?> = _selectedModel
 
+    private val _selectedProvider = MutableStateFlow<String>("opencode")
+    val selectedProvider: StateFlow<String> = _selectedProvider
+
     private val _currentSessionId = MutableStateFlow<String?>(null)
     val currentSessionId: StateFlow<String?> = _currentSessionId
 
+    private var pollingJob: Job? = null
+
     fun selectModel(modelId: String?) {
         _selectedModel.value = modelId
+    }
+
+    fun selectProvider(provider: String) {
+        _selectedProvider.value = provider.lowercase().trim()
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 
     fun loadModels() {
@@ -51,7 +70,11 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun load(sessionId: String) {
+    fun load(sessionId: String, provider: String? = null) {
+        pollingJob?.cancel()
+        if (provider != null) {
+            _selectedProvider.value = provider.lowercase().trim()
+        }
         if (sessionId.isBlank()) {
             loadModels()
             return
@@ -66,66 +89,196 @@ class ChatViewModel : ViewModel() {
                 if (resp.ok && resp.data != null) {
                     _messages.value = resp.data.filterNot { it.isEmpty }
                 } else if (!resp.ok) {
-                    _error.value = resp.error
+                    _error.value = resp.error ?: "Error al obtener mensajes"
                 }
             } catch (e: Exception) {
-                _error.value = e.message
-            } finally { _loading.value = false }
+                _error.value = e.localizedMessage ?: e.message ?: "Error de conexión con el servidor"
+            } finally {
+                _loading.value = false
+            }
         }
     }
 
-    fun send(sessionId: String, text: String) {
-        sendWithFiles(sessionId, text, emptyList())
+    fun send(sessionId: String, text: String, provider: String? = null) {
+        sendWithFiles(sessionId, text, emptyList(), provider)
     }
 
-    fun sendWithFiles(sessionId: String, text: String, files: List<AttachedFile>) {
+    fun retryMessage(failedMsg: Message, sessionId: String) {
+        val text = failedMsg.text
+        val files = failedMsg.fileParts().mapNotNull { fp ->
+            if (fp.filename != null) {
+                AttachedFile(
+                    name = fp.filename,
+                    size = fp.data?.length?.toLong() ?: 0L,
+                    mime = fp.mime ?: "text/plain",
+                    text = fp.data,
+                    base64 = if (fp.url?.startsWith("data:") == true) fp.url.substringAfter("base64,") else null
+                )
+            } else null
+        }
+        _messages.value = _messages.value.filterNot { it.info?.id == failedMsg.info?.id }
+        sendWithFiles(sessionId, text, files)
+    }
+
+    fun sendWithFiles(
+        sessionId: String,
+        text: String,
+        files: List<AttachedFile>,
+        explicitProvider: String? = null
+    ) {
         if (text.isBlank() && files.isEmpty()) return
+
+        val provider = (explicitProvider ?: _selectedProvider.value).lowercase().trim()
+        val tempMsgId = "local_${System.currentTimeMillis()}"
+
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
-            val optimisticText = if (text.isNotBlank()) text else files.joinToString(", ") { it.name }
+
+            // 1. Optimistic user message with PENDING status
+            val optimisticParts = mutableListOf<MessagePart>()
+            if (text.isNotBlank()) {
+                optimisticParts += MessagePart(type = "text", text = text)
+            }
+            for (f in files) {
+                when {
+                    f.text != null -> optimisticParts += MessagePart(type = "text", text = "Archivo ${f.name} (${f.mime}):\n```\n${f.text.take(30000)}\n```", filename = f.name, mime = f.mime)
+                    f.base64 != null -> optimisticParts += MessagePart(type = "file", filename = f.name, mime = f.mime, url = "data:${f.mime};base64,${f.base64}")
+                }
+            }
             val optimistic = Message(
-                info = com.opencode.companion.data.MessageInfo(role = "user"),
-                parts = listOf(com.opencode.companion.data.MessagePart(type = "text", text = optimisticText))
+                info = MessageInfo(id = tempMsgId, role = "user", status = MessageDeliveryStatus.PENDING),
+                parts = optimisticParts
             )
             _messages.value = _messages.value + optimistic
-            try {
-                val parts = mutableListOf<Map<String, String>>()
-                if (text.isNotBlank()) parts += mapOf("type" to "text", "text" to text)
-                for (f in files) {
-                    when {
-                        f.text != null -> parts += mapOf("type" to "text", "text" to "Archivo ${f.name} (${f.mime}):\n```\n${f.text.take(30000)}\n```")
-                        f.base64 != null -> {
-                            val dataUri = "data:${f.mime};base64,${f.base64}"
-                            parts += mapOf("type" to "file", "mime" to f.mime, "filename" to f.name, "url" to dataUri)
-                        }
+
+            // 2. Resolve Target Session ID
+            val activeSessionId = sessionId.ifBlank { _currentSessionId.value ?: "" }
+            val targetSessionId = if (activeSessionId.isBlank()) createNewSession(provider) else activeSessionId
+            if (targetSessionId == null) {
+                _error.value = "No se pudo crear o resolver la sesión en el servidor"
+                _messages.value = _messages.value.map {
+                    if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
+                }
+                _loading.value = false
+                return@launch
+            }
+            _currentSessionId.value = targetSessionId
+
+            // 3. Prepare payload parts
+            val reqParts = mutableListOf<Map<String, String>>()
+            if (text.isNotBlank()) reqParts += mapOf("type" to "text", "text" to text)
+            for (f in files) {
+                when {
+                    f.text != null -> reqParts += mapOf("type" to "text", "text" to "Archivo ${f.name} (${f.mime}):\n```\n${f.text.take(30000)}\n```")
+                    f.base64 != null -> {
+                        val dataUri = "data:${f.mime};base64,${f.base64}"
+                        reqParts += mapOf("type" to "file", "mime" to f.mime, "filename" to f.name, "url" to dataUri)
                     }
                 }
-                val targetSessionId = if (sessionId.isBlank()) createNewSession() else sessionId
-                if (targetSessionId == null) {
-                    _error.value = "No se pudo crear la sesión"
-                    _loading.value = false
-                    return@launch
+            }
+
+            val countBefore = _messages.value.size
+            var messageDelivered = false
+
+            // 4. Start active background polling in parallel to catch assistant output or SSE stream completions
+            pollingJob?.cancel()
+            pollingJob = launch {
+                // Poll every 1.5s for up to 50 attempts (~75s)
+                for (attempt in 1..50) {
+                    delay(1500)
+                    if (!isActive || messageDelivered) break
+                    try {
+                        val pollResp = api.getMessages(targetSessionId)
+                        if (pollResp.ok && pollResp.data != null) {
+                            val nonEmpties = pollResp.data.filterNot { it.isEmpty }
+                            // Check if a new assistant message arrived
+                            val hasAssistant = nonEmpties.any { it.role == "assistant" && !it.isEmpty }
+                            if (hasAssistant && nonEmpties.size >= countBefore) {
+                                _messages.value = nonEmpties
+                                _loading.value = false
+                                messageDelivered = true
+                                break
+                            }
+                        }
+                    } catch (_: Exception) { }
                 }
-                _currentSessionId.value = targetSessionId
-                api.sendMessage(targetSessionId, SendMessageRequest(parts = parts))
-                kotlinx.coroutines.delay(600)
-                val resp = api.getMessages(targetSessionId)
-                if (resp.ok && resp.data != null) {
-                    _messages.value = resp.data.filterNot { it.isEmpty }
+            }
+
+            // 5. Send message via Retrofit with explicit provider and model
+            try {
+                val sendReq = SendMessageRequest(
+                    parts = reqParts,
+                    model = _selectedModel.value,
+                    provider = provider
+                )
+                val responseMsg = api.sendMessage(
+                    sessionId = targetSessionId,
+                    body = sendReq,
+                    provider = provider
+                )
+
+                // If responseMsg arrived directly with assistant parts
+                if (!responseMsg.isEmpty) {
+                    messageDelivered = true
+                    pollingJob?.cancel()
+
+                    // Mark user message as SENT and append response
+                    val updated = _messages.value.map {
+                        if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
+                    }
+                    val exists = updated.any { it.info?.id == responseMsg.info?.id }
+                    _messages.value = if (exists) updated else updated + responseMsg
+                    _loading.value = false
+                }
+
+                // Follow-up sync to get canonical messages from DB
+                delay(400)
+                val syncResp = api.getMessages(targetSessionId)
+                if (syncResp.ok && syncResp.data != null) {
+                    val synced = syncResp.data.filterNot { it.isEmpty }
+                    if (synced.isNotEmpty()) {
+                        _messages.value = synced
+                    }
                 }
             } catch (e: Exception) {
-                _error.value = e.message ?: "Error de red"
-            } finally { _loading.value = false }
+                // Check if background polling already retrieved the response
+                val hasAssistantNow = _messages.value.any { it.role == "assistant" && it.info?.id != tempMsgId }
+                if (!hasAssistantNow && !messageDelivered) {
+                    // Try one last fast getMessages attempt before declaring failure
+                    try {
+                        delay(600)
+                        val lastTry = api.getMessages(targetSessionId)
+                        if (lastTry.ok && lastTry.data != null) {
+                            val list = lastTry.data.filterNot { it.isEmpty }
+                            if (list.any { it.role == "assistant" }) {
+                                _messages.value = list
+                                _loading.value = false
+                                return@launch
+                            }
+                        }
+                    } catch (_: Exception) { }
+
+                    _messages.value = _messages.value.map {
+                        if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
+                    }
+                    _error.value = "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
+                }
+            } finally {
+                _loading.value = false
+                pollingJob?.cancel()
+            }
         }
     }
 
-    private suspend fun createNewSession(): String? {
+    private suspend fun createNewSession(provider: String = "opencode"): String? {
         return try {
             val title = "companion:${System.currentTimeMillis() % 100000}"
+            val bodyJson = "{\"title\":\"${title.replace("\"", "\\\"")}\",\"provider\":\"$provider\"}"
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:8765/opencode/session")
-                .post(okhttp3.RequestBody.create("application/json".toMediaType(), "{\"title\":\"${title.replace("\"", "\\\"")}\"}"))
+                .header("X-Provider", provider)
+                .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
                 .build()
             val resp = ApiClient.rawOkHttp.newCall(req).execute()
             val body = resp.body?.string() ?: return null

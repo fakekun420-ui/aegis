@@ -110,7 +110,14 @@ fun AppNavHost() {
         composable(NavRoutes.CHAT_PLACEHOLDER, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->
             val sid = backStack.arguments?.getString("sessionId") ?: ""
             val chatVm: ChatViewModel = viewModel(key = "chat_$sid")
-            ChatScreen(sessionId = sid, vm = chatVm, onBack = { navController.popBackStack() }, onVoice = { navController.navigate(NavRoutes.voice(sid)) })
+            val session = sessions.find { it.id == sid }
+            ChatScreen(
+                sessionId = sid,
+                vm = chatVm,
+                onBack = { navController.popBackStack() },
+                onVoice = { navController.navigate(NavRoutes.voice(sid)) },
+                sessionProvider = session?.provider
+            )
         }
         composable(NavRoutes.VOICE, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->
             val sid = backStack.arguments?.getString("sessionId") ?: ""

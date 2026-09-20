@@ -10,18 +10,20 @@ import android.speech.tts.TextToSpeech
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -30,13 +32,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.opencode.companion.data.AttachedFile
 import com.opencode.companion.data.Message
+import com.opencode.companion.data.MessageDeliveryStatus
 import com.opencode.companion.ui.viewmodel.ChatViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -48,7 +55,9 @@ fun ChatScreen(
     sessionId: String,
     vm: ChatViewModel,
     onBack: () -> Unit,
-    onVoice: () -> Unit = {}
+    onVoice: () -> Unit = {},
+    showTopBar: Boolean = sessionId.isNotBlank(),
+    sessionProvider: String? = null
 ) {
     val context = LocalContext.current
     val messages by vm.messages.collectAsState()
@@ -63,12 +72,12 @@ fun ChatScreen(
 
     LaunchedEffect(sessionId) { vm.load(sessionId) }
 
-    // Auto-scroll on new messages / initial load (double-frame + tts queue drain analog)
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            // Wait for layout pass
-            delay(60)
-            try { listState.animateScrollToItem(messages.size - 1) } catch (_: Exception) {}
+    // Auto-scroll on new messages / loading state changes
+    LaunchedEffect(messages.size, loading) {
+        val totalCount = messages.size + (if (loading && messages.isNotEmpty()) 1 else 0)
+        if (totalCount > 0) {
+            delay(80)
+            try { listState.animateScrollToItem(totalCount - 1) } catch (_: Exception) {}
         }
     }
 
@@ -173,22 +182,41 @@ fun ChatScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(sessionId.take(8), maxLines = 1) },
-                navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
-                actions = {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics { contentDescription = if (duplex) "Conversación" else "Texto" }) {
-                        Text(if (duplex) "Conversación" else "Texto", style = MaterialTheme.typography.labelSmall)
-                        Switch(checked = duplex, onCheckedChange = { v ->
-                            duplex = v
-                            if (v) scheduleDuplexRestart(600) else { duplexJob?.cancel(); try { recognizer?.cancel() } catch (_: Exception) {}; listening = false }
-                        }, modifier = Modifier.semantics { contentDescription = if (duplex) "Modo Conversación activado" else "Modo Texto activado" })
+            if (showTopBar) {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(sessionId.take(8).ifBlank { "Chat" }, maxLines = 1)
+                            if (!sessionProvider.isNullOrBlank()) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(
+                                        text = sessionProvider.replaceFirstChar { it.uppercase() },
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
+                    actions = {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics { contentDescription = if (duplex) "Conversación" else "Texto" }) {
+                            Text(if (duplex) "Conversación" else "Texto", style = MaterialTheme.typography.labelSmall)
+                            Switch(checked = duplex, onCheckedChange = { v ->
+                                duplex = v
+                                if (v) scheduleDuplexRestart(600) else { duplexJob?.cancel(); try { recognizer?.cancel() } catch (_: Exception) {}; listening = false }
+                            }, modifier = Modifier.semantics { contentDescription = if (duplex) "Modo Conversación activado" else "Modo Texto activado" })
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         bottomBar = {
-            Column {
+            Column(modifier = Modifier.navigationBarsPadding().imePadding()) {
                 if (attachedFiles.isNotEmpty()) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -260,43 +288,109 @@ fun ChatScreen(
         }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                loading && messages.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                error != null && messages.isEmpty() -> Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Error: $error", color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { vm.load(sessionId) }) { Text("Reintentar") }
-                }
-                messages.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(
-                            Icons.Filled.SmartToy,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            "Hablemos",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            "Escribe un mensaje para comenzar",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            Column(Modifier.fillMaxSize()) {
+                if (error != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = error ?: "Error de comunicación",
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { vm.clearError() },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "Cerrar",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                 }
-                else -> LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(messages, key = { it.info?.id ?: it.hashCode().toString() }) { msg ->
-                        MessageBubble(msg)
+                Box(Modifier.fillMaxSize().weight(1f)) {
+                    when {
+                        loading && messages.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                        messages.isEmpty() -> Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.SmartToy,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    "Hablemos",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "Escribe un mensaje para comenzar",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                val suggestionPrompts = listOf(
+                                    "¿Qué puedes hacer?",
+                                    "Explícame la arquitectura del proyecto",
+                                    "Comprueba el estado del sistema"
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                                ) {
+                                    suggestionPrompts.forEach { prompt ->
+                                        SuggestionChip(
+                                            onClick = {
+                                                composerText = prompt
+                                            },
+                                            label = { Text(prompt, style = MaterialTheme.typography.bodySmall) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        else -> LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(messages, key = { it.info?.id ?: it.hashCode().toString() }) { msg ->
+                                MessageBubble(msg, onRetry = {
+                                    if (sessionId.isNotBlank()) vm.retryMessage(msg, sessionId)
+                                })
+                            }
+                            if (loading) {
+                                item {
+                                    AssistantTypingBubble()
+                                }
+                            }
+                        }
                     }
-                    if (loading) { item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) } } }
                 }
             }
             if (sttError != null) {
@@ -406,16 +500,17 @@ private fun FileRow(name: String, mime: String, tint: androidx.compose.ui.graphi
 }
 
 @Composable
-private fun MessageBubble(msg: Message) {
+private fun MessageBubble(msg: Message, onRetry: (() -> Unit)? = null) {
     val isUser = msg.role == "user"
     val raw = msg.text
     val isMem = msg.isMemoryContext()
     val stripped = if (isMem) msg.strippedText() else raw
+    val deliveryStatus = msg.info?.deliveryStatus ?: if (isUser) MessageDeliveryStatus.SENT else null
 
-        val files = msg.fileParts()
-        val images = msg.imageParts()
-        val imageFiles = files.filter { it.mime?.startsWith("image/") == true && it.url != null }
-        val nonImageFiles = files.filter { !(it.mime?.startsWith("image/") == true && it.url != null) }
+    val files = msg.fileParts()
+    val images = msg.imageParts()
+    val imageFiles = files.filter { it.mime?.startsWith("image/") == true && it.url != null }
+    val nonImageFiles = files.filter { !(it.mime?.startsWith("image/") == true && it.url != null) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -465,7 +560,7 @@ private fun MessageBubble(msg: Message) {
             bottomEnd = if (isUser) 4.dp else 16.dp
         )
         Surface(color = bubbleColor, shape = shape, modifier = Modifier.fillMaxWidth(0.86f)) {
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Image previews (legacy type:"image" parts)
                 images.forEach { img ->
                     val bitmap = (img.image ?: img.data ?: img.url)?.let { decodeBase64Bitmap(it) }
@@ -507,6 +602,136 @@ private fun MessageBubble(msg: Message) {
                 } else if (images.isEmpty() && imageFiles.isEmpty() && nonImageFiles.isEmpty()) {
                     Text("(vacío)", color = contentColor.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
                 }
+
+                // Delivery Status for User Messages
+                if (isUser && deliveryStatus != null) {
+                    Row(
+                        modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        when (deliveryStatus) {
+                            MessageDeliveryStatus.PENDING -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(10.dp),
+                                    strokeWidth = 1.5.dp,
+                                    color = contentColor.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    "Enviando…",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = contentColor.copy(alpha = 0.7f)
+                                )
+                            }
+                            MessageDeliveryStatus.ERROR -> {
+                                Icon(
+                                    Icons.Filled.ErrorOutline,
+                                    contentDescription = "Error",
+                                    tint = MaterialTheme.colorScheme.errorContainer,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    "Error al enviar",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = MaterialTheme.colorScheme.errorContainer
+                                )
+                                if (onRetry != null) {
+                                    Text(
+                                        "• Reintentar",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        ),
+                                        color = MaterialTheme.colorScheme.errorContainer,
+                                        modifier = Modifier.clickable { onRetry() }
+                                    )
+                                }
+                            }
+                            MessageDeliveryStatus.SENT -> {
+                                Icon(
+                                    Icons.Filled.Done,
+                                    contentDescription = "Enviado",
+                                    tint = contentColor.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AssistantTypingBubble() {
+    val infiniteTransition = rememberInfiniteTransition(label = "typing_dots")
+    val dot1 by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, delayMillis = 0, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot1"
+    )
+    val dot2 by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, delayMillis = 180, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot2"
+    )
+    val dot3 by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, delayMillis = 360, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot3"
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.Start
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp),
+            modifier = Modifier.padding(vertical = 4.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dot1),
+                            shape = CircleShape
+                        )
+                )
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dot2),
+                            shape = CircleShape
+                        )
+                )
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dot3),
+                            shape = CircleShape
+                        )
+                )
             }
         }
     }
@@ -524,19 +749,36 @@ private fun ComposerBar(
 ) {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            IconButton(onClick = onAttach, modifier = Modifier.semantics { contentDescription = "Adjuntar archivo" }) { Icon(Icons.Filled.AttachFile, contentDescription = "Adjuntar archivo") }
+            IconButton(onClick = onAttach, modifier = Modifier.semantics { contentDescription = "Adjuntar archivo" }) {
+                Icon(Icons.Filled.AttachFile, contentDescription = "Adjuntar archivo")
+            }
             OutlinedTextField(
                 value = text,
                 onValueChange = onTextChange,
-                modifier = Modifier.weight(1f).semantics { contentDescription = "Escribe un mensaje" },
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = "Escribe un mensaje" },
                 placeholder = { Text("Escribe un mensaje…") },
-                maxLines = 5
+                maxLines = 5,
+                shape = RoundedCornerShape(20.dp)
             )
-            IconButton(onClick = onSend, enabled = text.isNotBlank(), modifier = Modifier.semantics { contentDescription = "Enviar mensaje" }) { Icon(Icons.Filled.Send, contentDescription = "Enviar mensaje") }
+            IconButton(
+                onClick = onSend,
+                enabled = text.isNotBlank(),
+                modifier = Modifier.semantics { contentDescription = "Enviar mensaje" }
+            ) {
+                Icon(
+                    Icons.Filled.Send,
+                    contentDescription = "Enviar mensaje",
+                    tint = if (text.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+            }
             IconButton(onClick = onMic, modifier = Modifier.semantics { contentDescription = if (listening) "Dejar de escuchar" else "Hablar" }) {
                 Icon(
                     if (listening) Icons.Filled.Mic else Icons.Filled.MicNone,

@@ -44,7 +44,12 @@ interface ApiService {
 
     // Send message via hub proxy POST /opencode/session/:id/message (handles injection)
     @POST("opencode/session/{id}/message")
-    suspend fun sendMessage(@Path("id") sessionId: String, @Body body: SendMessageRequest): Message
+    suspend fun sendMessage(
+        @Path("id") sessionId: String,
+        @Body body: SendMessageRequest,
+        @Header("X-Provider") provider: String? = null,
+        @Header("X-Project-Id") projectId: String? = null
+    ): Message
 
     @GET("api/system/status")
     suspend fun systemStatus(): SystemStatus

@@ -77,11 +77,17 @@ data class OpencodeSession(
 }
 
 // ---- Messages (GET /session/:id/message proxied via hub) ----
+enum class MessageDeliveryStatus { PENDING, SENT, ERROR }
+
 data class MessageInfo(
     val id: String? = null,
     val role: String? = null,
-    val time: Map<String, Any>? = null
-)
+    val time: Map<String, Any>? = null,
+    val status: MessageDeliveryStatus? = MessageDeliveryStatus.SENT
+) {
+    val deliveryStatus: MessageDeliveryStatus get() = status ?: MessageDeliveryStatus.SENT
+}
+
 data class MessagePart(
     val id: String? = null,
     val type: String? = null,
@@ -92,6 +98,7 @@ data class MessagePart(
     val image: String? = null,
     val url: String? = null
 )
+
 data class Message(
     val info: MessageInfo? = null,
     val parts: List<MessagePart>? = null
@@ -114,10 +121,18 @@ data class Message(
     val isEmpty: Boolean get() = text.isBlank() && strippedText().isBlank() && fileParts().isEmpty() && imageParts().isEmpty()
     fun fileParts(): List<MessagePart> = parts?.filter { it.type == "file" } ?: emptyList()
     fun imageParts(): List<MessagePart> = parts?.filter { it.type == "image" } ?: emptyList()
+
+    val isPending: Boolean get() = info?.deliveryStatus == MessageDeliveryStatus.PENDING
+    val isError: Boolean get() = info?.deliveryStatus == MessageDeliveryStatus.ERROR
+
+    fun withStatus(newStatus: MessageDeliveryStatus): Message =
+        copy(info = (info ?: MessageInfo()).copy(status = newStatus))
 }
 
 data class SendMessageRequest(
-    val parts: List<Map<String, String>>
+    val parts: List<Map<String, String>>,
+    val model: String? = null,
+    val provider: String? = null
 )
 
 data class Skill(
