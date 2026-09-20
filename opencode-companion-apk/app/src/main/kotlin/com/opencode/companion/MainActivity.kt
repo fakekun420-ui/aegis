@@ -168,27 +168,20 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             try {
                 val script = "/sdcard/projects/opencode-companion/keepalive.sh"
                 val sysLog = "/sdcard/projects/opencode-companion/hub-startup.log"
-                val direct = arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; test -x /usr/bin/node && { nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo direct; } || echo need_host")
-                var hostUsed = false
+                // su shell joins the caller mount ns, which DOES have /usr/bin/node
+                // (verified: su -c 'test -x /usr/bin/node' -> YES). The old pid-guess
+                // found only adb fork-server (ns 5555, /proc/PID/root resolves in OUR
+                // ns, not the app's) and nsenter -t <adb-pid> -m dropped keepalive
+                // into a ns without node -> infinite relaunch loop, 45s timeout.
+                // Fix: launch keepalive.sh directly in the su shell, no nsenter.
+                // keepalive.sh self-backgrounds (--no-daemon) and owns the poll loop.
+                val direct = arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched")
                 val proc = Runtime.getRuntime().exec(direct)
                 execExit = proc.waitFor()
                 val outText = try { proc.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
                 val errText = try { proc.errorStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
                 android.util.Log.i("OpenCodeBoot", "keepalive exec exit=$execExit out=${outText.take(120)} err=${errText.take(300)}")
-                if (outText.contains("need_host") || (execExit == 0 && !outText.contains("direct"))) {
-                    // system mount lacks /usr/bin/node: find host pid with node and nsenter there
-                    hostUsed = true
-                    val find = Runtime.getRuntime().exec(arrayOf("su", "-c", "for p in \$(ls /proc 2>/dev/null | grep -E '^[0-9]+\$' | head -n 400); do [ -x /proc/\$p/root/usr/bin/node ] 2>/dev/null && { echo \$p; break; }; done"))
-                    val hostPid = try { find.inputStream.bufferedReader().readText().trim().lines().firstOrNull()?.trim() } catch (_: Exception) { null }
-                    android.util.Log.i("OpenCodeBoot", "keepalive hostPid=$hostPid")
-                    if (!hostPid.isNullOrBlank()) {
-                        val re = Runtime.getRuntime().exec(arrayOf("su", "-c", "nsenter -t $hostPid -m -- sh \"$script\" >> \"$sysLog\" 2>&1 &"))
-                        execExit = re.waitFor()
-                        android.util.Log.i("OpenCodeBoot", "keepalive nsenter exit=$execExit pid=$hostPid")
-                    } else {
-                        execExit = 99
-                    }
-                }
+                if (!outText.contains("launched")) execExit = 98
             } catch (e: Exception) {
                 android.util.Log.e("OpenCodeBoot", "keepalive exec exception", e)
                 withContext(Dispatchers.Main) { isStartingSystem = false }
