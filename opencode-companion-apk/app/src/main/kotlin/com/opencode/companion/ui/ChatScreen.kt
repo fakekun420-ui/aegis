@@ -694,9 +694,9 @@ private fun AssistantTypingBubble() {
         label = "dot3"
     )
 
-    Row(
+    Box(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.Start
+        contentAlignment = Alignment.CenterStart
     ) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
