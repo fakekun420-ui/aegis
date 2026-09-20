@@ -174,7 +174,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 // Robust fix: COPY node into /sdcard (shared into app ns, verified
                 // visible via nsenter -t <app> -m) as node.bin, then run keepalive
                 // IN the app ns with NODE_BIN pointing at the staged copy. No nsenter.
-                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", """ST=/sdcard/projects/opencode-companion/node.bin; [ -x /usr/bin/node ] && SRC=/usr/bin/node || SRC=$(command -v node 2>/dev/null); if [ -n "$SRC" ]; then [ "$ST" -ot "$SRC" ] 2>/dev/null || [ ! -x "$ST" ] && cp "$SRC" "$ST" && chmod 755 "$ST"; ls -la "$ST"; else echo NO-SRC; fi"""))
+                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", "ST=/sdcard/projects/opencode-companion/node.bin; [ -x /usr/bin/node ] && SRC=/usr/bin/node || SRC=$(command -v node 2>/dev/null); if [ -n "$SRC" ]; then [ "$ST" -ot "$SRC" ] 2>/dev/null || [ ! -x "$ST" ] && cp "$SRC" "$ST" && chmod 755 "$ST"; ls -la "$ST"; else echo NO-SRC; fi"))
                 val stageOut = try { stage.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
                 android.util.Log.i("OpenCodeBoot", "keepalive stage: ${stageOut.take(200)}")
                 val stagedBin = "/sdcard/projects/opencode-companion/node.bin"
