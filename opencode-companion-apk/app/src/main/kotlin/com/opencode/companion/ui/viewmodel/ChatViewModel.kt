@@ -10,12 +10,14 @@ import com.opencode.companion.data.MessageInfo
 import com.opencode.companion.data.MessagePart
 import com.opencode.companion.data.ModelOption
 import com.opencode.companion.data.SendMessageRequest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 
 class ChatViewModel : ViewModel() {
@@ -271,8 +273,8 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    private suspend fun createNewSession(provider: String = "opencode"): String? {
-        return try {
+    private suspend fun createNewSession(provider: String = "opencode"): String? = withContext(Dispatchers.IO) {
+        try {
             val title = "companion:${System.currentTimeMillis() % 100000}"
             val bodyJson = "{\"title\":\"${title.replace("\"", "\\\"")}\",\"provider\":\"$provider\"}"
             val req = okhttp3.Request.Builder()
@@ -281,7 +283,7 @@ class ChatViewModel : ViewModel() {
                 .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
                 .build()
             val resp = ApiClient.rawOkHttp.newCall(req).execute()
-            val body = resp.body?.string() ?: return null
+            val body = resp.body?.string() ?: return@withContext null
             val j = com.google.gson.JsonParser.parseString(body).asJsonObject
             when {
                 j.has("id") -> j.get("id").asString

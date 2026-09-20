@@ -381,7 +381,7 @@ fun ChatScreen(
                         ) {
                             items(messages, key = { it.info?.id ?: it.hashCode().toString() }) { msg ->
                                 MessageBubble(msg, onRetry = {
-                                    if (sessionId.isNotBlank()) vm.retryMessage(msg, sessionId)
+                                    vm.retryMessage(msg, sessionId)
                                 })
                             }
                             if (loading) {
