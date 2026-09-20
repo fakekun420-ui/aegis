@@ -10,6 +10,7 @@ import com.opencode.companion.data.SendMessageRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
 
 class ChatViewModel : ViewModel() {
     private val api = ApiClient.service
@@ -28,6 +29,9 @@ class ChatViewModel : ViewModel() {
 
     private val _selectedModel = MutableStateFlow<String?>(null)
     val selectedModel: StateFlow<String?> = _selectedModel
+
+    private val _currentSessionId = MutableStateFlow<String?>(null)
+    val currentSessionId: StateFlow<String?> = _currentSessionId
 
     fun selectModel(modelId: String?) {
         _selectedModel.value = modelId
@@ -48,6 +52,11 @@ class ChatViewModel : ViewModel() {
     }
 
     fun load(sessionId: String) {
+        if (sessionId.isBlank()) {
+            loadModels()
+            return
+        }
+        _currentSessionId.value = sessionId
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
@@ -94,9 +103,16 @@ class ChatViewModel : ViewModel() {
                         }
                     }
                 }
-                api.sendMessage(sessionId, SendMessageRequest(parts = parts))
+                val targetSessionId = if (sessionId.isBlank()) createNewSession() else sessionId
+                if (targetSessionId == null) {
+                    _error.value = "No se pudo crear la sesión"
+                    _loading.value = false
+                    return@launch
+                }
+                _currentSessionId.value = targetSessionId
+                api.sendMessage(targetSessionId, SendMessageRequest(parts = parts))
                 kotlinx.coroutines.delay(600)
-                val resp = api.getMessages(sessionId)
+                val resp = api.getMessages(targetSessionId)
                 if (resp.ok && resp.data != null) {
                     _messages.value = resp.data.filterNot { it.isEmpty }
                 }
@@ -104,5 +120,31 @@ class ChatViewModel : ViewModel() {
                 _error.value = e.message ?: "Error de red"
             } finally { _loading.value = false }
         }
+    }
+
+    private suspend fun createNewSession(): String? {
+        return try {
+            val title = "companion:${System.currentTimeMillis() % 100000}"
+            val req = okhttp3.Request.Builder()
+                .url("http://127.0.0.1:8765/opencode/session")
+                .post(okhttp3.RequestBody.create("application/json".toMediaType(), "{\"title\":\"${title.replace("\"", "\\\"")}\"}"))
+                .build()
+            val resp = ApiClient.rawOkHttp.newCall(req).execute()
+            val body = resp.body?.string() ?: return null
+            val j = com.google.gson.JsonParser.parseString(body).asJsonObject
+            when {
+                j.has("id") -> j.get("id").asString
+                j.has("ID") -> j.get("ID").asString
+                j.has("data") -> {
+                    val d = j.getAsJsonObject("data")
+                    when {
+                        d.has("id") -> d.get("id").asString
+                        d.has("ID") -> d.get("ID").asString
+                        else -> null
+                    }
+                }
+                else -> null
+            }
+        } catch (_: Exception) { null }
     }
 }

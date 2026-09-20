@@ -2,7 +2,6 @@ package com.opencode.companion.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -16,20 +15,20 @@ import com.opencode.companion.ui.viewmodel.MainViewModel
 fun AppNavHost() {
     val navController = rememberNavController()
     val vm: MainViewModel = viewModel()
+    val draftVm: ChatViewModel = viewModel(key = "draft_chat")
 
-    // Poll system ready was already handled by MainActivity overlay; Compose just shows nav.
-    // Collect state
     val projects by vm.projects.collectAsState()
     val sessions by vm.sessions.collectAsState()
 
-    NavHost(navController = navController, startDestination = NavRoutes.MAIN) {
-        composable(NavRoutes.MAIN) {
+    NavHost(navController = navController, startDestination = NavRoutes.DRAFT_CHAT) {
+        composable(NavRoutes.DRAFT_CHAT) {
             MainNavScreen(
                 projects = projects,
                 sessions = sessions,
+                draftVm = draftVm,
                 onNavigateProjects = { navController.navigate(NavRoutes.PROJECTS) },
                 onNavigateChats = { navController.navigate(NavRoutes.CHATS) },
-                onOpenProject = { id -> navController.navigate(NavRoutes.PROJECTS) },
+                onOpenProject = { id -> navController.navigate("project/$id") },
                 onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) }
             )
         }
@@ -82,9 +81,8 @@ fun AppNavHost() {
                     onUnlinkProject = { target -> detailVm.unlinkProject(target) }
                 )
             } else {
-                // Still loading project
-                androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    if (loading) androidx.compose.material3.CircularProgressIndicator() else androidx.compose.material3.Text("Proyecto no encontrado")
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (loading) CircularProgressIndicator() else Text("Proyecto no encontrado")
                 }
             }
         }
@@ -96,11 +94,11 @@ fun AppNavHost() {
                 error = vm.error.collectAsState().value,
                 onBack = { navController.popBackStack() },
                 onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) },
-                onCreateChatPlaceholder = { /* TODO: create new chat */ },
+                onCreateChatPlaceholder = { },
                 onRenameSession = { _, _ -> },
                 onPinSession = { _ -> },
                 onMoveSession = { sessionId, projectId -> vm.moveSession(sessionId, projectId) },
-                onDeleteSession = { _ -> /* needs DELETE /opencode/session/:id when spec added */ },
+                onDeleteSession = { _ -> },
                 onRefresh = { vm.refreshSessions() },
                 onClearError = { vm.clearError() }
             )
