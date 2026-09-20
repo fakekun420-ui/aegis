@@ -3,6 +3,7 @@ package com.opencode.companion.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.opencode.companion.data.*
+import okhttp3.MediaType.Companion.toMediaType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -19,6 +20,11 @@ class MainViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    private val _loadingProjects = MutableStateFlow(false)
+    val loadingProjects: StateFlow<Boolean> = _loadingProjects
+    private val _loadingSessions = MutableStateFlow(false)
+    val loadingSessions: StateFlow<Boolean> = _loadingSessions
+
     init { refreshAll() }
 
     fun refreshAll() {
@@ -26,23 +32,29 @@ class MainViewModel : ViewModel() {
         refreshSessions()
     }
 
+    fun clearError() { _error.value = null }
+
     fun refreshProjects() {
         viewModelScope.launch {
+            _loadingProjects.value = true
             try {
                 val resp = api.getProjects()
                 if (resp.ok && resp.data != null) _projects.value = resp.data
                 else _error.value = resp.error ?: "getProjects failed"
-            } catch (e: Exception) { _error.value = e.message }
+            } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
+            finally { _loadingProjects.value = false }
         }
     }
 
     fun refreshSessions() {
         viewModelScope.launch {
+            _loadingSessions.value = true
             try {
                 val resp = api.getOpencodeSessions()
                 if (resp.ok && resp.data != null) _sessions.value = resp.data
                 else _error.value = resp.error ?: "getSessions failed"
-            } catch (e: Exception) { _error.value = e.message }
+            } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
+            finally { _loadingSessions.value = false }
         }
     }
 
@@ -77,8 +89,49 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val resp = api.linkSession(projectId, LinkSessionRequest(sessionId = sessionId))
-                if (resp.ok) refreshProjects() else _error.value = resp.error
-            } catch (e: Exception) { _error.value = e.message }
+                if (resp.ok) refreshProjects() else _error.value = resp.error ?: "move failed"
+            } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
         }
+    }
+
+    suspend fun createSessionForProject(projectId: String, title: String): String? {
+        return try {
+            // Create session via hub proxy, then auto-link
+            val body = mapOf("title" to title)
+            // Direct POST to /opencode/session via ApiClient is not yet typed; use raw Retrofit via OkHttp
+            // Simpler: use api helper — add createSession endpoint lazily via generic call
+            // For now use direct OkHttp
+            val client = ApiClient.service
+            // Fallback: create via POST /opencode/session (hub proxy) using ad-hoc retrofit
+            // Easiest: use ApiClient.rawCreateSession if exists, else inline okhttp
+            val sid = createSessionViaHub(title)
+            if (sid != null) {
+                try { api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title)) } catch (_: Exception) {}
+                refreshSessions(); refreshProjects()
+            }
+            sid
+        } catch (e: Exception) { _error.value = e.message; null }
+    }
+
+    private suspend fun createSessionViaHub(title: String): String? {
+        return try {
+            val req = okhttp3.Request.Builder()
+                .url("http://127.0.0.1:8765/opencode/session")
+                .post(okhttp3.RequestBody.create("application/json".toMediaType(), "{\"title\":\"${title.replace("\"","\\\"")}\"}"))
+                .build()
+            val resp = ApiClient.rawOkHttp.newCall(req).execute()
+            val body = resp.body?.string() ?: return null
+            // Response is {id:..., ID:...} or {ok,data:{id}}
+            val json = com.google.gson.JsonParser.parseString(body).asJsonObject
+            when {
+                json.has("id") -> json.get("id").asString
+                json.has("ID") -> json.get("ID").asString
+                json.has("data") -> {
+                    val d = json.getAsJsonObject("data")
+                    when { d.has("id") -> d.get("id").asString; d.has("ID") -> d.get("ID").asString; else -> null }
+                }
+                else -> null
+            }
+        } catch (_: Exception) { null }
     }
 }

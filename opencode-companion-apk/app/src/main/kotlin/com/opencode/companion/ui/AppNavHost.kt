@@ -1,5 +1,6 @@
 package com.opencode.companion.ui
 
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,24 +36,71 @@ fun AppNavHost() {
         composable(NavRoutes.PROJECTS) {
             ProjectsScreen(
                 projects = projects,
+                isLoading = vm.loadingProjects.collectAsState().value,
+                error = vm.error.collectAsState().value,
                 onBack = { navController.popBackStack() },
-                onOpenProject = { /* already on projects; could show detail later */ },
+                onOpenProject = { id -> navController.navigate("project/$id") },
                 onCreateProject = { name, desc -> vm.createProject(name, desc) },
                 onRenameProject = { id, name -> vm.renameProject(id, name) },
-                onDeleteProject = { id -> vm.deleteProject(id) }
+                onDeleteProject = { id -> vm.deleteProject(id) },
+                onRefresh = { vm.refreshProjects() },
+                onClearError = { vm.clearError() }
             )
+        }
+        composable(
+            route = "project/{projectId}",
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+        ) { backStack ->
+            val pid = backStack.arguments?.getString("projectId") ?: return@composable
+            val detailVm: com.opencode.companion.ui.viewmodel.ProjectDetailViewModel = viewModel(key = "project_$pid")
+            val project by detailVm.project.collectAsState()
+            val detailSessions by detailVm.sessions.collectAsState()
+            val skills by detailVm.skills.collectAsState()
+            val linked by detailVm.linkedProjects.collectAsState()
+            val loading by detailVm.loading.collectAsState()
+            val err by detailVm.error.collectAsState()
+            LaunchedEffect(pid) { detailVm.load(pid) }
+            val p = project
+            if (p != null) {
+                ProjectDetailScreen(
+                    project = p,
+                    sessions = detailSessions,
+                    skills = skills,
+                    linkedProjects = linked,
+                    isLoading = loading,
+                    error = err,
+                    onBack = { navController.popBackStack() },
+                    onOpenSession = { sid -> navController.navigate(NavRoutes.chat(sid)) },
+                    onSendNewSession = { text -> detailVm.sendNewSession(pid, text) { sid -> navController.navigate(NavRoutes.chat(sid)) } },
+                    onRefresh = { detailVm.load(pid) },
+                    onClearError = { detailVm.clearError() },
+                    onCreateSkill = { scope, name, content -> detailVm.createSkill(scope, name, content) },
+                    onDeleteSkill = { scope, name -> detailVm.deleteSkill(scope, name) },
+                    onLinkProject = { target -> detailVm.linkProject(target) },
+                    onUnlinkProject = { target -> detailVm.unlinkProject(target) }
+                )
+            } else {
+                // Still loading project
+                androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    if (loading) androidx.compose.material3.CircularProgressIndicator() else androidx.compose.material3.Text("Proyecto no encontrado")
+                }
+            }
         }
         composable(NavRoutes.CHATS) {
             ChatsScreen(
                 sessions = sessions,
                 projects = projects,
+                isLoading = vm.loadingSessions.collectAsState().value,
+                error = vm.error.collectAsState().value,
                 onBack = { navController.popBackStack() },
                 onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) },
-                onCreateChatPlaceholder = { /* placeholder later */ },
+                onCreateChatPlaceholder = { /* TODO: create new chat */ },
                 onRenameSession = { _, _ -> },
                 onPinSession = { _ -> },
                 onMoveSession = { sessionId, projectId -> vm.moveSession(sessionId, projectId) },
-                onDeleteSession = { _ -> /* needs DELETE /opencode/session/:id when spec added */ }
+                onDeleteSession = { _ -> /* needs DELETE /opencode/session/:id when spec added */ },
+                onRefresh = { vm.refreshSessions() },
+                onClearError = { vm.clearError() }
             )
         }
         composable(NavRoutes.CHAT_PLACEHOLDER, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->

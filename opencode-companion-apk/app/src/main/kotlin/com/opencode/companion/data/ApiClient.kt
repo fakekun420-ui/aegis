@@ -21,6 +21,8 @@ object ApiClient {
         .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
         .build()
 
+    val rawOkHttp: OkHttpClient get() = okHttp
+
     val service: ApiService = Retrofit.Builder()
         .baseUrl(BASE_URL)
         .client(okHttp)

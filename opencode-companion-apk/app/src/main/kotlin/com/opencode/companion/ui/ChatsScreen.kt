@@ -9,8 +9,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.OpencodeSession
@@ -22,13 +25,17 @@ import com.opencode.companion.util.relativeTime
 fun ChatsScreen(
     sessions: List<OpencodeSession>,
     projects: List<Project>,
+    isLoading: Boolean = false,
+    error: String? = null,
     onBack: () -> Unit,
     onOpenSession: (String) -> Unit,
     onCreateChatPlaceholder: () -> Unit,
     onRenameSession: (String, String) -> Unit,
     onPinSession: (String) -> Unit,
     onMoveSession: (String, String) -> Unit,
-    onDeleteSession: (String) -> Unit
+    onDeleteSession: (String) -> Unit,
+    onRefresh: () -> Unit = {},
+    onClearError: () -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
     var menuTarget by remember { mutableStateOf<OpencodeSession?>(null) }
@@ -52,25 +59,44 @@ fun ChatsScreen(
         floatingActionButton = { ExtendedFloatingActionButton(onClick = onCreateChatPlaceholder, icon = { Icon(Icons.Filled.Add, null) }, text = { Text("+ Nuevo chat") }) }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar chats") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(filtered, key = { it.resolvedId.ifBlank { it.hashCode().toString() } }) { sess ->
-                    val projName = sessionToProject[sess.resolvedId]
-                    Card(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onOpenSession(sess.resolvedId) }, onLongClick = { menuTarget = sess })) {
-                        ListItem(
-                            headlineContent = { Text(sess.resolvedTitle, maxLines = 1) },
-                            supportingContent = { Text(listOfNotNull(relativeTime(sess.lastActivityIso), projName).joinToString(" · "), maxLines = 1) },
-                            leadingContent = { Icon(Icons.Filled.ChatBubble, null) }
-                        )
-                    }
-                    DropdownMenu(expanded = menuTarget?.resolvedId == sess.resolvedId, onDismissRequest = { menuTarget = null }) {
-                        DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = sess })
-                        DropdownMenuItem(text = { Text("Fijar") }, onClick = { menuTarget = null; onPinSession(sess.resolvedId) })
-                        DropdownMenuItem(text = { Text("Cambiar proyecto") }, onClick = { menuTarget = null; moveTarget = sess })
-                        DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = sess })
+            var isRefreshing by remember { mutableStateOf(false) }
+            LaunchedEffect(isLoading) { if (!isLoading) isRefreshing = false }
+            if (isLoading && sessions.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else {
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar chats") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = { isRefreshing = true; onRefresh() }, modifier = Modifier.fillMaxSize()) {
+                    if (filtered.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Filled.Inbox, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("No tienes chats aún", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(filtered, key = { it.resolvedId.ifBlank { it.hashCode().toString() } }) { sess ->
+                                val projName = sessionToProject[sess.resolvedId]
+                                Card(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onOpenSession(sess.resolvedId) }, onLongClick = { menuTarget = sess })) {
+                                    ListItem(
+                                        headlineContent = { Text(sess.resolvedTitle, maxLines = 1) },
+                                        supportingContent = { Text(listOfNotNull(relativeTime(sess.lastActivityIso), projName).joinToString(" · "), maxLines = 1) },
+                                        leadingContent = { Icon(Icons.Filled.ChatBubble, null) }
+                                    )
+                                }
+                                DropdownMenu(expanded = menuTarget?.resolvedId == sess.resolvedId, onDismissRequest = { menuTarget = null }) {
+                                    DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = sess })
+                                    DropdownMenuItem(text = { Text("Fijar") }, onClick = { menuTarget = null; onPinSession(sess.resolvedId) })
+                                    DropdownMenuItem(text = { Text("Cambiar proyecto") }, onClick = { menuTarget = null; moveTarget = sess })
+                                    DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = sess })
+                                }
+                            }
+                        }
                     }
                 }
-                if (filtered.isEmpty()) { item { Text("Sin chats", style = MaterialTheme.typography.bodySmall) } }
+            }
+            error?.let {
+                Snackbar(modifier = Modifier.padding(top = 8.dp), action = { TextButton(onClick = { onClearError(); onRefresh() }) { Text("Reintentar") } }) { Text(it.take(300)) }
             }
         }
     }

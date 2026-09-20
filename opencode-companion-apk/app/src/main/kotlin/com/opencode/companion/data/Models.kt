@@ -99,6 +99,32 @@ data class SendMessageRequest(
     val parts: List<Map<String, String>>
 )
 
+data class Skill(
+    val scope: String,
+    val name: String,
+    val content: String
+)
+
+data class SkillListResponse(
+    val skills: List<Skill>,
+    val projectId: String? = null,
+    val counts: Map<String, Int>? = null
+)
+
+data class SkillCreateRequest(
+    val scope: String,
+    val name: String,
+    val content: String
+)
+
+data class AttachedFile(
+    val name: String,
+    val mime: String,
+    val size: Long,
+    val base64: String? = null,
+    val text: String? = null
+)
+
 // System status for overlay gate
 data class SystemStatus(
     val ready: Boolean = false,

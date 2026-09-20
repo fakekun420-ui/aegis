@@ -9,8 +9,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.Project
@@ -20,11 +23,15 @@ import com.opencode.companion.util.relativeTime
 @Composable
 fun ProjectsScreen(
     projects: List<Project>,
+    isLoading: Boolean = false,
+    error: String? = null,
     onBack: () -> Unit,
     onOpenProject: (String) -> Unit,
     onCreateProject: (String, String) -> Unit,
     onRenameProject: (String, String) -> Unit,
-    onDeleteProject: (String) -> Unit
+    onDeleteProject: (String) -> Unit,
+    onRefresh: () -> Unit = {},
+    onClearError: () -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
     var showCreate by remember { mutableStateOf(false) }
@@ -45,22 +52,41 @@ fun ProjectsScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(filtered, key = { it.id }) { proj ->
-                    Card(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onOpenProject(proj.id) }, onLongClick = { menuTarget = proj })) {
-                        ListItem(
-                            headlineContent = { Text(proj.name) },
-                            supportingContent = { Text("${proj.description ?: "—"} · ${relativeTime(proj.createdAt)}", maxLines = 1) },
-                            leadingContent = { Icon(Icons.Filled.Folder, null) }
-                        )
-                    }
-                    DropdownMenu(expanded = menuTarget?.id == proj.id, onDismissRequest = { menuTarget = null }) {
-                        DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = proj })
-                        DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = proj })
+            var isRefreshing by remember { mutableStateOf(false) }
+            LaunchedEffect(isLoading) { if (!isLoading) isRefreshing = false }
+            if (isLoading && projects.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else {
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = { isRefreshing = true; onRefresh() }, modifier = Modifier.fillMaxSize()) {
+                    if (filtered.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Filled.Inbox, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("No tienes proyectos aún — crea el primero", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(filtered, key = { it.id }) { proj ->
+                                Card(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onOpenProject(proj.id) }, onLongClick = { menuTarget = proj })) {
+                                    ListItem(
+                                        headlineContent = { Text(proj.name) },
+                                        supportingContent = { Text("${proj.description ?: "—"} · ${relativeTime(proj.createdAt)}", maxLines = 1) },
+                                        leadingContent = { Icon(Icons.Filled.Folder, null) }
+                                    )
+                                }
+                                DropdownMenu(expanded = menuTarget?.id == proj.id, onDismissRequest = { menuTarget = null }) {
+                                    DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = proj })
+                                    DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = proj })
+                                }
+                            }
+                        }
                     }
                 }
-                if (filtered.isEmpty()) { item { Text("Sin proyectos", style = MaterialTheme.typography.bodySmall) } }
+            }
+            error?.let {
+                Snackbar(modifier = Modifier.padding(top = 8.dp), action = { TextButton(onClick = { onClearError(); onRefresh() }) { Text("Reintentar") } }) { Text(it.take(300)) }
             }
         }
     }

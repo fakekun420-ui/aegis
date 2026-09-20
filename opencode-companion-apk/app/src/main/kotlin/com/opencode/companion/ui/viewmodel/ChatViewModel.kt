@@ -40,27 +40,43 @@ class ChatViewModel : ViewModel() {
     }
 
     fun send(sessionId: String, text: String) {
-        if (text.isBlank()) return
+        sendWithFiles(sessionId, text, emptyList())
+    }
+
+    fun sendWithFiles(sessionId: String, text: String, files: List<com.opencode.companion.data.AttachedFile>) {
+        if (text.isBlank() && files.isEmpty()) return
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
-            // Optimistic bubble
+            val optimisticText = if (text.isNotBlank()) text else files.joinToString(", ") { it.name }
             val optimistic = Message(
                 info = com.opencode.companion.data.MessageInfo(role = "user"),
-                parts = listOf(com.opencode.companion.data.MessagePart(type = "text", text = text))
+                parts = listOf(com.opencode.companion.data.MessagePart(type = "text", text = optimisticText))
             )
             _messages.value = _messages.value + optimistic
             try {
-                api.sendMessage(sessionId, SendMessageRequest(parts = listOf(mapOf("type" to "text", "text" to text))))
-                // Reload to get assistant response (LLM round-trip ~seconds; proxy guard 60s)
-                // Poll once after short delay; opencode may take seconds to produce assistant message
+                val parts = mutableListOf<Map<String, String>>()
+                if (text.isNotBlank()) parts += mapOf("type" to "text", "text" to text)
+                for (f in files) {
+                    when {
+                        f.text != null -> parts += mapOf("type" to "text", "text" to "Archivo ${f.name} (${f.mime}):\n```\n${f.text.take(30000)}\n```")
+                        f.base64 != null -> {
+                            // Opencode expects {type:'file', mime, data} or image
+                            if (f.mime.startsWith("image/")) {
+                                parts += mapOf("type" to "image", "mime" to f.mime, "image" to f.base64, "filename" to f.name)
+                            }
+                            parts += mapOf("type" to "file", "mime" to f.mime, "filename" to f.name, "data" to f.base64)
+                        }
+                    }
+                }
+                api.sendMessage(sessionId, SendMessageRequest(parts = parts))
                 kotlinx.coroutines.delay(600)
                 val resp = api.getMessages(sessionId)
                 if (resp.ok && resp.data != null) {
                     _messages.value = resp.data.filterNot { it.isEmpty }
                 }
             } catch (e: Exception) {
-                _error.value = e.message
+                _error.value = e.message ?: "Error de red"
             } finally { _loading.value = false }
         }
     }

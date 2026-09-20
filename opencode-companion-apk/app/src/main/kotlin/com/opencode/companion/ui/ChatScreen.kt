@@ -2,9 +2,12 @@ package com.opencode.companion.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -26,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.opencode.companion.data.AttachedFile
 import com.opencode.companion.data.Message
 import com.opencode.companion.ui.viewmodel.ChatViewModel
 import kotlinx.coroutines.delay
@@ -84,9 +88,15 @@ fun ChatScreen(
     var listening by remember { mutableStateOf(false) }
     var sttError by remember { mutableStateOf<String?>(null) }
     var composerText by remember { mutableStateOf("") }
-    var attachStub by remember { mutableStateOf(false) }
+    var attachedFiles by remember { mutableStateOf<List<AttachedFile>>(emptyList()) }
     var duplexJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
+        val newFiles = uris.take(6 - attachedFiles.size).mapNotNull { uri -> uriToAttachedFile(context, uri) }
+        attachedFiles = attachedFiles + newFiles
+    }
 
     val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted) sttError = "Micrófono denegado"
@@ -143,30 +153,54 @@ fun ChatScreen(
             )
         },
         bottomBar = {
-            ComposerBar(
-                text = composerText,
-                onTextChange = { composerText = it },
-                onSend = {
-                    val t = composerText.trim()
-                    if (t.isNotBlank()) { vm.send(sessionId, t); composerText = "" }
-                },
-                onAttach = { attachStub = true },
-                onMic = {
-                    if (!ensureMicPermission()) return@ComposerBar
-                    if (listening) {
-                        try { recognizer?.stopListening() } catch (_: Exception) {}
-                    } else {
-                        startListeningInternal(
-                            context, recognizer, { recognizer = it }, { listening = it }, { sttError = it },
-                            duplex, scope, ::scheduleDuplexRestart,
-                            onResult = { t -> composerText = if (composerText.isBlank()) t else "$composerText $t" },
-                            onQueueTts = {}
-                        )
+            Column {
+                if (attachedFiles.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        attachedFiles.forEachIndexed { idx, f ->
+                            AssistChip(
+                                onClick = {},
+                                label = { Text("${f.name.take(18)} ${humanSize(f.size)}", maxLines = 1) },
+                                trailingIcon = {
+                                    IconButton(onClick = { attachedFiles = attachedFiles.filterIndexed { i, _ -> i != idx } }, modifier = Modifier.size(18.dp)) {
+                                        Icon(Icons.Filled.Close, contentDescription = "Quitar", modifier = Modifier.size(12.dp))
+                                    }
+                                }
+                            )
+                        }
                     }
-                },
-                listening = listening,
-                duplex = duplex
-            )
+                }
+                ComposerBar(
+                    text = composerText,
+                    onTextChange = { composerText = it },
+                    onSend = {
+                        val t = composerText.trim()
+                        if (t.isNotBlank() || attachedFiles.isNotEmpty()) {
+                            vm.sendWithFiles(sessionId, t, attachedFiles)
+                            composerText = ""
+                            attachedFiles = emptyList()
+                        }
+                    },
+                    onAttach = { filePickerLauncher.launch(arrayOf("*/*")) },
+                    onMic = {
+                        if (!ensureMicPermission()) return@ComposerBar
+                        if (listening) {
+                            try { recognizer?.stopListening() } catch (_: Exception) {}
+                        } else {
+                            startListeningInternal(
+                                context, recognizer, { recognizer = it }, { listening = it }, { sttError = it },
+                                duplex, scope, ::scheduleDuplexRestart,
+                                onResult = { t -> composerText = if (composerText.isBlank()) t else "$composerText $t" },
+                                onQueueTts = {}
+                            )
+                        }
+                    },
+                    listening = listening,
+                    duplex = duplex
+                )
+            }
         }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -198,9 +232,6 @@ fun ChatScreen(
         }
     }
 
-    if (attachStub) {
-        AlertDialog(onDismissRequest = { attachStub = false }, title = { Text("Adjuntar") }, text = { Text("Adjuntos de archivos — próxima fase (stub).") }, confirmButton = { TextButton(onClick = { attachStub = false }) { Text("OK") } })
-    }
 }
 
 @Composable
@@ -303,6 +334,43 @@ private fun ComposerBar(
             }
         }
     }
+}
+
+private fun humanSize(b: Long): String = when {
+    b < 1024 -> "$b B"
+    b < 1024 * 1024 -> "${(b / 1024.0).let { String.format("%.1f", it) }} KB"
+    else -> "${(b / 1024.0 / 1024.0).let { String.format("%.1f", it) }} MB"
+}
+
+private fun uriToAttachedFile(context: android.content.Context, uri: Uri): AttachedFile? {
+    return try {
+        val cr = context.contentResolver
+        val mime = cr.getType(uri) ?: "application/octet-stream"
+        var name = "archivo"
+        var size = 0L
+        cr.query(uri, null, null, null, null)?.use { c ->
+            val nameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIdx = c.getColumnIndex(OpenableColumns.SIZE)
+            if (c.moveToFirst()) {
+                if (nameIdx >= 0) name = c.getString(nameIdx) ?: name
+                if (sizeIdx >= 0) size = c.getLong(sizeIdx)
+            }
+        }
+        // Base64 for images/files under ~5MB, else just metadata
+        val isText = mime.startsWith("text/") || name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".json")
+        cr.openInputStream(uri)?.use { input ->
+            val bytes = input.readBytes()
+            if (bytes.size > 5 * 1024 * 1024) {
+                AttachedFile(name = name, mime = mime, size = bytes.size.toLong(), text = "[archivo demasiado grande, ${humanSize(bytes.size.toLong())}]")
+            } else if (isText) {
+                val text = String(bytes, Charsets.UTF_8).take(60000)
+                AttachedFile(name = name, mime = mime, size = bytes.size.toLong(), text = text)
+            } else {
+                val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                AttachedFile(name = name, mime = mime, size = bytes.size.toLong(), base64 = b64)
+            }
+        }
+    } catch (_: Exception) { null }
 }
 
 // ---- helpers ----
