@@ -18,6 +18,23 @@ class OpencodeAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        // Self-heal (pending a11y persistence): the framework strips this service
+        // from enabled_accessibility_services on force-stop/crash. Re-add ourselves
+        // alongside whatever is already enabled (BAXA etc.) — WRITE_SECURE_SETTINGS
+        // is granted via root/adb, no user prompt needed.
+        try {
+            val cr = applicationContext.contentResolver
+            val cur = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+            val me = "${applicationContext.packageName}/.OpencodeAccessibilityService"
+            val parts = cur.split(":").filter { it.isNotBlank() }.toMutableList()
+            // drop stale short-form entries of ourselves to avoid duplicates
+            parts.removeAll { it.endsWith(".OpencodeAccessibilityService") }
+            if (!parts.contains(me)) {
+                parts += me
+                android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, parts.joinToString(":"))
+                android.provider.Settings.Secure.putInt(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 1)
+            }
+        } catch (_: Exception) {}
     }
     override fun onDestroy() { instance = null; super.onDestroy() }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
