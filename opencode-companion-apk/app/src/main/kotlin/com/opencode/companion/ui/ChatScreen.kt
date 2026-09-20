@@ -28,12 +28,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -209,48 +211,10 @@ fun ChatScreen(
         },
         bottomBar = {
             Column(modifier = Modifier.navigationBarsPadding().imePadding()) {
-                if (attachedFiles.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        attachedFiles.forEachIndexed { idx, f ->
-                            AssistChip(
-                                onClick = {},
-                                label = { Text("${f.name.take(18)} ${humanSize(f.size)}", maxLines = 1) },
-                                shape = RoundedCornerShape(10.dp),
-                                trailingIcon = {
-                                    IconButton(onClick = { attachedFiles = attachedFiles.filterIndexed { i, _ -> i != idx } }, modifier = Modifier.size(18.dp)) {
-                                        Icon(Icons.Filled.Close, contentDescription = "Quitar", modifier = Modifier.size(12.dp))
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AssistChip(
-                        onClick = { showModelSheet = true },
-                        label = {
-                            val modelName = models.find { it.id == selectedModel }?.name ?: selectedModel ?: "Modelo"
-                            Text(modelName, style = MaterialTheme.typography.labelSmall)
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        leadingIcon = { Icon(Icons.Filled.SmartToy, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        modifier = Modifier.semantics { contentDescription = "Seleccionar modelo" }
-                    )
-                    Spacer(Modifier.weight(1f))
-                    FilledTonalIconButton(
-                        onClick = onVoice,
-                        modifier = Modifier.size(40.dp).semantics { contentDescription = "Modo voz" }
-                    ) {
-                        Icon(Icons.Filled.Headset, contentDescription = "Modo voz", modifier = Modifier.size(20.dp))
-                    }
-                }
-                ComposerBar(
+                val modelDisplayName = models.find { it.id == selectedModel }?.name
+                    ?: if (!selectedModel.isNullOrBlank()) selectedModel!! else "Gemini 3.6 Flash"
+
+                UnifiedFloatingComposer(
                     text = composerText,
                     onTextChange = { composerText = it },
                     onSend = {
@@ -263,7 +227,7 @@ fun ChatScreen(
                     },
                     onAttach = { showAttachSheet = true },
                     onMic = {
-                        if (!ensureMicPermission()) return@ComposerBar
+                        if (!ensureMicPermission()) return@UnifiedFloatingComposer
                         if (listening) {
                             try { recognizer?.stopListening() } catch (_: Exception) {}
                         } else {
@@ -276,7 +240,11 @@ fun ChatScreen(
                         }
                     },
                     listening = listening,
-                    duplex = duplex
+                    attachedFiles = attachedFiles,
+                    onRemoveFile = { idx -> attachedFiles = attachedFiles.filterIndexed { i, _ -> i != idx } },
+                    selectedModelName = modelDisplayName,
+                    onSelectModelClick = { showModelSheet = true },
+                    onVoice = onVoice
                 )
             }
         }
@@ -511,33 +479,7 @@ private fun MessageBubble(msg: Message, onRetry: (() -> Unit)? = null) {
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        if (isMem && stripped.isNotBlank() && stripped != raw) {
-            // Collapsible contexto interno row
-            var expanded by remember { mutableStateOf(false) }
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth(0.9f)
-            ) {
-                Column(Modifier.padding(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("contexto interno", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Ocultar" else "Ver") }
-                    }
-                    if (expanded) {
-                        Text(raw.take(4000), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-        } else if (isMem && stripped.isBlank()) {
-            var expanded by remember { mutableStateOf(false) }
-            Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth(0.9f)) {
-                Column(Modifier.padding(8.dp)) {
-                    Row { Text("contexto interno (oculto)", style = MaterialTheme.typography.labelSmall); Spacer(Modifier.weight(1f)); TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Ocultar" else "Ver") } }
-                    if (expanded) Text(raw.take(4000), style = MaterialTheme.typography.bodySmall)
-                }
-            }
+        if (isMem && stripped.isBlank()) {
             return@Column
         }
 
@@ -735,53 +677,212 @@ private fun AssistantTypingBubble() {
 }
 
 @Composable
-private fun ComposerBar(
+private fun UnifiedFloatingComposer(
     text: String,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     onAttach: () -> Unit,
     onMic: () -> Unit,
     listening: Boolean,
-    duplex: Boolean
+    attachedFiles: List<AttachedFile>,
+    onRemoveFile: (Int) -> Unit,
+    selectedModelName: String,
+    onSelectModelClick: () -> Unit,
+    onVoice: () -> Unit
 ) {
-    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            IconButton(onClick = onAttach, modifier = Modifier.semantics { contentDescription = "Adjuntar archivo" }) {
-                Icon(Icons.Filled.AttachFile, contentDescription = "Adjuntar archivo")
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 4.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            // Attached files chips
+            if (attachedFiles.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    attachedFiles.forEachIndexed { idx, f ->
+                        AssistChip(
+                            onClick = {},
+                            label = { Text("${f.name.take(18)} ${humanSize(f.size)}", maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+                            shape = RoundedCornerShape(10.dp),
+                            trailingIcon = {
+                                IconButton(onClick = { onRemoveFile(idx) }, modifier = Modifier.size(18.dp)) {
+                                    Icon(Icons.Filled.Close, contentDescription = "Quitar", modifier = Modifier.size(12.dp))
+                                }
+                            }
+                        )
+                    }
+                }
             }
-            OutlinedTextField(
+
+            // Text input
+            TextField(
                 value = text,
                 onValueChange = onTextChange,
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .semantics { contentDescription = "Escribe un mensaje" },
-                placeholder = { Text("Escribe un mensaje…") },
+                placeholder = {
+                    Text(
+                        "Escribe un mensaje…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                },
                 maxLines = 5,
-                shape = RoundedCornerShape(20.dp)
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                    unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
             )
-            IconButton(
-                onClick = onSend,
-                enabled = text.isNotBlank(),
-                modifier = Modifier.semantics { contentDescription = "Enviar mensaje" }
+
+            // Bottom toolbar inside the pill
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    Icons.Filled.Send,
-                    contentDescription = "Enviar mensaje",
-                    tint = if (text.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                )
-            }
-            IconButton(onClick = onMic, modifier = Modifier.semantics { contentDescription = if (listening) "Dejar de escuchar" else "Hablar" }) {
-                Icon(
-                    if (listening) Icons.Filled.Mic else Icons.Filled.MicNone,
-                    contentDescription = if (listening) "Dejar de escuchar" else "Hablar",
-                    tint = if (listening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    IconButton(
+                        onClick = onAttach,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .semantics { contentDescription = "Adjuntar archivo" }
+                    ) {
+                        Icon(
+                            Icons.Outlined.Add,
+                            contentDescription = "Adjuntar archivo",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Surface(
+                        onClick = onSelectModelClick,
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.semantics { contentDescription = "Seleccionar modelo" }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.AutoAwesome,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                selectedModelName,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Icon(
+                                Icons.Filled.KeyboardArrowDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    IconButton(
+                        onClick = onVoice,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .semantics { contentDescription = "Modo voz" }
+                    ) {
+                        Icon(
+                            Icons.Outlined.Headphones,
+                            contentDescription = "Modo voz",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    val canSend = text.isNotBlank() || attachedFiles.isNotEmpty()
+                    if (canSend) {
+                        IconButton(
+                            onClick = onSend,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                .semantics { contentDescription = "Enviar mensaje" }
+                        ) {
+                            Icon(
+                                Icons.Filled.ArrowUpward,
+                                contentDescription = "Enviar mensaje",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else if (listening) {
+                        val infiniteTransition = rememberInfiniteTransition(label = "pulse_mic")
+                        val scale by infiniteTransition.animateFloat(
+                            initialValue = 1f,
+                            targetValue = 1.15f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(500, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "micScale"
+                        )
+                        IconButton(
+                            onClick = onMic,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .graphicsLayer { scaleX = scale; scaleY = scale }
+                                .background(MaterialTheme.colorScheme.error, CircleShape)
+                                .semantics { contentDescription = "Dejar de escuchar" }
+                        ) {
+                            Icon(
+                                Icons.Filled.Mic,
+                                contentDescription = "Dejar de escuchar",
+                                tint = MaterialTheme.colorScheme.onError,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = onMic,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
+                                .semantics { contentDescription = "Hablar" }
+                        ) {
+                            Icon(
+                                Icons.Filled.MicNone,
+                                contentDescription = "Hablar",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

@@ -6,21 +6,29 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 /**
  * Lightweight markdown renderer — no external library.
- * Handles: #/##/### headers, ``` code blocks (monospace Surface), **bold**, *italic*, `inline code`, - lists, [links](url), > blockquotes.
- * Strips <memory_context> blocks before rendering (handled by collapsible row).
+ * Handles: #/##/### headers, ``` code blocks (with language header & copy button), **bold**, *italic*, `inline code`, - lists, [links](url), > blockquotes.
+ * Uses Claude-inspired Serif reading typography and clean styled surfaces.
  */
 @Composable
 fun MarkdownText(text: String, modifier: Modifier = Modifier, onLinkClick: ((String) -> Unit)? = null) {
@@ -31,58 +39,124 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, onLinkClick: ((Str
                 is MdBlock.Header -> Text(
                     block.text,
                     style = when (block.level) {
-                        1 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                        2 -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        else -> MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                    }
+                        1 -> MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+                        2 -> MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+                        else -> MaterialTheme.typography.titleSmall.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+                    },
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                is MdBlock.CodeBlock -> Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        block.code,
-                        modifier = Modifier.padding(10.dp).horizontalScroll(rememberScrollState()),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp
-                    )
-                }
+                is MdBlock.CodeBlock -> CodeBlockItem(block)
                 is MdBlock.Quote -> Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(6.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Text(
                         block.text,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Serif, fontSize = 14.sp, lineHeight = 20.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                is MdBlock.BulletList -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                is MdBlock.BulletList -> Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     block.items.forEach { item ->
-                        Row { Text("• ", style = MaterialTheme.typography.bodyMedium); Text(buildInline(item), style = MaterialTheme.typography.bodyMedium) }
+                        Row {
+                            Text("• ", style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(buildInline(item), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp, lineHeight = 22.sp), color = MaterialTheme.colorScheme.onSurface)
+                        }
                     }
                 }
-                is MdBlock.OrderedList -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                is MdBlock.OrderedList -> Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     block.items.forEachIndexed { idx, item ->
-                        Row { Text("${idx + 1}. ", style = MaterialTheme.typography.bodyMedium); Text(buildInline(item), style = MaterialTheme.typography.bodyMedium) }
+                        Row {
+                            Text("${idx + 1}. ", style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(buildInline(item), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp, lineHeight = 22.sp), color = MaterialTheme.colorScheme.onSurface)
+                        }
                     }
                 }
                 is MdBlock.Paragraph -> Text(
                     buildInline(block.text),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp, lineHeight = 22.sp),
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
     }
 }
 
+@Composable
+private fun CodeBlockItem(block: MdBlock.CodeBlock) {
+    val clipboardManager = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2000)
+            copied = false
+        }
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = block.language.ifBlank { "código" }.uppercase(),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(block.code))
+                        copied = true
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.height(28.dp).semantics { contentDescription = if (copied) "Copiado" else "Copiar código" }
+                ) {
+                    Icon(
+                        if (copied) Icons.Filled.Done else Icons.Outlined.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        if (copied) "¡Copiado!" else "Copiar",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Text(
+                text = block.code,
+                modifier = Modifier
+                    .padding(12.dp)
+                    .horizontalScroll(rememberScrollState()),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.5.sp,
+                lineHeight = 17.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
 private sealed class MdBlock {
     data class Header(val level: Int, val text: String) : MdBlock()
-    data class CodeBlock(val code: String) : MdBlock()
+    data class CodeBlock(val code: String, val language: String = "") : MdBlock()
     data class Quote(val text: String) : MdBlock()
     data class BulletList(val items: List<String>) : MdBlock()
     data class OrderedList(val items: List<String>) : MdBlock()
@@ -95,6 +169,7 @@ private fun parseMarkdown(src: String): List<MdBlock> {
     var i = 0
     var inCode = false
     var codeBuf = StringBuilder()
+    var currentLang = ""
     val bulletBuf = mutableListOf<String>()
     val orderedBuf = mutableListOf<String>()
 
@@ -108,11 +183,13 @@ private fun parseMarkdown(src: String): List<MdBlock> {
         val trimmed = line.trim()
         if (trimmed.startsWith("```")) {
             if (inCode) {
-                blocks += MdBlock.CodeBlock(codeBuf.toString())
+                blocks += MdBlock.CodeBlock(codeBuf.toString().trimEnd(), currentLang)
                 codeBuf = StringBuilder()
+                currentLang = ""
                 inCode = false
             } else {
                 flushLists()
+                currentLang = trimmed.removePrefix("```").trim()
                 inCode = true
             }
             i++
@@ -131,7 +208,7 @@ private fun parseMarkdown(src: String): List<MdBlock> {
         }
     }
     flushLists()
-    if (inCode && codeBuf.isNotEmpty()) blocks += MdBlock.CodeBlock(codeBuf.toString())
+    if (inCode && codeBuf.isNotEmpty()) blocks += MdBlock.CodeBlock(codeBuf.toString().trimEnd(), currentLang)
     return blocks
 }
 

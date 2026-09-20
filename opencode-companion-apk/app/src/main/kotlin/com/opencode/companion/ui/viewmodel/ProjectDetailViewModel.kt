@@ -31,6 +31,22 @@ class ProjectDetailViewModel : ViewModel() {
 
     fun clearError() { _error.value = null }
 
+    fun patchInstructions(instructions: String) {
+        viewModelScope.launch {
+            val pid = _project.value?.id ?: return@launch
+            try {
+                val resp = api.patchProject(pid, PatchProjectRequest(description = instructions))
+                if (resp.ok && resp.data != null) {
+                    _project.value = resp.data
+                } else {
+                    load(pid)
+                }
+            } catch (e: Exception) {
+                _error.value = e.message
+            }
+        }
+    }
+
     fun load(projectId: String) {
         viewModelScope.launch {
             _loading.value = true

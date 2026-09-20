@@ -82,7 +82,8 @@ fun AppNavHost() {
                     onCreateSkill = { scope, name, content -> detailVm.createSkill(scope, name, content) },
                     onDeleteSkill = { scope, name -> detailVm.deleteSkill(scope, name) },
                     onLinkProject = { target -> detailVm.linkProject(target) },
-                    onUnlinkProject = { target -> detailVm.unlinkProject(target) }
+                    onUnlinkProject = { target -> detailVm.unlinkProject(target) },
+                    onPatchInstructions = { text -> detailVm.patchInstructions(text) }
                 )
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

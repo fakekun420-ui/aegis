@@ -1,15 +1,24 @@
 package com.opencode.companion.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -17,9 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.Project
 import com.opencode.companion.ui.theme.AgyBadgeBg
@@ -74,14 +82,20 @@ fun ProjectsScreen(
     var pinnedIds by remember { mutableStateOf(setOf<String>()) }
 
     val filtered = remember(projects, query) {
-        if (query.isBlank()) projects else projects.filter { it.name.contains(query, ignoreCase = true) || (it.description ?: "").contains(query, ignoreCase = true) }
+        if (query.isBlank()) projects else projects.filter {
+            it.name.contains(query, ignoreCase = true) || (it.description ?: "").contains(query, ignoreCase = true)
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Proyectos", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)) },
-                navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
+                navigationIcon = {
+                    IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -97,78 +111,185 @@ fun ProjectsScreen(
             )
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             var isRefreshing by remember { mutableStateOf(false) }
             LaunchedEffect(isLoading) { if (!isLoading) isRefreshing = false }
+
             if (isLoading && projects.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
+                // Barra de búsqueda estilo píldora
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    label = { Text("Buscar") },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Buscar proyectos" },
-                    singleLine = true
+                    placeholder = { Text("Buscar proyectos…") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Search,
+                            contentDescription = "Buscar",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingIcon = {
+                        if (query.isNotBlank()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(
+                                    Icons.Outlined.Close,
+                                    contentDescription = "Limpiar búsqueda",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "Buscar proyectos" },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface
+                    )
                 )
-                PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = { isRefreshing = true; onRefresh() }, modifier = Modifier.fillMaxSize()) {
+
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = { isRefreshing = true; onRefresh() },
+                    modifier = Modifier.fillMaxSize()
+                ) {
                     if (filtered.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Filled.Inbox, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(
+                                    Icons.Outlined.Inbox,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                                 Text("No tienes proyectos aún — crea el primero", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 72.dp)) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 72.dp)
+                        ) {
                             items(filtered, key = { it.id }) { proj ->
-                                OutlinedCard(
-                                    shape = RoundedCornerShape(12.dp),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                    modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = proj.name }.combinedClickable(onClick = { onOpenProject(proj.id) }, onLongClick = { menuTarget = proj })
-                                ) {
-                                    ListItem(
-                                        colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
-                                        headlineContent = {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text(proj.name, modifier = Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium))
-                                                ProviderBadge(proj.resolvedProvider)
+                                Box {
+                                    OutlinedCard(
+                                        shape = RoundedCornerShape(12.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .semantics(mergeDescendants = true) { contentDescription = proj.name }
+                                            .combinedClickable(
+                                                onClick = { onOpenProject(proj.id) },
+                                                onLongClick = { menuTarget = proj }
+                                            )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 13.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            ) {
+                                                Icon(
+                                                    Icons.Outlined.Folder,
+                                                    contentDescription = "Proyecto",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Text(
+                                                    proj.name,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    modifier = Modifier.weight(1f, fill = false)
+                                                )
+                                                val timeStr = relativeTime(proj.createdAt)
+                                                Text(
+                                                    " ◦ $timeStr",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1
+                                                )
+                                                if (!proj.description.isNullOrBlank()) {
+                                                    Text(
+                                                        " · ${proj.description}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
                                             }
-                                        },
-                                        supportingContent = { Text("${proj.description ?: "—"} · ${relativeTime(proj.createdAt)}", maxLines = 1, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                        leadingContent = { Icon(Icons.Filled.Folder, contentDescription = "Proyecto", tint = MaterialTheme.colorScheme.primary) }
-                                    )
-                                }
-                                DropdownMenu(expanded = menuTarget?.id == proj.id, onDismissRequest = { menuTarget = null }, shape = RoundedCornerShape(12.dp), containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                                    DropdownMenuItem(
-                                        text = { Text(if (pinnedIds.contains(proj.id)) "Desfijar" else "Fijar") },
-                                        onClick = { menuTarget = null; pinnedIds = if (pinnedIds.contains(proj.id)) pinnedIds - proj.id else pinnedIds + proj.id },
-                                        modifier = Modifier.semantics { contentDescription = "Fijar" }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Editar detalles") },
-                                        onClick = { menuTarget = null; editTarget = proj },
-                                        modifier = Modifier.semantics { contentDescription = "Editar detalles" }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Archivar") },
-                                        onClick = { menuTarget = null; archiveTarget = proj },
-                                        modifier = Modifier.semantics { contentDescription = "Archivar" }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Eliminar") },
-                                        onClick = { menuTarget = null; deleteTarget = proj },
-                                        modifier = Modifier.semantics { contentDescription = "Eliminar" }
-                                    )
+                                            ProviderBadge(proj.resolvedProvider)
+                                        }
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = menuTarget?.id == proj.id,
+                                        onDismissRequest = { menuTarget = null },
+                                        shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text(if (pinnedIds.contains(proj.id)) "Desfijar" else "Fijar") },
+                                            leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                            onClick = {
+                                                menuTarget = null
+                                                pinnedIds = if (pinnedIds.contains(proj.id)) pinnedIds - proj.id else pinnedIds + proj.id
+                                            },
+                                            modifier = Modifier.semantics { contentDescription = "Fijar" }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Editar detalles") },
+                                            leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                            onClick = { menuTarget = null; editTarget = proj },
+                                            modifier = Modifier.semantics { contentDescription = "Editar detalles" }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Archivar") },
+                                            leadingIcon = { Icon(Icons.Outlined.Archive, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                            onClick = { menuTarget = null; archiveTarget = proj },
+                                            modifier = Modifier.semantics { contentDescription = "Archivar" }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Eliminar", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold) },
+                                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                            onClick = { menuTarget = null; deleteTarget = proj },
+                                            modifier = Modifier.semantics { contentDescription = "Eliminar" }
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+
             error?.let {
-                Snackbar(modifier = Modifier.padding(top = 8.dp), action = { TextButton(onClick = { onClearError(); onRefresh() }) { Text("Reintentar") } }) { Text(it.take(300)) }
+                Snackbar(modifier = Modifier.padding(top = 8.dp), action = { TextButton(onClick = { onClearError(); onRefresh() }) { Text("Reintentar") } }) {
+                    Text(it.take(300))
+                }
             }
         }
     }
@@ -209,6 +330,7 @@ fun ProjectsScreen(
             dismissButton = { TextButton(onClick = { showCreate = false }) { Text("Cancelar") } }
         )
     }
+
     editTarget?.let { proj ->
         var name by remember(proj.id) { mutableStateOf(proj.name) }
         var desc by remember(proj.id) { mutableStateOf(proj.description ?: "") }
@@ -227,6 +349,7 @@ fun ProjectsScreen(
             dismissButton = { TextButton(onClick = { editTarget = null }) { Text("Cancelar") } }
         )
     }
+
     archiveTarget?.let { proj ->
         AlertDialog(
             onDismissRequest = { archiveTarget = null },
@@ -238,6 +361,7 @@ fun ProjectsScreen(
             dismissButton = { TextButton(onClick = { archiveTarget = null }) { Text("Cancelar") } }
         )
     }
+
     deleteTarget?.let { proj ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
