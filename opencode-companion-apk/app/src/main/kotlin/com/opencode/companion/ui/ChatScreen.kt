@@ -414,7 +414,6 @@ private fun MessageBubble(msg: Message) {
 
         val files = msg.fileParts()
         val images = msg.imageParts()
-        val bitmaps: List<android.graphics.Bitmap?> = remember(key1 = images) { images.map { img -> (img.image ?: img.data)?.let { decodeBase64Bitmap(it) } } }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -466,8 +465,8 @@ private fun MessageBubble(msg: Message) {
         Surface(color = bubbleColor, shape = shape, modifier = Modifier.fillMaxWidth(0.86f)) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Image previews (base64 data URIs from backend)
-                images.forEachIndexed { idx, img ->
-                    val bitmap = bitmaps.getOrNull(idx)
+                images.forEach { img ->
+                    val bitmap = (img.image ?: img.data)?.let { decodeBase64Bitmap(it) }
                     if (bitmap != null) {
                         Image(
                             bitmap = bitmap.asImageBitmap(),
