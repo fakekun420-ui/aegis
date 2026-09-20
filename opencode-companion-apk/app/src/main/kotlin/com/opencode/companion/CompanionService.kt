@@ -110,6 +110,7 @@ class CompanionService : Service() {
                 path=="/status" && method=="GET" -> 200 to JSONObject().apply{
                     put("ok", true)
                     put("a11y", OpencodeAccessibilityService.instance != null)
+                    put("needsA11yRepair", OpencodeAccessibilityService.needsA11yRepair)
                     put("pkg", packageName)
                     put("port", 8766)
                     put("lastPkg", OpencodeAccessibilityService.lastEventPkg)

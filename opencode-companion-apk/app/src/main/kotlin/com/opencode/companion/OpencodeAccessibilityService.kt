@@ -13,6 +13,7 @@ class OpencodeAccessibilityService : AccessibilityService() {
     companion object {
         @Volatile var instance: OpencodeAccessibilityService? = null
         @Volatile var lastEventPkg: String = ""
+        @Volatile var needsA11yRepair: Boolean = false
     }
 
     override fun onServiceConnected() {
@@ -20,21 +21,19 @@ class OpencodeAccessibilityService : AccessibilityService() {
         instance = this
         // Self-heal (pending a11y persistence): the framework strips this service
         // from enabled_accessibility_services on force-stop/crash. Re-add ourselves
-        // alongside whatever is already enabled (BAXA etc.) — WRITE_SECURE_SETTINGS
-        // is granted via root/adb, no user prompt needed.
+        // alongside whatever is already enabled (BAXA etc.).
+        // NOTE: app uid cannot write Secure settings (WRITE_SECURE_SETTINGS is
+        // signature|privileged) and su shells from the app ns (5508) can reach
+        // NEITHER /system/bin/settings NOR /usr/bin/node (verified). So the write
+        // is delegated: CompanionService exposes POST /a11y-repair on :8766, and the
+        // HUB (running in ubuntu chroot ns with full tooling) performs the
+        // `settings put secure` via its own root shell on next /status poll.
+        // Here we only flag the need.
         try {
-            val cr = applicationContext.contentResolver
-            val cur = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
-            val me = "${applicationContext.packageName}/.OpencodeAccessibilityService"
-            val parts = cur.split(":").filter { it.isNotBlank() }.toMutableList()
-            // drop stale short-form entries of ourselves to avoid duplicates
-            parts.removeAll { it.endsWith(".OpencodeAccessibilityService") }
-            if (!parts.contains(me)) {
-                parts += me
-                android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, parts.joinToString(":"))
-                android.provider.Settings.Secure.putInt(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 1)
-            }
-        } catch (_: Exception) {}
+            val cur = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+            val me = "${packageName}/.OpencodeAccessibilityService"
+            needsA11yRepair = !cur.split(":").contains(me)
+        } catch (_: Exception) { needsA11yRepair = true }
     }
     override fun onDestroy() { instance = null; super.onDestroy() }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

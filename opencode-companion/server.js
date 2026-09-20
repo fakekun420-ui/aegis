@@ -606,7 +606,25 @@ const server = http.createServer(async (req, res)=>{
     const sessionOwnership = classifyOwnership(ocHealth, servePids);
     const bridgeHealth = await new Promise(resolve=>{
       http.get({ hostname:"127.0.0.1", port:8766, path:"/status", timeout:1500 }, r=>{
-        let d=""; r.on("data",c=>d+=c); r.on("end",()=>{ try{ const j=JSON.parse(d); resolve({ up:true, a11y: !!j.a11y }); }catch{ resolve({ up:true, a11y:false }) } });
+        let d=""; r.on("data",c=>d+=c); r.on("end", async ()=>{
+          let h;
+          try {
+            const j=JSON.parse(d);
+            h = { up:true, a11y: !!j.a11y };
+            if (j.needsA11yRepair) {
+              try {
+                const cur = (await runShell("settings get secure enabled_accessibility_services")).stdout.trim();
+                const me = "com.opencode.companion/com.opencode.companion.OpencodeAccessibilityService";
+                const parts = cur.split(":").map(x=>x.trim()).filter(x=>x && x!==me);
+                parts.push(me);
+                await runShell("settings put secure enabled_accessibility_services " + parts.join(":"));
+                await runShell("settings put secure accessibility_enabled 1");
+                h.a11yRepaired = true;
+              } catch(_e) { h.a11yRepairError = String((_e&&_e.message)||_e).slice(0,120); }
+            }
+          } catch(_e) { h = { up:true, a11y:false }; }
+          resolve(h);
+        });
       }).on("error", ()=> resolve({ up:false, a11y:false })).end();
     });
     const ready = ocHealth.healthy && ocHealth.up;
