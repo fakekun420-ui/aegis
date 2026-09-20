@@ -86,6 +86,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     @Composable
+    private var lastBootError by mutableStateOf<String?>(null)
+
+    @Composable
     private fun NativeOfflineOverlay(ownership: String, isStarting: Boolean, onStartSystem: () -> Unit) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(
@@ -109,6 +112,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     Text("Iniciando servicios...", style = MaterialTheme.typography.bodySmall)
                 } else {
                     Button(onClick = onStartSystem, modifier = Modifier.fillMaxWidth()) { Text("Iniciar Sistema") }
+                }
+                lastBootError?.let { err ->
+                    Spacer(Modifier.height(8.dp))
+                    Text("Error: $err", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
@@ -160,10 +167,29 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         lifecycleScope.launch(Dispatchers.IO) {
             var execExit = -1
             try {
-                val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; nohup sh /sdcard/projects/opencode-companion/keepalive.sh > /sdcard/projects/opencode-companion/hub-startup.log 2>&1 &"))
+                val script = "/sdcard/projects/opencode-companion/keepalive.sh"
+                val sysLog = "/sdcard/projects/opencode-companion/hub-startup.log"
+                val direct = arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; test -x /usr/bin/node && { nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo direct; } || echo need_host")
+                var hostUsed = false
+                val proc = Runtime.getRuntime().exec(direct)
                 execExit = proc.waitFor()
+                val outText = try { proc.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
                 val errText = try { proc.errorStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
-                android.util.Log.i("OpenCodeBoot", "keepalive exec exit=$execExit err=${errText.take(300)}")
+                android.util.Log.i("OpenCodeBoot", "keepalive exec exit=$execExit out=${outText.take(120)} err=${errText.take(300)}")
+                if (outText.contains("need_host") || (execExit == 0 && !outText.contains("direct"))) {
+                    // system mount lacks /usr/bin/node: find host pid with node and nsenter there
+                    hostUsed = true
+                    val find = Runtime.getRuntime().exec(arrayOf("su", "-c", "for p in \$(ls /proc 2>/dev/null | grep -E '^[0-9]+\$' | head -n 400); do [ -x /proc/\$p/root/usr/bin/node ] 2>/dev/null && { echo \$p; break; }; done"))
+                    val hostPid = try { find.inputStream.bufferedReader().readText().trim().lines().firstOrNull()?.trim() } catch (_: Exception) { null }
+                    android.util.Log.i("OpenCodeBoot", "keepalive hostPid=$hostPid")
+                    if (!hostPid.isNullOrBlank()) {
+                        val re = Runtime.getRuntime().exec(arrayOf("su", "-c", "nsenter -t $hostPid -m -- sh \"$script\" >> \"$sysLog\" 2>&1 &"))
+                        execExit = re.waitFor()
+                        android.util.Log.i("OpenCodeBoot", "keepalive nsenter exit=$execExit pid=$hostPid")
+                    } else {
+                        execExit = 99
+                    }
+                }
             } catch (e: Exception) {
                 android.util.Log.e("OpenCodeBoot", "keepalive exec exception", e)
                 withContext(Dispatchers.Main) { isStartingSystem = false }
@@ -182,10 +208,17 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 if (ready) {
                     systemReady = true
                     systemOwnership = "ready"
+                    lastBootError = null
                     toast("Hub levantado")
                 } else {
-                    android.util.Log.e("OpenCodeBoot", "timeout 45s sin 200")
-                    toast("Timeout 45s")
+                    val reason = when {
+                        execExit == 99 -> "no se encontró namespace host con /usr/bin/node"
+                        execExit != 0 -> "keepalive exit=$execExit"
+                        else -> "hub sin 200 tras 45s"
+                    }
+                    lastBootError = reason
+                    android.util.Log.e("OpenCodeBoot", "timeout 45s sin 200 ($reason)")
+                    toast("Timeout 45s: $reason")
                 }
             }
         }
