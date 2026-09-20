@@ -1628,7 +1628,6 @@ const server = http.createServer(async (req, res)=>{
             if (s.sessionId === sid) {
               s.title = newTitle;
               s.lastUsed = nowIso();
-              updatedInProjects = true;
             }
           }
         }

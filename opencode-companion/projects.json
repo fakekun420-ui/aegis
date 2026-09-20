@@ -85,6 +85,14 @@
           "lastUsed": "2026-09-20T20:48:03.751Z",
           "summary": "",
           "provider": "opencode"
+        },
+        {
+          "sessionId": "ses_f3f1e97f7ffeAwyBXHAch8Pd23",
+          "title": "companion:92785",
+          "createdAt": "2026-09-20T22:13:12.908Z",
+          "lastUsed": "2026-09-20T22:16:55.257Z",
+          "summary": "",
+          "provider": "opencode"
         }
       ],
       "skills": [],
@@ -158,18 +166,18 @@
           "provider": "opencode"
         },
         {
-          "sessionId": "0adc77f9-68a1-4e32-8e03-d012d3a287c4",
-          "title": "Frontend",
-          "createdAt": "2026-09-20T20:44:49.859Z",
-          "lastUsed": "2026-09-20T20:46:39.532Z",
-          "summary": "",
-          "provider": "antigravity"
-        },
-        {
           "sessionId": "ed8f444b-168f-4e64-8c19-e832ab542c77",
           "title": "Backend",
           "createdAt": "2026-09-20T20:45:42.907Z",
           "lastUsed": "2026-09-20T20:46:22.865Z",
+          "summary": "",
+          "provider": "antigravity"
+        },
+        {
+          "sessionId": "0adc77f9-68a1-4e32-8e03-d012d3a287c4",
+          "title": "Frontend QA Verified",
+          "createdAt": "2026-09-20T22:24:52.495Z",
+          "lastUsed": "2026-09-20T22:24:52.495Z",
           "summary": "",
           "provider": "antigravity"
         }
@@ -178,5 +186,22 @@
       "linkedProjects": [],
       "instructions": "Instrucciones personalizadas del proyecto: actuar con máxima precisión y modularidad."
     }
-  ]
+  ],
+  "sessionTitles": {
+    "ses_f4c5592adffe5cWhDvFeOX8Ip3": "companion:Agencia de Marketing:85820",
+    "ses_f8ba7151affeV44tOLJQ7MPZCT": "DepegaLab",
+    "ses_f3ffa6589ffe34zBDKdRfTHXzE": "test-debug-session",
+    "ses_f3feb1c76ffe7ck8kq7TRpOjhU": "companion:test",
+    "ses_f3fe72bf9ffejB9jmGfqTO5bwz": "companion:47730",
+    "ses_f3fccbe0effe4L750SATzTU3Gk": "companion:79801",
+    "ses_f3fc90cabffej1fkAOTTwVTjPN": "companion:21825",
+    "ses_f3fafc39affeq9hAnhTJc3xs77": "Test Claude Code Blocks",
+    "ses_f3fa028faffeHZPnvB3SKpd3St": "e2e-opencode-test",
+    "ses_f3f6c8d82ffetHzVl7nD2bIvwu": "companion:83684",
+    "agy_mua2vw5p_y1o73xiz": "companion:Antigravity POC Project:001",
+    "ses_f4c94c66dffenoqFOCFaytnre7": "Arquitecto",
+    "0adc77f9-68a1-4e32-8e03-d012d3a287c4": "Frontend QA Verified",
+    "ed8f444b-168f-4e64-8c19-e832ab542c77": "Backend",
+    "ses_f3f1e97f7ffeAwyBXHAch8Pd23": "companion:92785"
+  }
 }
