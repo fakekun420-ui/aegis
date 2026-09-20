@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     @Composable
-    private var lastBootError by mutableStateOf<String?>(null)
+    private var lastBootError: String? by mutableStateOf<String?>(null)
 
     @Composable
     private fun NativeOfflineOverlay(ownership: String, isStarting: Boolean, onStartSystem: () -> Unit) {
