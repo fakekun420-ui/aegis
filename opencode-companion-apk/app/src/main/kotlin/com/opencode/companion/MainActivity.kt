@@ -168,15 +168,17 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             try {
                 val script = "/sdcard/projects/opencode-companion/keepalive.sh"
                 val sysLog = "/sdcard/projects/opencode-companion/hub-startup.log"
-                // Resolve node INSIDE the su shell (it sees host mounts; the app ns 4026535508
-                // does not — node lives only in termux ns 4026535555). Pass it as NODE_BIN
-                // env so keepalive.sh never needs /usr/bin/node itself. No nsenter: the old
-                // pid-guess resolved /proc/PID/root in OUR ns, picked adb fork-server, and
-                // dropped keepalive where node is invisible -> infinite relaunch loop.
-                val resolve = Runtime.getRuntime().exec(arrayOf("su", "-c", """[ -x /usr/bin/node ] && echo /usr/bin/node; [ -x /data/data/com.termux/files/usr/bin/node ] && echo /data/data/com.termux/files/usr/bin/node; command -v node 2>/dev/null; echo done"""))
-                val nodeBin = try { resolve.inputStream.bufferedReader().readText().trim().lines().firstOrNull { it.isNotBlank() && it != "done" }?.trim() } catch (_: Exception) { null }
-                android.util.Log.i("OpenCodeBoot", "keepalive nodeBin=$nodeBin")
-                val direct = arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; NODE_BIN=\"${nodeBin ?: "/usr/bin/node"}\" nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched")
+                // App ns (4026535508) cannot see /usr/bin/node — node lives only in termux
+                // ns 4026535555 and nsenter from su lands in node-less namespaces too
+                // (verified: pid-1 ns and termux-pid ns both report NO-NODE via nsenter).
+                // Robust fix: COPY node into /sdcard (shared into app ns, verified
+                // visible via nsenter -t <app> -m) as node.bin, then run keepalive
+                // IN the app ns with NODE_BIN pointing at the staged copy. No nsenter.
+                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", """ST=/sdcard/projects/opencode-companion/node.bin; [ -x /usr/bin/node ] && SRC=/usr/bin/node || SRC=$(command -v node 2>/dev/null); if [ -n "$SRC" ]; then [ "$ST" -ot "$SRC" ] 2>/dev/null || [ ! -x "$ST" ] && cp "$SRC" "$ST" && chmod 755 "$ST"; ls -la "$ST"; else echo NO-SRC; fi"""))
+                val stageOut = try { stage.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
+                android.util.Log.i("OpenCodeBoot", "keepalive stage: ${stageOut.take(200)}")
+                val stagedBin = "/sdcard/projects/opencode-companion/node.bin"
+                val direct = arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; NODE_BIN=\"$stagedBin\" nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched")
                 val proc = Runtime.getRuntime().exec(direct)
                 execExit = proc.waitFor()
                 val outText = try { proc.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
