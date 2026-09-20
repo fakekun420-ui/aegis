@@ -71,7 +71,11 @@ data class MessageInfo(
 data class MessagePart(
     val id: String? = null,
     val type: String? = null,
-    val text: String? = null
+    val text: String? = null,
+    val mime: String? = null,
+    val filename: String? = null,
+    val data: String? = null,
+    val image: String? = null
 )
 data class Message(
     val info: MessageInfo? = null,
@@ -92,7 +96,9 @@ data class Message(
         t = Regex("<project_knowledge[\\s\\S]*?</project_knowledge>", RegexOption.IGNORE_CASE).replace(t, "").trim()
         return t
     }
-    val isEmpty: Boolean get() = text.isBlank() && strippedText().isBlank()
+    val isEmpty: Boolean get() = text.isBlank() && strippedText().isBlank() && fileParts().isEmpty() && imageParts().isEmpty()
+    fun fileParts(): List<MessagePart> = parts?.filter { it.type == "file" } ?: emptyList()
+    fun imageParts(): List<MessagePart> = parts?.filter { it.type == "image" } ?: emptyList()
 }
 
 data class SendMessageRequest(

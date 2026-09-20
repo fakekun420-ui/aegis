@@ -11,6 +11,9 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -380,6 +383,28 @@ fun ChatScreen(
 }
 
 @Composable
+private fun decodeBase64Bitmap(b64: String): android.graphics.Bitmap? {
+    return try {
+        val clean = b64.substringAfter(",", b64)
+        val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    } catch (_: Exception) { null }
+}
+
+@Composable
+private fun FileRow(name: String, mime: String, tint: androidx.compose.ui.graphics.Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            if (mime.startsWith("image/")) Icons.Filled.Photo else Icons.Filled.FolderOpen,
+            contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)
+        )
+        Column {
+            Text(name, style = MaterialTheme.typography.bodySmall, color = tint, maxLines = 1)
+            if (mime.isNotBlank()) Text(mime, style = MaterialTheme.typography.labelSmall, color = tint.copy(alpha = 0.7f), maxLines = 1)
+        }
+    }
+}
+
 private fun MessageBubble(msg: Message) {
     val isUser = msg.role == "user"
     val raw = msg.text
@@ -433,12 +458,37 @@ private fun MessageBubble(msg: Message) {
             bottomStart = if (isUser) 16.dp else 4.dp,
             bottomEnd = if (isUser) 4.dp else 16.dp
         )
+        val files = msg.fileParts()
+        val images = msg.imageParts()
         Surface(color = bubbleColor, shape = shape, modifier = Modifier.fillMaxWidth(0.86f)) {
-            Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                if (isUser) {
-                    Text(stripped.ifBlank { raw }, color = contentColor, style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    MarkdownText(stripped.ifBlank { raw })
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Image previews (base64 data URIs from backend)
+                images.forEach { img ->
+                    val b64 = img.image ?: img.data
+                    val bitmap = remember(b64) { b64?.let { decodeBase64Bitmap(it) } }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = img.filename ?: "imagen adjunta",
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.FillWidth
+                        )
+                    } else {
+                        FileRow(name = img.filename ?: "imagen", mime = img.mime ?: "image/*", tint = contentColor)
+                    }
+                }
+                // File attachments as icon rows
+                files.forEach { f ->
+                    FileRow(name = f.filename ?: "archivo", mime = f.mime ?: "", tint = contentColor)
+                }
+                if (stripped.isNotBlank() || raw.isNotBlank()) {
+                    if (isUser) {
+                        Text(stripped.ifBlank { raw }, color = contentColor, style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        MarkdownText(stripped.ifBlank { raw })
+                    }
+                } else if (images.isEmpty() && files.isEmpty()) {
+                    Text("(vacío)", color = contentColor.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
