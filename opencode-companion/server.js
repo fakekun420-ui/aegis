@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { exec, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { OpencodeAdapter, AntigravityAdapter, ProviderManager } from "./providers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -76,6 +77,9 @@ function validateProjectPayload(body, isCreate) {
   if (body.description !== undefined && typeof body.description !== "string") return "description must be string";
   if (body.skills !== undefined && !Array.isArray(body.skills)) return "skills must be array";
   if (body.linkedProjects !== undefined && !Array.isArray(body.linkedProjects)) return "linkedProjects must be array";
+  if (body.provider !== undefined && !["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim())) {
+    return "invalid provider — must be 'opencode' or 'antigravity'";
+  }
   return null;
 }
 // Normalize sessions entry — ensures required fields exist
@@ -85,7 +89,9 @@ function normalizeSessionEntry(s) {
     title: String(s.title || s.sessionId || "untitled").trim(),
     createdAt: s.createdAt || nowIso(),
     lastUsed: s.lastUsed || s.createdAt || nowIso(),
-    summary: s.summary || ""
+    summary: s.summary || "",
+    provider: s.provider ? String(s.provider).toLowerCase().trim() : undefined,
+    agyConversationId: s.agyConversationId ? String(s.agyConversationId).trim() : undefined
   };
 }
 
@@ -209,6 +215,22 @@ function buildSystemContextBlock(projectId) {
   if (crossBlock) parts.push(`# Cross-Project Context (linked projects)\n${crossBlock}`);
   return parts.join("\n\n");
 }
+
+// ---- Multi-agent Provider Abstraction ----
+const providerManager = new ProviderManager(path.join(__dirname, "providers.json"));
+const opencodeAdapter = new OpencodeAdapter({
+  host: OPENCODE_HOST,
+  port: OPENCODE_PORT,
+  getSystemContextBlock: (pid) => buildSystemContextBlock(pid)
+});
+const antigravityAdapter = new AntigravityAdapter({
+  binPath: fs.existsSync("/root/.local/bin/agy") ? "/root/.local/bin/agy" : "agy",
+  brainDir: "/root/.gemini/antigravity-cli/brain",
+  cwd: PROJECTS_ROOT,
+  getSystemContextBlock: (pid) => buildSystemContextBlock(pid)
+});
+providerManager.register(opencodeAdapter);
+providerManager.register(antigravityAdapter);
 
 // ---- Non-destructive session ownership discovery (hub must never kill TUI) ----
 // COMPANION_SESSION_FILE persists the PID we launched as companion-owned across restarts.
@@ -582,6 +604,162 @@ const server = http.createServer(async (req, res)=>{
   try { url = new URL(req.url, `http://${req.headers.host}`); } catch (e) { return json(res, 400, { error: 'bad url', detail: String(e) }); }
   const pathname = url.pathname;
 
+  // 0) Provider API routes
+  if(pathname==="/api/providers" && req.method==="GET"){
+    return json(res, 200, { ok: true, data: { defaultProvider: providerManager.defaultProvider, providers: providerManager.listProviders() } });
+  }
+  if(pathname==="/api/providers/default" && req.method==="POST"){
+    try {
+      const raw = await readJsonBody(req, 4*1024);
+      const body = JSON.parse(raw || "{}");
+      const id = String(body.provider || body.id || "").toLowerCase().trim();
+      if (!id || !providerManager.adapters.has(id)) {
+        return json(res, 400, { ok: false, error: `invalid provider: ${id}` });
+      }
+      providerManager.defaultProvider = id;
+      try {
+        fs.writeFileSync(path.join(__dirname, "providers.json"), JSON.stringify({
+          defaultProvider: id,
+          providers: providerManager.listProviders()
+        }, null, 2));
+      } catch (_) {}
+      return json(res, 200, { ok: true, data: { defaultProvider: id } });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e) });
+    }
+  }
+
+  // 0b) Provider-aware Session Creation: POST /opencode/session or POST /api/sessions
+  if ((pathname === "/opencode/session" || pathname === "/api/sessions") && req.method === "POST") {
+    try {
+      const raw = await readJsonBody(req, 64 * 1024);
+      const body = JSON.parse(raw || "{}");
+      const store = loadProjectsStore();
+
+      let provId = body.provider || req.headers["x-provider"] || null;
+      let projectId = body.projectId || req.headers["x-project-id"] || UI_STATE.projectId || null;
+
+      if (!projectId && typeof body.title === "string") {
+        for (const p of store.projects) {
+          if (body.title.includes(`:${p.name}:`) || body.title.includes(`:${p.id}:`)) {
+            projectId = p.id;
+            break;
+          }
+        }
+      }
+
+      if (!provId && projectId) {
+        const p = findProject(store, projectId);
+        if (p && p.provider) provId = p.provider;
+      }
+
+      const adapter = providerManager.resolveProvider(null, provId, store);
+
+      if (adapter.id === "antigravity") {
+        console.log(`[hub] creating Antigravity session (title: ${body.title || "untitled"})`);
+        const created = await adapter.createSession({
+          title: body.title,
+          projectId
+        });
+
+        if (projectId) {
+          const proj = findProject(store, projectId);
+          if (proj && !proj.archivedAt) {
+            const entry = normalizeSessionEntry({
+              sessionId: created.id,
+              title: created.title,
+              createdAt: created.createdAt,
+              lastUsed: created.createdAt,
+              provider: "antigravity"
+            });
+            proj.sessions = proj.sessions || [];
+            proj.sessions.push(entry);
+            saveProjectsStore(store);
+          }
+        }
+
+        return json(res, 201, {
+          id: created.id,
+          ID: created.id,
+          title: created.title,
+          createdAt: created.createdAt,
+          provider: "antigravity"
+        });
+      }
+
+      // If OpenCode, use opencodeAdapter
+      console.log(`[hub] creating OpenCode session via adapter (title: ${body.title || "untitled"})`);
+      const created = await opencodeAdapter.createSession({ title: body.title });
+      if (projectId) {
+        const proj = findProject(store, projectId);
+        if (proj && !proj.archivedAt) {
+          const entry = normalizeSessionEntry({
+            sessionId: created.id,
+            title: created.title,
+            createdAt: created.createdAt,
+            lastUsed: created.createdAt,
+            provider: "opencode"
+          });
+          proj.sessions = proj.sessions || [];
+          proj.sessions.push(entry);
+          saveProjectsStore(store);
+        }
+      }
+      return json(res, 201, created.raw || created);
+    } catch (e) {
+      console.error("[hub] createSession error:", e.message);
+      return json(res, 500, { ok: false, error: `createSession failed: ${e.message}` });
+    }
+  }
+
+  // 0c) Provider-aware Message Send: POST /opencode/session/:id/message or POST /api/sessions/:id/message
+  const sendMsgMatch = pathname.match(/^\/(?:opencode|api)\/session(?:s)?\/([^\/]+)\/message$/);
+  if (sendMsgMatch && req.method === "POST") {
+    const sid = sanitizeProjectId(decodeURIComponent(sendMsgMatch[1]));
+    const store = loadProjectsStore();
+    const adapter = providerManager.resolveProvider(sid, req.headers["x-provider"], store);
+
+    if (adapter.id === "antigravity") {
+      try {
+        const raw = await readJsonBody(req, 512 * 1024);
+        const body = JSON.parse(raw || "{}");
+
+        let pId = body.projectId || req.headers["x-project-id"] || null;
+        let sessionEntry = null;
+        for (const p of store.projects) {
+          const found = (p.sessions || []).find((s) => s.sessionId === sid);
+          if (found) {
+            pId = pId || p.id;
+            sessionEntry = found;
+            break;
+          }
+        }
+        if (!pId && UI_STATE && UI_STATE.projectId) pId = UI_STATE.projectId;
+        body.projectId = pId;
+
+        if (sessionEntry && sessionEntry.agyConversationId) {
+          adapter.sessionMap.set(sid, sessionEntry.agyConversationId);
+        }
+
+        const msgResponse = await adapter.sendMessage(sid, body);
+
+        if (sessionEntry) {
+          if (adapter.sessionMap.has(sid)) {
+            sessionEntry.agyConversationId = adapter.sessionMap.get(sid);
+          }
+          sessionEntry.lastUsed = nowIso();
+          saveProjectsStore(store);
+        }
+
+        return json(res, 200, msgResponse);
+      } catch (e) {
+        console.error("[hub] antigravity sendMessage error:", e.message);
+        return json(res, 502, { ok: false, error: `Antigravity execution failed: ${e.message}` });
+      }
+    }
+    // If opencode, fall through to proxyToOpencode with injection!
+  }
+
   // 1) opencode proxy
   if(pathname.startsWith("/opencode/") || pathname==="/opencode"){
     return proxyToOpencode(req, res);
@@ -811,6 +989,7 @@ const server = http.createServer(async (req, res)=>{
         description: String(body.description || "").trim(),
         createdAt: nowIso(),
         archivedAt: null,
+        provider: (body.provider && ["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim())) ? String(body.provider).toLowerCase().trim() : "opencode",
         sessions: [],
         skills: Array.isArray(body.skills) ? body.skills : [],
         linkedProjects: Array.isArray(body.linkedProjects) ? body.linkedProjects : []
@@ -844,6 +1023,10 @@ const server = http.createServer(async (req, res)=>{
         proj.name = newName;
       }
       if (body.description !== undefined) proj.description = String(body.description || "").trim();
+      if (body.provider !== undefined) {
+        const prov = String(body.provider).toLowerCase().trim();
+        if (["opencode", "antigravity"].includes(prov)) proj.provider = prov;
+      }
       if (body.archived !== undefined || body.archivedAt !== undefined) {
         // archived boolean toggles archivedAt timestamp (soft delete spec)
         const shouldArchive = body.archived === true || (body.archivedAt !== undefined && body.archivedAt !== null);
@@ -911,12 +1094,52 @@ const server = http.createServer(async (req, res)=>{
       for (const p of store.projects) {
         if (p.id !== id) p.sessions = (p.sessions || []).filter(s => s.sessionId !== sessionId);
       }
-      const entry = normalizeSessionEntry({ sessionId, title: body.title, summary: body.summary, createdAt: body.createdAt, lastUsed: body.lastUsed });
+      const entry = normalizeSessionEntry({
+        sessionId,
+        title: body.title,
+        summary: body.summary,
+        createdAt: body.createdAt,
+        lastUsed: body.lastUsed,
+        provider: body.provider || proj.provider || "opencode",
+        agyConversationId: body.agyConversationId
+      });
       proj.sessions = proj.sessions || [];
       proj.sessions.push(entry);
       saveProjectsStore(store);
       return json(res, 201, ok(entry));
     } catch (e) { return json(res, 500, fail(String(e))); }
+  }
+
+  // PATCH /api/projects/:id/sessions/:sessionId — update session title, summary, or provider
+  if(pathname.match(/^\/api\/projects\/[^\/]+\/sessions\/[^\/]+$/) && req.method==="PATCH"){
+    const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions\/([^\/]+)$/);
+    const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    const sessionId = sanitizeProjectId(decodeURIComponent(m[2]));
+    const store = loadProjectsStore();
+    const proj = findProject(store, id);
+    if (!proj) return json(res, 404, fail(`project ${id} not found`));
+    const sess = (proj.sessions || []).find(s => s.sessionId === sessionId);
+    if (!sess) return json(res, 404, fail(`session ${sessionId} not found in project ${id}`));
+    try {
+      const raw = await readJsonBody(req, 64*1024);
+      const body = JSON.parse(raw || "{}");
+      if (body.title !== undefined) sess.title = String(body.title).trim();
+      if (body.summary !== undefined) sess.summary = String(body.summary).trim();
+      if (body.provider !== undefined) {
+        const prov = String(body.provider).toLowerCase().trim();
+        if (!["opencode", "antigravity"].includes(prov)) {
+          return json(res, 400, fail("invalid provider: must be 'opencode' or 'antigravity'"));
+        }
+        sess.provider = prov;
+      }
+      if (body.agyConversationId !== undefined) {
+        sess.agyConversationId = String(body.agyConversationId).trim();
+      }
+      saveProjectsStore(store);
+      return json(res, 200, ok(sess));
+    } catch (e) {
+      return json(res, 500, fail(String(e)));
+    }
   }
 
   // DELETE /api/projects/:id/sessions/:sessionId — disassociate session from project
@@ -1031,62 +1254,50 @@ const server = http.createServer(async (req, res)=>{
     } catch (e) { return json(res, 500, fail(String(e))); }
   }
 
-  // GET /api/opencode/sessions — proxy live opencode session list (fix 4: surface existing chats)
-  if(pathname==="/api/opencode/sessions" && req.method==="GET"){
+  // GET /api/opencode/sessions (and GET /api/sessions) — proxy live sessions across all active providers
+  if((pathname==="/api/opencode/sessions" || pathname==="/api/sessions") && req.method==="GET"){
     try {
-      const ocRes = await new Promise((resolve, reject)=>{
-        const r = http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path: "/session", timeout: 4000 }, rs=>{
-          let d=""; rs.on("data",c=>d+=c); rs.on("end",()=> resolve({ status: rs.statusCode, body: d }));
-        });
-        r.on("error", reject);
-        r.setTimeout(4000, ()=> { try{ r.destroy(); }catch{} reject(new Error("timeout /session")); });
-      });
-      const payload = JSON.parse(ocRes.body || "[]");
-      // Normalize to array
-      const list = Array.isArray(payload) ? payload : (payload.sessions || payload.data || []);
+      const list = await providerManager.listAllSessions();
       return json(res, 200, ok(list));
     } catch (e) {
-      return json(res, 500, fail(`opencode /session proxy failed: ${String(e).slice(0,400)}`));
+      return json(res, 500, fail(`list sessions failed: ${String(e).slice(0,400)}`));
     }
   }
 
-  // Phase 2: GET /api/opencode/sessions/:id/messages — proxy GET /session/:id/message
-  // Following same proxyToOpencode pattern as /api/opencode/sessions above
-  if(pathname.match(/^\/api\/opencode\/sessions\/[^\/]+\/messages$/) && req.method==="GET"){
-    const m = pathname.match(/^\/api\/opencode\/sessions\/([^\/]+)\/messages$/);
+  // Phase 2: GET /api/opencode/sessions/:id/messages (and GET /api/sessions/:id/messages) — unified messages
+  if((pathname.match(/^\/api\/opencode\/sessions\/[^\/]+\/messages$/) || pathname.match(/^\/api\/sessions\/[^\/]+\/messages$/)) && req.method==="GET"){
+    const m = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)\/messages$/);
     const sid = sanitizeProjectId(decodeURIComponent(m[1]));
     try {
-      const ocRes = await new Promise((resolve, reject) => {
-        const r = http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path: `/session/${encodeURIComponent(sid)}/message`, timeout: 8000 }, rs => {
-          let d = ""; rs.on("data", c => d += c); rs.on("end", () => resolve({ status: rs.statusCode, body: d }));
-        });
-        r.on("error", reject);
-        r.setTimeout(8000, () => { try { r.destroy(); } catch {} reject(new Error("timeout /session/:id/message")); });
-      });
-      let payload;
-      try { payload = JSON.parse(ocRes.body || "[]"); } catch { payload = ocRes.body; }
-      const list = Array.isArray(payload) ? payload : (payload.messages || payload.data || []);
-      // Pass through raw array — hub envelope not needed, keep compat with direct /opencode proxy
-      // Wrap in ok envelope for consistent client parsing (ApiService expects List<Message>)
-      // But Retrofit will deserialize envelope.data — so use envelope
-      return json(res, ocRes.status, ok(list));
+      // Sync agyConversationId if stored in projects.json
+      const store = loadProjectsStore();
+      for (const p of store.projects) {
+        const found = (p.sessions || []).find(s => s.sessionId === sid);
+        if (found && found.agyConversationId) {
+          antigravityAdapter.sessionMap.set(sid, found.agyConversationId);
+        }
+      }
+
+      const list = await providerManager.getUnifiedMessages(sid);
+      return json(res, 200, ok(list));
     } catch (e) {
-      return json(res, 502, fail(`opencode /session/:id/message proxy failed: ${String(e).slice(0,400)}`));
+      return json(res, 502, fail(`get messages failed: ${String(e).slice(0,400)}`));
     }
   }
 
-  // GET /api/opencode/models — list available models for the model selector
-  // Returns a curated list since opencode doesn't expose a models API directly
-  if(pathname === "/api/opencode/models" && req.method === "GET") {
-    const models = [
-      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", description: "Rápido y eficiente" },
-      { id: "gemini-3.6-flash-lite", name: "Gemini 3.6 Flash Lite", description: "Más rápido, menos preciso" },
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "Alta calidad, más lento" },
-      { id: "gpt-4o", name: "GPT-4o", description: "OpenAI multihablidad" },
-      { id: "gpt-4o-mini", name: "GPT-4o Mini", description: "Rápido y económico" },
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", description: "Balance calidad/velocidad" },
-      { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", description: " Ultrarrápido" }
-    ];
+  // GET /api/opencode/models (and GET /api/models) — list available models for the model selector
+  if((pathname === "/api/opencode/models" || pathname === "/api/models") && req.method === "GET") {
+    const prov = url.searchParams.get("provider");
+    if (prov === "antigravity") {
+      const models = await antigravityAdapter.listModels();
+      return json(res, 200, ok(models));
+    }
+    if (prov === "all") {
+      const oc = await opencodeAdapter.listModels();
+      const agy = await antigravityAdapter.listModels();
+      return json(res, 200, ok({ opencode: oc, antigravity: agy }));
+    }
+    const models = await opencodeAdapter.listModels();
     return json(res, 200, ok(models));
   }
 

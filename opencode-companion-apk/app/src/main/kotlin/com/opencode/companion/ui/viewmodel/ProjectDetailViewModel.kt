@@ -63,10 +63,14 @@ class ProjectDetailViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 // Create session via hub
+                val provider = _project.value?.provider ?: "opencode"
                 val title = "companion:${_project.value?.name ?: projectId}:${System.currentTimeMillis() % 100000}"
+                val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":\"$projectId\",\"provider\":\"$provider\"}"
                 val req = okhttp3.Request.Builder()
                     .url("http://127.0.0.1:8765/opencode/session")
-                    .post(okhttp3.RequestBody.create("application/json".toMediaType(), "{\"title\":\"${title.replace("\"","\\\"")}\"}"))
+                    .header("X-Provider", provider)
+                    .header("X-Project-Id", projectId)
+                    .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
                     .build()
                 val resp = ApiClient.rawOkHttp.newCall(req).execute()
                 val body = resp.body?.string() ?: return@launch
@@ -78,7 +82,7 @@ class ProjectDetailViewModel : ViewModel() {
                     }; else -> null }
                 } catch (_: Exception) { null } ?: return@launch
                 // Link to project
-                api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title))
+                api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider))
                 // Send first message
                 if (text.isNotBlank()) {
                     api.sendMessage(sid, SendMessageRequest(parts = listOf(mapOf("type" to "text", "text" to text))))

@@ -15,8 +15,14 @@ data class SessionRef(
     val title: String? = null,
     val createdAt: String? = null,
     val lastUsed: String? = null,
-    val summary: String? = null
-)
+    val summary: String? = null,
+    val provider: String? = null
+) {
+    fun resolvedProvider(projectProvider: String? = null): String {
+        val p = provider ?: projectProvider
+        return if (p?.lowercase() == "antigravity") "Antigravity" else "OpenCode"
+    }
+}
 
 data class Project(
     val id: String,
@@ -24,25 +30,31 @@ data class Project(
     val description: String? = null,
     val createdAt: String? = null,
     val archivedAt: String? = null,
+    val provider: String? = "opencode",
     val sessions: List<SessionRef>? = null,
     val skills: List<Any>? = null,
     val linkedProjects: List<String>? = null
-)
+) {
+    val resolvedProvider: String get() = if (provider?.lowercase() == "antigravity") "Antigravity" else "OpenCode"
+}
 
 data class CreateProjectRequest(
     val name: String,
-    val description: String? = null
+    val description: String? = null,
+    val provider: String? = "opencode"
 )
 
 data class PatchProjectRequest(
     val name: String? = null,
     val description: String? = null,
-    val archived: Boolean? = null
+    val archived: Boolean? = null,
+    val provider: String? = null
 )
 
 data class LinkSessionRequest(
     val sessionId: String,
-    val title: String? = null
+    val title: String? = null,
+    val provider: String? = null
 )
 
 // ---- Sessions (proxy /api/opencode/sessions -> opencode /session) ----
@@ -55,11 +67,13 @@ data class OpencodeSession(
     val createdAt: String? = null,
     @SerializedName("created_at") val createdAtAlt: String? = null,
     val updatedAt: String? = null,
-    @SerializedName("updated_at") val updatedAtAlt: String? = null
+    @SerializedName("updated_at") val updatedAtAlt: String? = null,
+    val provider: String? = null
 ) {
     val resolvedId: String get() = id ?: ID ?: ""
     val resolvedTitle: String get() = title ?: name ?: resolvedId.take(8)
     val lastActivityIso: String? get() = updatedAt ?: updatedAtAlt ?: createdAt ?: createdAtAlt
+    val resolvedProvider: String get() = if (provider?.lowercase() == "antigravity") "Antigravity" else "OpenCode"
 }
 
 // ---- Messages (GET /session/:id/message proxied via hub) ----

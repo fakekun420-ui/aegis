@@ -86,7 +86,12 @@ fun ProjectDetailScreen(
                                 items(sessions, key = { it.sessionId }) { s ->
                                     Card(onClick = { onOpenSession(s.sessionId) }, modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = s.title ?: s.sessionId.take(8) }) {
                                         ListItem(
-                                            headlineContent = { Text(s.title ?: s.sessionId.take(8)) },
+                                            headlineContent = {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text(s.title ?: s.sessionId.take(8), modifier = Modifier.weight(1f, fill = false))
+                                                    ProviderBadge(s.resolvedProvider(project.provider))
+                                                }
+                                            },
                                             supportingContent = { Text(s.lastUsed ?: s.createdAt ?: "", maxLines = 1) },
                                             leadingContent = { Icon(Icons.Filled.ChatBubble, contentDescription = "Sesión") }
                                         )

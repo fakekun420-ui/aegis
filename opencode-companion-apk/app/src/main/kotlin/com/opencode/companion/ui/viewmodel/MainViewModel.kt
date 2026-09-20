@@ -58,10 +58,10 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun createProject(name: String, description: String) {
+    fun createProject(name: String, description: String, provider: String = "opencode") {
         viewModelScope.launch {
             try {
-                val resp = api.createProject(CreateProjectRequest(name, description.ifBlank { null }))
+                val resp = api.createProject(CreateProjectRequest(name, description.ifBlank { null }, provider = provider))
                 if (resp.ok) refreshProjects() else _error.value = resp.error
             } catch (e: Exception) { _error.value = e.message }
         }
@@ -114,32 +114,28 @@ class MainViewModel : ViewModel() {
 
     suspend fun createSessionForProject(projectId: String, title: String): String? {
         return try {
-            // Create session via hub proxy, then auto-link
-            val body = mapOf("title" to title)
-            // Direct POST to /opencode/session via ApiClient is not yet typed; use raw Retrofit via OkHttp
-            // Simpler: use api helper — add createSession endpoint lazily via generic call
-            // For now use direct OkHttp
-            val client = ApiClient.service
-            // Fallback: create via POST /opencode/session (hub proxy) using ad-hoc retrofit
-            // Easiest: use ApiClient.rawCreateSession if exists, else inline okhttp
-            val sid = createSessionViaHub(title)
+            val proj = _projects.value.find { it.id == projectId }
+            val provider = proj?.provider ?: "opencode"
+            val sid = createSessionViaHub(title, projectId, provider)
             if (sid != null) {
-                try { api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title)) } catch (_: Exception) {}
+                try { api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider)) } catch (_: Exception) {}
                 refreshSessions(); refreshProjects()
             }
             sid
         } catch (e: Exception) { _error.value = e.message; null }
     }
 
-    private suspend fun createSessionViaHub(title: String): String? {
+    private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? {
         return try {
+            val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":\"${projectId ?: ""}\",\"provider\":\"$provider\"}"
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:8765/opencode/session")
-                .post(okhttp3.RequestBody.create("application/json".toMediaType(), "{\"title\":\"${title.replace("\"","\\\"")}\"}"))
+                .header("X-Provider", provider)
+                .apply { if (projectId != null) header("X-Project-Id", projectId) }
+                .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
                 .build()
             val resp = ApiClient.rawOkHttp.newCall(req).execute()
             val body = resp.body?.string() ?: return null
-            // Response is {id:..., ID:...} or {ok,data:{id}}
             val json = com.google.gson.JsonParser.parseString(body).asJsonObject
             when {
                 json.has("id") -> json.get("id").asString

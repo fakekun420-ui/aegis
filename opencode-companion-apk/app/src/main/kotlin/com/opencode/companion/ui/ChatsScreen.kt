@@ -81,7 +81,12 @@ fun ChatsScreen(
                                 val projName = sessionToProject[sess.resolvedId]
                                 Card(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = sess.resolvedTitle }.combinedClickable(onClick = { onOpenSession(sess.resolvedId) }, onLongClick = { menuTarget = sess })) {
                                     ListItem(
-                                        headlineContent = { Text(sess.resolvedTitle, maxLines = 1) },
+                                        headlineContent = {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(sess.resolvedTitle, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                                                ProviderBadge(sess.resolvedProvider)
+                                            }
+                                        },
                                         supportingContent = { Text(listOfNotNull(relativeTime(sess.lastActivityIso), projName).joinToString(" · "), maxLines = 1) },
                                         leadingContent = { Icon(Icons.Filled.ChatBubble, contentDescription = "Chat") }
                                     )

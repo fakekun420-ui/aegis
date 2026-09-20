@@ -43,7 +43,7 @@ fun AppNavHost() {
                 error = vm.error.collectAsState().value,
                 onBack = { navController.popBackStack() },
                 onOpenProject = { id -> navController.navigate("project/$id") },
-                onCreateProject = { name, desc -> vm.createProject(name, desc) },
+                onCreateProject = { name, desc, provider -> vm.createProject(name, desc, provider) },
                 onRenameProject = { id, name -> vm.renameProject(id, name) },
                 onPatchProject = { id, name, desc -> vm.patchProject(id, name, desc) },
                 onArchiveProject = { id -> vm.archiveProject(id) },

@@ -17,9 +17,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.Project
 import com.opencode.companion.util.relativeTime
+
+@Composable
+fun ProviderBadge(provider: String, modifier: Modifier = Modifier) {
+    val isAgy = provider.equals("antigravity", ignoreCase = true)
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = if (isAgy) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+        modifier = modifier
+    ) {
+        Text(
+            text = if (isAgy) "Antigravity" else "OpenCode",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isAgy) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -29,7 +47,7 @@ fun ProjectsScreen(
     error: String? = null,
     onBack: () -> Unit,
     onOpenProject: (String) -> Unit,
-    onCreateProject: (String, String) -> Unit,
+    onCreateProject: (String, String, String) -> Unit = { _, _, _ -> },
     onRenameProject: (String, String) -> Unit,
     onPatchProject: (String, String?, String?) -> Unit = { _, _, _ -> },
     onArchiveProject: (String) -> Unit = {},
@@ -83,7 +101,12 @@ fun ProjectsScreen(
                             items(filtered, key = { it.id }) { proj ->
                                 Card(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = proj.name }.combinedClickable(onClick = { onOpenProject(proj.id) }, onLongClick = { menuTarget = proj })) {
                                     ListItem(
-                                        headlineContent = { Text(proj.name) },
+                                        headlineContent = {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(proj.name, modifier = Modifier.weight(1f, fill = false))
+                                                ProviderBadge(proj.resolvedProvider)
+                                            }
+                                        },
                                         supportingContent = { Text("${proj.description ?: "—"} · ${relativeTime(proj.createdAt)}", maxLines = 1) },
                                         leadingContent = { Icon(Icons.Filled.Folder, contentDescription = "Proyecto") }
                                     )
@@ -124,6 +147,7 @@ fun ProjectsScreen(
     if (showCreate) {
         var name by remember { mutableStateOf("") }
         var desc by remember { mutableStateOf("") }
+        var selectedProvider by remember { mutableStateOf("opencode") }
         AlertDialog(
             onDismissRequest = { showCreate = false },
             title = { Text("Nuevo proyecto") },
@@ -131,10 +155,23 @@ fun ProjectsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = desc, onValueChange = { desc = it }, label = { Text("Descripción (opcional)") }, modifier = Modifier.fillMaxWidth())
+                    Text("Proveedor / Agente:", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        FilterChip(
+                            selected = selectedProvider == "opencode",
+                            onClick = { selectedProvider = "opencode" },
+                            label = { Text("OpenCode") }
+                        )
+                        FilterChip(
+                            selected = selectedProvider == "antigravity",
+                            onClick = { selectedProvider = "antigravity" },
+                            label = { Text("Antigravity") }
+                        )
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { if (name.isNotBlank()) { onCreateProject(name.trim(), desc.trim()); showCreate = false } }) { Text("Crear") }
+                TextButton(onClick = { if (name.isNotBlank()) { onCreateProject(name.trim(), desc.trim(), selectedProvider); showCreate = false } }) { Text("Crear") }
             },
             dismissButton = { TextButton(onClick = { showCreate = false }) { Text("Cancelar") } }
         )
