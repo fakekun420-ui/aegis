@@ -1,335 +1,403 @@
 {
-  "nodes": [
+  "communities": {
+    "0": [
+      "public_app_addmsg",
+      "public_app_autogrow",
+      "public_app_bindprimarybuttons",
+      "public_app_canceltts",
+      "public_app_createsession",
+      "public_app_draintts",
+      "public_app_ensureaudiocontext",
+      "public_app_formatassistantsuccess",
+      "public_app_fuzzyfindproject",
+      "public_app_getexecanalysishint",
+      "public_app_handleassistantexecresult",
+      "public_app_handlemessageresponse",
+      "public_app_hidepill",
+      "public_app_humansize",
+      "public_app_initrecognition",
+      "public_app_initrecognition_scheduleduplexrestart",
+      "public_app_ismemorycontext",
+      "public_app_jpost",
+      "public_app_normalizevoicetext",
+      "public_app_pillfromsseevent",
+      "public_app_queuetts",
+      "public_app_renderchips",
+      "public_app_renderdisambiguation",
+      "public_app_scrolltobottom",
+      "public_app_selectsession",
+      "public_app_sendprompt",
+      "public_app_setupsse",
+      "public_app_setvoicemode",
+      "public_app_showpill",
+      "public_app_startlistening",
+      "public_app_startvoicesession",
+      "public_app_stoplistening",
+      "public_app_stripmemorycontext",
+      "public_app_tryassistantintent",
+      "public_app_updatevoicemodelabels",
+      "public_app_voicehandletext",
+      "public_app_voicelog",
+      "public_app_voicettsconfirm"
+    ],
+    "1": [
+      "public_app",
+      "public_app_agentsel",
+      "public_app_btnattach",
+      "public_app_btnhamburger",
+      "public_app_btnmic",
+      "public_app_btnsend",
+      "public_app_chipsel",
+      "public_app_composerel",
+      "public_app_dothub",
+      "public_app_dotoc",
+      "public_app_drawer",
+      "public_app_drawerbackdrop",
+      "public_app_drawerctl",
+      "public_app_filepicker",
+      "public_app_hubfoot",
+      "public_app_hubstatusel",
+      "public_app_initvoices",
+      "public_app_msgsel",
+      "public_app_ocstatusel",
+      "public_app_projectexpanded",
+      "public_app_projectscountel",
+      "public_app_projectslist",
+      "public_app_promptel",
+      "public_app_setupdrawer",
+      "public_app_standalonelist",
+      "public_app_state",
+      "public_app_statuspill",
+      "public_app_statuspilltext",
+      "public_app_sysinfo",
+      "public_app_ttsqueue",
+      "public_app_voicemodelabelduplex",
+      "public_app_voicemodelabelpush",
+      "public_app_voicemodetoggle"
+    ],
+    "2": [
+      "public_app_closeallsessionmenus",
+      "public_app_el",
+      "public_app_fetchskills",
+      "public_app_fmtdate",
+      "public_app_hideprojectview",
+      "public_app_jpatch",
+      "public_app_managedsessionrowel",
+      "public_app_openprojectview",
+      "public_app_persistexpanded",
+      "public_app_persistui",
+      "public_app_projectviewel",
+      "public_app_refreshprojects",
+      "public_app_refreshsessions",
+      "public_app_refreshskillsui",
+      "public_app_renderdrawer",
+      "public_app_renderprojectsessions",
+      "public_app_renderprojectsettings",
+      "public_app_sessionmenuforrow",
+      "public_app_sessionmenuforrow_item",
+      "public_app_sessionrowel",
+      "public_app_sessionsformanagedproject",
+      "public_app_setupnewprojectform",
+      "public_app_setupnewprojectform_closeform",
+      "public_app_setupnewprojectform_openform",
+      "public_app_setupprojectview",
+      "public_app_setupprojectview_pautogrow",
+      "public_app_setupprojectview_sendprojectprompt",
+      "public_app_setupskillsui",
+      "public_app_showlinkpicker",
+      "public_app_showtoast"
+    ],
+    "3": [
+      "ref_node_child_process",
+      "ref_node_fs",
+      "ref_node_http",
+      "ref_node_path",
+      "ref_node_url",
+      "server",
+      "server_argval",
+      "server_companion_session_file",
+      "server_companionmeta",
+      "server_dirname",
+      "server_hub_port",
+      "server_mime",
+      "server_opencode_port",
+      "server_projects_store_file",
+      "server_rationale_1077",
+      "server_skills_root",
+      "server_summaries_dir",
+      "server_ui_state",
+      "server_ui_state_file",
+      "server_voice_commands",
+      "server_voice_log"
+    ],
+    "4": [
+      "server_genprojectid",
+      "server_getprocessuptime",
+      "server_isvalidscope",
+      "server_isvalidskillname",
+      "server_listprojects",
+      "server_persistcompanionsession",
+      "server_probeopencodehealth",
+      "server_readjsonbody",
+      "server_runshell",
+      "server_sanitizename",
+      "server_sanitizeprojectid",
+      "server_sanitizescope",
+      "server_saveprojectsstore",
+      "server_saveuistate",
+      "server_scanservepids",
+      "server_server",
+      "server_shellexecraw",
+      "server_validateprojectpayload"
+    ],
+    "5": [
+      "package",
+      "package_dependencies",
+      "package_description",
+      "package_name",
+      "package_scripts",
+      "package_scripts_dev",
+      "package_scripts_start",
+      "package_type",
+      "package_version"
+    ],
+    "6": [
+      "server_buildcrossprojectcontext",
+      "server_buildskillscontext",
+      "server_buildsystemcontextblock",
+      "server_findproject",
+      "server_listallskillsmerged",
+      "server_listskills",
+      "server_loadprojectsstore",
+      "server_proxywithinjection",
+      "server_readsummary"
+    ],
+    "7": [
+      "public_app_jget",
+      "public_app_ownershipmeta",
+      "public_app_refreshagents",
+      "public_app_refreshstatus",
+      "public_app_renderownership",
+      "public_app_setdot"
+    ],
+    "8": [
+      "public_app_filetobase64",
+      "public_app_filetotext",
+      "public_app_getfilekind",
+      "public_app_handlefiles",
+      "public_app_mimeguess"
+    ],
+    "9": [
+      "keepalive",
+      "keepalive_hub_up",
+      "keepalive_is_up",
+      "keepalive_sh__entry"
+    ],
+    "10": [
+      "server_json",
+      "server_proxytoopencode",
+      "server_proxytoopencode_projecthint",
+      "server_send"
+    ],
+    "11": [
+      "server_normalizesessionentry",
+      "server_nowiso",
+      "server_pushvoicelog",
+      "server_writesummary"
+    ],
+    "12": [
+      "public_app_escapehtml",
+      "public_app_rendermarkdown",
+      "public_app_rendermarkdown_closelists"
+    ],
+    "13": [
+      "public_app_fetchmanagedprojects",
+      "public_app_jgetok",
+      "public_app_unwrap"
+    ],
+    "14": [
+      "server_classifyownership",
+      "server_clearstalecompanionmetaifneeded",
+      "server_iscompanionpidalive"
+    ],
+    "15": [
+      "server_deleteskill",
+      "server_skillpath",
+      "server_writeskill"
+    ],
+    "16": [
+      "service_d_99_opencode_hub",
+      "service_d_99_opencode_hub_sh__entry"
+    ],
+    "17": [
+      "start_hub",
+      "start_hub_sh__entry"
+    ]
+  },
+  "cohesion": {
+    "0": 0.13086770981507823,
+    "1": 0.06060606060606061,
+    "2": 0.167816091954023,
+    "3": 0.09523809523809523,
+    "4": 0.11764705882352941,
+    "5": 0.2222222222222222,
+    "6": 0.25,
+    "7": 0.4,
+    "8": 0.5,
+    "9": 0.8333333333333334,
+    "10": 0.5,
+    "11": 0.5,
+    "12": 0.6666666666666666,
+    "13": 0.6666666666666666,
+    "14": 0.6666666666666666,
+    "15": 0.6666666666666666,
+    "16": 1.0,
+    "17": 1.0
+  },
+  "gods": [
     {
-      "path": "opencode-companion/server.js",
-      "role": "hub: Node zero-deps HTTP 8765 -> proxy 4096, device bridge, multimodal, assistant, skills, summaries, voice registry",
-      "deps": [
-        "public/index.html",
-        "public/app.js",
-        "public/style.css",
-        "keepalive.sh"
-      ],
-      "info": {
-        "size": 92594,
-        "ext": ".js",
-        "hash": "9f80ff80"
-      }
+      "id": "server_server",
+      "label": "server",
+      "degree": 35
     },
     {
-      "path": "opencode-companion/public/index.html",
-      "role": "SPA shell: drawer + composer + skills/linked UI",
-      "deps": [
-        "public/app.js",
-        "public/style.css"
-      ],
-      "info": {
-        "size": 8965,
-        "ext": ".html",
-        "hash": "282909f9"
-      }
+      "id": "public_app_showpill",
+      "label": "showPill()",
+      "degree": 26
     },
     {
-      "path": "opencode-companion/public/app.js",
-      "role": "SPA logic: drawer/projects/sessions, multimodal, voice duplex, skills/linked, SSE",
-      "deps": [
-        "server.js:api/projects",
-        "server.js:api/skills",
-        "server.js:proxy"
-      ],
-      "info": {
-        "size": 87375,
-        "ext": ".js",
-        "hash": "f8fb684e"
-      }
+      "id": "public_app_sendprompt",
+      "label": "sendPrompt()",
+      "degree": 19
     },
     {
-      "path": "opencode-companion/public/style.css",
-      "role": "Theme + layout + status pills",
-      "deps": [],
-      "info": {
-        "size": 14759,
-        "ext": ".css",
-        "hash": "d63c0d8d"
-      }
+      "id": "public_app_addmsg",
+      "label": "addMsg()",
+      "degree": 18
     },
     {
-      "path": "opencode-companion/keepalive.sh",
-      "role": "Keepalive loop host-mount nsenter, guards TUI vs serve, hub pkill fix",
-      "deps": [
-        "server.js"
-      ],
-      "info": {
-        "size": 8136,
-        "ext": ".sh",
-        "hash": "b648d506"
-      }
+      "id": "public_app_renderdrawer",
+      "label": "renderDrawer()",
+      "degree": 18
     },
     {
-      "path": "opencode-companion/start-hub.sh",
-      "role": "Manual starter opencode serve + node server.js",
-      "deps": [
-        "server.js"
-      ],
-      "info": {
-        "size": 1519,
-        "ext": ".sh",
-        "hash": "3624d333"
-      }
+      "id": "public_app_voicehandletext",
+      "label": "voiceHandleText()",
+      "degree": 16
     },
     {
-      "path": "opencode-companion/service.d-99-opencode-hub.sh",
-      "role": "Magisk boot hook",
-      "deps": [
-        "keepalive.sh"
-      ],
-      "info": {
-        "size": 2059,
-        "ext": ".sh",
-        "hash": "74b90185"
-      }
+      "id": "public_app_selectsession",
+      "label": "selectSession()",
+      "degree": 15
     },
     {
-      "path": "opencode-companion/package.json",
-      "role": "Hub manifest",
-      "deps": [],
-      "info": {
-        "size": 323,
-        "ext": ".json",
-        "hash": "50bf6740"
-      }
+      "id": "public_app_refreshprojects",
+      "label": "refreshProjects()",
+      "degree": 15
     },
     {
-      "path": "opencode-companion/ui-state.json",
-      "role": "Runtime UI state (gitignored)",
-      "deps": [],
-      "info": {
-        "size": 82,
-        "ext": ".json",
-        "hash": "5d1f5b17"
-      }
+      "id": "public_app_el",
+      "label": "el()",
+      "degree": 14
     },
     {
-      "path": "opencode-companion-apk/app/src/main/AndroidManifest.xml",
-      "role": "Manifest: INTERNET, RECORD_AUDIO, READ_CONTACTS, BIND_VOICE_INTERACTION",
-      "deps": [],
-      "info": {
-        "size": 3957,
-        "ext": ".xml",
-        "hash": "22586e4b"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "role": "MainActivity: WebView + wake word (SharedPrefs) + STT/TTS + keepalive poll",
-      "deps": [
-        "CompanionService.kt",
-        "CompanionVoiceInteractionService.kt"
-      ],
-      "info": {
-        "size": 37183,
-        "ext": ".kt",
-        "hash": "6c799cd4"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionService.kt",
-      "role": "Foreground bridge :8766 (a11y/shell/launch)",
-      "deps": [
-        "OpencodeAccessibilityService.kt"
-      ],
-      "info": {
-        "size": 9105,
-        "ext": ".kt",
-        "hash": "4b691766"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionVoiceInteractionService.kt",
-      "role": "VoiceInteractionService assistant (long-press home)",
-      "deps": [
-        "MainActivity.kt"
-      ],
-      "info": {
-        "size": 6924,
-        "ext": ".kt",
-        "hash": "7d18be5b"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/OpencodeAccessibilityService.kt",
-      "role": "A11y: clickByText, gestures",
-      "deps": [],
-      "info": {
-        "size": 5099,
-        "ext": ".kt",
-        "hash": "637a033e"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/RootShell.kt",
-      "role": "RootShell: su -c fallbacks",
-      "deps": [],
-      "info": {
-        "size": 2168,
-        "ext": ".kt",
-        "hash": "e111a950"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/app/src/main/res/layout/activity_main.xml",
-      "role": "Layout: coordinator + WebView + overlay",
-      "deps": [],
-      "info": {
-        "size": 11658,
-        "ext": ".xml",
-        "hash": "d3965bdd"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/app/src/main/res/xml/voice_interaction_service_config.xml",
-      "role": "Voice config: supportsAssist",
-      "deps": [],
-      "info": {
-        "size": 400,
-        "ext": ".xml",
-        "hash": "8676e0ab"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/app/build.gradle.kts",
-      "role": "Gradle: versionCode BUILD_NUMBER, signingConfigs release, deps",
-      "deps": [],
-      "info": {
-        "size": 2429,
-        "ext": ".kts",
-        "hash": "2ea95527"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/build.gradle.kts",
-      "role": "Top-level AGP",
-      "deps": [],
-      "info": {
-        "size": 155,
-        "ext": ".kts",
-        "hash": "6c997379"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/settings.gradle.kts",
-      "role": "Settings include :app",
-      "deps": [],
-      "info": {
-        "size": 336,
-        "ext": ".kts",
-        "hash": "1b138af6"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/README.md",
-      "role": "APK docs: hub standalone vs a11y",
-      "deps": [],
-      "info": {
-        "size": 2629,
-        "ext": ".md",
-        "hash": "383a68ba"
-      }
-    },
-    {
-      "path": "opencode-companion-apk/install-su.sh",
-      "role": "Su installer: pm grant + a11y + whitelist",
-      "deps": [],
-      "info": {
-        "size": 4787,
-        "ext": ".sh",
-        "hash": "de60f389"
-      }
-    },
-    {
-      "path": ".github/workflows/build-apk.yml",
-      "role": "CI: decode keystore, BUILD_NUMBER, smoke 3–15MB, cert SHA",
-      "deps": [],
-      "info": {
-        "size": 4384,
-        "ext": ".yml",
-        "hash": "67cf0512"
-      }
-    },
-    {
-      "path": ".gitignore",
-      "role": "Ignores: *.keystore, node_modules, logs, ui-state.json",
-      "deps": [],
-      "info": {
-        "size": 652,
-        "ext": "",
-        "hash": "321115c2"
-      }
+      "id": "public_app_refreshskillsui",
+      "label": "refreshSkillsUI()",
+      "degree": 13
     }
   ],
-  "edges": [
+  "surprises": [
     {
-      "from": "opencode-companion/server.js",
-      "to": "public/index.html"
+      "source": "server",
+      "target": "normalizeSessionEntry()",
+      "source_files": [
+        "server.js",
+        "server.js"
+      ],
+      "confidence": "INFERRED",
+      "relation": "indirect_call",
+      "note": "Bridges community 11 → community 4"
     },
     {
-      "from": "opencode-companion/server.js",
-      "to": "public/app.js"
+      "source": "addMsg()",
+      "target": "el()",
+      "source_files": [
+        "public/app.js",
+        "public/app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 2"
     },
     {
-      "from": "opencode-companion/server.js",
-      "to": "public/style.css"
+      "source": "addMsg()",
+      "target": "renderMarkdown()",
+      "source_files": [
+        "public/app.js",
+        "public/app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 12"
     },
     {
-      "from": "opencode-companion/server.js",
-      "to": "keepalive.sh"
+      "source": "handleFiles()",
+      "target": "humanSize()",
+      "source_files": [
+        "public/app.js",
+        "public/app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 8"
     },
     {
-      "from": "opencode-companion/public/index.html",
-      "to": "public/app.js"
+      "source": "selectSession()",
+      "target": "jget()",
+      "source_files": [
+        "public/app.js",
+        "public/app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 0 → community 7"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `server` connect `server` to `server.js`, `buildCrossProjectContext`, `proxyToOpencode`, `nowIso`, `classifyOwnership`, `skillPath`?",
+      "why": "High betweenness centrality (0.015) - this node is a cross-community bridge."
     },
     {
-      "from": "opencode-companion/public/index.html",
-      "to": "public/style.css"
+      "type": "bridge_node",
+      "question": "Why does `setupNewProjectForm()` connect `renderDrawer` to `showPill`, `app.js`?",
+      "why": "High betweenness centrality (0.012) - this node is a cross-community bridge."
     },
     {
-      "from": "opencode-companion/public/app.js",
-      "to": "server.js:api/projects"
+      "type": "bridge_node",
+      "question": "Why does `showPill()` connect `showPill` to `handleFiles`, `app.js`, `renderDrawer`?",
+      "why": "High betweenness centrality (0.008) - this node is a cross-community bridge."
     },
     {
-      "from": "opencode-companion/public/app.js",
-      "to": "server.js:api/skills"
+      "type": "isolated_nodes",
+      "question": "What connects `agentSel`, `btnAttach`, `btnHamburger` to the rest of the system?",
+      "why": "52 weakly-connected nodes found - possible documentation gaps or missing edges."
     },
     {
-      "from": "opencode-companion/public/app.js",
-      "to": "server.js:proxy"
+      "type": "low_cohesion",
+      "question": "Should `showPill` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.13086770981507823 - nodes in this community are weakly interconnected."
     },
     {
-      "from": "opencode-companion/keepalive.sh",
-      "to": "server.js"
+      "type": "low_cohesion",
+      "question": "Should `app.js` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.06060606060606061 - nodes in this community are weakly interconnected."
     },
     {
-      "from": "opencode-companion/start-hub.sh",
-      "to": "server.js"
-    },
-    {
-      "from": "opencode-companion/service.d-99-opencode-hub.sh",
-      "to": "keepalive.sh"
-    },
-    {
-      "from": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "to": "CompanionService.kt"
-    },
-    {
-      "from": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.kt",
-      "to": "CompanionVoiceInteractionService.kt"
-    },
-    {
-      "from": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionService.kt",
-      "to": "OpencodeAccessibilityService.kt"
-    },
-    {
-      "from": "opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/CompanionVoiceInteractionService.kt",
-      "to": "MainActivity.kt"
+      "type": "low_cohesion",
+      "question": "Should `server.js` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.09523809523809523 - nodes in this community are weakly interconnected."
     }
   ]
 }

@@ -60,24 +60,24 @@ hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 <div class="container">
 
 <h1>opencode-companion — Complete Call Flow &amp; Architecture Documentation</h1>
-<p class="subtitle">Generated from graphify knowledge graph: 179 nodes, 389 edges, 18 communities. Commit: 0089193</p>
+<p class="subtitle">Generated from graphify knowledge graph: 197 nodes, 467 edges, 18 communities. Commit: e502567</p>
 
 <div class="nav">
     <a href="#overview">Architecture Overview</a>
     <a href="#build-graph">Graph Build</a>
     <a href="#cli-skills">CLI &amp; Skill Installers</a>
-    <a href="#appjs-public-formatassistantsuccess">Appjs Public Formatassistantsuccess</a>
-    <a href="#public-appjs-addmsg">Public Appjs Addmsg</a>
-    <a href="#public-appjs-fetchskills">Public Appjs Fetchskills</a>
-    <a href="#serverjs-genprojectid-getprocessuptime">Serverjs Genprojectid Getprocessuptime</a>
-    <a href="#serverjs-buildcrossprojectcontext-buildskillscon">Serverjs Buildcrossprojectcontext Buildskillscontext</a>
-    <a href="#public-appjs-filetobase64">Public Appjs Filetobase64</a>
-    <a href="#serverjs-normalizesessionentry-nowiso">Serverjs Normalizesessionentry Nowiso</a>
-    <a href="#keepalivesh-hub-script">Keepalivesh Hub Script</a>
-    <a href="#public-appjs-ownershipmeta">Public Appjs Ownershipmeta</a>
-    <a href="#public-appjs-fetchmanagedprojects">Public Appjs Fetchmanagedprojects</a>
-    <a href="#serverjs-classifyownership-clearstalecompanionme">Serverjs Classifyownership Clearstalecompanionmetaifneeded</a>
-    <a href="#serverjs-deleteskill-skillpath">Serverjs Deleteskill Skillpath</a>
+    <a href="#showpill">showPill</a>
+    <a href="#app-js">app.js</a>
+    <a href="#renderdrawer">renderDrawer</a>
+    <a href="#server">server</a>
+    <a href="#buildcrossprojectcontext">buildCrossProjectContext</a>
+    <a href="#jget">jget</a>
+    <a href="#handlefiles">handleFiles</a>
+    <a href="#proxytoopencode">proxyToOpencode</a>
+    <a href="#nowiso">nowIso</a>
+    <a href="#keepalive-sh">keepalive.sh</a>
+    <a href="#rendermarkdown">renderMarkdown</a>
+    <a href="#fetchmanagedprojects">fetchManagedProjects</a>
     <a href="#other">Other</a>
 </div>
 
@@ -88,48 +88,48 @@ hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    BUILD_GRAPH_321CBB04("Graph Build<br/><small>34 nodes</small>")
+    BUILD_GRAPH_321CBB04("Graph Build<br/><small>30 nodes</small>")
     class BUILD_GRAPH_321CBB04 module;
     CLI_SKILLS_9964CBB8("CLI &amp; Skill Installers<br/><small>2 nodes</small>")
     class CLI_SKILLS_9964CBB8 module;
-    APPJS_PUBLIC_FORMATASSISTANTSUCCESS_DDB133CB("Appjs Public Formatassistantsuccess<br/><small>35 nodes</small>")
-    class APPJS_PUBLIC_FORMATASSISTANTSUCCESS_DDB133CB module;
-    PUBLIC_APPJS_ADDMSG_00A0DBE9("Public Appjs Addmsg<br/><small>26 nodes</small>")
-    class PUBLIC_APPJS_ADDMSG_00A0DBE9 module;
-    PUBLIC_APPJS_FETCHSKILLS_24C03BD1("Public Appjs Fetchskills<br/><small>25 nodes</small>")
-    class PUBLIC_APPJS_FETCHSKILLS_24C03BD1 module;
-    SERVERJS_GENPROJECTID_GETPROCESSUPTIME_5AD2DC1C("Serverjs Genprojectid Getprocessuptime<br/><small>18 nodes</small>")
-    class SERVERJS_GENPROJECTID_GETPROCESSUPTIME_5AD2DC1C module;
-    SERVERJS_BUILDCROSSPROJECTCONTEXT_BUILDSKILLSCON_0CA95BC9("Serverjs Buildcrossprojectcontext Buildskillscontext<br/><small>9 nodes</small>")
-    class SERVERJS_BUILDCROSSPROJECTCONTEXT_BUILDSKILLSCON_0CA95BC9 module;
-    PUBLIC_APPJS_FILETOBASE64_8A8B0AC0("Public Appjs Filetobase64<br/><small>5 nodes</small>")
-    class PUBLIC_APPJS_FILETOBASE64_8A8B0AC0 module;
-    SERVERJS_NORMALIZESESSIONENTRY_NOWISO_1F9F16F9("Serverjs Normalizesessionentry Nowiso<br/><small>4 nodes</small>")
-    class SERVERJS_NORMALIZESESSIONENTRY_NOWISO_1F9F16F9 module;
-    KEEPALIVESH_HUB_SCRIPT_B302463E("Keepalivesh Hub Script<br/><small>4 nodes</small>")
-    class KEEPALIVESH_HUB_SCRIPT_B302463E module;
-    PUBLIC_APPJS_OWNERSHIPMETA_A6508A72("Public Appjs Ownershipmeta<br/><small>4 nodes</small>")
-    class PUBLIC_APPJS_OWNERSHIPMETA_A6508A72 module;
-    PUBLIC_APPJS_FETCHMANAGEDPROJECTS_9E5F234E("Public Appjs Fetchmanagedprojects<br/><small>3 nodes</small>")
-    class PUBLIC_APPJS_FETCHMANAGEDPROJECTS_9E5F234E module;
-    SERVERJS_CLASSIFYOWNERSHIP_CLEARSTALECOMPANIONME_D3B47F89("Serverjs Classifyownership Clearstalecompanionmetaifneeded<br/><small>3 nodes</small>")
-    class SERVERJS_CLASSIFYOWNERSHIP_CLEARSTALECOMPANIONME_D3B47F89 module;
-    SERVERJS_DELETESKILL_SKILLPATH_04DA802C("Serverjs Deleteskill Skillpath<br/><small>3 nodes</small>")
-    class SERVERJS_DELETESKILL_SKILLPATH_04DA802C module;
-    OTHER_D0941E68("Other<br/><small>4 nodes</small>")
+    SHOWPILL_06BA70DD("showPill<br/><small>38 nodes</small>")
+    class SHOWPILL_06BA70DD module;
+    APP_JS_CC08AAF7("app.js<br/><small>33 nodes</small>")
+    class APP_JS_CC08AAF7 module;
+    RENDERDRAWER_69BF0C9C("renderDrawer<br/><small>30 nodes</small>")
+    class RENDERDRAWER_69BF0C9C module;
+    SERVER_3DE4F901("server<br/><small>18 nodes</small>")
+    class SERVER_3DE4F901 module;
+    BUILDCROSSPROJECTCONTEXT_D5D2D748("buildCrossProjectContext<br/><small>9 nodes</small>")
+    class BUILDCROSSPROJECTCONTEXT_D5D2D748 module;
+    JGET_D15E7034("jget<br/><small>6 nodes</small>")
+    class JGET_D15E7034 module;
+    HANDLEFILES_A765A2E0("handleFiles<br/><small>5 nodes</small>")
+    class HANDLEFILES_A765A2E0 module;
+    PROXYTOOPENCODE_2C2004EE("proxyToOpencode<br/><small>4 nodes</small>")
+    class PROXYTOOPENCODE_2C2004EE module;
+    NOWISO_0514A959("nowIso<br/><small>4 nodes</small>")
+    class NOWISO_0514A959 module;
+    KEEPALIVE_SH_83E47E50("keepalive.sh<br/><small>4 nodes</small>")
+    class KEEPALIVE_SH_83E47E50 module;
+    RENDERMARKDOWN_BDB442B0("renderMarkdown<br/><small>3 nodes</small>")
+    class RENDERMARKDOWN_BDB442B0 module;
+    FETCHMANAGEDPROJECTS_1FC7ACA0("fetchManagedProjects<br/><small>3 nodes</small>")
+    class FETCHMANAGEDPROJECTS_1FC7ACA0 module;
+    OTHER_D0941E68("Other<br/><small>8 nodes</small>")
     class OTHER_D0941E68 module;
-    APPJS_PUBLIC_FORMATASSISTANTSUCCESS_DDB133CB -->|contains x25| PUBLIC_APPJS_ADDMSG_00A0DBE9
-    APPJS_PUBLIC_FORMATASSISTANTSUCCESS_DDB133CB -->|contains x23| PUBLIC_APPJS_FETCHSKILLS_24C03BD1
-    BUILD_GRAPH_321CBB04 -->|contains x18| SERVERJS_GENPROJECTID_GETPROCESSUPTIME_5AD2DC1C
-    PUBLIC_APPJS_FETCHSKILLS_24C03BD1 -->|calls x16| PUBLIC_APPJS_ADDMSG_00A0DBE9
-    BUILD_GRAPH_321CBB04 -->|contains x10| SERVERJS_BUILDCROSSPROJECTCONTEXT_BUILDSKILLSCON_0CA95BC9
-    PUBLIC_APPJS_ADDMSG_00A0DBE9 -->|calls x8| PUBLIC_APPJS_FETCHSKILLS_24C03BD1
-    APPJS_PUBLIC_FORMATASSISTANTSUCCESS_DDB133CB -->|contains x5| PUBLIC_APPJS_FILETOBASE64_8A8B0AC0
-    SERVERJS_GENPROJECTID_GETPROCESSUPTIME_5AD2DC1C -->|calls x5| SERVERJS_BUILDCROSSPROJECTCONTEXT_BUILDSKILLSCON_0CA95BC9
-    APPJS_PUBLIC_FORMATASSISTANTSUCCESS_DDB133CB -->|contains x4| PUBLIC_APPJS_OWNERSHIPMETA_A6508A72
-    BUILD_GRAPH_321CBB04 -->|contains x4| SERVERJS_NORMALIZESESSIONENTRY_NOWISO_1F9F16F9
-    SERVERJS_GENPROJECTID_GETPROCESSUPTIME_5AD2DC1C -->|calls x4| SERVERJS_NORMALIZESESSIONENTRY_NOWISO_1F9F16F9
-    PUBLIC_APPJS_FILETOBASE64_8A8B0AC0 -->|calls x3| PUBLIC_APPJS_ADDMSG_00A0DBE9
+    APP_JS_CC08AAF7 -->|contains x37| SHOWPILL_06BA70DD
+    APP_JS_CC08AAF7 -->|contains x25| RENDERDRAWER_69BF0C9C
+    RENDERDRAWER_69BF0C9C -->|calls x21| SHOWPILL_06BA70DD
+    BUILD_GRAPH_321CBB04 -->|contains x18| SERVER_3DE4F901
+    SHOWPILL_06BA70DD -->|calls x13| RENDERDRAWER_69BF0C9C
+    BUILD_GRAPH_321CBB04 -->|contains x9| BUILDCROSSPROJECTCONTEXT_D5D2D748
+    APP_JS_CC08AAF7 -->|contains x6| JGET_D15E7034
+    BUILD_GRAPH_321CBB04 -->|contains x6| OTHER_D0941E68
+    APP_JS_CC08AAF7 -->|contains x5| HANDLEFILES_A765A2E0
+    SERVER_3DE4F901 -->|calls x5| BUILDCROSSPROJECTCONTEXT_D5D2D748
+    SERVER_3DE4F901 -->|calls x5| OTHER_D0941E68
+    BUILD_GRAPH_321CBB04 -->|contains x4| NOWISO_0514A959
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -146,23 +146,36 @@ flowchart LR
     <h4>Architecture Layers</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>Layer</th><th>Nodes</th><th>Communities</th></tr>
-      <tr><td>Graph Build</td><td>34</td><td><code>3, 5, 10</code></td></tr><tr><td>CLI &amp; Skill Installers</td><td>2</td><td><code>16</code></td></tr><tr><td>Appjs Public Formatassistantsuccess</td><td>35</td><td><code>0</code></td></tr><tr><td>Public Appjs Addmsg</td><td>26</td><td><code>1</code></td></tr><tr><td>Public Appjs Fetchskills</td><td>25</td><td><code>2</code></td></tr><tr><td>Serverjs Genprojectid Getprocessuptime</td><td>18</td><td><code>4</code></td></tr><tr><td>Serverjs Buildcrossprojectcontext Buildskillscontext</td><td>9</td><td><code>6</code></td></tr><tr><td>Public Appjs Filetobase64</td><td>5</td><td><code>7</code></td></tr><tr><td>Serverjs Normalizesessionentry Nowiso</td><td>4</td><td><code>11</code></td></tr><tr><td>Keepalivesh Hub Script</td><td>4</td><td><code>8</code></td></tr><tr><td>Public Appjs Ownershipmeta</td><td>4</td><td><code>9</code></td></tr><tr><td>Public Appjs Fetchmanagedprojects</td><td>3</td><td><code>12</code></td></tr><tr><td>Serverjs Classifyownership Clearstalecompanionmetaifneeded</td><td>3</td><td><code>13</code></td></tr><tr><td>Serverjs Deleteskill Skillpath</td><td>3</td><td><code>14</code></td></tr><tr><td>Other</td><td>4</td><td><code>15, 17</code></td></tr>
+      <tr><td>Graph Build</td><td>30</td><td><code>3, 5</code></td></tr><tr><td>CLI &amp; Skill Installers</td><td>2</td><td><code>16</code></td></tr><tr><td>showPill</td><td>38</td><td><code>0</code></td></tr><tr><td>app.js</td><td>33</td><td><code>1</code></td></tr><tr><td>renderDrawer</td><td>30</td><td><code>2</code></td></tr><tr><td>server</td><td>18</td><td><code>4</code></td></tr><tr><td>buildCrossProjectContext</td><td>9</td><td><code>6</code></td></tr><tr><td>jget</td><td>6</td><td><code>7</code></td></tr><tr><td>handleFiles</td><td>5</td><td><code>8</code></td></tr><tr><td>proxyToOpencode</td><td>4</td><td><code>10</code></td></tr><tr><td>nowIso</td><td>4</td><td><code>11</code></td></tr><tr><td>keepalive.sh</td><td>4</td><td><code>9</code></td></tr><tr><td>renderMarkdown</td><td>3</td><td><code>12</code></td></tr><tr><td>fetchManagedProjects</td><td>3</td><td><code>13</code></td></tr><tr><td>Other</td><td>8</td><td><code>14, 15, 17</code></td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Core Flow</h4>
-    <div class="arrow-chain">CLI &amp; Skill Installers -&gt; Graph Build -&gt; Serverjs Genprojectid Getprocessuptime -&gt; Serverjs Buildcrossprojectcontext Buildskillscontext -&gt; Appjs Public Formatassistantsuccess -&gt; Public Appjs Addmsg -&gt; Public Appjs Fetchskills</div>
+    <div class="arrow-chain">Graph Build -&gt; server -&gt; Other -&gt; CLI &amp; Skill Installers -&gt; showPill -&gt; renderDrawer -&gt; jget</div>
+  </div>
+</div>
+<div class="grid">
+  <div class="card">
+    <h4>Graph Report Highlights</h4>
+    <ul>
+      <li>197 nodes · 467 edges · 18 communities (15 shown, 3 thin omitted)</li>
+      <li>Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 11 edges (avg confidence: 0.85)</li>
+      <li>Token cost: 0 input · 0 output</li>
+      <li>1. `server` - 35 edges</li>
+      <li>2. `showPill()` - 26 edges</li>
+      <li>3. `sendPrompt()` - 19 edges</li>
+    </ul>
   </div>
 </div>
 <hr>
 <!-- ====== 2. Graph Build ====== -->
 <h2 id="build-graph">2. Graph Build</h2>
-<p>Graph Build groups implementation around serverjs, packagejson, ref, node, mostly in server.js, package.json. This section covers 34 nodes and 34 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<p>Graph Build groups implementation around serverjs, packagejson, ref, node, mostly in server.js, package.json. This section covers 30 nodes and 28 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Graph Build (34 nodes, 34 edges)
+    %% Section: Graph Build (30 nodes, 28 edges)
     subgraph build_graph_package_json_4e40bfbd["package.json"]
         package_dependencies_c512ca5e("dependencies<br/><small>package.json</small>")
         package_description_1bccacf3("description<br/><small>package.json</small>")
@@ -183,18 +196,16 @@ flowchart LR
     end
     subgraph build_graph_server_js_5f9f1c3b["server.js"]
         server_3de4f901("server.js")
-        server_proxytoopencode_6e290a5b("proxyToOpencode()<br/><small>server.js</small>")
-        server_json_4ce9f464("json()<br/><small>server.js</small>")
-        server_send_53636af1("send()<br/><small>server.js</small>")
+        server_companion_session_file_0c93f120("COMPANION_SESSION_FILE<br/><small>server.js</small>")
+        server_hub_port_0368dd88("HUB_PORT<br/><small>server.js</small>")
+        server_mime_038a70c8("MIME<br/><small>server.js</small>")
     end
-    server_json_4ce9f464 -->|calls| server_send_53636af1
-    server_proxytoopencode_6e290a5b -->|calls| server_json_4ce9f464
     server_3de4f901 -->|imports| ref_node_http_8d4471e5
     server_3de4f901 -->|imports| ref_node_fs_b768bf73
     server_3de4f901 -->|imports| ref_node_path_350e6c64
     server_3de4f901 -->|imports| ref_node_child_process_a8b54592
     server_3de4f901 -->|imports| ref_node_url_a44e0198
-    %% Omitted for readability: 16 nodes, 0 edges
+    %% Omitted for readability: 12 nodes, 0 edges
     class package_dependencies_c512ca5e function;
     class package_description_1bccacf3 function;
     class package_scripts_dev_8c0c97d3 function;
@@ -210,9 +221,9 @@ flowchart LR
     class ref_node_child_process_a8b54592 function;
     class ref_node_url_a44e0198 function;
     class server_3de4f901 module;
-    class server_proxytoopencode_6e290a5b function;
-    class server_json_4ce9f464 function;
-    class server_send_53636af1 function;
+    class server_companion_session_file_0c93f120 klass;
+    class server_hub_port_0368dd88 klass;
+    class server_mime_038a70c8 klass;
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -481,13 +492,13 @@ flowchart LR
     <h4>Key Files</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>server.js</code></td><td>20 nodes</td></tr>
+      <tr><td><code>server.js</code></td><td>16 nodes</td></tr>
 <tr><td><code>package.json</code></td><td>9 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: contains x26, imports x5, calls x2, explains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x22, imports x5, explains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
@@ -559,415 +570,75 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 4. Appjs Public Formatassistantsuccess ====== -->
-<h2 id="appjs-public-formatassistantsuccess">4. Appjs Public Formatassistantsuccess</h2>
-<p>Appjs Public Formatassistantsuccess groups implementation around appjs, public, formatassistantsuccess, initvoices, mostly in public/app.js. This section covers 35 nodes and 34 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 4. showPill ====== -->
+<h2 id="showpill">4. showPill</h2>
+<p>showPill groups implementation around public, appjs, addmsg, autogrow, mostly in public/app.js. This section covers 38 nodes and 93 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Appjs Public Formatassistantsuccess (35 nodes, 34 edges)
-    public_app_fd8505ea("app.js")
-    public_app_updatevoicemodelabels_da917a43("updateVoiceModeLabels()<br/><small>public/app.js</small>")
-    public_app_statuspill_4cbcb7e7("statusPill<br/><small>public/app.js</small>")
-    public_app_statuspilltext_b0998ca7("statusPillText<br/><small>public/app.js</small>")
-    public_app_ttsqueue_feaafe78("ttsQueue<br/><small>public/app.js</small>")
-    public_app_initvoices_7fe1b03f("initVoices()<br/><small>public/app.js</small>")
-    public_app_btnhamburger_0e49498d("btnHamburger<br/><small>public/app.js</small>")
-    public_app_drawer_62727655("drawer<br/><small>public/app.js</small>")
-    public_app_drawerbackdrop_541911eb("drawerBackdrop<br/><small>public/app.js</small>")
-    public_app_chipsel_94c5ddf2("chipsEl<br/><small>public/app.js</small>")
-    public_app_filepicker_a57bb030("filePicker<br/><small>public/app.js</small>")
-    public_app_drawerctl_3bb59661("drawerCtl<br/><small>public/app.js</small>")
-    public_app_projectscountel_8c0fd1ad("projectsCountEl<br/><small>public/app.js</small>")
-    public_app_voicemodetoggle_5de9eca7("voiceModeToggle<br/><small>public/app.js</small>")
-    public_app_formatassistantsuccess_76d378b6("formatAssistantSuccess()<br/><small>public/app.js</small>")
-    public_app_btnattach_66743b34("btnAttach<br/><small>public/app.js</small>")
-    public_app_btnmic_232d397f("btnMic<br/><small>public/app.js</small>")
-    public_app_btnsend_6171c8cb("btnSend<br/><small>public/app.js</small>")
-    public_app_fd8505ea -->|contains| public_app_updatevoicemodelabels_da917a43
-    public_app_fd8505ea -->|contains| public_app_statuspill_4cbcb7e7
-    public_app_fd8505ea -->|contains| public_app_statuspilltext_b0998ca7
-    public_app_fd8505ea -->|contains| public_app_ttsqueue_feaafe78
-    public_app_fd8505ea -->|contains| public_app_initvoices_7fe1b03f
-    public_app_fd8505ea -->|contains| public_app_btnhamburger_0e49498d
-    public_app_fd8505ea -->|contains| public_app_drawer_62727655
-    public_app_fd8505ea -->|contains| public_app_drawerbackdrop_541911eb
-    public_app_fd8505ea -->|contains| public_app_chipsel_94c5ddf2
-    public_app_fd8505ea -->|contains| public_app_filepicker_a57bb030
-    public_app_fd8505ea -->|contains| public_app_drawerctl_3bb59661
-    public_app_fd8505ea -->|contains| public_app_projectscountel_8c0fd1ad
-    public_app_fd8505ea -->|contains| public_app_voicemodetoggle_5de9eca7
-    public_app_fd8505ea -->|contains| public_app_formatassistantsuccess_76d378b6
-    public_app_fd8505ea -->|contains| public_app_btnattach_66743b34
-    public_app_fd8505ea -->|contains| public_app_btnmic_232d397f
-    public_app_fd8505ea -->|contains| public_app_btnsend_6171c8cb
-    %% Omitted for readability: 17 nodes, 0 edges
-    class public_app_fd8505ea module;
-    class public_app_updatevoicemodelabels_da917a43 function;
-    class public_app_statuspill_4cbcb7e7 function;
-    class public_app_statuspilltext_b0998ca7 function;
-    class public_app_ttsqueue_feaafe78 function;
-    class public_app_initvoices_7fe1b03f function;
-    class public_app_btnhamburger_0e49498d function;
-    class public_app_drawer_62727655 function;
-    class public_app_drawerbackdrop_541911eb function;
-    class public_app_chipsel_94c5ddf2 function;
-    class public_app_filepicker_a57bb030 function;
-    class public_app_drawerctl_3bb59661 function;
-    class public_app_projectscountel_8c0fd1ad function;
-    class public_app_voicemodetoggle_5de9eca7 function;
-    class public_app_formatassistantsuccess_76d378b6 function;
-    class public_app_btnattach_66743b34 function;
-    class public_app_btnmic_232d397f function;
-    class public_app_btnsend_6171c8cb function;
-    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
-    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
-    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
-    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
-    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
-    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
-    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
-    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
-    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
-</div>
-
-<h3>Call Details</h3>
-<table class="call-table">
-<tr>
-  <th style="width:5%">#</th>
-  <th style="width:28%">Node</th>
-  <th style="width:10%">Type</th>
-  <th style="width:17%">Caller</th>
-  <th style="width:20%">Callees</th>
-  <th style="width:20%">Description</th>
-</tr>
-<tr>
-  <td>1</td>
-  <td><code>formatAssistantSuccess()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>No direct outbound edge</td>
-  <td>formatAssistantSuccess() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>2</td>
-  <td><code>initVoices()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>initVoices() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>3</td>
-  <td><code>setupDrawer()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>setupDrawer() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>4</td>
-  <td><code>updateVoiceModeLabels()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>setVoiceMode()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>No direct outbound edge</td>
-  <td>updateVoiceModeLabels() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>5</td>
-  <td><code>app.js</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-class">Module</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>autoGrow()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>app.js node in public/app.js.</td>
-</tr>
-<tr>
-  <td>6</td>
-  <td><code>agentSel</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>agentSel node in public/app.js.</td>
-</tr>
-<tr>
-  <td>7</td>
-  <td><code>btnAttach</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>btnAttach node in public/app.js.</td>
-</tr>
-<tr>
-  <td>8</td>
-  <td><code>btnHamburger</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>btnHamburger node in public/app.js.</td>
-</tr>
-<tr>
-  <td>9</td>
-  <td><code>btnMic</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>btnMic node in public/app.js.</td>
-</tr>
-<tr>
-  <td>10</td>
-  <td><code>btnSend</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>btnSend node in public/app.js.</td>
-</tr>
-<tr>
-  <td>11</td>
-  <td><code>chipsEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>chipsEl node in public/app.js.</td>
-</tr>
-<tr>
-  <td>12</td>
-  <td><code>composerEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>composerEl node in public/app.js.</td>
-</tr>
-<tr>
-  <td>13</td>
-  <td><code>dotHub</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>dotHub node in public/app.js.</td>
-</tr>
-<tr>
-  <td>14</td>
-  <td><code>dotOc</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>dotOc node in public/app.js.</td>
-</tr>
-<tr>
-  <td>15</td>
-  <td><code>drawer</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>drawer node in public/app.js.</td>
-</tr>
-<tr>
-  <td>16</td>
-  <td><code>drawerBackdrop</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>drawerBackdrop node in public/app.js.</td>
-</tr>
-<tr>
-  <td>17</td>
-  <td><code>drawerCtl</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>drawerCtl node in public/app.js.</td>
-</tr>
-<tr>
-  <td>18</td>
-  <td><code>filePicker</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>filePicker node in public/app.js.</td>
-</tr>
-<tr>
-  <td>19</td>
-  <td><code>hubFoot</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>hubFoot node in public/app.js.</td>
-</tr>
-<tr>
-  <td>20</td>
-  <td><code>hubStatusEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>hubStatusEl node in public/app.js.</td>
-</tr>
-<tr>
-  <td>21</td>
-  <td><code>msgsEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>msgsEl node in public/app.js.</td>
-</tr>
-<tr>
-  <td>22</td>
-  <td><code>ocStatusEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>ocStatusEl node in public/app.js.</td>
-</tr>
-<tr>
-  <td>23</td>
-  <td><code>projectExpanded</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>projectExpanded node in public/app.js.</td>
-</tr>
-<tr>
-  <td>24</td>
-  <td><code>projectsCountEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>projectsCountEl node in public/app.js.</td>
-</tr>
-<tr>
-  <td>25</td>
-  <td><code>projectsList</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>projectsList node in public/app.js.</td>
-</tr>
-<tr>
-  <td>26</td>
-  <td><code>promptEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>Builds structured prompts for model calls.</td>
-</tr>
-<tr>
-  <td>27</td>
-  <td><code>standaloneList</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>standaloneList node in public/app.js.</td>
-</tr>
-<tr>
-  <td>28</td>
-  <td><code>state</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>state node in public/app.js.</td>
-</tr>
-<tr>
-  <td>29</td>
-  <td><code>statusPill</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>statusPill node in public/app.js.</td>
-</tr>
-<tr>
-  <td>30</td>
-  <td><code>statusPillText</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td>No direct outbound edge</td>
-  <td>statusPillText node in public/app.js.</td>
-</tr>
-</table>
-
-<div class="grid">
-  <div class="card">
-    <h4>Key Files</h4>
-    <table style="width:100%;font-size:0.85rem;">
-      <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>public/app.js</code></td><td>35 nodes</td></tr>
-    </table>
-  </div>
-  <div class="card">
-    <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: contains x34. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
-  </div>
-</div>
-<hr>
-
-<!-- ====== 5. Public Appjs Addmsg ====== -->
-<h2 id="public-appjs-addmsg">5. Public Appjs Addmsg</h2>
-<p>Public Appjs Addmsg groups implementation around public, appjs, addmsg, autogrow, mostly in public/app.js. This section covers 26 nodes and 67 internal edges; the diagram shows only representative relationships to stay readable.</p>
-
-<div class="mermaid">
-%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
-flowchart LR
-    %% Section: Public Appjs Addmsg (26 nodes, 67 edges)
+    %% Section: showPill (38 nodes, 93 edges)
     public_app_sendprompt_1c333b2c("sendPrompt()<br/><small>public/app.js</small>")
+    public_app_voicehandletext_3722aba1("voiceHandleText()<br/><small>public/app.js</small>")
+    public_app_selectsession_d4e4c5a3("selectSession()<br/><small>public/app.js</small>")
     public_app_setvoicemode_ea1b44db("setVoiceMode()<br/><small>public/app.js</small>")
-    public_app_tryassistantintent_6d90b26e("tryAssistantIntent()<br/><small>public/app.js</small>")
     public_app_initrecognition_429e6561("initRecognition()<br/><small>public/app.js</small>")
-    public_app_createsession_9a4bba6c("createSession()<br/><small>public/app.js</small>")
-    public_app_bindprimarybuttons_7d366f47("bindPrimaryButtons()<br/><small>public/app.js</small>")
+    public_app_tryassistantintent_6d90b26e("tryAssistantIntent()<br/><small>public/app.js</small>")
     public_app_addmsg_a11b703b("addMsg()<br/><small>public/app.js</small>")
+    public_app_ismemorycontext_154154ba("isMemoryContext()<br/><small>public/app.js</small>")
+    public_app_stripmemorycontext_3f93f80e("stripMemoryContext()<br/><small>public/app.js</small>")
+    public_app_scrolltobottom_6c020132("scrollToBottom()<br/><small>public/app.js</small>")
     public_app_queuetts_2f26d89f("queueTts()<br/><small>public/app.js</small>")
+    public_app_bindprimarybuttons_7d366f47("bindPrimaryButtons()<br/><small>public/app.js</small>")
     public_app_ensureaudiocontext_e64b748c("ensureAudioContext()<br/><small>public/app.js</small>")
     public_app_stoplistening_7b8e0ae5("stopListening()<br/><small>public/app.js</small>")
     public_app_startlistening_94f62388("startListening()<br/><small>public/app.js</small>")
+    public_app_createsession_9a4bba6c("createSession()<br/><small>public/app.js</small>")
     public_app_showpill_3ba0a91e("showPill()<br/><small>public/app.js</small>")
     public_app_jpost_f102b77f("jpost()<br/><small>public/app.js</small>")
-    public_app_hidepill_52fc7e12("hidePill()<br/><small>public/app.js</small>")
-    public_app_draintts_ce7f2e76("drainTts()<br/><small>public/app.js</small>")
-    public_app_getexecanalysishint_b9a3fc01("getExecAnalysisHint()<br/><small>public/app.js</small>")
-    public_app_humansize_5e0fe3e3("humanSize()<br/><small>public/app.js</small>")
-    public_app_handleassistantexecresult_42b09a50("handleAssistantExecResult()<br/><small>public/app.js</small>")
+    public_app_addmsg_a11b703b -->|calls| public_app_ismemorycontext_154154ba
+    public_app_addmsg_a11b703b -->|calls| public_app_stripmemorycontext_3f93f80e
+    public_app_addmsg_a11b703b -->|calls| public_app_scrolltobottom_6c020132
     public_app_addmsg_a11b703b -->|calls| public_app_queuetts_2f26d89f
     public_app_bindprimarybuttons_7d366f47 -->|calls| public_app_ensureaudiocontext_e64b748c
     public_app_bindprimarybuttons_7d366f47 -->|calls| public_app_stoplistening_7b8e0ae5
     public_app_bindprimarybuttons_7d366f47 -->|calls| public_app_startlistening_94f62388
     public_app_createsession_9a4bba6c -->|calls| public_app_showpill_3ba0a91e
     public_app_createsession_9a4bba6c -->|calls| public_app_jpost_f102b77f
-    public_app_createsession_9a4bba6c -->|calls| public_app_hidepill_52fc7e12
+    public_app_createsession_9a4bba6c -->|calls| public_app_selectsession_d4e4c5a3
     public_app_createsession_9a4bba6c -->|calls| public_app_addmsg_a11b703b
-    public_app_draintts_ce7f2e76 -->|calls| public_app_hidepill_52fc7e12
-    public_app_draintts_ce7f2e76 -->|calls| public_app_startlistening_94f62388
-    public_app_draintts_ce7f2e76 -->|calls| public_app_showpill_3ba0a91e
-    public_app_getexecanalysishint_b9a3fc01 -->|calls| public_app_humansize_5e0fe3e3
-    public_app_handleassistantexecresult_42b09a50 -->|calls| public_app_addmsg_a11b703b
-    public_app_handleassistantexecresult_42b09a50 -->|calls| public_app_showpill_3ba0a91e
     public_app_initrecognition_429e6561 -->|calls| public_app_showpill_3ba0a91e
-    public_app_initrecognition_429e6561 -->|calls| public_app_hidepill_52fc7e12
+    public_app_initrecognition_429e6561 -->|calls| public_app_voicehandletext_3722aba1
     public_app_initrecognition_429e6561 -->|calls| public_app_sendprompt_1c333b2c
     public_app_queuetts_2f26d89f -->|calls| public_app_ensureaudiocontext_e64b748c
-    public_app_queuetts_2f26d89f -->|calls| public_app_draintts_ce7f2e76
+    public_app_selectsession_d4e4c5a3 -->|calls| public_app_addmsg_a11b703b
+    public_app_selectsession_d4e4c5a3 -->|calls| public_app_showpill_3ba0a91e
+    public_app_selectsession_d4e4c5a3 -->|calls| public_app_ismemorycontext_154154ba
+    public_app_selectsession_d4e4c5a3 -->|calls| public_app_stripmemorycontext_3f93f80e
+    public_app_selectsession_d4e4c5a3 -->|calls| public_app_scrolltobottom_6c020132
     public_app_sendprompt_1c333b2c -->|calls| public_app_jpost_f102b77f
     public_app_sendprompt_1c333b2c -->|calls| public_app_addmsg_a11b703b
     public_app_sendprompt_1c333b2c -->|calls| public_app_showpill_3ba0a91e
-    public_app_sendprompt_1c333b2c -->|calls| public_app_hidepill_52fc7e12
-    public_app_sendprompt_1c333b2c -->|calls| public_app_handleassistantexecresult_42b09a50
-    %% Omitted for readability: 8 nodes, 15 edges
+    public_app_sendprompt_1c333b2c -->|calls| public_app_startlistening_94f62388
+    %% Omitted for readability: 20 nodes, 14 edges
     class public_app_sendprompt_1c333b2c function;
+    class public_app_voicehandletext_3722aba1 function;
+    class public_app_selectsession_d4e4c5a3 function;
     class public_app_setvoicemode_ea1b44db function;
-    class public_app_tryassistantintent_6d90b26e function;
     class public_app_initrecognition_429e6561 function;
-    class public_app_createsession_9a4bba6c function;
-    class public_app_bindprimarybuttons_7d366f47 function;
+    class public_app_tryassistantintent_6d90b26e function;
     class public_app_addmsg_a11b703b function;
+    class public_app_ismemorycontext_154154ba function;
+    class public_app_stripmemorycontext_3f93f80e function;
+    class public_app_scrolltobottom_6c020132 function;
     class public_app_queuetts_2f26d89f function;
+    class public_app_bindprimarybuttons_7d366f47 function;
     class public_app_ensureaudiocontext_e64b748c function;
     class public_app_stoplistening_7b8e0ae5 function;
     class public_app_startlistening_94f62388 function;
+    class public_app_createsession_9a4bba6c function;
     class public_app_showpill_3ba0a91e function;
     class public_app_jpost_f102b77f function;
-    class public_app_hidepill_52fc7e12 function;
-    class public_app_draintts_ce7f2e76 function;
-    class public_app_getexecanalysishint_b9a3fc01 function;
-    class public_app_humansize_5e0fe3e3 function;
-    class public_app_handleassistantexecresult_42b09a50 function;
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -993,15 +664,15 @@ flowchart LR
   <td>1</td>
   <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>handleMessageResponse()</code><br><small style="color:var(--muted)">public/app.js</small><br>+6 more</td>
-  <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>queueTts()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>handleMessageResponse()</code><br><small style="color:var(--muted)">public/app.js</small><br>+8 more</td>
+  <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>isMemoryContext()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>queueTts()</code><br><small style="color:var(--muted)">public/app.js</small><br>+3 more</td>
   <td>addMsg() node in public/app.js.</td>
 </tr>
 <tr>
   <td>2</td>
   <td><code>autoGrow()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>app.js</code><br><small style="color:var(--muted)">public/app.js</small><br><code>initRecognition()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>app.js</code><br><small style="color:var(--muted)">public/app.js</small><br><code>initRecognition()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendProjectPrompt()</code><br><small style="color:var(--muted)">public/app.js</small><br>+1 more</td>
   <td>No direct outbound edge</td>
   <td>autoGrow() node in public/app.js.</td>
 </tr>
@@ -1047,6 +718,22 @@ flowchart LR
 </tr>
 <tr>
   <td>8</td>
+  <td><code>formatAssistantSuccess()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>formatAssistantSuccess() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>fuzzyFindProject()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>voiceHandleText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>normalizeVoiceText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>fuzzyFindProject() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>10</td>
   <td><code>getExecAnalysisHint()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1054,7 +741,7 @@ flowchart LR
   <td>Orchestrates analysis and returns structured documentation data.</td>
 </tr>
 <tr>
-  <td>9</td>
+  <td>11</td>
   <td><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>tryAssistantIntent()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>voiceHandleText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1062,7 +749,7 @@ flowchart LR
   <td>handleAssistantExecResult() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>10</td>
+  <td>12</td>
   <td><code>handleMessageResponse()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1070,7 +757,7 @@ flowchart LR
   <td>handleMessageResponse() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>11</td>
+  <td>13</td>
   <td><code>hidePill()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>drainTts()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small><br>+6 more</td>
@@ -1078,7 +765,7 @@ flowchart LR
   <td>hidePill() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>12</td>
+  <td>14</td>
   <td><code>humanSize()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>getExecAnalysisHint()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>handleFiles()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderChips()</code><br><small style="color:var(--muted)">public/app.js</small><br>+1 more</td>
@@ -1086,7 +773,7 @@ flowchart LR
   <td>humanSize() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>13</td>
+  <td>15</td>
   <td><code>initRecognition()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>setVoiceMode()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>startListening()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1094,7 +781,7 @@ flowchart LR
   <td>initRecognition() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>14</td>
+  <td>16</td>
   <td><code>scheduleDuplexRestart()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1102,15 +789,39 @@ flowchart LR
   <td>scheduleDuplexRestart() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>15</td>
+  <td>17</td>
+  <td><code>isMemoryContext()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>selectSession()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>isMemoryContext() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>18</td>
   <td><code>jpost()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDisambiguation()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br>+4 more</td>
+  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDisambiguation()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br>+6 more</td>
   <td>No direct outbound edge</td>
   <td>jpost() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>16</td>
+  <td>19</td>
+  <td><code>normalizeVoiceText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>fuzzyFindProject()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>voiceHandleText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>normalizeVoiceText() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>pillFromSseEvent()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-async">Async</span></td>
+  <td><code>setupSSE()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>pillFromSseEvent() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>21</td>
   <td><code>queueTts()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>voiceTtsConfirm()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1118,7 +829,7 @@ flowchart LR
   <td>queueTts() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>17</td>
+  <td>22</td>
   <td><code>renderChips()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>handleFiles()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderChips()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1126,7 +837,7 @@ flowchart LR
   <td>renderChips() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>18</td>
+  <td>23</td>
   <td><code>renderDisambiguation()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>tryAssistantIntent()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1134,15 +845,39 @@ flowchart LR
   <td>renderDisambiguation() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>19</td>
+  <td>24</td>
+  <td><code>scrollToBottom()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>selectSession()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>scrollToBottom() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>selectSession()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderProjectSessions()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
+  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>hidePill()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>hideProjectView()</code><br><small style="color:var(--muted)">public/app.js</small><br>+6 more</td>
+  <td>selectSession() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>26</td>
   <td><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>bindPrimaryButtons()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>initRecognition()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>bindPrimaryButtons()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>initRecognition()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendProjectPrompt()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>autoGrow()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br>+12 more</td>
   <td>Builds structured prompts for model calls.</td>
 </tr>
 <tr>
-  <td>20</td>
+  <td>27</td>
+  <td><code>setupSSE()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-async">Async</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>hidePill()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>pillFromSseEvent()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>showPill()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>setupSSE() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>28</td>
   <td><code>setVoiceMode()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1150,52 +885,20 @@ flowchart LR
   <td>setVoiceMode() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>21</td>
+  <td>29</td>
   <td><code>showPill()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>drainTts()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small><br>+17 more</td>
+  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>drainTts()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small><br>+21 more</td>
   <td><code>hidePill()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td>showPill() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>22</td>
+  <td>30</td>
   <td><code>startListening()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>bindPrimaryButtons()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>drainTts()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>scheduleDuplexRestart()</code><br><small style="color:var(--muted)">public/app.js</small><br>+3 more</td>
   <td><code>ensureAudioContext()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>initRecognition()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>showPill()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td>startListening() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>23</td>
-  <td><code>startVoiceSession()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>showPill()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>startListening()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>voiceTtsConfirm()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>startVoiceSession() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>24</td>
-  <td><code>stopListening()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>bindPrimaryButtons()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>setVoiceMode()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>No direct outbound edge</td>
-  <td>stopListening() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>25</td>
-  <td><code>tryAssistantIntent()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>handleAssistantExecResult()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>jpost()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDisambiguation()</code><br><small style="color:var(--muted)">public/app.js</small><br>+1 more</td>
-  <td>tryAssistantIntent() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>26</td>
-  <td><code>voiceTtsConfirm()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>startVoiceSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>voiceHandleText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>queueTts()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>voiceTtsConfirm() node in public/app.js.</td>
 </tr>
 </table>
 
@@ -1204,85 +907,78 @@ flowchart LR
     <h4>Key Files</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>public/app.js</code></td><td>26 nodes</td></tr>
+      <tr><td><code>public/app.js</code></td><td>38 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: calls x62, indirect call x4, contains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x87, indirect call x5, contains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
 
-<!-- ====== 6. Public Appjs Fetchskills ====== -->
-<h2 id="public-appjs-fetchskills">6. Public Appjs Fetchskills</h2>
-<p>Public Appjs Fetchskills groups implementation around public, appjs, fetchskills, fmtdate, mostly in public/app.js. This section covers 25 nodes and 50 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 5. app.js ====== -->
+<h2 id="app-js">5. app.js</h2>
+<p>app.js groups implementation around appjs, public, initvoices, setupdrawer, mostly in public/app.js. This section covers 33 nodes and 32 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Public Appjs Fetchskills (25 nodes, 50 edges)
-    public_app_voicehandletext_3722aba1("voiceHandleText()<br/><small>public/app.js</small>")
-    public_app_managedsessionrowel_ad5c77b4("managedSessionRowEl()<br/><small>public/app.js</small>")
-    public_app_sessionrowel_be9e3ad0("sessionRowEl()<br/><small>public/app.js</small>")
-    public_app_setupnewprojectform_7f7774de("setupNewProjectForm()<br/><small>public/app.js</small>")
-    public_app_renderdrawer_edea98cf("renderDrawer()<br/><small>public/app.js</small>")
-    public_app_refreshsessions_9aee219e("refreshSessions()<br/><small>public/app.js</small>")
-    public_app_fuzzyfindproject_15ad9502("fuzzyFindProject()<br/><small>public/app.js</small>")
-    public_app_normalizevoicetext_78bfe9af("normalizeVoiceText()<br/><small>public/app.js</small>")
-    public_app_el_b007d778("el()<br/><small>public/app.js</small>")
-    public_app_fmtdate_c6a285bd("fmtDate()<br/><small>public/app.js</small>")
-    public_app_persistui_dc6bb4ac("persistUi()<br/><small>public/app.js</small>")
-    public_app_selectsession_d4e4c5a3("selectSession()<br/><small>public/app.js</small>")
-    public_app_refreshprojects_3562608e("refreshProjects()<br/><small>public/app.js</small>")
-    public_app_jpatch_8723f541("jpatch()<br/><small>public/app.js</small>")
-    public_app_refreshagents_aeb1e8b4("refreshAgents()<br/><small>public/app.js</small>")
-    public_app_jget_16e694be("jget()<br/><small>public/app.js</small>")
-    public_app_showtoast_1fb58cb9("showToast()<br/><small>public/app.js</small>")
-    public_app_refreshskillsui_8b88136f("refreshSkillsUI()<br/><small>public/app.js</small>")
-    public_app_fuzzyfindproject_15ad9502 -->|calls| public_app_normalizevoicetext_78bfe9af
-    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_el_b007d778
-    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_fmtdate_c6a285bd
-    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_persistui_dc6bb4ac
-    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_selectsession_d4e4c5a3
-    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_refreshprojects_3562608e
-    public_app_persistui_dc6bb4ac -->|calls| public_app_jpatch_8723f541
-    public_app_refreshagents_aeb1e8b4 -->|calls| public_app_jget_16e694be
-    public_app_refreshprojects_3562608e -->|calls| public_app_renderdrawer_edea98cf
-    public_app_refreshprojects_3562608e -->|calls| public_app_showtoast_1fb58cb9
-    public_app_refreshsessions_9aee219e -->|calls| public_app_jget_16e694be
-    public_app_refreshsessions_9aee219e -->|calls| public_app_renderdrawer_edea98cf
-    public_app_refreshsessions_9aee219e -->|calls| public_app_showtoast_1fb58cb9
-    public_app_refreshskillsui_8b88136f -->|calls| public_app_el_b007d778
-    public_app_refreshskillsui_8b88136f -->|calls| public_app_refreshskillsui_8b88136f
-    public_app_refreshskillsui_8b88136f -->|calls| public_app_refreshprojects_3562608e
-    public_app_renderdrawer_edea98cf -->|calls| public_app_el_b007d778
-    public_app_renderdrawer_edea98cf -->|calls| public_app_persistui_dc6bb4ac
-    public_app_renderdrawer_edea98cf -->|calls| public_app_renderdrawer_edea98cf
-    public_app_renderdrawer_edea98cf -->|calls| public_app_refreshskillsui_8b88136f
-    public_app_renderdrawer_edea98cf -->|calls| public_app_managedsessionrowel_ad5c77b4
-    public_app_renderdrawer_edea98cf -->|calls| public_app_sessionrowel_be9e3ad0
-    public_app_selectsession_d4e4c5a3 -->|calls| public_app_persistui_dc6bb4ac
-    public_app_selectsession_d4e4c5a3 -->|calls| public_app_jget_16e694be
-    %% Omitted for readability: 7 nodes, 16 edges
-    class public_app_voicehandletext_3722aba1 function;
-    class public_app_managedsessionrowel_ad5c77b4 function;
-    class public_app_sessionrowel_be9e3ad0 function;
-    class public_app_setupnewprojectform_7f7774de function;
-    class public_app_renderdrawer_edea98cf function;
-    class public_app_refreshsessions_9aee219e function;
-    class public_app_fuzzyfindproject_15ad9502 function;
-    class public_app_normalizevoicetext_78bfe9af function;
-    class public_app_el_b007d778 function;
-    class public_app_fmtdate_c6a285bd function;
-    class public_app_persistui_dc6bb4ac function;
-    class public_app_selectsession_d4e4c5a3 function;
-    class public_app_refreshprojects_3562608e function;
-    class public_app_jpatch_8723f541 function;
-    class public_app_refreshagents_aeb1e8b4 function;
-    class public_app_jget_16e694be function;
-    class public_app_showtoast_1fb58cb9 function;
-    class public_app_refreshskillsui_8b88136f function;
+    %% Section: app.js (33 nodes, 32 edges)
+    public_app_fd8505ea("app.js")
+    public_app_statuspill_4cbcb7e7("statusPill<br/><small>public/app.js</small>")
+    public_app_statuspilltext_b0998ca7("statusPillText<br/><small>public/app.js</small>")
+    public_app_btnhamburger_0e49498d("btnHamburger<br/><small>public/app.js</small>")
+    public_app_drawer_62727655("drawer<br/><small>public/app.js</small>")
+    public_app_drawerbackdrop_541911eb("drawerBackdrop<br/><small>public/app.js</small>")
+    public_app_chipsel_94c5ddf2("chipsEl<br/><small>public/app.js</small>")
+    public_app_filepicker_a57bb030("filePicker<br/><small>public/app.js</small>")
+    public_app_projectscountel_8c0fd1ad("projectsCountEl<br/><small>public/app.js</small>")
+    public_app_composerel_9c44514f("composerEl<br/><small>public/app.js</small>")
+    public_app_voicemodelabelpush_f2933479("voiceModeLabelPush<br/><small>public/app.js</small>")
+    public_app_voicemodelabelduplex_8693a001("voiceModeLabelDuplex<br/><small>public/app.js</small>")
+    public_app_voicemodetoggle_5de9eca7("voiceModeToggle<br/><small>public/app.js</small>")
+    public_app_ttsqueue_feaafe78("ttsQueue<br/><small>public/app.js</small>")
+    public_app_initvoices_7fe1b03f("initVoices()<br/><small>public/app.js</small>")
+    public_app_btnattach_66743b34("btnAttach<br/><small>public/app.js</small>")
+    public_app_btnmic_232d397f("btnMic<br/><small>public/app.js</small>")
+    public_app_btnsend_6171c8cb("btnSend<br/><small>public/app.js</small>")
+    public_app_fd8505ea -->|contains| public_app_statuspill_4cbcb7e7
+    public_app_fd8505ea -->|contains| public_app_statuspilltext_b0998ca7
+    public_app_fd8505ea -->|contains| public_app_btnhamburger_0e49498d
+    public_app_fd8505ea -->|contains| public_app_drawer_62727655
+    public_app_fd8505ea -->|contains| public_app_drawerbackdrop_541911eb
+    public_app_fd8505ea -->|contains| public_app_chipsel_94c5ddf2
+    public_app_fd8505ea -->|contains| public_app_filepicker_a57bb030
+    public_app_fd8505ea -->|contains| public_app_projectscountel_8c0fd1ad
+    public_app_fd8505ea -->|contains| public_app_composerel_9c44514f
+    public_app_fd8505ea -->|contains| public_app_voicemodelabelpush_f2933479
+    public_app_fd8505ea -->|contains| public_app_voicemodelabelduplex_8693a001
+    public_app_fd8505ea -->|contains| public_app_voicemodetoggle_5de9eca7
+    public_app_fd8505ea -->|contains| public_app_ttsqueue_feaafe78
+    public_app_fd8505ea -->|contains| public_app_initvoices_7fe1b03f
+    public_app_fd8505ea -->|contains| public_app_btnattach_66743b34
+    public_app_fd8505ea -->|contains| public_app_btnmic_232d397f
+    public_app_fd8505ea -->|contains| public_app_btnsend_6171c8cb
+    %% Omitted for readability: 15 nodes, 0 edges
+    class public_app_fd8505ea module;
+    class public_app_statuspill_4cbcb7e7 function;
+    class public_app_statuspilltext_b0998ca7 function;
+    class public_app_btnhamburger_0e49498d function;
+    class public_app_drawer_62727655 function;
+    class public_app_drawerbackdrop_541911eb function;
+    class public_app_chipsel_94c5ddf2 function;
+    class public_app_filepicker_a57bb030 function;
+    class public_app_projectscountel_8c0fd1ad function;
+    class public_app_composerel_9c44514f function;
+    class public_app_voicemodelabelpush_f2933479 function;
+    class public_app_voicemodelabelduplex_8693a001 function;
+    class public_app_voicemodetoggle_5de9eca7 function;
+    class public_app_ttsqueue_feaafe78 function;
+    class public_app_initvoices_7fe1b03f function;
+    class public_app_btnattach_66743b34 function;
+    class public_app_btnmic_232d397f function;
+    class public_app_btnsend_6171c8cb function;
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -1306,43 +1002,390 @@ flowchart LR
 </tr>
 <tr>
   <td>1</td>
+  <td><code>initVoices()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>initVoices() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>setupDrawer()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>setupDrawer() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>app.js</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>autoGrow()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>app.js node in public/app.js.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>agentSel</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>agentSel node in public/app.js.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>btnAttach</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>btnAttach node in public/app.js.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>btnHamburger</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>btnHamburger node in public/app.js.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>btnMic</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>btnMic node in public/app.js.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>btnSend</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>btnSend node in public/app.js.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>chipsEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>chipsEl node in public/app.js.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>composerEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>composerEl node in public/app.js.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>dotHub</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>dotHub node in public/app.js.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>dotOc</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>dotOc node in public/app.js.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>drawer</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>drawer node in public/app.js.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>drawerBackdrop</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>drawerBackdrop node in public/app.js.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>drawerCtl</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>drawerCtl node in public/app.js.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>filePicker</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>filePicker node in public/app.js.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>hubFoot</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>hubFoot node in public/app.js.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>hubStatusEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>hubStatusEl node in public/app.js.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>msgsEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>msgsEl node in public/app.js.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>ocStatusEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>ocStatusEl node in public/app.js.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>projectExpanded</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>projectExpanded node in public/app.js.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>projectsCountEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>projectsCountEl node in public/app.js.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>projectsList</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>projectsList node in public/app.js.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>promptEl</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Builds structured prompts for model calls.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>standaloneList</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>standaloneList node in public/app.js.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>state</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>state node in public/app.js.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>statusPill</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>statusPill node in public/app.js.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>statusPillText</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>statusPillText node in public/app.js.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>sysInfo</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>sysInfo node in public/app.js.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>ttsQueue</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>ttsQueue node in public/app.js.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>public/app.js</code></td><td>33 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x32. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 6. renderDrawer ====== -->
+<h2 id="renderdrawer">6. renderDrawer</h2>
+<p>renderDrawer groups implementation around public, appjs, closeallsessionmenus, fetchskills, mostly in public/app.js. This section covers 30 nodes and 76 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: renderDrawer (30 nodes, 76 edges)
+    public_app_setupprojectview_sendprojectprompt_01ef9f89("sendProjectPrompt()<br/><small>public/app.js</small>")
+    public_app_managedsessionrowel_ad5c77b4("managedSessionRowEl()<br/><small>public/app.js</small>")
+    public_app_sessionrowel_be9e3ad0("sessionRowEl()<br/><small>public/app.js</small>")
+    public_app_renderdrawer_edea98cf("renderDrawer()<br/><small>public/app.js</small>")
+    public_app_openprojectview_cc28d6f6("openProjectView()<br/><small>public/app.js</small>")
+    public_app_setupnewprojectform_7f7774de("setupNewProjectForm()<br/><small>public/app.js</small>")
+    public_app_hideprojectview_efe2a880("hideProjectView()<br/><small>public/app.js</small>")
+    public_app_projectviewel_6f1bd4dc("projectViewEl()<br/><small>public/app.js</small>")
+    public_app_el_b007d778("el()<br/><small>public/app.js</small>")
+    public_app_fmtdate_c6a285bd("fmtDate()<br/><small>public/app.js</small>")
+    public_app_persistui_dc6bb4ac("persistUi()<br/><small>public/app.js</small>")
+    public_app_sessionmenuforrow_bae312f3("sessionMenuForRow()<br/><small>public/app.js</small>")
+    public_app_closeallsessionmenus_ebd7a2ae("closeAllSessionMenus()<br/><small>public/app.js</small>")
+    public_app_refreshprojects_3562608e("refreshProjects()<br/><small>public/app.js</small>")
+    public_app_renderprojectsessions_36e9f862("renderProjectSessions()<br/><small>public/app.js</small>")
+    public_app_refreshskillsui_8b88136f("refreshSkillsUI()<br/><small>public/app.js</small>")
+    public_app_renderprojectsettings_066d9fd2("renderProjectSettings()<br/><small>public/app.js</small>")
+    public_app_jpatch_8723f541("jpatch()<br/><small>public/app.js</small>")
+    public_app_hideprojectview_efe2a880 -->|calls| public_app_projectviewel_6f1bd4dc
+    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_el_b007d778
+    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_fmtdate_c6a285bd
+    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_persistui_dc6bb4ac
+    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_sessionmenuforrow_bae312f3
+    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_closeallsessionmenus_ebd7a2ae
+    public_app_managedsessionrowel_ad5c77b4 -->|calls| public_app_refreshprojects_3562608e
+    public_app_openprojectview_cc28d6f6 -->|calls| public_app_renderprojectsessions_36e9f862
+    public_app_openprojectview_cc28d6f6 -->|calls| public_app_refreshskillsui_8b88136f
+    public_app_openprojectview_cc28d6f6 -->|calls| public_app_renderprojectsettings_066d9fd2
+    public_app_openprojectview_cc28d6f6 -->|calls| public_app_persistui_dc6bb4ac
+    public_app_openprojectview_cc28d6f6 -->|calls| public_app_projectviewel_6f1bd4dc
+    public_app_persistui_dc6bb4ac -->|calls| public_app_jpatch_8723f541
+    public_app_refreshprojects_3562608e -->|calls| public_app_renderdrawer_edea98cf
+    public_app_refreshskillsui_8b88136f -->|calls| public_app_el_b007d778
+    public_app_refreshskillsui_8b88136f -->|calls| public_app_refreshskillsui_8b88136f
+    public_app_refreshskillsui_8b88136f -->|calls| public_app_refreshprojects_3562608e
+    public_app_renderdrawer_edea98cf -->|calls| public_app_el_b007d778
+    public_app_renderdrawer_edea98cf -->|calls| public_app_persistui_dc6bb4ac
+    public_app_renderdrawer_edea98cf -->|calls| public_app_renderdrawer_edea98cf
+    public_app_renderdrawer_edea98cf -->|calls| public_app_refreshskillsui_8b88136f
+    public_app_renderdrawer_edea98cf -->|calls| public_app_openprojectview_cc28d6f6
+    public_app_renderdrawer_edea98cf -->|calls| public_app_managedsessionrowel_ad5c77b4
+    public_app_renderdrawer_edea98cf -->|calls| public_app_sessionrowel_be9e3ad0
+    %% Omitted for readability: 12 nodes, 21 edges
+    class public_app_setupprojectview_sendprojectprompt_01ef9f89 function;
+    class public_app_managedsessionrowel_ad5c77b4 function;
+    class public_app_sessionrowel_be9e3ad0 function;
+    class public_app_renderdrawer_edea98cf function;
+    class public_app_openprojectview_cc28d6f6 function;
+    class public_app_setupnewprojectform_7f7774de function;
+    class public_app_hideprojectview_efe2a880 function;
+    class public_app_projectviewel_6f1bd4dc function;
+    class public_app_el_b007d778 function;
+    class public_app_fmtdate_c6a285bd function;
+    class public_app_persistui_dc6bb4ac function;
+    class public_app_sessionmenuforrow_bae312f3 function;
+    class public_app_closeallsessionmenus_ebd7a2ae function;
+    class public_app_refreshprojects_3562608e function;
+    class public_app_renderprojectsessions_36e9f862 function;
+    class public_app_refreshskillsui_8b88136f function;
+    class public_app_renderprojectsettings_066d9fd2 function;
+    class public_app_jpatch_8723f541 function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>closeAllSessionMenus()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>item()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br>+1 more</td>
+  <td>No direct outbound edge</td>
+  <td>closeAllSessionMenus() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>2</td>
   <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small><br>+5 more</td>
+  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>item()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br>+10 more</td>
   <td>No direct outbound edge</td>
   <td>el() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>2</td>
+  <td>3</td>
   <td><code>fetchSkills()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>refreshSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>refreshSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderProjectSettings()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td>No direct outbound edge</td>
   <td>fetchSkills() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>3</td>
+  <td>4</td>
   <td><code>fmtDate()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderProjectSessions()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td>No direct outbound edge</td>
   <td>fmtDate() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>4</td>
-  <td><code>fuzzyFindProject()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>voiceHandleText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><code>normalizeVoiceText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>fuzzyFindProject() node in public/app.js.</td>
-</tr>
-<tr>
   <td>5</td>
-  <td><code>jget()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>hideProjectView()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>refreshAgents()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSessions()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
-  <td>No direct outbound edge</td>
-  <td>jget() node in public/app.js.</td>
+  <td><code>selectSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendProjectPrompt()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>setupProjectView()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>projectViewEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>hideProjectView() node in public/app.js.</td>
 </tr>
 <tr>
   <td>6</td>
@@ -1357,16 +1400,16 @@ flowchart LR
   <td><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>fmtDate()</code><br><small style="color:var(--muted)">public/app.js</small><br>+3 more</td>
+  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>closeAllSessionMenus()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br>+5 more</td>
   <td>managedSessionRowEl() node in public/app.js.</td>
 </tr>
 <tr>
   <td>8</td>
-  <td><code>normalizeVoiceText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>openProjectView()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>fuzzyFindProject()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>voiceHandleText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>No direct outbound edge</td>
-  <td>normalizeVoiceText() node in public/app.js.</td>
+  <td><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>persistUi()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>projectViewEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
+  <td>openProjectView() node in public/app.js.</td>
 </tr>
 <tr>
   <td>9</td>
@@ -1380,23 +1423,23 @@ flowchart LR
   <td>10</td>
   <td><code>persistUi()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>selectSession()</code><br><small style="color:var(--muted)">public/app.js</small><br>+3 more</td>
+  <td><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>openProjectView()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br>+6 more</td>
   <td><code>jpatch()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td>persistUi() node in public/app.js.</td>
 </tr>
 <tr>
   <td>11</td>
-  <td><code>refreshAgents()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>projectViewEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>jget()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>refreshAgents() node in public/app.js.</td>
+  <td><code>hideProjectView()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>openProjectView()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>projectViewEl() node in public/app.js.</td>
 </tr>
 <tr>
   <td>12</td>
   <td><code>refreshProjects()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small><br>+3 more</td>
+  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small><br>+8 more</td>
   <td><code>fetchManagedProjects()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>showToast()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td>refreshProjects() node in public/app.js.</td>
 </tr>
@@ -1404,7 +1447,7 @@ flowchart LR
   <td>13</td>
   <td><code>refreshSessions()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendProjectPrompt()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendPrompt()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
   <td><code>jget()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>showToast()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td>refreshSessions() node in public/app.js.</td>
 </tr>
@@ -1412,7 +1455,7 @@ flowchart LR
   <td>14</td>
   <td><code>refreshSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>refreshSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>setupSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small><br>+1 more</td>
+  <td><code>openProjectView()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br>+4 more</td>
   <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>fetchSkills()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshProjects()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
   <td>refreshSkillsUI() node in public/app.js.</td>
 </tr>
@@ -1420,28 +1463,52 @@ flowchart LR
   <td>15</td>
   <td><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>refreshProjects()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSessions()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
-  <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>jpost()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br>+7 more</td>
+  <td><code>refreshProjects()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSessions()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small><br>+3 more</td>
+  <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>jpost()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br>+8 more</td>
   <td>renderDrawer() node in public/app.js.</td>
 </tr>
 <tr>
   <td>16</td>
-  <td><code>selectSession()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>renderProjectSessions()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>hidePill()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>jget()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
-  <td>selectSession() node in public/app.js.</td>
+  <td><code>openProjectView()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sendProjectPrompt()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>fmtDate()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>selectSession()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>renderProjectSessions() node in public/app.js.</td>
 </tr>
 <tr>
   <td>17</td>
-  <td><code>sessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>renderProjectSettings()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>fmtDate()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>persistUi()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
-  <td>sessionRowEl() node in public/app.js.</td>
+  <td><code>openProjectView()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderProjectSettings()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>setupProjectView()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>fetchSkills()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshProjects()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
+  <td>renderProjectSettings() node in public/app.js.</td>
 </tr>
 <tr>
   <td>18</td>
+  <td><code>sessionMenuForRow()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>managedSessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>sessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>jpost()</code><br><small style="color:var(--muted)">public/app.js</small><br>+5 more</td>
+  <td>sessionMenuForRow() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>item()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>closeAllSessionMenus()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>el()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>item() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>sessionRowEl()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>closeAllSessionMenus()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>fmtDate()</code><br><small style="color:var(--muted)">public/app.js</small><br>+4 more</td>
+  <td>sessionRowEl() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>21</td>
   <td><code>sessionsForManagedProject()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>renderDrawer()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1449,7 +1516,7 @@ flowchart LR
   <td>sessionsForManagedProject() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>19</td>
+  <td>22</td>
   <td><code>setupNewProjectForm()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1457,7 +1524,7 @@ flowchart LR
   <td>setupNewProjectForm() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>20</td>
+  <td>23</td>
   <td><code>closeForm()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>setupNewProjectForm()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1465,7 +1532,7 @@ flowchart LR
   <td>closeForm() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>21</td>
+  <td>24</td>
   <td><code>openForm()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>setupNewProjectForm()</code><br><small style="color:var(--muted)">public/app.js</small></td>
@@ -1473,7 +1540,31 @@ flowchart LR
   <td>openForm() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>22</td>
+  <td>25</td>
+  <td><code>setupProjectView()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>hideProjectView()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>pAutoGrow()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshProjects()</code><br><small style="color:var(--muted)">public/app.js</small><br>+3 more</td>
+  <td>setupProjectView() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>pAutoGrow()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>sendProjectPrompt()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>setupProjectView()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>pAutoGrow() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>sendProjectPrompt()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>autoGrow()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>hideProjectView()</code><br><small style="color:var(--muted)">public/app.js</small><br>+9 more</td>
+  <td>Builds structured prompts for model calls.</td>
+</tr>
+<tr>
+  <td>28</td>
   <td><code>setupSkillsUI()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -1481,28 +1572,20 @@ flowchart LR
   <td>setupSkillsUI() node in public/app.js.</td>
 </tr>
 <tr>
-  <td>23</td>
+  <td>29</td>
+  <td><code>showLinkPicker()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>sessionMenuForRow()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>closeAllSessionMenus()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshProjects()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
+  <td>showLinkPicker() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>30</td>
   <td><code>showToast()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>refreshProjects()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSessions()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><code>el()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>showPill()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td>showToast() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>24</td>
-  <td><code>voiceHandleText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>initRecognition()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>createSession()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>fuzzyFindProject()</code><br><small style="color:var(--muted)">public/app.js</small><br>+11 more</td>
-  <td>voiceHandleText() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>25</td>
-  <td><code>voiceLog()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>voiceHandleText()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><code>jpost()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>voiceLog() node in public/app.js.</td>
 </tr>
 </table>
 
@@ -1511,24 +1594,24 @@ flowchart LR
     <h4>Key Files</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>public/app.js</code></td><td>25 nodes</td></tr>
+      <tr><td><code>public/app.js</code></td><td>30 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: calls x48, indirect call x2. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x70, indirect call x4, contains x2. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
 
-<!-- ====== 7. Serverjs Genprojectid Getprocessuptime ====== -->
-<h2 id="serverjs-genprojectid-getprocessuptime">7. Serverjs Genprojectid Getprocessuptime</h2>
-<p>Serverjs Genprojectid Getprocessuptime groups implementation around serverjs, genprojectid, getprocessuptime, isvalidscope, mostly in server.js. This section covers 18 nodes and 18 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 7. server ====== -->
+<h2 id="server">7. server</h2>
+<p>server groups implementation around serverjs, genprojectid, getprocessuptime, isvalidscope, mostly in server.js. This section covers 18 nodes and 18 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Serverjs Genprojectid Getprocessuptime (18 nodes, 18 edges)
+    %% Section: server (18 nodes, 18 edges)
     server_server_4a4c9a18("server<br/><small>server.js</small>")
     server_runshell_44bcc604("runShell()<br/><small>server.js</small>")
     server_shellexecraw_ca83c2c1("shellExecRaw()<br/><small>server.js</small>")
@@ -1765,14 +1848,14 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 8. Serverjs Buildcrossprojectcontext Buildskillscontext ====== -->
-<h2 id="serverjs-buildcrossprojectcontext-buildskillscon">8. Serverjs Buildcrossprojectcontext Buildskillscontext</h2>
-<p>Serverjs Buildcrossprojectcontext Buildskillscontext groups implementation around serverjs, buildcrossprojectcontext, buildskillscontext, buildsystemcontextblock, mostly in server.js. This section covers 9 nodes and 9 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 8. buildCrossProjectContext ====== -->
+<h2 id="buildcrossprojectcontext">8. buildCrossProjectContext</h2>
+<p>buildCrossProjectContext groups implementation around serverjs, buildcrossprojectcontext, buildskillscontext, buildsystemcontextblock, mostly in server.js. This section covers 9 nodes and 9 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Serverjs Buildcrossprojectcontext Buildskillscontext (9 nodes, 9 edges)
+    %% Section: buildCrossProjectContext (9 nodes, 9 edges)
     server_buildcrossprojectcontext_f50d6879("buildCrossProjectContext()<br/><small>server.js</small>")
     server_proxywithinjection_a23ccb0d("proxyWithInjection()<br/><small>server.js</small>")
     server_buildsystemcontextblock_84f8a2aa("buildSystemContextBlock()<br/><small>server.js</small>")
@@ -1910,14 +1993,126 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 9. Public Appjs Filetobase64 ====== -->
-<h2 id="public-appjs-filetobase64">9. Public Appjs Filetobase64</h2>
-<p>Public Appjs Filetobase64 groups implementation around public, appjs, filetobase64, filetotext, mostly in public/app.js. This section covers 5 nodes and 5 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 9. jget ====== -->
+<h2 id="jget">9. jget</h2>
+<p>jget groups implementation around public, appjs, jget, ownershipmeta, mostly in public/app.js. This section covers 6 nodes and 6 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Public Appjs Filetobase64 (5 nodes, 5 edges)
+    %% Section: jget (6 nodes, 6 edges)
+    public_app_refreshstatus_61e9f36e("refreshStatus()<br/><small>public/app.js</small>")
+    public_app_refreshagents_aeb1e8b4("refreshAgents()<br/><small>public/app.js</small>")
+    public_app_renderownership_12138cd1("renderOwnership()<br/><small>public/app.js</small>")
+    public_app_jget_16e694be("jget()<br/><small>public/app.js</small>")
+    public_app_setdot_6a362050("setDot()<br/><small>public/app.js</small>")
+    public_app_ownershipmeta_5c3ef0fb("ownershipMeta()<br/><small>public/app.js</small>")
+    public_app_refreshagents_aeb1e8b4 -->|calls| public_app_jget_16e694be
+    public_app_refreshstatus_61e9f36e -->|calls| public_app_jget_16e694be
+    public_app_refreshstatus_61e9f36e -->|calls| public_app_renderownership_12138cd1
+    public_app_refreshstatus_61e9f36e -->|calls| public_app_setdot_6a362050
+    public_app_refreshstatus_61e9f36e -->|calls| public_app_ownershipmeta_5c3ef0fb
+    public_app_renderownership_12138cd1 -->|calls| public_app_ownershipmeta_5c3ef0fb
+    class public_app_refreshstatus_61e9f36e function;
+    class public_app_refreshagents_aeb1e8b4 function;
+    class public_app_renderownership_12138cd1 function;
+    class public_app_jget_16e694be function;
+    class public_app_setdot_6a362050 function;
+    class public_app_ownershipmeta_5c3ef0fb function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>jget()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>refreshAgents()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshSessions()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
+  <td>No direct outbound edge</td>
+  <td>jget() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>ownershipMeta()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderOwnership()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>ownershipMeta() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>refreshAgents()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>jget()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>refreshAgents() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>jget()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>ownershipMeta()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderOwnership()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
+  <td>refreshStatus() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>renderOwnership()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>ownershipMeta()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>renderOwnership() node in public/app.js.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>setDot()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>setDot() node in public/app.js.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>public/app.js</code></td><td>6 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x6. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 10. handleFiles ====== -->
+<h2 id="handlefiles">10. handleFiles</h2>
+<p>handleFiles groups implementation around public, appjs, filetobase64, filetotext, mostly in public/app.js. This section covers 5 nodes and 5 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: handleFiles (5 nodes, 5 edges)
     public_app_handlefiles_38785ef9("handleFiles()<br/><small>public/app.js</small>")
     public_app_getfilekind_e1c0081a("getFileKind()<br/><small>public/app.js</small>")
     public_app_mimeguess_3233e431("mimeGuess()<br/><small>public/app.js</small>")
@@ -2011,14 +2206,102 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 10. Serverjs Normalizesessionentry Nowiso ====== -->
-<h2 id="serverjs-normalizesessionentry-nowiso">10. Serverjs Normalizesessionentry Nowiso</h2>
-<p>Serverjs Normalizesessionentry Nowiso groups implementation around serverjs, normalizesessionentry, nowiso, pushvoicelog, mostly in server.js. This section covers 4 nodes and 3 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 11. proxyToOpencode ====== -->
+<h2 id="proxytoopencode">11. proxyToOpencode</h2>
+<p>proxyToOpencode groups implementation around serverjs, json, proxytoopencode, projecthint, mostly in server.js. This section covers 4 nodes and 3 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Serverjs Normalizesessionentry Nowiso (4 nodes, 3 edges)
+    %% Section: proxyToOpencode (4 nodes, 3 edges)
+    server_proxytoopencode_6e290a5b("proxyToOpencode()<br/><small>server.js</small>")
+    server_json_4ce9f464("json()<br/><small>server.js</small>")
+    server_send_53636af1("send()<br/><small>server.js</small>")
+    server_proxytoopencode_projecthint_eff5138b("_projectHint()<br/><small>server.js</small>")
+    server_json_4ce9f464 -->|calls| server_send_53636af1
+    server_proxytoopencode_6e290a5b -->|calls| server_json_4ce9f464
+    class server_proxytoopencode_6e290a5b function;
+    class server_json_4ce9f464 function;
+    class server_send_53636af1 function;
+    class server_proxytoopencode_projecthint_eff5138b function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>json()</code><br><small style="color:var(--muted)">server.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>proxyToOpencode()</code><br><small style="color:var(--muted)">server.js</small><br><code>server</code><br><small style="color:var(--muted)">server.js</small></td>
+  <td><code>send()</code><br><small style="color:var(--muted)">server.js</small></td>
+  <td>json() node in server.js.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>proxyToOpencode()</code><br><small style="color:var(--muted)">server.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>server</code><br><small style="color:var(--muted)">server.js</small></td>
+  <td><code>json()</code><br><small style="color:var(--muted)">server.js</small><br><code>proxyWithInjection()</code><br><small style="color:var(--muted)">server.js</small></td>
+  <td>proxyToOpencode() node in server.js.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>_projectHint()</code><br><small style="color:var(--muted)">server.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>_projectHint() node in server.js.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>send()</code><br><small style="color:var(--muted)">server.js</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>json()</code><br><small style="color:var(--muted)">server.js</small><br><code>server</code><br><small style="color:var(--muted)">server.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>send() node in server.js.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>server.js</code></td><td>4 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x2, contains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 12. nowIso ====== -->
+<h2 id="nowiso">12. nowIso</h2>
+<p>nowIso groups implementation around serverjs, normalizesessionentry, nowiso, pushvoicelog, mostly in server.js. This section covers 4 nodes and 3 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: nowIso (4 nodes, 3 edges)
     server_normalizesessionentry_7bf1760d("normalizeSessionEntry()<br/><small>server.js</small>")
     server_pushvoicelog_6fa1c592("pushVoiceLog()<br/><small>server.js</small>")
     server_writesummary_a6e9406a("writeSummary()<br/><small>server.js</small>")
@@ -2100,14 +2383,14 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 11. Keepalivesh Hub Script ====== -->
-<h2 id="keepalivesh-hub-script">11. Keepalivesh Hub Script</h2>
-<p>Keepalivesh Hub Script groups implementation around keepalivesh, hub, script, mostly in keepalive.sh. This section covers 4 nodes and 5 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 13. keepalive.sh ====== -->
+<h2 id="keepalive-sh">13. keepalive.sh</h2>
+<p>keepalive.sh groups implementation around keepalivesh, hub, script, mostly in keepalive.sh. This section covers 4 nodes and 5 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Keepalivesh Hub Script (4 nodes, 5 edges)
+    %% Section: keepalive.sh (4 nodes, 5 edges)
     keepalive_sh_entry_a3b31e93("keepalive.sh script<br/><small>keepalive.sh</small>")
     keepalive_hub_up_7c2048d0("hub_up()<br/><small>keepalive.sh</small>")
     keepalive_is_up_4a957511("is_up()<br/><small>keepalive.sh</small>")
@@ -2188,26 +2471,21 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 12. Public Appjs Ownershipmeta ====== -->
-<h2 id="public-appjs-ownershipmeta">12. Public Appjs Ownershipmeta</h2>
-<p>Public Appjs Ownershipmeta groups implementation around public, appjs, ownershipmeta, refreshstatus, mostly in public/app.js. This section covers 4 nodes and 4 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 14. renderMarkdown ====== -->
+<h2 id="rendermarkdown">14. renderMarkdown</h2>
+<p>renderMarkdown groups implementation around public, appjs, escapehtml, rendermarkdown, mostly in public/app.js. This section covers 3 nodes and 2 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Public Appjs Ownershipmeta (4 nodes, 4 edges)
-    public_app_refreshstatus_61e9f36e("refreshStatus()<br/><small>public/app.js</small>")
-    public_app_renderownership_12138cd1("renderOwnership()<br/><small>public/app.js</small>")
-    public_app_setdot_6a362050("setDot()<br/><small>public/app.js</small>")
-    public_app_ownershipmeta_5c3ef0fb("ownershipMeta()<br/><small>public/app.js</small>")
-    public_app_refreshstatus_61e9f36e -->|calls| public_app_renderownership_12138cd1
-    public_app_refreshstatus_61e9f36e -->|calls| public_app_setdot_6a362050
-    public_app_refreshstatus_61e9f36e -->|calls| public_app_ownershipmeta_5c3ef0fb
-    public_app_renderownership_12138cd1 -->|calls| public_app_ownershipmeta_5c3ef0fb
-    class public_app_refreshstatus_61e9f36e function;
-    class public_app_renderownership_12138cd1 function;
-    class public_app_setdot_6a362050 function;
-    class public_app_ownershipmeta_5c3ef0fb function;
+    %% Section: renderMarkdown (3 nodes, 2 edges)
+    public_app_rendermarkdown_eb6ee557("renderMarkdown()<br/><small>public/app.js</small>")
+    public_app_escapehtml_fb93a3ef("escapeHtml()<br/><small>public/app.js</small>")
+    public_app_rendermarkdown_closelists_e7a743cb("closeLists()<br/><small>public/app.js</small>")
+    public_app_rendermarkdown_eb6ee557 -->|calls| public_app_escapehtml_fb93a3ef
+    class public_app_rendermarkdown_eb6ee557 function;
+    class public_app_escapehtml_fb93a3ef function;
+    class public_app_rendermarkdown_closelists_e7a743cb function;
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -2231,35 +2509,27 @@ flowchart LR
 </tr>
 <tr>
   <td>1</td>
-  <td><code>ownershipMeta()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>escapeHtml()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderOwnership()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>renderMarkdown()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td>No direct outbound edge</td>
-  <td>ownershipMeta() node in public/app.js.</td>
+  <td>Exports documentation data to a target format.</td>
 </tr>
 <tr>
   <td>2</td>
-  <td><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>renderMarkdown()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>jget()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>ownershipMeta()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>renderOwnership()</code><br><small style="color:var(--muted)">public/app.js</small><br>+2 more</td>
-  <td>refreshStatus() node in public/app.js.</td>
+  <td><code>addMsg()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>escapeHtml()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>Exports documentation data to a target format.</td>
 </tr>
 <tr>
   <td>3</td>
-  <td><code>renderOwnership()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td><code>closeLists()</code><br><small style="color:var(--muted)">public/app.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
-  <td><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><code>ownershipMeta()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>renderOwnership() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>4</td>
-  <td><code>setDot()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-func">Function</span></td>
-  <td><code>refreshStatus()</code><br><small style="color:var(--muted)">public/app.js</small></td>
+  <td>External entry / no inbound edge</td>
   <td>No direct outbound edge</td>
-  <td>setDot() node in public/app.js.</td>
+  <td>closeLists() node in public/app.js.</td>
 </tr>
 </table>
 
@@ -2268,24 +2538,24 @@ flowchart LR
     <h4>Key Files</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>public/app.js</code></td><td>4 nodes</td></tr>
+      <tr><td><code>public/app.js</code></td><td>3 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: calls x4. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x1, contains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
 
-<!-- ====== 13. Public Appjs Fetchmanagedprojects ====== -->
-<h2 id="public-appjs-fetchmanagedprojects">13. Public Appjs Fetchmanagedprojects</h2>
-<p>Public Appjs Fetchmanagedprojects groups implementation around public, appjs, fetchmanagedprojects, jgetok, mostly in public/app.js. This section covers 3 nodes and 2 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 15. fetchManagedProjects ====== -->
+<h2 id="fetchmanagedprojects">15. fetchManagedProjects</h2>
+<p>fetchManagedProjects groups implementation around public, appjs, fetchmanagedprojects, jgetok, mostly in public/app.js. This section covers 3 nodes and 2 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Public Appjs Fetchmanagedprojects (3 nodes, 2 edges)
+    %% Section: fetchManagedProjects (3 nodes, 2 edges)
     public_app_fetchmanagedprojects_76449bcf("fetchManagedProjects()<br/><small>public/app.js</small>")
     public_app_jgetok_591d9971("jgetOk()<br/><small>public/app.js</small>")
     public_app_unwrap_ede84377("unwrap()<br/><small>public/app.js</small>")
@@ -2356,22 +2626,38 @@ flowchart LR
 </div>
 <hr>
 
-<!-- ====== 14. Serverjs Classifyownership Clearstalecompanionmetaifneeded ====== -->
-<h2 id="serverjs-classifyownership-clearstalecompanionme">14. Serverjs Classifyownership Clearstalecompanionmetaifneeded</h2>
-<p>Serverjs Classifyownership Clearstalecompanionmetaifneeded groups implementation around serverjs, classifyownership, clearstalecompanionmetaifneeded, iscompanionpidalive, mostly in server.js. This section covers 3 nodes and 2 internal edges; the diagram shows only representative relationships to stay readable.</p>
+<!-- ====== 16. Other ====== -->
+<h2 id="other">16. Other</h2>
+<p>Other groups implementation around serverjs, start, hubsh, classifyownership, mostly in server.js, start-hub.sh. This section covers 8 nodes and 5 internal edges; the diagram shows only representative relationships to stay readable.</p>
 
 <div class="mermaid">
 %%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
 flowchart LR
-    %% Section: Serverjs Classifyownership Clearstalecompanionmetaifneeded (3 nodes, 2 edges)
-    server_classifyownership_3fd7ed5b("classifyOwnership()<br/><small>server.js</small>")
-    server_clearstalecompanionmetaifneeded_fef1aa50("clearStaleCompanionMetaIfNeeded()<br/><small>server.js</small>")
-    server_iscompanionpidalive_735a0c8b("isCompanionPidAlive()<br/><small>server.js</small>")
+    %% Section: Other (8 nodes, 5 edges)
+    subgraph other_server_js_23e1c1d8["server.js"]
+        server_classifyownership_3fd7ed5b("classifyOwnership()<br/><small>server.js</small>")
+        server_clearstalecompanionmetaifneeded_fef1aa50("clearStaleCompanionMetaIfNeeded()<br/><small>server.js</small>")
+        server_deleteskill_d3dc2966("deleteSkill()<br/><small>server.js</small>")
+        server_writeskill_c5abdeb6("writeSkill()<br/><small>server.js</small>")
+        server_iscompanionpidalive_735a0c8b("isCompanionPidAlive()<br/><small>server.js</small>")
+        server_skillpath_9fc6cfe8("skillPath()<br/><small>server.js</small>")
+    end
+    subgraph other_start_hub_sh_f8cf740b["start-hub.sh"]
+        start_hub_4c404b99("start-hub.sh")
+        start_hub_sh_entry_b43f83f0("start-hub.sh script<br/><small>start-hub.sh</small>")
+    end
     server_classifyownership_3fd7ed5b -->|calls| server_iscompanionpidalive_735a0c8b
     server_clearstalecompanionmetaifneeded_fef1aa50 -->|calls| server_iscompanionpidalive_735a0c8b
+    server_deleteskill_d3dc2966 -->|calls| server_skillpath_9fc6cfe8
+    server_writeskill_c5abdeb6 -->|calls| server_skillpath_9fc6cfe8
     class server_classifyownership_3fd7ed5b function;
     class server_clearstalecompanionmetaifneeded_fef1aa50 function;
+    class server_deleteskill_d3dc2966 function;
+    class server_writeskill_c5abdeb6 function;
     class server_iscompanionpidalive_735a0c8b function;
+    class server_skillpath_9fc6cfe8 function;
+    class start_hub_4c404b99 function;
+    class start_hub_sh_entry_b43f83f0 function;
     classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
     classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
     classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
@@ -2417,62 +2703,8 @@ flowchart LR
   <td>No direct outbound edge</td>
   <td>isCompanionPidAlive() node in server.js.</td>
 </tr>
-</table>
-
-<div class="grid">
-  <div class="card">
-    <h4>Key Files</h4>
-    <table style="width:100%;font-size:0.85rem;">
-      <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>server.js</code></td><td>3 nodes</td></tr>
-    </table>
-  </div>
-  <div class="card">
-    <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: calls x2. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
-  </div>
-</div>
-<hr>
-
-<!-- ====== 15. Serverjs Deleteskill Skillpath ====== -->
-<h2 id="serverjs-deleteskill-skillpath">15. Serverjs Deleteskill Skillpath</h2>
-<p>Serverjs Deleteskill Skillpath groups implementation around serverjs, deleteskill, skillpath, writeskill, mostly in server.js. This section covers 3 nodes and 2 internal edges; the diagram shows only representative relationships to stay readable.</p>
-
-<div class="mermaid">
-%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
-flowchart LR
-    %% Section: Serverjs Deleteskill Skillpath (3 nodes, 2 edges)
-    server_deleteskill_d3dc2966("deleteSkill()<br/><small>server.js</small>")
-    server_writeskill_c5abdeb6("writeSkill()<br/><small>server.js</small>")
-    server_skillpath_9fc6cfe8("skillPath()<br/><small>server.js</small>")
-    server_deleteskill_d3dc2966 -->|calls| server_skillpath_9fc6cfe8
-    server_writeskill_c5abdeb6 -->|calls| server_skillpath_9fc6cfe8
-    class server_deleteskill_d3dc2966 function;
-    class server_writeskill_c5abdeb6 function;
-    class server_skillpath_9fc6cfe8 function;
-    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
-    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
-    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
-    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
-    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
-    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
-    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
-    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
-    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
-</div>
-
-<h3>Call Details</h3>
-<table class="call-table">
 <tr>
-  <th style="width:5%">#</th>
-  <th style="width:28%">Node</th>
-  <th style="width:10%">Type</th>
-  <th style="width:17%">Caller</th>
-  <th style="width:20%">Callees</th>
-  <th style="width:20%">Description</th>
-</tr>
-<tr>
-  <td>1</td>
+  <td>4</td>
   <td><code>deleteSkill()</code><br><small style="color:var(--muted)">server.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>server</code><br><small style="color:var(--muted)">server.js</small></td>
@@ -2480,7 +2712,7 @@ flowchart LR
   <td>deleteSkill() node in server.js.</td>
 </tr>
 <tr>
-  <td>2</td>
+  <td>5</td>
   <td><code>skillPath()</code><br><small style="color:var(--muted)">server.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>deleteSkill()</code><br><small style="color:var(--muted)">server.js</small><br><code>server</code><br><small style="color:var(--muted)">server.js</small><br><code>writeSkill()</code><br><small style="color:var(--muted)">server.js</small></td>
@@ -2488,90 +2720,15 @@ flowchart LR
   <td>skillPath() node in server.js.</td>
 </tr>
 <tr>
-  <td>3</td>
+  <td>6</td>
   <td><code>writeSkill()</code><br><small style="color:var(--muted)">server.js</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td><code>server</code><br><small style="color:var(--muted)">server.js</small></td>
   <td><code>skillPath()</code><br><small style="color:var(--muted)">server.js</small></td>
   <td>writeSkill() node in server.js.</td>
 </tr>
-</table>
-
-<div class="grid">
-  <div class="card">
-    <h4>Key Files</h4>
-    <table style="width:100%;font-size:0.85rem;">
-      <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>server.js</code></td><td>3 nodes</td></tr>
-    </table>
-  </div>
-  <div class="card">
-    <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: calls x2. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
-  </div>
-</div>
-<hr>
-
-<!-- ====== 16. Other ====== -->
-<h2 id="other">16. Other</h2>
-<p>Other groups implementation around start, hubsh, public, appjs, mostly in public/app.js, start-hub.sh. This section covers 4 nodes and 2 internal edges; the diagram shows only representative relationships to stay readable.</p>
-
-<div class="mermaid">
-%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
-flowchart LR
-    %% Section: Other (4 nodes, 2 edges)
-    subgraph other_public_app_js_01c85c4b["public/app.js"]
-        public_app_setupsse_ef0bcaae("setupSSE()<br/><small>public/app.js</small>")
-        public_app_pillfromsseevent_eba05432("pillFromSseEvent()<br/><small>public/app.js</small>")
-    end
-    subgraph other_start_hub_sh_f8cf740b["start-hub.sh"]
-        start_hub_4c404b99("start-hub.sh")
-        start_hub_sh_entry_b43f83f0("start-hub.sh script<br/><small>start-hub.sh</small>")
-    end
-    public_app_setupsse_ef0bcaae -->|calls| public_app_pillfromsseevent_eba05432
-    class public_app_setupsse_ef0bcaae async;
-    class public_app_pillfromsseevent_eba05432 async;
-    class start_hub_4c404b99 function;
-    class start_hub_sh_entry_b43f83f0 function;
-    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
-    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
-    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
-    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
-    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
-    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
-    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
-    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
-    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
-</div>
-
-<h3>Call Details</h3>
-<table class="call-table">
 <tr>
-  <th style="width:5%">#</th>
-  <th style="width:28%">Node</th>
-  <th style="width:10%">Type</th>
-  <th style="width:17%">Caller</th>
-  <th style="width:20%">Callees</th>
-  <th style="width:20%">Description</th>
-</tr>
-<tr>
-  <td>1</td>
-  <td><code>pillFromSseEvent()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-async">Async</span></td>
-  <td><code>setupSSE()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>No direct outbound edge</td>
-  <td>pillFromSseEvent() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>2</td>
-  <td><code>setupSSE()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td><span class="tag tag-async">Async</span></td>
-  <td>External entry / no inbound edge</td>
-  <td><code>hidePill()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>pillFromSseEvent()</code><br><small style="color:var(--muted)">public/app.js</small><br><code>showPill()</code><br><small style="color:var(--muted)">public/app.js</small></td>
-  <td>setupSSE() node in public/app.js.</td>
-</tr>
-<tr>
-  <td>3</td>
+  <td>7</td>
   <td><code>start-hub.sh</code><br><small style="color:var(--muted)">start-hub.sh</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -2579,7 +2736,7 @@ flowchart LR
   <td>start-hub.sh node in start-hub.sh.</td>
 </tr>
 <tr>
-  <td>4</td>
+  <td>8</td>
   <td><code>start-hub.sh script</code><br><small style="color:var(--muted)">start-hub.sh</small></td>
   <td><span class="tag tag-func">Function</span></td>
   <td>External entry / no inbound edge</td>
@@ -2593,13 +2750,13 @@ flowchart LR
     <h4>Key Files</h4>
     <table style="width:100%;font-size:0.85rem;">
       <tr><th>File</th><th>Coverage</th></tr>
-      <tr><td><code>public/app.js</code></td><td>2 nodes</td></tr>
+      <tr><td><code>server.js</code></td><td>6 nodes</td></tr>
 <tr><td><code>start-hub.sh</code></td><td>2 nodes</td></tr>
     </table>
   </div>
   <div class="card">
     <h4>Design Notes</h4>
-    <p>This section comes from graphify community clustering. Relationship summary: calls x1, contains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x4, contains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
   </div>
 </div>
 <hr>
@@ -2610,8 +2767,8 @@ flowchart LR
   <div class="card">
     <h4>Graph</h4>
     <table style="width:100%;font-size:0.85rem;">
-      <tr><td>Nodes</td><td>179</td></tr>
-      <tr><td>Edges</td><td>389</td></tr>
+      <tr><td>Nodes</td><td>197</td></tr>
+      <tr><td>Edges</td><td>467</td></tr>
       <tr><td>Hyperedges</td><td>0</td></tr>
       <tr><td>Communities</td><td>18</td></tr>
       <tr><td>Documented Sections</td><td>15</td></tr>
@@ -2620,8 +2777,8 @@ flowchart LR
   <div class="card">
     <h4>Edge Confidence</h4>
     <table style="width:100%;font-size:0.85rem;">
-      <tr><td>EXTRACTED</td><td>380</td></tr>
-      <tr><td>INFERRED</td><td>9</td></tr>
+      <tr><td>EXTRACTED</td><td>456</td></tr>
+      <tr><td>INFERRED</td><td>11</td></tr>
       <tr><td>AMBIGUOUS</td><td>0</td></tr>
     </table>
   </div>
@@ -2629,7 +2786,7 @@ flowchart LR
 
 <div style="text-align:center; padding:40px 0; color: var(--muted); font-size:0.9rem;">
   <p>opencode-companion — Architecture Documentation</p>
-  <p>Generated: 2026-09-18 03:00 UTC · graphify callflow-html</p>
+  <p>Generated: 2026-09-20 04:12 UTC · graphify callflow-html</p>
 </div>
 
 </div><!-- .container -->
