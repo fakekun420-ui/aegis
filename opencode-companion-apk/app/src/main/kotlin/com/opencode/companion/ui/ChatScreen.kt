@@ -461,12 +461,12 @@ private fun MessageBubble(msg: Message) {
         )
         val files = msg.fileParts()
         val images = msg.imageParts()
+        val bitmaps = remember(images) { images.map { img -> (img.image ?: img.data)?.let { decodeBase64Bitmap(it) } } }
         Surface(color = bubbleColor, shape = shape, modifier = Modifier.fillMaxWidth(0.86f)) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Image previews (base64 data URIs from backend)
-                images.forEach { img ->
-                    val b64 = img.image ?: img.data
-                    val bitmap = remember(b64) { b64?.let { decodeBase64Bitmap(it) } }
+                images.forEachIndexed { idx, img ->
+                    val bitmap = bitmaps.getOrNull(idx)
                     if (bitmap != null) {
                         Image(
                             bitmap = bitmap.asImageBitmap(),
