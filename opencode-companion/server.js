@@ -387,12 +387,33 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
   if (!isMessageRoute || req.method !== "POST" || !originalBodyBuf || originalBodyBuf.length === 0) return null;
   let parsed;
   try { parsed = JSON.parse(originalBodyBuf.toString("utf8")); } catch { return null; }
+
+  // Normalize OpenCode payload: OpenCode strictly validates schema.
+  let modified = false;
+  if ("provider" in parsed) {
+    delete parsed.provider;
+    modified = true;
+  }
+  if (typeof parsed.model === "string") {
+    const m = parsed.model;
+    if (m.includes("gemini")) {
+      parsed.model = { modelID: m, providerID: "google" };
+    } else if (m.includes("gpt")) {
+      parsed.model = { modelID: m, providerID: "openai" };
+    } else if (m.includes("claude")) {
+      parsed.model = { modelID: m, providerID: "anthropic" };
+    } else {
+      delete parsed.model;
+    }
+    modified = true;
+  }
+
   // Dedup: if caller already injected (retry) skip to avoid double prefix blowing up size
   try {
     const firstPartText = Array.isArray(parsed.parts) && parsed.parts[0] && typeof parsed.parts[0].text === "string" ? parsed.parts[0].text : "";
-    if (firstPartText.startsWith("[SYSTEM CONTEXT") || firstPartText.includes("---\n\n[SYSTEM CONTEXT")) return null;
-    if (typeof parsed.text === "string" && parsed.text.includes("[SYSTEM CONTEXT")) return null;
-    if (typeof parsed.prompt === "string" && parsed.prompt.includes("[SYSTEM CONTEXT")) return null;
+    if (firstPartText.startsWith("[SYSTEM CONTEXT") || firstPartText.includes("---\n\n[SYSTEM CONTEXT")) return modified ? Buffer.from(JSON.stringify(parsed)) : null;
+    if (typeof parsed.text === "string" && parsed.text.includes("[SYSTEM CONTEXT")) return modified ? Buffer.from(JSON.stringify(parsed)) : null;
+    if (typeof parsed.prompt === "string" && parsed.prompt.includes("[SYSTEM CONTEXT")) return modified ? Buffer.from(JSON.stringify(parsed)) : null;
   } catch {}
   // Resolve projectId for this message: from body.projectId, or from sessionId association via projects.json, or header X-Project-Id
   let projectId = parsed.projectId || parsed.projectID || req.headers["x-project-id"] || null;
@@ -407,9 +428,9 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
   }
   // Also fallback to UI_STATE projectId if header missing (client persisted active project)
   if (!projectId && UI_STATE && UI_STATE.projectId) projectId = UI_STATE.projectId;
-  if (!projectId) return null;
+  if (!projectId) return modified ? Buffer.from(JSON.stringify(parsed)) : null;
   let block = buildSystemContextBlock(projectId);
-  if (!block) return null;
+  if (!block) return modified ? Buffer.from(JSON.stringify(parsed)) : null;
   // Defensive sanitization: remove control chars that break JSON/provider validation, keep \n \r \t
   // Also normalize: skills/summaries may contain unescaped quotes/backticks/binary
   block = String(block).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, " ");
