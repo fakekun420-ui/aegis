@@ -85,7 +85,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         checkHubOnStart()
     }
 
-    @Composable
     private var lastBootError: String? by mutableStateOf<String?>(null)
 
     @Composable
