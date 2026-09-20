@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.OpencodeSession
 import com.opencode.companion.data.Project
 import com.opencode.companion.ui.viewmodel.ChatViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
