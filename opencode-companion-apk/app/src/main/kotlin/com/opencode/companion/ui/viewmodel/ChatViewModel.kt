@@ -3,7 +3,9 @@ package com.opencode.companion.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.opencode.companion.data.ApiClient
+import com.opencode.companion.data.AttachedFile
 import com.opencode.companion.data.Message
+import com.opencode.companion.data.ModelOption
 import com.opencode.companion.data.SendMessageRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,13 +23,37 @@ class ChatViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    private val _models = MutableStateFlow<List<ModelOption>>(emptyList())
+    val models: StateFlow<List<ModelOption>> = _models
+
+    private val _selectedModel = MutableStateFlow<String?>(null)
+    val selectedModel: StateFlow<String?> = _selectedModel
+
+    fun selectModel(modelId: String?) {
+        _selectedModel.value = modelId
+    }
+
+    fun loadModels() {
+        viewModelScope.launch {
+            try {
+                val resp = api.getModels()
+                if (resp.ok && resp.data != null) {
+                    _models.value = resp.data
+                    if (_selectedModel.value == null && resp.data.isNotEmpty()) {
+                        _selectedModel.value = resp.data.first().id
+                    }
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
     fun load(sessionId: String) {
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
+            loadModels()
             try {
                 val resp = api.getMessages(sessionId)
-                // Envelope wrapping: ok check; if raw array compat, handle
                 if (resp.ok && resp.data != null) {
                     _messages.value = resp.data.filterNot { it.isEmpty }
                 } else if (!resp.ok) {
@@ -43,7 +69,7 @@ class ChatViewModel : ViewModel() {
         sendWithFiles(sessionId, text, emptyList())
     }
 
-    fun sendWithFiles(sessionId: String, text: String, files: List<com.opencode.companion.data.AttachedFile>) {
+    fun sendWithFiles(sessionId: String, text: String, files: List<AttachedFile>) {
         if (text.isBlank() && files.isEmpty()) return
         viewModelScope.launch {
             _loading.value = true
@@ -61,7 +87,6 @@ class ChatViewModel : ViewModel() {
                     when {
                         f.text != null -> parts += mapOf("type" to "text", "text" to "Archivo ${f.name} (${f.mime}):\n```\n${f.text.take(30000)}\n```")
                         f.base64 != null -> {
-                            // Opencode expects {type:'file', mime, data} or image
                             if (f.mime.startsWith("image/")) {
                                 parts += mapOf("type" to "image", "mime" to f.mime, "image" to f.base64, "filename" to f.name)
                             }

@@ -42,6 +42,8 @@ fun AppNavHost() {
                 onOpenProject = { id -> navController.navigate("project/$id") },
                 onCreateProject = { name, desc -> vm.createProject(name, desc) },
                 onRenameProject = { id, name -> vm.renameProject(id, name) },
+                onPatchProject = { id, name, desc -> vm.patchProject(id, name, desc) },
+                onArchiveProject = { id -> vm.archiveProject(id) },
                 onDeleteProject = { id -> vm.deleteProject(id) },
                 onRefresh = { vm.refreshProjects() },
                 onClearError = { vm.clearError() }
@@ -106,7 +108,12 @@ fun AppNavHost() {
         composable(NavRoutes.CHAT_PLACEHOLDER, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->
             val sid = backStack.arguments?.getString("sessionId") ?: ""
             val chatVm: ChatViewModel = viewModel(key = "chat_$sid")
-            ChatScreen(sessionId = sid, vm = chatVm, onBack = { navController.popBackStack() })
+            ChatScreen(sessionId = sid, vm = chatVm, onBack = { navController.popBackStack() }, onVoice = { navController.navigate(NavRoutes.voice(sid)) })
+        }
+        composable(NavRoutes.VOICE, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->
+            val sid = backStack.arguments?.getString("sessionId") ?: ""
+            val chatVm: ChatViewModel = viewModel(key = "chat_$sid")
+            VoiceConversationScreen(sessionId = sid, vm = chatVm, onBack = { navController.popBackStack() })
         }
     }
 }

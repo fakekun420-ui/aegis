@@ -43,12 +43,16 @@ import java.util.Locale
 fun ChatScreen(
     sessionId: String,
     vm: ChatViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onVoice: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val messages by vm.messages.collectAsState()
     val loading by vm.loading.collectAsState()
     val error by vm.error.collectAsState()
+    val models by vm.models.collectAsState()
+    val selectedModel by vm.selectedModel.collectAsState()
+    var showModelSheet by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -98,6 +102,31 @@ fun ChatScreen(
         if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
         val newFiles = uris.take(6 - attachedFiles.size).mapNotNull { uri -> uriToAttachedFile(context, uri) }
         attachedFiles = attachedFiles + newFiles
+    }
+
+    var showAttachSheet by remember { mutableStateOf(false) }
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && cameraUri != null) {
+            val f = uriToAttachedFile(context, cameraUri!!)
+            if (f != null) attachedFiles = attachedFiles + f
+        }
+    }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val f = uriToAttachedFile(context, uri)
+            if (f != null) attachedFiles = attachedFiles + f
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", java.io.File(context.cacheDir, "photo_${System.currentTimeMillis()}.jpg"))
+            cameraUri = uri
+            cameraLauncher.launch(uri)
+        }
     }
 
     val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -174,6 +203,27 @@ fun ChatScreen(
                         }
                     }
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AssistChip(
+                        onClick = { showModelSheet = true },
+                        label = {
+                            val modelName = models.find { it.id == selectedModel }?.name ?: selectedModel ?: "Modelo"
+                            Text(modelName, style = MaterialTheme.typography.labelSmall)
+                        },
+                        leadingIcon = { Icon(Icons.Filled.SmartToy, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.semantics { contentDescription = "Seleccionar modelo" }
+                    )
+                    Spacer(Modifier.weight(1f))
+                    FilledTonalIconButton(
+                        onClick = onVoice,
+                        modifier = Modifier.size(40.dp).semantics { contentDescription = "Modo voz" }
+                    ) {
+                        Icon(Icons.Filled.Headset, contentDescription = "Modo voz", modifier = Modifier.size(20.dp))
+                    }
+                }
                 ComposerBar(
                     text = composerText,
                     onTextChange = { composerText = it },
@@ -185,7 +235,7 @@ fun ChatScreen(
                             attachedFiles = emptyList()
                         }
                     },
-                    onAttach = { filePickerLauncher.launch(arrayOf("*/*")) },
+                    onAttach = { showAttachSheet = true },
                     onMic = {
                         if (!ensureMicPermission()) return@ComposerBar
                         if (listening) {
@@ -214,7 +264,24 @@ fun ChatScreen(
                     Button(onClick = { vm.load(sessionId) }) { Text("Reintentar") }
                 }
                 messages.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Sesión vacía — escribe abajo.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(
+                            Icons.Filled.SmartToy,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "Hablemos",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "Escribe un mensaje para comenzar",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 else -> LazyColumn(
                     state = listState,
@@ -230,6 +297,81 @@ fun ChatScreen(
             }
             if (sttError != null) {
                 Snackbar(modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) { Text(sttError ?: "") }
+            }
+        }
+    }
+
+    if (showAttachSheet) {
+        ModalBottomSheet(onDismissRequest = { showAttachSheet = false }) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Agregar al chat", style = MaterialTheme.typography.titleMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilledTonalIconButton(
+                            onClick = {
+                                showAttachSheet = false
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                    val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", java.io.File(context.cacheDir, "photo_${System.currentTimeMillis()}.jpg"))
+                                    cameraUri = uri
+                                    cameraLauncher.launch(uri)
+                                } else {
+                                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                }
+                            },
+                            modifier = Modifier.size(56.dp).semantics { contentDescription = "Cámara" }
+                        ) { Icon(Icons.Filled.CameraAlt, contentDescription = "Cámara", modifier = Modifier.size(28.dp)) }
+                        Text("Cámara", style = MaterialTheme.typography.labelSmall)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilledTonalIconButton(
+                            onClick = { showAttachSheet = false; photoPickerLauncher.launch("image/*") },
+                            modifier = Modifier.size(56.dp).semantics { contentDescription = "Fotos" }
+                        ) { Icon(Icons.Filled.Photo, contentDescription = "Fotos", modifier = Modifier.size(28.dp)) }
+                        Text("Fotos", style = MaterialTheme.typography.labelSmall)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilledTonalIconButton(
+                            onClick = { showAttachSheet = false; filePickerLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.size(56.dp).semantics { contentDescription = "Archivos" }
+                        ) { Icon(Icons.Filled.FolderOpen, contentDescription = "Archivos", modifier = Modifier.size(28.dp)) }
+                        Text("Archivos", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+
+    if (showModelSheet) {
+        ModalBottomSheet(onDismissRequest = { showModelSheet = false }) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Seleccionar modelo", style = MaterialTheme.typography.titleMedium)
+                models.forEach { model ->
+                    ListItem(
+                        headlineContent = { Text(model.name) },
+                        supportingContent = { model.description?.let { Text(it) } },
+                        leadingContent = {
+                            RadioButton(
+                                selected = model.id == selectedModel,
+                                onClick = { vm.selectModel(model.id); showModelSheet = false }
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().clickable { vm.selectModel(model.id); showModelSheet = false }
+                    )
+                }
+                if (models.isEmpty()) {
+                    Text("Cargando modelos…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(16.dp))
             }
         }
     }

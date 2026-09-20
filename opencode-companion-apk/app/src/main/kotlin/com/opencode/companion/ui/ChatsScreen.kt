@@ -89,7 +89,7 @@ fun ChatsScreen(
                                 DropdownMenu(expanded = menuTarget?.resolvedId == sess.resolvedId, onDismissRequest = { menuTarget = null }) {
                                     DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = sess }, modifier = Modifier.semantics { contentDescription = "Renombrar" })
                                     DropdownMenuItem(text = { Text("Fijar") }, onClick = { menuTarget = null; onPinSession(sess.resolvedId) }, modifier = Modifier.semantics { contentDescription = "Fijar" })
-                                    DropdownMenuItem(text = { Text("Cambiar proyecto") }, onClick = { menuTarget = null; moveTarget = sess }, modifier = Modifier.semantics { contentDescription = "Cambiar proyecto" })
+                                    DropdownMenuItem(text = { Text("Agregar a proyecto") }, onClick = { menuTarget = null; moveTarget = sess }, modifier = Modifier.semantics { contentDescription = "Agregar a proyecto" })
                                     DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = sess }, modifier = Modifier.semantics { contentDescription = "Eliminar" })
                                 }
                             }
@@ -126,7 +126,7 @@ fun ChatsScreen(
         var selected by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { moveTarget = null },
-            title = { Text("Cambiar proyecto") },
+            title = { Text("Agregar a proyecto") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     projects.forEach { p ->

@@ -1049,6 +1049,21 @@ const server = http.createServer(async (req, res)=>{
     }
   }
 
+  // GET /api/opencode/models — list available models for the model selector
+  // Returns a curated list since opencode doesn't expose a models API directly
+  if(pathname === "/api/opencode/models" && req.method === "GET") {
+    const models = [
+      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", description: "Rápido y eficiente" },
+      { id: "gemini-3.6-flash-lite", name: "Gemini 3.6 Flash Lite", description: "Más rápido, menos preciso" },
+      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "Alta calidad, más lento" },
+      { id: "gpt-4o", name: "GPT-4o", description: "OpenAI multihablidad" },
+      { id: "gpt-4o-mini", name: "GPT-4o Mini", description: "Rápido y económico" },
+      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", description: "Balance calidad/velocidad" },
+      { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", description: " Ultrarrápido" }
+    ];
+    return json(res, 200, ok(models));
+  }
+
   // GET /api/projects/:id/summary — read summary (optional fetch helper)
   if(pathname.match(/^\/api\/projects\/[^\/]+\/summary$/) && req.method==="GET"){
     const m = pathname.match(/^\/api\/projects\/[^\/]+\/summary$/);

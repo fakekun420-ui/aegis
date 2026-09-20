@@ -48,4 +48,7 @@ interface ApiService {
 
     @GET("api/system/status")
     suspend fun systemStatus(): SystemStatus
+
+    @GET("api/opencode/models")
+    suspend fun getModels(): Envelope<List<ModelOption>>
 }

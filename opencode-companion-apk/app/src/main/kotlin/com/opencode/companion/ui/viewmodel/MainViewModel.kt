@@ -76,6 +76,24 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    fun patchProject(id: String, name: String?, description: String?) {
+        viewModelScope.launch {
+            try {
+                val resp = api.patchProject(id, PatchProjectRequest(name = name, description = description))
+                if (resp.ok) refreshProjects() else _error.value = resp.error
+            } catch (e: Exception) { _error.value = e.message }
+        }
+    }
+
+    fun archiveProject(id: String) {
+        viewModelScope.launch {
+            try {
+                val resp = api.patchProject(id, PatchProjectRequest(archived = true))
+                if (resp.ok) refreshProjects() else _error.value = resp.error
+            } catch (e: Exception) { _error.value = e.message }
+        }
+    }
+
     fun deleteProject(id: String) {
         viewModelScope.launch {
             try {

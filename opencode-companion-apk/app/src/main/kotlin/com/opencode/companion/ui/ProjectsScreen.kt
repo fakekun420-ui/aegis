@@ -31,6 +31,8 @@ fun ProjectsScreen(
     onOpenProject: (String) -> Unit,
     onCreateProject: (String, String) -> Unit,
     onRenameProject: (String, String) -> Unit,
+    onPatchProject: (String, String?, String?) -> Unit = { _, _, _ -> },
+    onArchiveProject: (String) -> Unit = {},
     onDeleteProject: (String) -> Unit,
     onRefresh: () -> Unit = {},
     onClearError: () -> Unit = {}
@@ -38,8 +40,11 @@ fun ProjectsScreen(
     var query by remember { mutableStateOf("") }
     var showCreate by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<Project?>(null) }
+    var editTarget by remember { mutableStateOf<Project?>(null) }
+    var archiveTarget by remember { mutableStateOf<Project?>(null) }
     var deleteTarget by remember { mutableStateOf<Project?>(null) }
     var menuTarget by remember { mutableStateOf<Project?>(null) }
+    var pinnedIds by remember { mutableStateOf(setOf<String>()) }
 
     val filtered = remember(projects, query) {
         if (query.isBlank()) projects else projects.filter { it.name.contains(query, ignoreCase = true) || (it.description ?: "").contains(query, ignoreCase = true) }
@@ -84,8 +89,26 @@ fun ProjectsScreen(
                                     )
                                 }
                                 DropdownMenu(expanded = menuTarget?.id == proj.id, onDismissRequest = { menuTarget = null }) {
-                                    DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = proj }, modifier = Modifier.semantics { contentDescription = "Renombrar" })
-                                    DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = proj }, modifier = Modifier.semantics { contentDescription = "Eliminar" })
+                                    DropdownMenuItem(
+                                        text = { Text(if (pinnedIds.contains(proj.id)) "Desfijar" else "Fijar") },
+                                        onClick = { menuTarget = null; pinnedIds = if (pinnedIds.contains(proj.id)) pinnedIds - proj.id else pinnedIds + proj.id },
+                                        modifier = Modifier.semantics { contentDescription = "Fijar" }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Editar detalles") },
+                                        onClick = { menuTarget = null; editTarget = proj },
+                                        modifier = Modifier.semantics { contentDescription = "Editar detalles" }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Archivar") },
+                                        onClick = { menuTarget = null; archiveTarget = proj },
+                                        modifier = Modifier.semantics { contentDescription = "Archivar" }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Eliminar") },
+                                        onClick = { menuTarget = null; deleteTarget = proj },
+                                        modifier = Modifier.semantics { contentDescription = "Eliminar" }
+                                    )
                                 }
                             }
                         }
@@ -116,14 +139,29 @@ fun ProjectsScreen(
             dismissButton = { TextButton(onClick = { showCreate = false }) { Text("Cancelar") } }
         )
     }
-    renameTarget?.let { proj ->
+    editTarget?.let { proj ->
         var name by remember(proj.id) { mutableStateOf(proj.name) }
+        var desc by remember(proj.id) { mutableStateOf(proj.description ?: "") }
         AlertDialog(
-            onDismissRequest = { renameTarget = null },
-            title = { Text("Renombrar proyecto") },
-            text = { OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
-            confirmButton = { TextButton(onClick = { if (name.isNotBlank()) { onRenameProject(proj.id, name.trim()); renameTarget = null } }) { Text("Guardar") } },
-            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("Cancelar") } }
+            onDismissRequest = { editTarget = null },
+            title = { Text("Editar detalles") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = desc, onValueChange = { desc = it }, label = { Text("Descripción") }, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = { TextButton(onClick = { if (name.isNotBlank()) { onPatchProject(proj.id, name.trim(), desc.trim().ifBlank { null }); editTarget = null } }) { Text("Guardar") } },
+            dismissButton = { TextButton(onClick = { editTarget = null }) { Text("Cancelar") } }
+        )
+    }
+    archiveTarget?.let { proj ->
+        AlertDialog(
+            onDismissRequest = { archiveTarget = null },
+            title = { Text("Archivar proyecto") },
+            text = { Text("¿Archivar \"${proj.name}\"? Podrás verlo en la sección de archivados.") },
+            confirmButton = { TextButton(onClick = { onArchiveProject(proj.id); archiveTarget = null }) { Text("Archivar") } },
+            dismissButton = { TextButton(onClick = { archiveTarget = null }) { Text("Cancelar") } }
         )
     }
     deleteTarget?.let { proj ->

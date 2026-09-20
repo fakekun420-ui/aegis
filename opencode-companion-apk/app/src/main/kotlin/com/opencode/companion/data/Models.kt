@@ -125,6 +125,18 @@ data class AttachedFile(
     val text: String? = null
 )
 
+// ---- Models ----
+data class ModelOption(
+    val id: String,
+    val name: String,
+    val description: String? = null
+)
+
+data class SendMessageRequestWithModel(
+    val parts: List<Map<String, String>>,
+    val model: String? = null
+)
+
 // System status for overlay gate
 data class SystemStatus(
     val ready: Boolean = false,

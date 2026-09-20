@@ -7,14 +7,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 import com.opencode.companion.data.OpencodeSession
 import com.opencode.companion.data.Project
 import com.opencode.companion.util.pickEpochMillis
@@ -39,16 +43,50 @@ fun MainNavScreen(
     onOpenSession: (String) -> Unit
 ) {
     val recents = remember(projects, sessions) { buildRecents(projects, sessions) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Opencode Companion") },
-                navigationIcon = { Icon(Icons.Filled.Menu, contentDescription = "Menú") }
-            )
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                Spacer(Modifier.height(24.dp))
+                Text("Opencode Companion", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+                HorizontalDivider()
+                NavigationDrawerItem(
+                    label = { Text("Inicio") },
+                    selected = false,
+                    onClick = { /* already on main */ },
+                    icon = { Icon(Icons.Filled.Home, contentDescription = null) }
+                )
+                NavigationDrawerItem(
+                    label = { Text("Proyectos") },
+                    selected = false,
+                    onClick = { onNavigateProjects() },
+                    icon = { Icon(Icons.Filled.Folder, contentDescription = null) }
+                )
+                NavigationDrawerItem(
+                    label = { Text("Chats") },
+                    selected = false,
+                    onClick = { onNavigateChats() },
+                    icon = { Icon(Icons.Filled.ChatBubble, contentDescription = null) }
+                )
+            }
         }
-    ) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Opencode Companion") },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = { kotlinx.coroutines.MainScope().launch { if (drawerState.isClosed) drawerState.open() else drawerState.close() } },
+                            modifier = Modifier.semantics { contentDescription = "Menú" }
+                        ) { Icon(Icons.Filled.Menu, contentDescription = "Menú") }
+                    }
+                )
+            }
+        ) { padding ->
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
             item { SectionHeader("Navegación") }
             item {
                 Card(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
@@ -95,6 +133,7 @@ fun MainNavScreen(
                     Divider()
                 }
             }
+        }
         }
     }
 }
