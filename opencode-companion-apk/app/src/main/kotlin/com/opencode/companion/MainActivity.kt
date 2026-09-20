@@ -175,7 +175,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /sdcard/projects/opencode-companion/find-ubuntu.sh"))
                 val ubuntuPid = try { stage.inputStream.bufferedReader().readText().trim().lines().firstOrNull { it.isNotBlank() }?.trim() } catch (_: Exception) { null }
                 android.util.Log.i("OpenCodeBoot", "keepalive ubuntuPid=$ubuntuPid")
-                val direct = if (!ubuntuPid.isNullOrBlank()) arrayOf("su", "-c", "chroot /proc/" + ubuntuPid + "/root /bin/sh -c '/usr/bin/nohup /bin/sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'") else null
+                val direct = if (!ubuntuPid.isNullOrBlank()) arrayOf("su", "-c", "chroot /proc/" + ubuntuPid + "/root /bin/sh -c '/usr/bin/nohup /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'") else null
                 if (direct == null) { execExit = 97; android.util.Log.e("OpenCodeBoot", "keepalive: no ubuntu chroot anchor found") } else {
                 val proc = Runtime.getRuntime().exec(direct)
                 execExit = proc.waitFor()
