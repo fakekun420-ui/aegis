@@ -7,9 +7,9 @@
   },
   "app/src/main/kotlin/com/opencode/companion/CompanionService.kt": {
     "mtime": 1789890146.469995,
-    "seen": 1789939460.9091413,
+    "seen": 1789944793.146646,
     "ast_hash": "d48adb540df5b445f0e6e7983e391279",
-    "semantic_hash": ""
+    "semantic_hash": "d48adb540df5b445f0e6e7983e391279"
   },
   "app/src/main/kotlin/com/opencode/companion/CompanionVoiceInteractionService.kt": {
     "mtime": 1789690228.1890602,
@@ -19,15 +19,15 @@
   },
   "app/src/main/kotlin/com/opencode/companion/MainActivity.kt": {
     "mtime": 1789930027.665584,
-    "seen": 1789939460.9091628,
+    "seen": 1789944793.1472664,
     "ast_hash": "467422dcfad852f6c3845d220f906123",
-    "semantic_hash": ""
+    "semantic_hash": "467422dcfad852f6c3845d220f906123"
   },
   "app/src/main/kotlin/com/opencode/companion/OpencodeAccessibilityService.kt": {
     "mtime": 1789890131.6099951,
-    "seen": 1789939460.909171,
+    "seen": 1789944793.147279,
     "ast_hash": "566fc97f654191c21776f2c9d9816e18",
-    "semantic_hash": ""
+    "semantic_hash": "566fc97f654191c21776f2c9d9816e18"
   },
   "app/src/main/kotlin/com/opencode/companion/RootShell.kt": {
     "mtime": 1789493620.4439857,
@@ -55,51 +55,51 @@
   },
   "app/src/main/kotlin/com/opencode/companion/data/ApiClient.kt": {
     "mtime": 1789928240.5055847,
-    "seen": 1789939460.90919,
+    "seen": 1789944793.14786,
     "ast_hash": "8774e58c56e66b6cdccb81ca236638a2",
-    "semantic_hash": ""
+    "semantic_hash": "8774e58c56e66b6cdccb81ca236638a2"
   },
   "app/src/main/kotlin/com/opencode/companion/data/ApiService.kt": {
-    "mtime": 1789935705.9951272,
-    "seen": 1789939460.9091995,
-    "ast_hash": "dce2cdf9a76aaabbc279ea3de1a9a075",
-    "semantic_hash": ""
+    "mtime": 1789941699.7889996,
+    "seen": 1789944793.1478713,
+    "ast_hash": "47d0a738b863b2e4f69e77d04a87a28e",
+    "semantic_hash": "47d0a738b863b2e4f69e77d04a87a28e"
   },
   "app/src/main/kotlin/com/opencode/companion/data/Models.kt": {
     "mtime": 1789928254.0655847,
-    "seen": 1789939460.9092088,
+    "seen": 1789944793.147884,
     "ast_hash": "43a628ff95733f3370b6df5b132d68b4",
-    "semantic_hash": ""
+    "semantic_hash": "43a628ff95733f3370b6df5b132d68b4"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/AppNavHost.kt": {
-    "mtime": 1789935841.7651272,
-    "seen": 1789939460.9092183,
-    "ast_hash": "d40e15a4f556d739d3607307eedd0d36",
-    "semantic_hash": ""
+    "mtime": 1789941819.5589995,
+    "seen": 1789944793.1478937,
+    "ast_hash": "6431dad09d5283223bc05b01dcc5dd95",
+    "semantic_hash": "6431dad09d5283223bc05b01dcc5dd95"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/ChatScreen.kt": {
-    "mtime": 1789932160.435583,
-    "seen": 1789939460.909228,
-    "ast_hash": "e794ca2b1a74803338737446ce24b41b",
-    "semantic_hash": ""
+    "mtime": 1789941797.6689994,
+    "seen": 1789944793.1479037,
+    "ast_hash": "9abb67d23599ad9c6c12af304c92f662",
+    "semantic_hash": "9abb67d23599ad9c6c12af304c92f662"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/ChatsScreen.kt": {
     "mtime": 1789935745.1251273,
-    "seen": 1789939460.9092371,
+    "seen": 1789944793.1479151,
     "ast_hash": "9a9f489bc34186b73efef6ad4ebcdbe8",
-    "semantic_hash": ""
+    "semantic_hash": "9a9f489bc34186b73efef6ad4ebcdbe8"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/MainNavScreen.kt": {
     "mtime": 1789930130.515584,
-    "seen": 1789939460.9092462,
+    "seen": 1789944793.1479266,
     "ast_hash": "132e1eaa259a2dca63ebeb8fa9b402fd",
-    "semantic_hash": ""
+    "semantic_hash": "132e1eaa259a2dca63ebeb8fa9b402fd"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/MarkdownText.kt": {
-    "mtime": 1789932093.6255832,
-    "seen": 1789939460.909255,
-    "ast_hash": "a0acdc2f01d39ed9882dafdec311ff76",
-    "semantic_hash": ""
+    "mtime": 1789941856.0089993,
+    "seen": 1789944793.147936,
+    "ast_hash": "8f6b12ef86dd7b6e7fbe9457a1ceb6ec",
+    "semantic_hash": "8f6b12ef86dd7b6e7fbe9457a1ceb6ec"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/NavRoutes.kt": {
     "mtime": 1789874642.0789995,
@@ -109,15 +109,15 @@
   },
   "app/src/main/kotlin/com/opencode/companion/ui/ProjectDetailScreen.kt": {
     "mtime": 1789935809.9251273,
-    "seen": 1789939460.9092739,
+    "seen": 1789944793.148827,
     "ast_hash": "d9aea96f345b586a95dd9c45901d17c5",
-    "semantic_hash": ""
+    "semantic_hash": "d9aea96f345b586a95dd9c45901d17c5"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/ProjectsScreen.kt": {
     "mtime": 1789935764.855127,
-    "seen": 1789939460.9092822,
+    "seen": 1789944793.148842,
     "ast_hash": "e76f6f832aa31098a3469cf06ee27f06",
-    "semantic_hash": ""
+    "semantic_hash": "e76f6f832aa31098a3469cf06ee27f06"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/VoiceConversationScreen.kt": {
     "mtime": 1789870814.7199993,
@@ -126,22 +126,22 @@
     "semantic_hash": "2ae6b4c5a980017e14ae412a315f9236"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/viewmodel/ChatViewModel.kt": {
-    "mtime": 1789929013.0355844,
-    "seen": 1789939460.9093087,
-    "ast_hash": "db3c4424d570f7cb349f2f2b382857ac",
-    "semantic_hash": ""
+    "mtime": 1789941745.4489994,
+    "seen": 1789944793.1495903,
+    "ast_hash": "252df39bbdecf8199bc43abd59bee5b3",
+    "semantic_hash": "252df39bbdecf8199bc43abd59bee5b3"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/viewmodel/MainViewModel.kt": {
-    "mtime": 1789936043.095127,
-    "seen": 1789939460.9093177,
-    "ast_hash": "c2235362fa202d289a80861c0857786d",
-    "semantic_hash": ""
+    "mtime": 1789941722.4589994,
+    "seen": 1789944793.1496027,
+    "ast_hash": "7c1626ce9ac2e7801f816a3df535a015",
+    "semantic_hash": "7c1626ce9ac2e7801f816a3df535a015"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/viewmodel/ProjectDetailViewModel.kt": {
     "mtime": 1789935728.2651272,
-    "seen": 1789939460.9093268,
+    "seen": 1789944793.1496165,
     "ast_hash": "e5984548eae7c3c084f9592c354c7232",
-    "semantic_hash": ""
+    "semantic_hash": "e5984548eae7c3c084f9592c354c7232"
   },
   "app/src/main/kotlin/com/opencode/companion/util/RelativeTime.kt": {
     "mtime": 1789859174.3078532,
@@ -151,15 +151,15 @@
   },
   "app/src/main/assets/stage-node.sh": {
     "mtime": 1789883015.9899979,
-    "seen": 1789939460.9091258,
+    "seen": 1789944793.14663,
     "ast_hash": "29e305aca8e7ba2e52d01321c3eebbc4",
-    "semantic_hash": ""
+    "semantic_hash": "29e305aca8e7ba2e52d01321c3eebbc4"
   },
   "app/src/main/kotlin/com/opencode/companion/ui/theme/Theme.kt": {
     "mtime": 1789930024.095584,
-    "seen": 1789939460.9093003,
+    "seen": 1789944793.149576,
     "ast_hash": "35f83b616ee91d4038556d59339e0199",
-    "semantic_hash": ""
+    "semantic_hash": "35f83b616ee91d4038556d59339e0199"
   },
   "README.md": {
     "mtime": 1789493703.5439856,

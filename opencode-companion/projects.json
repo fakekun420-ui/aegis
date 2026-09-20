@@ -66,7 +66,7 @@
           "sessionId": "ses_f3fafc39affeq9hAnhTJc3xs77",
           "title": "Test Claude Code Blocks",
           "createdAt": "2026-09-20T19:34:38.972Z",
-          "lastUsed": "2026-09-20T19:34:38.972Z",
+          "lastUsed": "2026-09-20T22:51:27.285Z",
           "summary": "",
           "provider": "opencode"
         },
@@ -91,6 +91,14 @@
           "title": "companion:92785",
           "createdAt": "2026-09-20T22:13:12.908Z",
           "lastUsed": "2026-09-20T22:16:55.257Z",
+          "summary": "",
+          "provider": "opencode"
+        },
+        {
+          "sessionId": "ses_f3f027485ffeC10AWQQDH0HxX5",
+          "title": "companion:36892",
+          "createdAt": "2026-09-20T22:43:56.953Z",
+          "lastUsed": "2026-09-20T22:43:56.988Z",
           "summary": "",
           "provider": "opencode"
         }
@@ -177,7 +185,7 @@
           "sessionId": "0adc77f9-68a1-4e32-8e03-d012d3a287c4",
           "title": "Frontend QA Verified",
           "createdAt": "2026-09-20T22:24:52.495Z",
-          "lastUsed": "2026-09-20T22:24:52.495Z",
+          "lastUsed": "2026-09-20T22:46:07.624Z",
           "summary": "",
           "provider": "antigravity"
         }
@@ -202,6 +210,7 @@
     "ses_f4c94c66dffenoqFOCFaytnre7": "Arquitecto",
     "0adc77f9-68a1-4e32-8e03-d012d3a287c4": "Frontend QA Verified",
     "ed8f444b-168f-4e64-8c19-e832ab542c77": "Backend",
-    "ses_f3f1e97f7ffeAwyBXHAch8Pd23": "companion:92785"
+    "ses_f3f1e97f7ffeAwyBXHAch8Pd23": "companion:92785",
+    "ses_f3f027485ffeC10AWQQDH0HxX5": "companion:36892"
   }
 }

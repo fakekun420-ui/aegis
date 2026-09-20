@@ -1,125 +1,117 @@
 {
   "communities": {
     "0": [
-      "activityresultcontracts",
       "add",
-      "alignment",
-      "app_src_main_kotlin_com_opencode_companion_data_models_opencodesession",
-      "app_src_main_kotlin_com_opencode_companion_data_models_project",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity",
-      "app_src_main_kotlin_com_opencode_companion_ui_appnavhost_appnavhost",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatplaceholderscreen",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatplaceholderscreen_chatplaceholderscreen",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_chatscreen",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_composerbar",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_draintts",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_humansize",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_kt_texttospeech",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_uritoattachedfile",
+      "agybadgebg",
+      "agybadgeborder",
+      "agybadgefg",
       "app_src_main_kotlin_com_opencode_companion_ui_chatsscreen",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatsscreen_chatsscreen",
       "app_src_main_kotlin_com_opencode_companion_ui_mainnavscreen",
-      "app_src_main_kotlin_com_opencode_companion_ui_mainnavscreen_mainnavscreen",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext",
       "app_src_main_kotlin_com_opencode_companion_ui_projectdetailscreen",
-      "app_src_main_kotlin_com_opencode_companion_ui_projectdetailscreen_projectdetailscreen",
       "app_src_main_kotlin_com_opencode_companion_ui_projectsscreen",
-      "app_src_main_kotlin_com_opencode_companion_ui_projectsscreen_projectsscreen",
-      "app_src_main_kotlin_com_opencode_companion_ui_voiceconversationscreen",
-      "app_src_main_kotlin_com_opencode_companion_util_relativetime_relativetime",
+      "app_src_main_kotlin_com_opencode_companion_util_relativetime",
+      "app_src_main_kotlin_com_opencode_companion_util_relativetime_pickepochmillis",
+      "archive",
       "arrowback",
-      "base64",
+      "borderstroke",
       "chatbubble",
-      "circleshape",
-      "clickable",
-      "clip",
+      "chatbubbleoutline",
       "close",
       "combinedclickable",
+      "contentcopy",
       "contentdescription",
-      "contextcompat",
-      "delay",
-      "dispatchers",
+      "datetimeparseexception",
+      "delete",
+      "description",
+      "done",
       "dp",
+      "drivefilemove",
+      "duration",
+      "edit",
       "experimentalfoundationapi",
+      "extension",
       "folder",
+      "fontfamily",
+      "fontweight",
+      "horizontalscroll",
       "icons",
       "inbox",
+      "instant",
       "items",
       "lazycolumn",
+      "linkoff",
+      "localclipboardmanager",
+      "menu",
+      "opencodebadgebg",
+      "opencodebadgeborder",
+      "opencodebadgefg",
+      "pulltorefreshbox",
+      "pushpin",
+      "rememberscrollstate",
+      "roundedcornershape",
+      "search",
+      "send",
+      "sp",
+      "textdecoration",
+      "textoverflow"
+    ],
+    "1": [
+      "activityresultcontracts",
+      "alignment",
+      "androidx",
+      "app_src_main_kotlin_com_opencode_companion_data_models_attachedfile",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity",
+      "app_src_main_kotlin_com_opencode_companion_ui_appnavhost",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_decodebase64bitmap",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_draintts",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_filerow",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_humansize",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_kt_texttospeech",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_messagebubble",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_unifiedfloatingcomposer",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_uritoattachedfile",
+      "app_src_main_kotlin_com_opencode_companion_ui_voiceconversationscreen",
+      "asimagebitmap",
+      "background",
+      "base64",
+      "circleshape",
+      "circularprogressindicator",
+      "clickable",
+      "clip",
+      "contentscale",
+      "contextcompat",
+      "graphicslayer",
+      "image",
       "lazyliststate",
       "lifecyclescope",
       "localcontext",
       "manifest",
-      "menu",
       "modifier",
+      "navargument",
+      "navhost",
+      "navtype",
       "openablecolumns",
       "packagemanager",
-      "pulltorefreshbox",
       "rememberlauncherforactivityresult",
       "rememberlazyliststate",
+      "remembernavcontroller",
       "semantics",
       "setcontent",
       "settings",
       "smarttoy",
       "speechrecognizer",
+      "text",
       "texttospeech",
       "toast",
       "uri",
+      "viewmodel",
       "windowcompat",
-      "withcontext",
       "withtimeoutornull"
     ],
-    "1": [
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_sendmessage",
-      "app_src_main_kotlin_com_opencode_companion_data_models",
-      "app_src_main_kotlin_com_opencode_companion_data_models_attachedfile",
-      "app_src_main_kotlin_com_opencode_companion_data_models_createprojectrequest",
-      "app_src_main_kotlin_com_opencode_companion_data_models_message",
-      "app_src_main_kotlin_com_opencode_companion_data_models_message_ismemorycontext",
-      "app_src_main_kotlin_com_opencode_companion_data_models_message_strippedtext",
-      "app_src_main_kotlin_com_opencode_companion_data_models_messageinfo",
-      "app_src_main_kotlin_com_opencode_companion_data_models_messagepart",
-      "app_src_main_kotlin_com_opencode_companion_data_models_modeloption",
-      "app_src_main_kotlin_com_opencode_companion_data_models_sendmessagerequest",
-      "app_src_main_kotlin_com_opencode_companion_data_models_sendmessagerequestwithmodel",
-      "app_src_main_kotlin_com_opencode_companion_data_models_skillcreaterequest",
-      "app_src_main_kotlin_com_opencode_companion_data_models_skilllistresponse",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_messagebubble",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_createnewsession",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_load",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_loadmodels",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_selectmodel",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_send",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_sendwithfiles",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_kt_stateflow",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_kt_viewmodel",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_kt_stateflow",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_kt_viewmodel",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_kt_stateflow",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_kt_viewmodel",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_clearerror",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_createskill",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_deleteskill",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_linkproject",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_load",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_sendnewsession",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_unlinkproject",
-      "app_src_main_kotlin_com_opencode_companion_ui_voiceconversationscreen_voiceconversationscreen",
-      "launch",
-      "mutablestateflow",
-      "serializedname",
-      "tomediatype",
-      "viewmodelscope"
-    ],
     "2": [
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle",
       "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bytearray",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_oninitlistener",
       "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_recognitionlistener",
       "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_speechrecognizer",
       "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_texttospeech",
@@ -144,21 +136,77 @@
       "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startlistening",
       "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startrootsystemandpoll",
       "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253_onbeginningofspeech",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253_onbufferreceived",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253_onendofspeech",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253_onerror",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253_onevent",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253_onpartialresults",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253_onreadyforspeech",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253_onresults",
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l253_onrmschanged",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274_onbeginningofspeech",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274_onbufferreceived",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274_onendofspeech",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274_onerror",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274_onevent",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274_onpartialresults",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274_onreadyforspeech",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274_onresults",
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_startwakewordlistener_object_recognitionlistener_l274_onrmschanged",
       "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_stopwakewordlistener",
       "app_src_main_kotlin_com_opencode_companion_mainactivity_mainactivity_toast",
-      "componentactivity"
+      "app_src_main_kotlin_com_opencode_companion_ui_theme_theme",
+      "app_src_main_kotlin_com_opencode_companion_ui_theme_theme_opencodecompaniontheme",
+      "bundle",
+      "color",
+      "componentactivity",
+      "composable",
+      "darkcolorscheme",
+      "issystemindarktheme",
+      "materialtheme",
+      "oninitlistener"
     ],
     "3": [
+      "app_src_main_kotlin_com_opencode_companion_data_apiclient",
+      "app_src_main_kotlin_com_opencode_companion_data_apiclient_apiclient",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getmessages",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_sendmessage",
+      "app_src_main_kotlin_com_opencode_companion_data_models_message",
+      "app_src_main_kotlin_com_opencode_companion_data_models_message_fileparts",
+      "app_src_main_kotlin_com_opencode_companion_data_models_message_imageparts",
+      "app_src_main_kotlin_com_opencode_companion_data_models_message_ismemorycontext",
+      "app_src_main_kotlin_com_opencode_companion_data_models_message_strippedtext",
+      "app_src_main_kotlin_com_opencode_companion_data_models_message_withstatus",
+      "app_src_main_kotlin_com_opencode_companion_data_models_messagedeliverystatus",
+      "app_src_main_kotlin_com_opencode_companion_data_models_messagedeliverystatus_error",
+      "app_src_main_kotlin_com_opencode_companion_data_models_messagedeliverystatus_pending",
+      "app_src_main_kotlin_com_opencode_companion_data_models_messagedeliverystatus_sent",
+      "app_src_main_kotlin_com_opencode_companion_data_models_messageinfo",
+      "app_src_main_kotlin_com_opencode_companion_data_models_messagepart",
+      "app_src_main_kotlin_com_opencode_companion_data_models_sendmessagerequest",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_clearerror",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_createnewsession",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_load",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_loadmodels",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_retrymessage",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_selectmodel",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_selectprovider",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_send",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel_sendwithfiles",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_kt_stateflow",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_kt_viewmodel",
+      "delay",
+      "dispatchers",
+      "docs_frontend_contract_3_1_send_message",
+      "docs_frontend_contract_3_2_get_messages_polling_initial_load",
+      "docs_frontend_contract_3_3_sessions_management",
+      "docs_frontend_contract_3_core_endpoints_specification",
+      "gsonbuilder",
+      "gsonconverterfactory",
+      "httplogginginterceptor",
+      "isactive",
+      "job",
+      "okhttpclient",
+      "retrofit",
+      "timeunit",
+      "withcontext"
+    ],
+    "4": [
       "app_src_main_kotlin_com_opencode_companion_companionvoiceinteractionservice",
       "app_src_main_kotlin_com_opencode_companion_companionvoiceinteractionservice_companionvoiceinteractionservice",
       "app_src_main_kotlin_com_opencode_companion_companionvoiceinteractionservice_companionvoiceinteractionservice_onready",
@@ -199,7 +247,75 @@
       "voiceinteractionsession",
       "voiceinteractionsessionservice"
     ],
-    "4": [
+    "5": [
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_createproject",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_createskill",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_deleteproject",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_deletesession",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_deleteskill",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getmodels",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getopencodesessions",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getprojects",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getprojectsessions",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getskills",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_linksession",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_patchproject",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_renamesession",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_systemstatus",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_unlinksession",
+      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_updateskill",
+      "app_src_main_kotlin_com_opencode_companion_data_models",
+      "app_src_main_kotlin_com_opencode_companion_data_models_createprojectrequest",
+      "app_src_main_kotlin_com_opencode_companion_data_models_envelope",
+      "app_src_main_kotlin_com_opencode_companion_data_models_linksessionrequest",
+      "app_src_main_kotlin_com_opencode_companion_data_models_modeloption",
+      "app_src_main_kotlin_com_opencode_companion_data_models_opencodesession",
+      "app_src_main_kotlin_com_opencode_companion_data_models_project",
+      "app_src_main_kotlin_com_opencode_companion_data_models_sendmessagerequestwithmodel",
+      "app_src_main_kotlin_com_opencode_companion_data_models_sessionref",
+      "app_src_main_kotlin_com_opencode_companion_data_models_sessionref_resolvedprovider",
+      "app_src_main_kotlin_com_opencode_companion_data_models_skill",
+      "app_src_main_kotlin_com_opencode_companion_data_models_skillcreaterequest",
+      "app_src_main_kotlin_com_opencode_companion_data_models_skilllistresponse",
+      "app_src_main_kotlin_com_opencode_companion_data_models_systemstatus",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_movesession",
+      "serializedname"
+    ],
+    "6": [
+      "app_src_main_kotlin_com_opencode_companion_ui_appnavhost_appnavhost",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_assistanttypingbubble",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_chatscreen",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatsscreen_chatsscreen",
+      "app_src_main_kotlin_com_opencode_companion_ui_mainnavscreen_mainnavscreen",
+      "app_src_main_kotlin_com_opencode_companion_ui_projectdetailscreen_projectdetailscreen",
+      "app_src_main_kotlin_com_opencode_companion_ui_projectsscreen_kt_modifier",
+      "app_src_main_kotlin_com_opencode_companion_ui_projectsscreen_projectsscreen",
+      "app_src_main_kotlin_com_opencode_companion_ui_projectsscreen_providerbadge",
+      "app_src_main_kotlin_com_opencode_companion_ui_voiceconversationscreen_voiceconversationscreen",
+      "app_src_main_kotlin_com_opencode_companion_util_relativetime_relativetime",
+      "docs_frontend_contract",
+      "docs_frontend_contract_1_overview_communication_architecture",
+      "docs_frontend_contract_2_global_headers_contract",
+      "docs_frontend_contract_4_1_kotlin_models_com_opencode_companion_data_models_kt",
+      "docs_frontend_contract_4_strict_type_definitions_kotlin_typescript",
+      "docs_frontend_contract_5_ui_lifecycle_polling_state_machine",
+      "docs_frontend_contract_6_frontend_visual_design_specifications_material_3",
+      "docs_frontend_contract_frontend_contract_opencode_antigravity_companion",
+      "docs_ui_audit_claude_style",
+      "docs_ui_audit_claude_style_1_resumen_ejecutivo",
+      "docs_ui_audit_claude_style_2_sistema_de_tokens_y_tipograf\u00eda_claude_warm_dark",
+      "docs_ui_audit_claude_style_3_1_projectdetailscreen_detalle_de_proyecto_estilo_claude",
+      "docs_ui_audit_claude_style_3_2_chatsscreen_y_projectsscreen_p\u00edldora_1_l\u00ednea_y_men\u00fa_flotante",
+      "docs_ui_audit_claude_style_3_3_chatscreen_y_markdowntext_tipograf\u00eda_serif_y_bloques_de_c\u00f3digo",
+      "docs_ui_audit_claude_style_3_4_floating_composer_unificado",
+      "docs_ui_audit_claude_style_3_matriz_de_componentes_y_pantallas_auditadas",
+      "docs_ui_audit_claude_style_4_verificaci\u00f3n_en_vivo_bridge_a11y_8766",
+      "docs_ui_audit_claude_style_5_conclusi\u00f3n",
+      "docs_ui_audit_claude_style_informe_de_auditor\u00eda_visual_e_interactiva_ui_ux_r\u00e9plica_pixel_perfect_estilo_claude"
+    ],
+    "7": [
       "app_src_main_kotlin_com_opencode_companion_companionservice",
       "app_src_main_kotlin_com_opencode_companion_companionservice_companionservice",
       "app_src_main_kotlin_com_opencode_companion_companionservice_companionservice_handlea11y",
@@ -227,7 +343,7 @@
       "socket",
       "thread"
     ],
-    "5": [
+    "8": [
       "accessibilityevent",
       "accessibilitynodeinfo",
       "accessibilityservice",
@@ -247,80 +363,73 @@
       "app_src_main_kotlin_com_opencode_companion_opencodeaccessibilityservice_opencodeaccessibilityservice_pressrecents",
       "app_src_main_kotlin_com_opencode_companion_opencodeaccessibilityservice_opencodeaccessibilityservice_settextbyid",
       "app_src_main_kotlin_com_opencode_companion_opencodeaccessibilityservice_opencodeaccessibilityservice_tapat",
-      "app_src_main_kotlin_com_opencode_companion_opencodeaccessibilityservice_opencodeaccessibilityservice_tapat_object_gestureresultcallback_l62",
-      "app_src_main_kotlin_com_opencode_companion_opencodeaccessibilityservice_opencodeaccessibilityservice_tapat_object_gestureresultcallback_l62_oncompleted",
+      "app_src_main_kotlin_com_opencode_companion_opencodeaccessibilityservice_opencodeaccessibilityservice_tapat_object_gestureresultcallback_l78",
+      "app_src_main_kotlin_com_opencode_companion_opencodeaccessibilityservice_opencodeaccessibilityservice_tapat_object_gestureresultcallback_l78_oncompleted",
       "build",
       "gesturedescription",
       "path",
       "rect"
     ],
-    "6": [
-      "annotatedstring",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_buildinline",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_buildinlinesimple",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_bulletlist",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_codeblock",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_header",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_markdowntext",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_mdblock",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_orderedlist",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_paragraph",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_parsemarkdown",
-      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_quote",
-      "background",
-      "color",
-      "fontfamily",
-      "fontweight",
-      "horizontalscroll",
-      "rememberscrollstate",
-      "roundedcornershape",
-      "sp",
-      "textdecoration"
+    "9": [
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_kt_stateflow",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_kt_viewmodel",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_kt_stateflow",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_kt_viewmodel",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_clearerror",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_createskill",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_deletesession",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_deleteskill",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_linkproject",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_load",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_patchinstructions",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_renamesession",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_sendnewsession",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_unlinkproject",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel_unlinksession",
+      "launch",
+      "mutablestateflow",
+      "tomediatype",
+      "viewmodelscope"
     ],
-    "7": [
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_createproject",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_createskill",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_deleteproject",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_deleteskill",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getmessages",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getmodels",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getopencodesessions",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getprojects",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getprojectsessions",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_getskills",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_linksession",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_patchproject",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_systemstatus",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_unlinksession",
-      "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice_updateskill",
-      "app_src_main_kotlin_com_opencode_companion_data_models_envelope",
-      "app_src_main_kotlin_com_opencode_companion_data_models_sessionref",
-      "app_src_main_kotlin_com_opencode_companion_data_models_skill",
-      "app_src_main_kotlin_com_opencode_companion_data_models_systemstatus"
-    ],
-    "8": [
+    "10": [
       "android",
       "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_kt_bytearray",
       "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_kt_recognitionlistener",
       "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_kt_speechrecognizer",
       "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555_onbeginningofspeech",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555_onbufferreceived",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555_onendofspeech",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555_onerror",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555_onevent",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555_onpartialresults",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555_onreadyforspeech",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555_onresults",
-      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l555_onrmschanged",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964_onbeginningofspeech",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964_onbufferreceived",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964_onendofspeech",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964_onerror",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964_onevent",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964_onpartialresults",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964_onreadyforspeech",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964_onresults",
+      "app_src_main_kotlin_com_opencode_companion_ui_chatscreen_startlisteninginternal_object_recognitionlistener_l964_onrmschanged",
       "kotlinx"
     ],
-    "9": [
-      "app_src_main_kotlin_com_opencode_companion_data_models_linksessionrequest",
+    "11": [
+      "annotatedstring",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_buildinline",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_buildinlinesimple",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_bulletlist",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_codeblock",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_codeblockitem",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_header",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_highlightcode",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_kt_modifier",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_markdowntext",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_mdblock",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_orderedlist",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_paragraph",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_parsemarkdown",
+      "app_src_main_kotlin_com_opencode_companion_ui_markdowntext_quote"
+    ],
+    "12": [
       "app_src_main_kotlin_com_opencode_companion_data_models_patchprojectrequest",
       "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel",
       "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_archiveproject",
@@ -329,14 +438,15 @@
       "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_createsessionforproject",
       "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_createsessionviahub",
       "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_deleteproject",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_movesession",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_deletesession",
       "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_patchproject",
       "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_refreshall",
       "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_refreshprojects",
       "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_refreshsessions",
-      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_renameproject"
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_renameproject",
+      "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel_renamesession"
     ],
-    "10": [
+    "13": [
       "app_src_main_kotlin_com_opencode_companion_rootshell",
       "app_src_main_kotlin_com_opencode_companion_rootshell_result",
       "app_src_main_kotlin_com_opencode_companion_rootshell_rootshell",
@@ -348,98 +458,78 @@
       "bufferedreader",
       "inputstreamreader"
     ],
-    "11": [
-      "app_src_main_kotlin_com_opencode_companion_ui_appnavhost",
-      "circularprogressindicator",
-      "composable",
-      "navargument",
-      "navhost",
-      "navtype",
-      "remembernavcontroller",
-      "text",
-      "viewmodel"
-    ],
-    "12": [
-      "app_src_main_kotlin_com_opencode_companion_data_apiclient",
-      "app_src_main_kotlin_com_opencode_companion_data_apiclient_apiclient",
-      "gsonbuilder",
-      "gsonconverterfactory",
-      "httplogginginterceptor",
-      "okhttpclient",
-      "retrofit",
-      "timeunit"
-    ],
-    "13": [
-      "app_src_main_kotlin_com_opencode_companion_util_relativetime",
-      "app_src_main_kotlin_com_opencode_companion_util_relativetime_pickepochmillis",
-      "datetimeparseexception",
-      "duration",
-      "instant"
-    ],
     "14": [
+      "readme",
+      "readme_boot_autostart_opcional",
+      "readme_compilar_apk",
+      "readme_endpoints_para_la_ia",
+      "readme_estructura",
+      "readme_opencode_companion_apk_poco_f3_crdroid_15_root",
+      "readme_qu\u00e9_hace",
+      "readme_uso_inmediato_sin_compilar_apk_1_min"
+    ],
+    "15": [
       "app_src_main_kotlin_com_opencode_companion_ui_navroutes",
       "app_src_main_kotlin_com_opencode_companion_ui_navroutes_navroutes",
       "app_src_main_kotlin_com_opencode_companion_ui_navroutes_navroutes_chat",
       "app_src_main_kotlin_com_opencode_companion_ui_navroutes_navroutes_voice"
     ],
-    "15": [
+    "16": [
+      "app_src_main_assets_stage_node",
+      "app_src_main_assets_stage_node_sh__entry"
+    ],
+    "17": [
       "install_su",
       "install_su_sh__entry"
     ],
-    "16": [
+    "18": [
       "app_build_gradle"
     ],
-    "17": [
-      "app_src_main_kotlin_com_opencode_companion_companionvoiceinteractionservice_kt_appcompatactivity"
-    ],
-    "18": [
-      "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_appcompatactivity"
-    ],
     "19": [
-      "build_gradle"
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_bundle"
     ],
     "20": [
-      "materialbutton"
+      "app_src_main_kotlin_com_opencode_companion_mainactivity_kt_oninitlistener"
     ],
     "21": [
-      "settings_gradle"
+      "build_gradle"
     ],
     "22": [
-      "textview"
+      "materialbutton"
     ],
     "23": [
-      "updatepadding"
+      "settings_gradle"
     ],
     "24": [
-      "viewcompat"
+      "updatepadding"
     ],
     "25": [
-      "websettings"
+      "viewcompat"
     ],
     "26": [
-      "webview"
+      "websettings"
     ],
     "27": [
       "windowinsetscompat"
     ]
   },
   "cohesion": {
-    "0": 0.07055630936227951,
-    "1": 0.07474747474747474,
-    "2": 0.08461538461538462,
-    "3": 0.08232118758434548,
-    "4": 0.11692307692307692,
-    "5": 0.11,
-    "6": 0.12987012987012986,
-    "7": 0.16666666666666666,
-    "8": 0.15833333333333333,
-    "9": 0.2857142857142857,
-    "10": 0.4,
-    "11": 0.2222222222222222,
-    "12": 0.2857142857142857,
+    "0": 0.07337526205450734,
+    "1": 0.05957767722473605,
+    "2": 0.06753006475485661,
+    "3": 0.06565656565656566,
+    "4": 0.08232118758434548,
+    "5": 0.11051693404634581,
+    "6": 0.10574712643678161,
+    "7": 0.11692307692307692,
+    "8": 0.11,
+    "9": 0.15151515151515152,
+    "10": 0.15833333333333333,
+    "11": 0.2,
+    "12": 0.3047619047619048,
     "13": 0.4,
-    "14": 0.5,
-    "15": 1.0,
+    "14": 0.25,
+    "15": 0.5,
     "16": 1.0,
     "17": 1.0,
     "18": 1.0,
@@ -462,17 +552,27 @@
     {
       "id": "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_chatviewmodel_chatviewmodel",
       "label": "ChatViewModel",
-      "degree": 18
+      "degree": 22
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_data_apiservice_apiservice",
       "label": "ApiService",
-      "degree": 18
+      "degree": 20
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_mainviewmodel_mainviewmodel",
       "label": "MainViewModel",
-      "degree": 18
+      "degree": 20
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_data_models_envelope",
+      "label": "Envelope",
+      "degree": 17
+    },
+    {
+      "id": "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel",
+      "label": "ProjectDetailViewModel",
+      "degree": 17
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_opencodeaccessibilityservice_opencodeaccessibilityservice",
@@ -485,118 +585,75 @@
       "degree": 15
     },
     {
-      "id": "app_src_main_kotlin_com_opencode_companion_data_models_envelope",
-      "label": "Envelope",
-      "degree": 15
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_ui_viewmodel_projectdetailviewmodel_projectdetailviewmodel",
-      "label": "ProjectDetailViewModel",
-      "degree": 13
+      "id": "app_src_main_kotlin_com_opencode_companion_data_models_message",
+      "label": "Message",
+      "degree": 14
     },
     {
       "id": "app_src_main_kotlin_com_opencode_companion_companionvoiceinteractionservice_companionvoicesession",
       "label": "CompanionVoiceSession",
       "degree": 13
-    },
-    {
-      "id": "app_src_main_kotlin_com_opencode_companion_companionservice_companionservice",
-      "label": "CompanionService",
-      "degree": 12
     }
   ],
   "surprises": [
     {
-      "source": "AppNavHost()",
-      "target": "VoiceConversationScreen()",
+      "source": "3.3. Sessions Management",
+      "target": "OpencodeSession",
       "source_files": [
-        "app/src/main/kotlin/com/opencode/companion/ui/AppNavHost.kt",
-        "app/src/main/kotlin/com/opencode/companion/ui/VoiceConversationScreen.kt"
+        "docs/FRONTEND_CONTRACT.md",
+        "app/src/main/kotlin/com/opencode/companion/data/Models.kt"
       ],
       "confidence": "INFERRED",
-      "relation": "calls",
-      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+      "relation": "references",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (doc \u2194 code); connects across different repos/directories; bridges separate communities; peripheral node `3.3. Sessions Management` unexpectedly reaches hub `OpencodeSession`"
     },
     {
-      "source": "MessageBubble()",
+      "source": "3.3. `ChatScreen` y `MarkdownText` (Tipograf\u00eda Serif y Bloques de C\u00f3digo)",
       "target": "MarkdownText()",
       "source_files": [
-        "app/src/main/kotlin/com/opencode/companion/ui/ChatScreen.kt",
+        "docs/UI_AUDIT_CLAUDE_STYLE.md",
         "app/src/main/kotlin/com/opencode/companion/ui/MarkdownText.kt"
       ],
       "confidence": "INFERRED",
-      "relation": "calls",
-      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+      "relation": "references",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (doc \u2194 code); connects across different repos/directories; bridges separate communities"
     },
     {
-      "source": "MainViewModel",
-      "target": "OpencodeSession",
+      "source": "1. Resumen Ejecutivo",
+      "target": "MarkdownText()",
       "source_files": [
-        "app/src/main/kotlin/com/opencode/companion/ui/viewmodel/MainViewModel.kt",
-        "app/src/main/kotlin/com/opencode/companion/data/Models.kt"
+        "docs/UI_AUDIT_CLAUDE_STYLE.md",
+        "app/src/main/kotlin/com/opencode/companion/ui/MarkdownText.kt"
       ],
-      "confidence": "EXTRACTED",
+      "confidence": "INFERRED",
       "relation": "references",
-      "why": "bridges separate communities"
+      "why": "inferred connection - not explicitly stated in source; crosses file types (doc \u2194 code); connects across different repos/directories; bridges separate communities"
     },
     {
-      "source": "MainViewModel",
-      "target": "Project",
+      "source": "3.1. Send Message",
+      "target": "SendMessageRequest",
       "source_files": [
-        "app/src/main/kotlin/com/opencode/companion/ui/viewmodel/MainViewModel.kt",
+        "docs/FRONTEND_CONTRACT.md",
         "app/src/main/kotlin/com/opencode/companion/data/Models.kt"
       ],
-      "confidence": "EXTRACTED",
+      "confidence": "INFERRED",
       "relation": "references",
-      "why": "bridges separate communities"
+      "why": "inferred connection - not explicitly stated in source; crosses file types (doc \u2194 code); connects across different repos/directories; peripheral node `3.1. Send Message` unexpectedly reaches hub `SendMessageRequest`"
     },
     {
-      "source": "ProjectDetailViewModel",
-      "target": "Project",
+      "source": "3.2. Get Messages (Polling & Initial Load)",
+      "target": "Message",
       "source_files": [
-        "app/src/main/kotlin/com/opencode/companion/ui/viewmodel/ProjectDetailViewModel.kt",
+        "docs/FRONTEND_CONTRACT.md",
         "app/src/main/kotlin/com/opencode/companion/data/Models.kt"
       ],
-      "confidence": "EXTRACTED",
+      "confidence": "INFERRED",
       "relation": "references",
-      "why": "bridges separate communities"
+      "why": "inferred connection - not explicitly stated in source; crosses file types (doc \u2194 code); connects across different repos/directories; peripheral node `3.2. Get Messages (Polling & Initial Load)` unexpectedly reaches hub `Message`"
     }
   ],
-  "questions": [
-    {
-      "type": "bridge_node",
-      "question": "Why does `MainActivity` connect `MainActivity` to `ChatScreen.kt`?",
-      "why": "High betweenness centrality (0.109) - this node is a cross-community bridge."
-    },
-    {
-      "type": "bridge_node",
-      "question": "Why does `MainViewModel` connect `MainViewModel` to `ChatScreen.kt`, `Models.kt`, `AppNavHost.kt`?",
-      "why": "High betweenness centrality (0.061) - this node is a cross-community bridge."
-    },
-    {
-      "type": "isolated_nodes",
-      "question": "What connects `SendMessageRequestWithModel`, `BulletList`, `OrderedList` to the rest of the system?",
-      "why": "4 weakly-connected nodes found - possible documentation gaps or missing edges."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `ChatScreen.kt` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.07055630936227951 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `Models.kt` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.07474747474747474 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `MainActivity` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.08461538461538462 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `CompanionVoiceInteractionService.kt` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.08232118758434548 - nodes in this community are weakly interconnected."
-    }
-  ]
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
 }
