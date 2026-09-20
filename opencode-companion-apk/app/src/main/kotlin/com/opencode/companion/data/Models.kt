@@ -62,6 +62,43 @@ data class OpencodeSession(
     val lastActivityIso: String? get() = updatedAt ?: updatedAtAlt ?: createdAt ?: createdAtAlt
 }
 
+// ---- Messages (GET /session/:id/message proxied via hub) ----
+data class MessageInfo(
+    val id: String? = null,
+    val role: String? = null,
+    val time: Map<String, Any>? = null
+)
+data class MessagePart(
+    val id: String? = null,
+    val type: String? = null,
+    val text: String? = null
+)
+data class Message(
+    val info: MessageInfo? = null,
+    val parts: List<MessagePart>? = null
+) {
+    // Normalized: role from info, text from type=text parts only
+    val role: String get() = info?.role ?: "assistant"
+    val text: String get() = parts
+        ?.filter { it.type == "text" && !it.text.isNullOrBlank() }
+        ?.joinToString("\n") { it.text!! } ?: ""
+    fun isMemoryContext(): Boolean {
+        val t = text.trim()
+        return t.startsWith("<memory_context") || t.contains("<project_knowledge") || t.contains("<memory relevance=")
+    }
+    fun strippedText(): String {
+        var t = text
+        t = Regex("<memory_context[\\s\\S]*?</memory_context>", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = Regex("<project_knowledge[\\s\\S]*?</project_knowledge>", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        return t
+    }
+    val isEmpty: Boolean get() = text.isBlank() && strippedText().isBlank()
+}
+
+data class SendMessageRequest(
+    val parts: List<Map<String, String>>
+)
+
 // System status for overlay gate
 data class SystemStatus(
     val ready: Boolean = false,

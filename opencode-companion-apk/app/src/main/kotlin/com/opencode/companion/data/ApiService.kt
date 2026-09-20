@@ -24,6 +24,13 @@ interface ApiService {
     @DELETE("api/projects/{id}/sessions/{sessionId}")
     suspend fun unlinkSession(@Path("id") projectId: String, @Path("sessionId") sessionId: String): Envelope<Map<String, String>>
 
+    @GET("api/opencode/sessions/{id}/messages")
+    suspend fun getMessages(@Path("id") sessionId: String): Envelope<List<Message>>
+
+    // Send message via hub proxy POST /opencode/session/:id/message (handles injection)
+    @POST("opencode/session/{id}/message")
+    suspend fun sendMessage(@Path("id") sessionId: String, @Body body: SendMessageRequest): Message
+
     @GET("api/system/status")
     suspend fun systemStatus(): SystemStatus
 }

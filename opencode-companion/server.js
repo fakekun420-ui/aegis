@@ -1024,6 +1024,31 @@ const server = http.createServer(async (req, res)=>{
     }
   }
 
+  // Phase 2: GET /api/opencode/sessions/:id/messages — proxy GET /session/:id/message
+  // Following same proxyToOpencode pattern as /api/opencode/sessions above
+  if(pathname.match(/^\/api\/opencode\/sessions\/[^\/]+\/messages$/) && req.method==="GET"){
+    const m = pathname.match(/^\/api\/opencode\/sessions\/([^\/]+)\/messages$/);
+    const sid = sanitizeProjectId(decodeURIComponent(m[1]));
+    try {
+      const ocRes = await new Promise((resolve, reject) => {
+        const r = http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path: `/session/${encodeURIComponent(sid)}/message`, timeout: 8000 }, rs => {
+          let d = ""; rs.on("data", c => d += c); rs.on("end", () => resolve({ status: rs.statusCode, body: d }));
+        });
+        r.on("error", reject);
+        r.setTimeout(8000, () => { try { r.destroy(); } catch {} reject(new Error("timeout /session/:id/message")); });
+      });
+      let payload;
+      try { payload = JSON.parse(ocRes.body || "[]"); } catch { payload = ocRes.body; }
+      const list = Array.isArray(payload) ? payload : (payload.messages || payload.data || []);
+      // Pass through raw array — hub envelope not needed, keep compat with direct /opencode proxy
+      // Wrap in ok envelope for consistent client parsing (ApiService expects List<Message>)
+      // But Retrofit will deserialize envelope.data — so use envelope
+      return json(res, ocRes.status, ok(list));
+    } catch (e) {
+      return json(res, 502, fail(`opencode /session/:id/message proxy failed: ${String(e).slice(0,400)}`));
+    }
+  }
+
   // GET /api/projects/:id/summary — read summary (optional fetch helper)
   if(pathname.match(/^\/api\/projects\/[^\/]+\/summary$/) && req.method==="GET"){
     const m = pathname.match(/^\/api\/projects\/[^\/]+\/summary$/);

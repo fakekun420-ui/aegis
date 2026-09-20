@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.opencode.companion.ui.viewmodel.ChatViewModel
 import com.opencode.companion.ui.viewmodel.MainViewModel
 
 @Composable
@@ -56,7 +57,8 @@ fun AppNavHost() {
         }
         composable(NavRoutes.CHAT_PLACEHOLDER, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->
             val sid = backStack.arguments?.getString("sessionId") ?: ""
-            ChatPlaceholderScreen(sessionId = sid, onBack = { navController.popBackStack() })
+            val chatVm: ChatViewModel = viewModel(key = "chat_$sid")
+            ChatScreen(sessionId = sid, vm = chatVm, onBack = { navController.popBackStack() })
         }
     }
 }
