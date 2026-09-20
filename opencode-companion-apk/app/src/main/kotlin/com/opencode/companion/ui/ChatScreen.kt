@@ -405,6 +405,7 @@ private fun FileRow(name: String, mime: String, tint: androidx.compose.ui.graphi
     }
 }
 
+@Composable
 private fun MessageBubble(msg: Message) {
     val isUser = msg.role == "user"
     val raw = msg.text
