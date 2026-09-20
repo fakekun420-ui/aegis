@@ -172,7 +172,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 // unique root marker (/proc/PID/root/lib/ld-linux-aarch64.so.1 = ubuntu
                 // chroot with node+loader). Launch keepalive INSIDE the chroot so node,
                 // loader, server.js and ports all resolve in one namespace. No nsenter.
-                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", "for p in ${'$'}(ls /proc 2>/dev/null); do F=/proc/${'$'}p/root; [ -x ${'$'}{F}/usr/bin/node ] 2>/dev/null && [ -f ${'$'}{F}/sdcard/projects/opencode-companion/server.js ] 2>/dev/null && { echo ${'$'}p; break; }; done"))
+                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /sdcard/projects/opencode-companion/find-ubuntu.sh"))
                 val ubuntuPid = try { stage.inputStream.bufferedReader().readText().trim().lines().firstOrNull { it.isNotBlank() }?.trim() } catch (_: Exception) { null }
                 android.util.Log.i("OpenCodeBoot", "keepalive ubuntuPid=$ubuntuPid")
                 val direct = if (!ubuntuPid.isNullOrBlank()) arrayOf("su", "-c", "chroot /proc/" + ubuntuPid + "/root /bin/sh -c 'nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'") else null
