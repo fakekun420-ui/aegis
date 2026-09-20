@@ -51,20 +51,23 @@ class ChatViewModel : ViewModel() {
     }
 
     fun selectProvider(provider: String) {
-        _selectedProvider.value = provider.lowercase().trim()
+        val p = provider.lowercase().trim()
+        _selectedProvider.value = p
+        loadModels(p)
     }
 
     fun clearError() {
         _error.value = null
     }
 
-    fun loadModels() {
+    fun loadModels(provider: String? = null) {
+        val prov = (provider ?: _selectedProvider.value).lowercase().trim()
         viewModelScope.launch {
             try {
-                val resp = api.getModels()
-                if (resp.ok && resp.data != null) {
+                val resp = api.getModels(prov)
+                if (resp.ok && resp.data != null && resp.data.isNotEmpty()) {
                     _models.value = resp.data
-                    if (_selectedModel.value == null && resp.data.isNotEmpty()) {
+                    if (_models.value.none { it.id == _selectedModel.value }) {
                         _selectedModel.value = resp.data.first().id
                     }
                 }
@@ -74,18 +77,17 @@ class ChatViewModel : ViewModel() {
 
     fun load(sessionId: String, provider: String? = null) {
         pollingJob?.cancel()
-        if (provider != null) {
-            _selectedProvider.value = provider.lowercase().trim()
-        }
+        val prov = (provider ?: if (sessionId.startsWith("agy_")) "antigravity" else "opencode").lowercase().trim()
+        _selectedProvider.value = prov
         if (sessionId.isBlank()) {
-            loadModels()
+            loadModels(prov)
             return
         }
         _currentSessionId.value = sessionId
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
-            loadModels()
+            loadModels(prov)
             try {
                 val resp = api.getMessages(sessionId)
                 if (resp.ok && resp.data != null) {

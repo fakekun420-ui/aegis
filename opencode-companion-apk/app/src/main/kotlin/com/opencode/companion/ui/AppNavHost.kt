@@ -132,13 +132,14 @@ fun AppNavHost() {
         composable(NavRoutes.CHAT_PLACEHOLDER, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->
             val sid = backStack.arguments?.getString("sessionId") ?: ""
             val chatVm: ChatViewModel = viewModel(key = "chat_$sid")
-            val session = sessions.find { it.id == sid }
+            val session = sessions.find { it.resolvedId == sid || it.id == sid || it.ID == sid }
+            val prov = session?.provider ?: if (sid.startsWith("agy_")) "antigravity" else "opencode"
             ChatScreen(
                 sessionId = sid,
                 vm = chatVm,
                 onBack = { navController.popBackStack() },
                 onVoice = { navController.navigate(NavRoutes.voice(sid)) },
-                sessionProvider = session?.provider
+                sessionProvider = prov
             )
         }
         composable(NavRoutes.VOICE, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->

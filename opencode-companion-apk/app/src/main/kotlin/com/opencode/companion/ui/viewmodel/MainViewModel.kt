@@ -106,8 +106,14 @@ class MainViewModel : ViewModel() {
     fun moveSession(sessionId: String, projectId: String) {
         viewModelScope.launch {
             try {
-                val resp = api.linkSession(projectId, LinkSessionRequest(sessionId = sessionId))
-                if (resp.ok) refreshProjects() else _error.value = resp.error ?: "move failed"
+                val currentSession = _sessions.value.find { it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId }
+                val currentTitle = currentSession?.resolvedTitle
+                val currentProvider = currentSession?.provider
+                val resp = api.linkSession(
+                    projectId,
+                    LinkSessionRequest(sessionId = sessionId, title = currentTitle, provider = currentProvider)
+                )
+                if (resp.ok) refreshAll() else _error.value = resp.error ?: "move failed"
             } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
         }
     }

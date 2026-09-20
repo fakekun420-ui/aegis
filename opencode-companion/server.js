@@ -60,15 +60,46 @@ function saveUiState() {
 // Envelope: all /api/projects routes return {ok:true,data:...} or {ok:false,error:...} (spec 6).
 const PROJECTS_STORE_FILE = path.join(__dirname, "projects.json");
 
-// Load projects from disk — returns {projects: []} envelope on disk (or [] legacy).
+// Load projects from disk — returns {projects: [], sessionTitles: {}} envelope on disk (or [] legacy).
 function loadProjectsStore() {
   try {
-    const raw = atomicReadFileSync(PROJECTS_STORE_FILE, { projects: [] });
-    // Accept both {projects:[]} and [] for backwards compat
-    if (Array.isArray(raw)) return { projects: raw };
-    if (raw && Array.isArray(raw.projects)) return raw;
-    return { projects: [] };
-  } catch (e) { console.error("[projects] load err", e.message); return { projects: [] }; }
+    const raw = atomicReadFileSync(PROJECTS_STORE_FILE, { projects: [], sessionTitles: {} });
+    let store;
+    if (Array.isArray(raw)) store = { projects: raw, sessionTitles: {} };
+    else if (raw && Array.isArray(raw.projects)) store = raw;
+    else store = { projects: [], sessionTitles: {} };
+    if (!store.sessionTitles || typeof store.sessionTitles !== "object") {
+      store.sessionTitles = {};
+    }
+    // Seed sessionTitles from projects
+    for (const p of (store.projects || [])) {
+      for (const s of (p.sessions || [])) {
+        if (s.sessionId && s.title && s.title !== s.sessionId && !store.sessionTitles[s.sessionId]) {
+          store.sessionTitles[s.sessionId] = s.title;
+        }
+      }
+    }
+    return store;
+  } catch (e) { console.error("[projects] load err", e.message); return { projects: [], sessionTitles: {} }; }
+}
+
+function resolveExistingSessionTitle(store, sessionId, fallbackTitle = null) {
+  if (!sessionId) return fallbackTitle || "";
+  if (store && store.sessionTitles && store.sessionTitles[sessionId]) {
+    return store.sessionTitles[sessionId];
+  }
+  if (store && Array.isArray(store.projects)) {
+    for (const p of store.projects) {
+      const s = (p.sessions || []).find(x => x.sessionId === sessionId);
+      if (s && s.title && s.title !== sessionId) {
+        return s.title;
+      }
+    }
+  }
+  if (fallbackTitle && fallbackTitle !== sessionId) {
+    return fallbackTitle;
+  }
+  return sessionId;
 }
 function saveProjectsStore(store) {
   try {
@@ -784,9 +815,10 @@ const server = http.createServer(async (req, res)=>{
         if (pId && !sessionEntry) {
           parentProject = findProject(store, pId);
           if (parentProject) {
+            const existingTitle = resolveExistingSessionTitle(store, sid);
             sessionEntry = normalizeSessionEntry({
               sessionId: sid,
-              title: sid,
+              title: existingTitle,
               createdAt: nowIso(),
               lastUsed: nowIso(),
               provider: provId || parentProject.provider || "opencode"
@@ -1352,15 +1384,31 @@ const server = http.createServer(async (req, res)=>{
           body.createdAt = created.createdAt || nowIso();
         }
 
-        if ((proj.sessions || []).some(s => s.sessionId === sessionId)) {
-          throw new Error(`DUPLICATE: session ${sessionId} already associated to project ${id}`);
-        }
+        let existingTitle = null;
         for (const p of store.projects) {
+          const found = (p.sessions || []).find(s => s.sessionId === sessionId);
+          if (found && found.title && found.title !== sessionId) {
+            existingTitle = found.title;
+          }
           if (p.id !== id) p.sessions = (p.sessions || []).filter(s => s.sessionId !== sessionId);
         }
+
+        // Cleanly replace any previous entry in this project
+        proj.sessions = (proj.sessions || []).filter(s => s.sessionId !== sessionId);
+
+        const candidateTitle = (body.title && String(body.title).trim() && String(body.title).trim() !== sessionId)
+          ? String(body.title).trim()
+          : null;
+        const resolvedTitle = candidateTitle || existingTitle || resolveExistingSessionTitle(store, sessionId, null);
+
+        store.sessionTitles = store.sessionTitles || {};
+        if (resolvedTitle && resolvedTitle !== sessionId) {
+          store.sessionTitles[sessionId] = resolvedTitle;
+        }
+
         createdEntry = normalizeSessionEntry({
           sessionId,
-          title: body.title,
+          title: resolvedTitle,
           summary: body.summary,
           createdAt: body.createdAt || nowIso(),
           lastUsed: body.lastUsed || nowIso(),
@@ -1544,18 +1592,13 @@ const server = http.createServer(async (req, res)=>{
   if((pathname==="/api/opencode/sessions" || pathname==="/api/sessions") && req.method==="GET"){
     try {
       const list = await providerManager.listAllSessions();
-      // Overlay custom titles from projects.json
+      // Overlay custom titles from projects.json or store.sessionTitles
       try {
         const store = loadProjectsStore();
-        const customTitles = new Map();
-        for (const p of store.projects) {
-          for (const s of (p.sessions || [])) {
-            if (s.title) customTitles.set(s.sessionId, s.title);
-          }
-        }
         for (const item of list) {
-          if (customTitles.has(item.id)) {
-            item.title = customTitles.get(item.id);
+          const custom = resolveExistingSessionTitle(store, item.id);
+          if (custom && custom !== item.id) {
+            item.title = custom;
           }
         }
       } catch (_) {}
@@ -1575,9 +1618,11 @@ const server = http.createServer(async (req, res)=>{
       const newTitle = String(body.title || body.name || "").trim();
       if (!newTitle) return json(res, 400, fail("title required"));
 
-      let updatedInProjects = false;
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
         const store = loadProjectsStore();
+        store.sessionTitles = store.sessionTitles || {};
+        store.sessionTitles[sid] = newTitle;
+
         for (const p of store.projects) {
           for (const s of (p.sessions || [])) {
             if (s.sessionId === sid) {
@@ -1587,9 +1632,7 @@ const server = http.createServer(async (req, res)=>{
             }
           }
         }
-        if (updatedInProjects) {
-          saveProjectsStore(store);
-        }
+        saveProjectsStore(store);
       });
 
       // Also forward rename to provider adapter (opencode)
@@ -1613,7 +1656,7 @@ const server = http.createServer(async (req, res)=>{
   if (deleteSessionMatch && req.method === "DELETE") {
     const sid = sanitizeProjectId(decodeURIComponent(deleteSessionMatch[1]));
     try {
-      // Remove from any project in projects.json
+      // Remove from any project in projects.json and clean sessionTitles
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
         const store = loadProjectsStore();
         let changed = false;
@@ -1621,6 +1664,10 @@ const server = http.createServer(async (req, res)=>{
           const before = (p.sessions || []).length;
           p.sessions = (p.sessions || []).filter(s => s.sessionId !== sid);
           if (p.sessions.length !== before) changed = true;
+        }
+        if (store.sessionTitles && store.sessionTitles[sid]) {
+          delete store.sessionTitles[sid];
+          changed = true;
         }
         if (changed) saveProjectsStore(store);
       });
@@ -1667,9 +1714,10 @@ const server = http.createServer(async (req, res)=>{
           if (headerProjectId && !sessionEntry) {
             parentProj = findProject(s, headerProjectId);
             if (parentProj && !parentProj.archivedAt) {
+              const existingTitle = resolveExistingSessionTitle(s, sid);
               sessionEntry = normalizeSessionEntry({
                 sessionId: sid,
-                title: sid,
+                title: existingTitle,
                 createdAt: nowIso(),
                 lastUsed: nowIso(),
                 provider: headerProvider || parentProj.provider || "opencode"

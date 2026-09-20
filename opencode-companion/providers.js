@@ -208,6 +208,11 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     this.host = options.host || "127.0.0.1";
     this.port = options.port || 4096;
     this.getSystemContextBlock = options.getSystemContextBlock || (() => null);
+    this._modelsCache = null;
+    this._modelsCacheTime = 0;
+    this._fetchingModels = false;
+    // Pre-warm models cache in background
+    setTimeout(() => { this.listModels().catch(() => {}); }, 1500);
   }
 
   async isHealthy() {
@@ -549,7 +554,21 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     }
 
     const finalPayload = { parts };
-    if (payload.model) finalPayload.model = payload.model;
+    if (payload.model) {
+      if (typeof payload.model === "object" && payload.model.modelID) {
+        finalPayload.model = payload.model;
+      } else if (typeof payload.model === "string" && payload.model.trim()) {
+        const mStr = payload.model.trim();
+        let providerID = "opencode";
+        let modelID = mStr;
+        if (mStr.includes("/")) {
+          const parts = mStr.split("/");
+          providerID = parts[0];
+          modelID = parts.slice(1).join("/");
+        }
+        finalPayload.model = { modelID, providerID };
+      }
+    }
 
     const postData = JSON.stringify(finalPayload);
 
@@ -624,14 +643,73 @@ export class OpencodeAdapter extends BaseProviderAdapter {
   }
 
   async listModels() {
+    const now = Date.now();
+    if (this._modelsCache && (now - (this._modelsCacheTime || 0) < 600000) && this._modelsCache.length > 0) {
+      return this._modelsCache;
+    }
+
+    if (this._fetchingModels) {
+      if (this._modelsCache && this._modelsCache.length > 0) return this._modelsCache;
+      return this._fallbackModels();
+    }
+
+    this._fetchingModels = true;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
+      const res = await fetch(`http://${this.host}:${this.port}/provider`, { signal: controller.signal });
+      clearTimeout(timer);
+
+      if (res.ok) {
+        const data = await res.json();
+        const connected = Array.isArray(data.connected) ? data.connected : ["opencode"];
+        const allProviders = Array.isArray(data.all) ? data.all : [];
+        const models = [];
+
+        // Include connected providers prioritizing opencode and google
+        const priority = ["opencode", "google", "xiaomi", "openrouter"];
+        const targetProviders = allProviders.filter(p => connected.includes(p.id))
+          .sort((a, b) => {
+            const idxA = priority.indexOf(a.id);
+            const idxB = priority.indexOf(b.id);
+            return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+          });
+
+        for (const prov of targetProviders) {
+          for (const [key, m] of Object.entries(prov.models || {})) {
+            if (m.status && m.status !== "active") continue;
+            models.push({
+              id: m.id || key,
+              name: m.name || key,
+              description: `${prov.name || prov.id} · ${m.family || "AI"}`
+            });
+          }
+        }
+
+        if (models.length > 0) {
+          this._modelsCache = models;
+          this._modelsCacheTime = now;
+          return models;
+        }
+      }
+    } catch (e) {
+      console.warn("[opencode] listModels fetch error:", e.message);
+    } finally {
+      this._fetchingModels = false;
+    }
+
+    return this._fallbackModels();
+  }
+
+  _fallbackModels() {
     return [
-      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", description: "Rápido y eficiente" },
-      { id: "gemini-3.6-flash-lite", name: "Gemini 3.6 Flash Lite", description: "Más rápido, menos preciso" },
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "Alta calidad, más lento" },
-      { id: "gpt-4o", name: "GPT-4o", description: "OpenAI multihabilidad" },
-      { id: "gpt-4o-mini", name: "GPT-4o Mini", description: "Rápido y económico" },
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", description: "Balance calidad/velocidad" },
-      { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", description: "Ultrarrápido" }
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", description: "OpenCode Zen · claude-sonnet" },
+      { id: "gemini-3.1-pro", name: "Gemini 3.1 Pro Preview", description: "OpenCode Zen · gemini-pro" },
+      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", description: "OpenCode Zen · gemini-flash" },
+      { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", description: "OpenCode Zen · deepseek" },
+      { id: "gpt-5-codex", name: "GPT-5 Codex", description: "OpenCode Zen · gpt-codex" },
+      { id: "mimo-v2.5-free", name: "Mimo v2.5 Free", description: "OpenCode Zen · mimo-free" },
+      { id: "nemotron-3-ultra-free", name: "Nemotron 3 Ultra Free", description: "OpenCode Zen · nemotron-free" }
     ];
   }
 }

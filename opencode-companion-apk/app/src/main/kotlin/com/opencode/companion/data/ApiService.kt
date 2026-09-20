@@ -61,5 +61,5 @@ interface ApiService {
     suspend fun systemStatus(): SystemStatus
 
     @GET("api/opencode/models")
-    suspend fun getModels(): Envelope<List<ModelOption>>
+    suspend fun getModels(@Query("provider") provider: String? = null): Envelope<List<ModelOption>>
 }

@@ -17,9 +17,9 @@
         },
         {
           "sessionId": "ses_f8ba7151affeV44tOLJQ7MPZCT",
-          "title": "ses_f8ba7151affeV44tOLJQ7MPZCT",
+          "title": "DepegaLab",
           "createdAt": "2026-09-20T02:41:29.919Z",
-          "lastUsed": "2026-09-20T02:41:29.919Z",
+          "lastUsed": "2026-09-20T20:47:22.363Z",
           "summary": ""
         },
         {
@@ -75,6 +75,14 @@
           "title": "e2e-opencode-test",
           "createdAt": "2026-09-20T19:51:41.586Z",
           "lastUsed": "2026-09-20T19:52:05.367Z",
+          "summary": "",
+          "provider": "opencode"
+        },
+        {
+          "sessionId": "ses_f3f6c8d82ffetHzVl7nD2bIvwu",
+          "title": "companion:83684",
+          "createdAt": "2026-09-20T20:48:03.736Z",
+          "lastUsed": "2026-09-20T20:48:03.751Z",
           "summary": "",
           "provider": "opencode"
         }
@@ -142,37 +150,28 @@
       "provider": "antigravity",
       "sessions": [
         {
-          "sessionId": "ses_f4026697dffebmRacAVuUcY5EH",
-          "title": "ses_f4026697dffebmRacAVuUcY5EH",
-          "createdAt": "2026-09-20T18:01:41.339Z",
-          "lastUsed": "2026-09-20T18:01:41.339Z",
-          "summary": "",
-          "provider": "antigravity"
-        },
-        {
           "sessionId": "ses_f4c94c66dffenoqFOCFaytnre7",
-          "title": "ses_f4c94c66dffenoqFOCFaytnre7",
+          "title": "Arquitecto",
           "createdAt": "2026-09-20T18:01:56.155Z",
-          "lastUsed": "2026-09-20T18:01:56.155Z",
+          "lastUsed": "2026-09-20T20:49:05.512Z",
           "summary": "",
-          "provider": "antigravity"
+          "provider": "opencode"
         },
         {
           "sessionId": "0adc77f9-68a1-4e32-8e03-d012d3a287c4",
-          "title": "0adc77f9-68a1-4e32-8e03-d012d3a287c4",
-          "createdAt": "2026-09-20T19:06:45.900Z",
-          "lastUsed": "2026-09-20T19:06:45.900Z",
+          "title": "Frontend",
+          "createdAt": "2026-09-20T20:44:49.859Z",
+          "lastUsed": "2026-09-20T20:46:39.532Z",
           "summary": "",
           "provider": "antigravity"
         },
         {
-          "sessionId": "agy_test_sess_001",
-          "title": "Sesion Test Automatizada",
-          "createdAt": "2026-09-20T19:51:10.824Z",
-          "lastUsed": "2026-09-20T19:51:22.290Z",
+          "sessionId": "ed8f444b-168f-4e64-8c19-e832ab542c77",
+          "title": "Backend",
+          "createdAt": "2026-09-20T20:45:42.907Z",
+          "lastUsed": "2026-09-20T20:46:22.865Z",
           "summary": "",
-          "provider": "antigravity",
-          "agyConversationId": "b8c78c09-7517-4d9f-9fe6-34629c3c09f2"
+          "provider": "antigravity"
         }
       ],
       "skills": [],

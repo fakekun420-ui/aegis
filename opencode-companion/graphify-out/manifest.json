@@ -1,9 +1,9 @@
 {
   "keepalive.sh": {
-    "mtime": 1789683660.0567317,
-    "seen": 1789698255.5609686,
-    "ast_hash": "406419933847943b9afe47d40a8b4d68",
-    "semantic_hash": "406419933847943b9afe47d40a8b4d68"
+    "mtime": 1789890825.6199949,
+    "seen": 1789939456.458783,
+    "ast_hash": "27c114716554ca63665802a1dd9c215b",
+    "semantic_hash": ""
   },
   "package.json": {
     "mtime": 1789493120.0439858,
@@ -11,17 +11,11 @@
     "ast_hash": "50bf67405238f05fdbc0d034728c8515",
     "semantic_hash": "50bf67405238f05fdbc0d034728c8515"
   },
-  "public/app.js": {
-    "mtime": 1789722519.5599976,
-    "seen": 1789877217.7135098,
-    "ast_hash": "80bad30d1b34b5e49099d75e7bc638e1",
-    "semantic_hash": "80bad30d1b34b5e49099d75e7bc638e1"
-  },
   "server.js": {
-    "mtime": 1789870399.1499994,
-    "seen": 1789877217.7135131,
-    "ast_hash": "f47790b5fa5320e6df20a709ffef168f",
-    "semantic_hash": "f47790b5fa5320e6df20a709ffef168f"
+    "mtime": 1789935679.2451272,
+    "seen": 1789939456.4588282,
+    "ast_hash": "32a8b7dd27058c5af0fd0203737da47f",
+    "semantic_hash": ""
   },
   "service.d-99-opencode-hub.sh": {
     "mtime": 1789659379.8533494,
@@ -35,16 +29,58 @@
     "ast_hash": "3624d3330a687ab85881d97e077145d6",
     "semantic_hash": "3624d3330a687ab85881d97e077145d6"
   },
-  ".companion-session.json": {
-    "mtime": 1789876240.358999,
-    "seen": 1789877217.713172,
-    "ast_hash": "af84e8561209435ccbcdc5e83f148f3a",
-    "semantic_hash": "af84e8561209435ccbcdc5e83f148f3a"
-  },
   "projects.json": {
-    "mtime": 1789873196.3199985,
-    "seen": 1789877217.7135053,
-    "ast_hash": "e08881bc41505f395af07083bf595d9c",
-    "semantic_hash": "e08881bc41505f395af07083bf595d9c"
+    "mtime": 1789937345.5051267,
+    "seen": 1789939456.458807,
+    "ast_hash": "1f3833cf41f8a39f98054788b5950d7d",
+    "semantic_hash": ""
+  },
+  "find-ubuntu.sh": {
+    "mtime": 1789885952.3399968,
+    "seen": 1789939456.4587634,
+    "ast_hash": "3adc87e691387ff37c9b4699d6640e94",
+    "semantic_hash": ""
+  },
+  "providers.js": {
+    "mtime": 1789935654.4451272,
+    "seen": 1789939456.4588144,
+    "ast_hash": "011beee2a609f69277e7faaed809ecee",
+    "semantic_hash": ""
+  },
+  "providers.json": {
+    "mtime": 1789922653.0289993,
+    "seen": 1789939456.4588208,
+    "ast_hash": "7c6154067f19cc1eff6cf7ca6965f552",
+    "semantic_hash": ""
+  },
+  "stage-node.sh": {
+    "mtime": 1789883016.0099978,
+    "seen": 1789939456.4588447,
+    "ast_hash": "29e305aca8e7ba2e52d01321c3eebbc4",
+    "semantic_hash": ""
+  },
+  "NOTES.md": {
+    "mtime": 1789716639.4899998,
+    "seen": 1789939456.4588594,
+    "ast_hash": "6ae0d931739431455b7d173a83789f22",
+    "semantic_hash": ""
+  },
+  "SESSION_HANDOFF.md": {
+    "mtime": 1789716608.0699997,
+    "seen": 1789939456.4588668,
+    "ast_hash": "931c539960e926d40a53b9abaca28e93",
+    "semantic_hash": ""
+  },
+  "docs/BACKEND_ARCHITECTURE.md": {
+    "mtime": 1789933996.2955825,
+    "seen": 1789939456.458873,
+    "ast_hash": "4a43646d6d0b811bdbcfff99cb676057",
+    "semantic_hash": ""
+  },
+  "docs/FRONTEND_CONTRACT.md": {
+    "mtime": 1789933559.3455827,
+    "seen": 1789939456.4588792,
+    "ast_hash": "c7504c0797040dc0cfc7c693014c7cb9",
+    "semantic_hash": ""
   }
 }

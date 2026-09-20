@@ -73,7 +73,9 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(sessionId) { vm.load(sessionId) }
+    LaunchedEffect(sessionId, sessionProvider) {
+        vm.load(sessionId, sessionProvider)
+    }
 
     // Auto-scroll on new messages / loading state changes
     LaunchedEffect(messages.size, loading) {
@@ -220,7 +222,7 @@ fun ChatScreen(
                     onSend = {
                         val t = composerText.trim()
                         if (t.isNotBlank() || attachedFiles.isNotEmpty()) {
-                            vm.sendWithFiles(sessionId, t, attachedFiles)
+                            vm.sendWithFiles(sessionId, t, attachedFiles, sessionProvider)
                             composerText = ""
                             attachedFiles = emptyList()
                         }

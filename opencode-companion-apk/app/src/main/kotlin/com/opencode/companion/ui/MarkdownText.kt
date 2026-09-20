@@ -140,18 +140,124 @@ private fun CodeBlockItem(block: MdBlock.CodeBlock) {
                     )
                 }
             }
+            val highlighted = remember(block.code, block.language) {
+                highlightCode(block.code, block.language)
+            }
             Text(
-                text = block.code,
+                text = highlighted,
                 modifier = Modifier
                     .padding(12.dp)
                     .horizontalScroll(rememberScrollState()),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.5.sp,
-                lineHeight = 17.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                lineHeight = 18.sp
             )
         }
     }
+}
+
+private fun highlightCode(code: String, language: String): AnnotatedString {
+    val lang = language.lowercase().trim()
+    val builder = AnnotatedString.Builder()
+
+    val keywordColor = Color(0xFFBA68C8)      // Purple accent for keywords
+    val stringColor = Color(0xFF81C784)       // Soft green for strings
+    val commentColor = Color(0xFF9E9E9E)      // Muted gray for comments
+    val numberColor = Color(0xFFFFB74D)       // Soft orange for numbers
+    val typeColor = Color(0xFF4DD0E1)         // Cyan for types / builtins
+    val defaultColor = Color(0xFFE0E0E0)      // Soft crisp light for plain text
+
+    val kotlinKeywords = setOf(
+        "fun", "val", "var", "class", "object", "interface", "import", "package", "return",
+        "if", "else", "when", "for", "while", "do", "try", "catch", "finally", "throw",
+        "null", "true", "false", "this", "super", "override", "private", "public",
+        "protected", "internal", "suspend", "data", "sealed", "enum", "companion", "in", "is", "as"
+    )
+
+    val pythonKeywords = setOf(
+        "def", "class", "import", "from", "return", "if", "elif", "else", "for", "while",
+        "try", "except", "finally", "raise", "None", "True", "False", "self", "with", "as",
+        "lambda", "async", "await", "yield", "pass", "in", "is", "not", "and", "or"
+    )
+
+    val bashKeywords = setOf(
+        "echo", "if", "then", "fi", "elif", "else", "for", "in", "do", "done", "while",
+        "until", "case", "esac", "function", "return", "exit", "sudo", "export", "cd",
+        "ls", "cat", "grep", "curl", "pm", "am", "su", "chmod", "chown", "source", "mkdir", "rm"
+    )
+
+    val jsKeywords = setOf(
+        "function", "const", "let", "var", "return", "if", "else", "for", "while",
+        "switch", "case", "default", "import", "export", "from", "class", "extends",
+        "new", "this", "true", "false", "null", "undefined", "async", "await", "try", "catch"
+    )
+
+    val keywords = when {
+        lang.contains("kotlin") || lang.contains("kt") -> kotlinKeywords
+        lang.contains("python") || lang.contains("py") -> pythonKeywords
+        lang.contains("bash") || lang.contains("sh") || lang.contains("shell") || lang.contains("zsh") -> bashKeywords
+        lang.contains("js") || lang.contains("javascript") || lang.contains("ts") || lang.contains("typescript") -> jsKeywords
+        else -> kotlinKeywords + pythonKeywords + bashKeywords + jsKeywords
+    }
+
+    val lines = code.split("\n")
+    lines.forEachIndexed { lineIdx, line ->
+        if (lineIdx > 0) builder.append("\n")
+
+        val trimmed = line.trimStart()
+        val isBashOrPy = lang.contains("py") || lang.contains("sh") || lang.contains("bash")
+        val commentPrefix = if (isBashOrPy) "#" else "//"
+
+        if (trimmed.startsWith(commentPrefix)) {
+            val indent = line.takeWhile { it.isWhitespace() }
+            builder.append(indent)
+            builder.withStyle(SpanStyle(color = commentColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+                append(trimmed)
+            }
+            return@forEachIndexed
+        }
+
+        val tokenRegex = Regex("""(//.*|#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b|[^\sA-Za-z0-9_]+|\s+)""")
+        val tokens = tokenRegex.findAll(line)
+
+        for (match in tokens) {
+            val token = match.value
+            when {
+                token.startsWith("//") || token.startsWith("#") -> {
+                    builder.withStyle(SpanStyle(color = commentColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+                        append(token)
+                    }
+                }
+                (token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'")) -> {
+                    builder.withStyle(SpanStyle(color = stringColor)) {
+                        append(token)
+                    }
+                }
+                token.matches(Regex("""\b\d+(\.\d+)?\b""")) -> {
+                    builder.withStyle(SpanStyle(color = numberColor)) {
+                        append(token)
+                    }
+                }
+                keywords.contains(token) -> {
+                    builder.withStyle(SpanStyle(color = keywordColor, fontWeight = FontWeight.Bold)) {
+                        append(token)
+                    }
+                }
+                token.firstOrNull()?.isUpperCase() == true && token.matches(Regex("""[A-Za-z0-9_]+""")) -> {
+                    builder.withStyle(SpanStyle(color = typeColor)) {
+                        append(token)
+                    }
+                }
+                else -> {
+                    builder.withStyle(SpanStyle(color = defaultColor)) {
+                        append(token)
+                    }
+                }
+            }
+        }
+    }
+
+    return builder.toAnnotatedString()
 }
 
 private sealed class MdBlock {
