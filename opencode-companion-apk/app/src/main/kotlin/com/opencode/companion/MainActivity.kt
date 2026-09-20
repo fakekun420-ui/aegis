@@ -168,23 +168,22 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             try {
                 val script = "/sdcard/projects/opencode-companion/keepalive.sh"
                 val sysLog = "/sdcard/projects/opencode-companion/hub-startup.log"
-                // App ns (4026535508) cannot see /usr/bin/node — node lives only in termux
-                // ns 4026535555 and nsenter from su lands in node-less namespaces too
-                // (verified: pid-1 ns and termux-pid ns both report NO-NODE via nsenter).
-                // Robust fix: COPY node into /sdcard (shared into app ns, verified
-                // visible via nsenter -t <app> -m) as node.bin, then run keepalive
-                // IN the app ns with NODE_BIN pointing at the staged copy. No nsenter.
-                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /sdcard/projects/opencode-companion/stage-node.sh"))
-                val stageOut = try { stage.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
-                android.util.Log.i("OpenCodeBoot", "keepalive stage: ${stageOut.take(200)}")
-                val stagedBin = "/sdcard/projects/opencode-companion/node.bin"
-                val direct = arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; NODE_BIN=\"$stagedBin\" nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched")
+                // chroot anchor: ubuntu init pid changes across reboots; find it by its
+                // unique root marker (/proc/PID/root/lib/ld-linux-aarch64.so.1 = ubuntu
+                // chroot with node+loader). Launch keepalive INSIDE the chroot so node,
+                // loader, server.js and ports all resolve in one namespace. No nsenter.
+                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", "for p in ${'$'}(ls /proc 2>/dev/null | grep -E ^[0-9]+${'$'}); do [ -e /proc/${'$'}p/root/lib/ld-linux-aarch64.so.1 ] 2>/dev/null && [ -x /proc/${'$'}p/root/usr/bin/node ] 2>/dev/null && { echo ${'$'}p; break; }; done"))
+                val ubuntuPid = try { stage.inputStream.bufferedReader().readText().trim().lines().firstOrNull { it.isNotBlank() }?.trim() } catch (_: Exception) { null }
+                android.util.Log.i("OpenCodeBoot", "keepalive ubuntuPid=$ubuntuPid")
+                val direct = if (!ubuntuPid.isNullOrBlank()) arrayOf("su", "-c", "chroot /proc/" + ubuntuPid + "/root /bin/sh -c 'nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'") else null
+                if (direct == null) { execExit = 97; android.util.Log.e("OpenCodeBoot", "keepalive: no ubuntu chroot anchor found") } else {
                 val proc = Runtime.getRuntime().exec(direct)
                 execExit = proc.waitFor()
                 val outText = try { proc.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
                 val errText = try { proc.errorStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
                 android.util.Log.i("OpenCodeBoot", "keepalive exec exit=$execExit out=${outText.take(120)} err=${errText.take(300)}")
                 if (!outText.contains("launched")) execExit = 98
+                }
             } catch (e: Exception) {
                 android.util.Log.e("OpenCodeBoot", "keepalive exec exception", e)
                 withContext(Dispatchers.Main) { isStartingSystem = false }
