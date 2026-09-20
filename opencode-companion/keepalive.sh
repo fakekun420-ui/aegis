@@ -107,8 +107,11 @@ while true; do
       kill -9 "$_ocpid" 2>/dev/null || true
     done
     sleep 1
-    # opencode es ELF standalone, no necesita node
-    nohup "$OPENCODE_BIN" serve --port "$OC_PORT" --hostname 0.0.0.0 >> "$HUB_DIR/opencode.log" 2>&1 &
+    # opencode es ELF standalone, no necesita node — PERO necesita HOME=/root para
+    # leer el DB real (/root/.local/share/opencode/opencode.db, 2.1GB, 18 sesiones).
+    # Sin HOME, XDG cae a /.local/share (DB fresca 249KB) y TODAS las sesiones
+    # vinculadas devuelven "Session not found" (bug: chats vacíos en la app).
+    HOME=/root nohup "$OPENCODE_BIN" serve --port "$OC_PORT" --hostname 0.0.0.0 >> "$HUB_DIR/opencode.log" 2>&1 &
     echo "  opencode pid $! lanzado ($OPENCODE_BIN)" >> "$LOG"
     sleep 4
   fi
