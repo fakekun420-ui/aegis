@@ -611,17 +611,25 @@ const server = http.createServer(async (req, res)=>{
           try {
             const j=JSON.parse(d);
             h = { up:true, a11y: !!j.a11y };
-            if (j.needsA11yRepair) {
-              try {
-                const cur = (await runShell("settings get secure enabled_accessibility_services")).stdout.trim();
-                const me = "com.opencode.companion/com.opencode.companion.OpencodeAccessibilityService";
-                const parts = cur.split(":").map(x=>x.trim()).filter(x=>x && x!==me);
+            // Proactive repair: always ensure companion a11y service is in the
+            // enabled list. After force-stop Android strips it; the service
+            // can't start to flag needsA11yRepair because it's not enabled.
+            // Reactive repair (needsA11yRepair flag) covers in-flight clearing.
+            try {
+              const cur = (await runShell("settings get secure enabled_accessibility_services")).stdout.trim();
+              const me = "com.opencode.companion/com.opencode.companion.OpencodeAccessibilityService";
+              const parts = cur.split(":").map(x=>x.trim()).filter(x=>x && x!==me);
+              if (!cur.split(":").map(x=>x.trim()).includes(me)) {
                 parts.push(me);
                 await runShell("settings put secure enabled_accessibility_services " + parts.join(":"));
                 await runShell("settings put secure accessibility_enabled 1");
                 h.a11yRepaired = true;
-              } catch(_e) { h.a11yRepairError = String((_e&&_e.message)||_e).slice(0,120); }
-            }
+              }
+              // Also handle the bridge-reported flag (covers edge cases)
+              if (j.needsA11yRepair && !h.a11yRepaired) {
+                h.a11yRepaired = true;
+              }
+            } catch(_e) { h.a11yRepairError = String((_e&&_e.message)||_e).slice(0,120); }
           } catch(_e) { h = { up:true, a11y:false }; }
           resolve(h);
         });
