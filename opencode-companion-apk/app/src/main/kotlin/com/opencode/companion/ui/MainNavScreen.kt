@@ -12,11 +12,13 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.OpencodeSession
 import com.opencode.companion.data.Project
-import com.opencode.companion.util.relativeTime
 import com.opencode.companion.util.pickEpochMillis
+import com.opencode.companion.util.relativeTime
 
 data class RecentItem(
     val id: String,
@@ -42,27 +44,31 @@ fun MainNavScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Opencode Companion") },
-                navigationIcon = { Icon(Icons.Filled.Menu, contentDescription = null) }
+                navigationIcon = { Icon(Icons.Filled.Menu, contentDescription = "Menú") }
             )
         }
     ) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
             item { SectionHeader("Navegación") }
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
                     Column {
                         ListItem(
                             headlineContent = { Text("Proyectos") },
                             supportingContent = { Text("${projects.size} proyectos") },
-                            leadingContent = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                            modifier = Modifier.clickable { onNavigateProjects() }
+                            leadingContent = { Icon(Icons.Filled.Folder, contentDescription = "Proyectos") },
+                            modifier = Modifier
+                                .semantics { contentDescription = "Proyectos" }
+                                .clickable { onNavigateProjects() }
                         )
                         Divider()
                         ListItem(
                             headlineContent = { Text("Chats") },
                             supportingContent = { Text("${sessions.size} chats") },
-                            leadingContent = { Icon(Icons.Filled.ChatBubble, contentDescription = null) },
-                            modifier = Modifier.clickable { onNavigateChats() }
+                            leadingContent = { Icon(Icons.Filled.ChatBubble, contentDescription = "Chats") },
+                            modifier = Modifier
+                                .semantics { contentDescription = "Chats" }
+                                .clickable { onNavigateChats() }
                         )
                     }
                 }
@@ -75,14 +81,14 @@ fun MainNavScreen(
                     ListItem(
                         headlineContent = { Text(item.title, maxLines = 1) },
                         supportingContent = { Text(item.subtitle, maxLines = 1) },
-                        leadingContent = { Icon(if (item.kind == "chat") Icons.Filled.ChatBubble else Icons.Filled.Folder, contentDescription = null) },
+                        leadingContent = { Icon(if (item.kind == "chat") Icons.Filled.ChatBubble else Icons.Filled.Folder, contentDescription = if (item.kind == "chat") "Chat" else "Proyecto") },
                         trailingContent = {
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Icon(Icons.Filled.Schedule, contentDescription = null, modifier = Modifier.size(14.dp))
                                 Text(relativeTime(item.epochMillis ?: 0L), style = MaterialTheme.typography.labelSmall)
                             }
                         },
-                        modifier = Modifier.clickable {
+                        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = item.title }.clickable {
                             if (item.kind == "chat") onOpenSession(item.id) else onOpenProject(item.id)
                         }
                     )

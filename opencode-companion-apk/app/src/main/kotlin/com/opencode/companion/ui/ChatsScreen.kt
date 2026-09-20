@@ -15,6 +15,8 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.OpencodeSession
 import com.opencode.companion.data.Project
@@ -55,8 +57,8 @@ fun ChatsScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Chats") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }) },
-        floatingActionButton = { ExtendedFloatingActionButton(onClick = onCreateChatPlaceholder, icon = { Icon(Icons.Filled.Add, null) }, text = { Text("+ Nuevo chat") }) }
+        topBar = { TopAppBar(title = { Text("Chats") }, navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } }) },
+        floatingActionButton = { ExtendedFloatingActionButton(onClick = onCreateChatPlaceholder, icon = { Icon(Icons.Filled.Add, contentDescription = "Nuevo chat") }, text = { Text("+ Nuevo chat") }, modifier = Modifier.semantics { contentDescription = "Nuevo chat" }) }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             var isRefreshing by remember { mutableStateOf(false) }
@@ -64,7 +66,7 @@ fun ChatsScreen(
             if (isLoading && sessions.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar chats") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar chats") }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Buscar chats" }, singleLine = true)
                 PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = { isRefreshing = true; onRefresh() }, modifier = Modifier.fillMaxSize()) {
                     if (filtered.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -77,18 +79,18 @@ fun ChatsScreen(
                         LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(filtered, key = { it.resolvedId.ifBlank { it.hashCode().toString() } }) { sess ->
                                 val projName = sessionToProject[sess.resolvedId]
-                                Card(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onOpenSession(sess.resolvedId) }, onLongClick = { menuTarget = sess })) {
+                                Card(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = sess.resolvedTitle }.combinedClickable(onClick = { onOpenSession(sess.resolvedId) }, onLongClick = { menuTarget = sess })) {
                                     ListItem(
                                         headlineContent = { Text(sess.resolvedTitle, maxLines = 1) },
                                         supportingContent = { Text(listOfNotNull(relativeTime(sess.lastActivityIso), projName).joinToString(" · "), maxLines = 1) },
-                                        leadingContent = { Icon(Icons.Filled.ChatBubble, null) }
+                                        leadingContent = { Icon(Icons.Filled.ChatBubble, contentDescription = "Chat") }
                                     )
                                 }
                                 DropdownMenu(expanded = menuTarget?.resolvedId == sess.resolvedId, onDismissRequest = { menuTarget = null }) {
-                                    DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = sess })
-                                    DropdownMenuItem(text = { Text("Fijar") }, onClick = { menuTarget = null; onPinSession(sess.resolvedId) })
-                                    DropdownMenuItem(text = { Text("Cambiar proyecto") }, onClick = { menuTarget = null; moveTarget = sess })
-                                    DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = sess })
+                                    DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = sess }, modifier = Modifier.semantics { contentDescription = "Renombrar" })
+                                    DropdownMenuItem(text = { Text("Fijar") }, onClick = { menuTarget = null; onPinSession(sess.resolvedId) }, modifier = Modifier.semantics { contentDescription = "Fijar" })
+                                    DropdownMenuItem(text = { Text("Cambiar proyecto") }, onClick = { menuTarget = null; moveTarget = sess }, modifier = Modifier.semantics { contentDescription = "Cambiar proyecto" })
+                                    DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = sess }, modifier = Modifier.semantics { contentDescription = "Eliminar" })
                                 }
                             }
                         }

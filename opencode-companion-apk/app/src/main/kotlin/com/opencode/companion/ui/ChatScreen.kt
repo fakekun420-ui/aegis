@@ -26,6 +26,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -140,14 +142,14 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = { Text(sessionId.take(8), maxLines = 1) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
+                navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
                 actions = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics { contentDescription = if (duplex) "Conversación" else "Texto" }) {
                         Text(if (duplex) "Conversación" else "Texto", style = MaterialTheme.typography.labelSmall)
                         Switch(checked = duplex, onCheckedChange = { v ->
                             duplex = v
                             if (v) scheduleDuplexRestart(600) else { duplexJob?.cancel(); try { recognizer?.cancel() } catch (_: Exception) {}; listening = false }
-                        })
+                        }, modifier = Modifier.semantics { contentDescription = if (duplex) "Modo Conversación activado" else "Modo Texto activado" })
                     }
                 }
             )
@@ -316,19 +318,19 @@ private fun ComposerBar(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            IconButton(onClick = onAttach) { Icon(Icons.Filled.AttachFile, contentDescription = "Adjuntar") }
+            IconButton(onClick = onAttach, modifier = Modifier.semantics { contentDescription = "Adjuntar archivo" }) { Icon(Icons.Filled.AttachFile, contentDescription = "Adjuntar archivo") }
             OutlinedTextField(
                 value = text,
                 onValueChange = onTextChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Escribe un mensaje" },
                 placeholder = { Text("Escribe un mensaje…") },
                 maxLines = 5
             )
-            IconButton(onClick = onSend, enabled = text.isNotBlank()) { Icon(Icons.Filled.Send, contentDescription = "Enviar") }
-            IconButton(onClick = onMic) {
+            IconButton(onClick = onSend, enabled = text.isNotBlank(), modifier = Modifier.semantics { contentDescription = "Enviar mensaje" }) { Icon(Icons.Filled.Send, contentDescription = "Enviar mensaje") }
+            IconButton(onClick = onMic, modifier = Modifier.semantics { contentDescription = if (listening) "Dejar de escuchar" else "Hablar" }) {
                 Icon(
                     if (listening) Icons.Filled.Mic else Icons.Filled.MicNone,
-                    contentDescription = "Hablar",
+                    contentDescription = if (listening) "Dejar de escuchar" else "Hablar",
                     tint = if (listening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                 )
             }

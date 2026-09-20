@@ -15,6 +15,8 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.Project
 import com.opencode.companion.util.relativeTime
@@ -45,10 +47,15 @@ fun ProjectsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Proyectos") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } })
+            TopAppBar(title = { Text("Proyectos") }, navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } })
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = { showCreate = true }, icon = { Icon(Icons.Filled.Add, null) }, text = { Text("+ Nuevo proyecto") })
+            ExtendedFloatingActionButton(
+                onClick = { showCreate = true },
+                icon = { Icon(Icons.Filled.Add, contentDescription = "Nuevo proyecto") },
+                text = { Text("+ Nuevo proyecto") },
+                modifier = Modifier.semantics { contentDescription = "Nuevo proyecto" }
+            )
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -57,7 +64,7 @@ fun ProjectsScreen(
             if (isLoading && projects.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar") }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Buscar proyectos" }, singleLine = true)
                 PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = { isRefreshing = true; onRefresh() }, modifier = Modifier.fillMaxSize()) {
                     if (filtered.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -69,16 +76,16 @@ fun ProjectsScreen(
                     } else {
                         LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(filtered, key = { it.id }) { proj ->
-                                Card(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onOpenProject(proj.id) }, onLongClick = { menuTarget = proj })) {
+                                Card(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = proj.name }.combinedClickable(onClick = { onOpenProject(proj.id) }, onLongClick = { menuTarget = proj })) {
                                     ListItem(
                                         headlineContent = { Text(proj.name) },
                                         supportingContent = { Text("${proj.description ?: "—"} · ${relativeTime(proj.createdAt)}", maxLines = 1) },
-                                        leadingContent = { Icon(Icons.Filled.Folder, null) }
+                                        leadingContent = { Icon(Icons.Filled.Folder, contentDescription = "Proyecto") }
                                     )
                                 }
                                 DropdownMenu(expanded = menuTarget?.id == proj.id, onDismissRequest = { menuTarget = null }) {
-                                    DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = proj })
-                                    DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = proj })
+                                    DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = proj }, modifier = Modifier.semantics { contentDescription = "Renombrar" })
+                                    DropdownMenuItem(text = { Text("Eliminar") }, onClick = { menuTarget = null; deleteTarget = proj }, modifier = Modifier.semantics { contentDescription = "Eliminar" })
                                 }
                             }
                         }

@@ -11,6 +11,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.Project
 import com.opencode.companion.data.SessionRef
@@ -43,29 +45,29 @@ fun ProjectDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Column { Text(project.name, maxLines = 1); Text(project.description ?: "—", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, maxLines = 1) } },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }
+                title = { Column(modifier = Modifier.semantics { contentDescription = project.name }) { Text(project.name, maxLines = 1); Text(project.description ?: "—", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, maxLines = 1) } },
+                navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } }
             )
         },
         bottomBar = {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = composerText, onValueChange = { composerText = it },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Mensaje para ${project.name}" },
                     placeholder = { Text("Mensaje para ${project.name}…") },
                     maxLines = 5
                 )
                 Button(onClick = {
                     val t = composerText.trim()
                     if (t.isNotBlank()) { onSendNewSession(t); composerText = "" }
-                }, enabled = composerText.isNotBlank()) { Text("Enviar") }
+                }, enabled = composerText.isNotBlank(), modifier = Modifier.semantics { contentDescription = "Enviar mensaje" }) { Text("Enviar") }
             }
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             TabRow(selectedTabIndex = tab) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Sesiones (${sessions.size})") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Skills & Vínculos") })
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Sesiones (${sessions.size})") }, modifier = Modifier.semantics { contentDescription = "Sesiones" })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Skills & Vínculos") }, modifier = Modifier.semantics { contentDescription = "Skills" })
             }
             if (isLoading && sessions.isEmpty() && skills.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -82,11 +84,11 @@ fun ProjectDetailScreen(
                         } else {
                             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(sessions, key = { it.sessionId }) { s ->
-                                    Card(onClick = { onOpenSession(s.sessionId) }, modifier = Modifier.fillMaxWidth()) {
+                                    Card(onClick = { onOpenSession(s.sessionId) }, modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = s.title ?: s.sessionId.take(8) }) {
                                         ListItem(
                                             headlineContent = { Text(s.title ?: s.sessionId.take(8)) },
                                             supportingContent = { Text(s.lastUsed ?: s.createdAt ?: "", maxLines = 1) },
-                                            leadingContent = { Icon(Icons.Filled.ChatBubble, null) }
+                                            leadingContent = { Icon(Icons.Filled.ChatBubble, contentDescription = "Sesión") }
                                         )
                                     }
                                 }
@@ -103,11 +105,11 @@ fun ProjectDetailScreen(
                             }
                             if (skills.isEmpty()) item { Text("Sin skills", style = MaterialTheme.typography.bodySmall) }
                             else items(skills, key = { "${it.scope}:${it.name}" }) { sk ->
-                                Card(Modifier.fillMaxWidth()) {
+                                Card(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = sk.name }) {
                                     ListItem(
                                         headlineContent = { Text("${sk.name} [${sk.scope}]") },
                                         supportingContent = { Text(sk.content.take(120), maxLines = 2) },
-                                        trailingContent = { TextButton(onClick = { onDeleteSkill(sk.scope, sk.name) }) { Text("Eliminar") } }
+                                        trailingContent = { TextButton(onClick = { onDeleteSkill(sk.scope, sk.name) }, modifier = Modifier.semantics { contentDescription = "Eliminar skill ${sk.name}" }) { Text("Eliminar") } }
                                     )
                                 }
                             }
@@ -119,10 +121,10 @@ fun ProjectDetailScreen(
                                 val ids = project.linkedProjects ?: emptyList()
                                 items(ids) { pid ->
                                     val lp = linkedProjects.find { it.id == pid }
-                                    Card(Modifier.fillMaxWidth()) {
+                                    Card(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = lp?.name ?: pid }) {
                                         ListItem(
                                             headlineContent = { Text(lp?.name ?: pid) },
-                                            trailingContent = { TextButton(onClick = { onUnlinkProject(pid) }) { Text("Quitar") } }
+                                            trailingContent = { TextButton(onClick = { onUnlinkProject(pid) }, modifier = Modifier.semantics { contentDescription = "Quitar ${lp?.name ?: pid}" }) { Text("Quitar") } }
                                         )
                                     }
                                 }
