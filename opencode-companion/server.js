@@ -7,7 +7,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { exec, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { OpencodeAdapter, AntigravityAdapter, ProviderManager } from "./providers.js";
+import {
+  OpencodeAdapter,
+  AntigravityAdapter,
+  ProviderManager,
+  fileMutex,
+  atomicReadFileSync,
+  atomicWriteFileSync,
+  normalizeMessage
+} from "./providers.js";
+
+// Helper: send ok envelope consistently
+function ok(data) { return { ok: true, data }; }
+function fail(error, code) { return { ok: false, error: String(error).slice(0, 800), code }; }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -51,8 +63,7 @@ const PROJECTS_STORE_FILE = path.join(__dirname, "projects.json");
 // Load projects from disk — returns {projects: []} envelope on disk (or [] legacy).
 function loadProjectsStore() {
   try {
-    if (!fs.existsSync(PROJECTS_STORE_FILE)) return { projects: [] };
-    const raw = JSON.parse(fs.readFileSync(PROJECTS_STORE_FILE, "utf8"));
+    const raw = atomicReadFileSync(PROJECTS_STORE_FILE, { projects: [] });
     // Accept both {projects:[]} and [] for backwards compat
     if (Array.isArray(raw)) return { projects: raw };
     if (raw && Array.isArray(raw.projects)) return raw;
@@ -60,7 +71,9 @@ function loadProjectsStore() {
   } catch (e) { console.error("[projects] load err", e.message); return { projects: [] }; }
 }
 function saveProjectsStore(store) {
-  try { fs.writeFileSync(PROJECTS_STORE_FILE, JSON.stringify(store, null, 2)); } catch (e) { console.error("[projects] save err", e.message); }
+  try {
+    atomicWriteFileSync(PROJECTS_STORE_FILE, store);
+  } catch (e) { console.error("[projects] save err", e.message); }
 }
 // Generate stable id: timestamp + random suffix, lowercase alphanumeric + hyphen
 function genProjectId() {
@@ -75,6 +88,7 @@ function validateProjectPayload(body, isCreate) {
   if (isCreate && (!body.name || !String(body.name).trim())) return "name required";
   if (body.name !== undefined && !String(body.name).trim()) return "name cannot be empty";
   if (body.description !== undefined && typeof body.description !== "string") return "description must be string";
+  if (body.instructions !== undefined && typeof body.instructions !== "string") return "instructions must be string";
   if (body.skills !== undefined && !Array.isArray(body.skills)) return "skills must be array";
   if (body.linkedProjects !== undefined && !Array.isArray(body.linkedProjects)) return "linkedProjects must be array";
   if (body.provider !== undefined && !["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim())) {
@@ -207,8 +221,15 @@ function buildSkillsContext(projectId) {
   return skills.map(s => `### Skill: ${s.name} [${s.scope}]\n${s.content}`).join("\n\n---\n\n");
 }
 function buildSystemContextBlock(projectId) {
-  // Compose skills + cross-project context into a single system block
+  // Compose project instructions + skills + cross-project context into a single system block
   const parts = [];
+  if (projectId) {
+    const store = loadProjectsStore();
+    const proj = findProject(store, projectId);
+    if (proj && proj.instructions && proj.instructions.trim()) {
+      parts.push(`# Project Instructions\n${proj.instructions.trim()}`);
+    }
+  }
   const skillsBlock = buildSkillsContext(projectId);
   if (skillsBlock) parts.push(`# Active Skills\n${skillsBlock}`);
   const crossBlock = buildCrossProjectContext(projectId);
@@ -655,10 +676,18 @@ const server = http.createServer(async (req, res)=>{
     try {
       const raw = await readJsonBody(req, 64 * 1024);
       const body = JSON.parse(raw || "{}");
-      const store = loadProjectsStore();
 
-      let provId = body.provider || req.headers["x-provider"] || null;
-      let projectId = body.projectId || req.headers["x-project-id"] || UI_STATE.projectId || null;
+      const headerProv = req.headers["x-provider"]
+        ? String(req.headers["x-provider"]).toLowerCase().trim()
+        : null;
+      const headerProj = req.headers["x-project-id"]
+        ? sanitizeProjectId(decodeURIComponent(req.headers["x-project-id"]))
+        : null;
+
+      let provId = body.provider || headerProv || null;
+      let projectId = body.projectId || headerProj || UI_STATE.projectId || null;
+
+      const store = loadProjectsStore();
 
       if (!projectId && typeof body.title === "string") {
         for (const p of store.projects) {
@@ -675,110 +704,168 @@ const server = http.createServer(async (req, res)=>{
       }
 
       const adapter = providerManager.resolveProvider(null, provId, store);
+      console.log(`[hub] creating session via ${adapter.id} (title: ${body.title || "untitled"}, project: ${projectId || "none"})`);
 
-      if (adapter.id === "antigravity") {
-        console.log(`[hub] creating Antigravity session (title: ${body.title || "untitled"})`);
-        const created = await adapter.createSession({
-          title: body.title,
-          projectId
-        });
+      const created = await adapter.createSession({
+        title: body.title,
+        projectId
+      });
 
-        if (projectId) {
-          const proj = findProject(store, projectId);
+      const entry = normalizeSessionEntry({
+        sessionId: created.id,
+        title: created.title,
+        createdAt: created.createdAt,
+        lastUsed: created.createdAt,
+        provider: adapter.id
+      });
+
+      if (projectId) {
+        await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+          const s = loadProjectsStore();
+          const proj = findProject(s, projectId);
           if (proj && !proj.archivedAt) {
-            const entry = normalizeSessionEntry({
-              sessionId: created.id,
-              title: created.title,
-              createdAt: created.createdAt,
-              lastUsed: created.createdAt,
-              provider: "antigravity"
-            });
             proj.sessions = proj.sessions || [];
             proj.sessions.push(entry);
-            saveProjectsStore(store);
+            saveProjectsStore(s);
           }
-        }
-
-        return json(res, 201, {
-          id: created.id,
-          ID: created.id,
-          title: created.title,
-          createdAt: created.createdAt,
-          provider: "antigravity"
         });
       }
 
-      // If OpenCode, use opencodeAdapter
-      console.log(`[hub] creating OpenCode session via adapter (title: ${body.title || "untitled"})`);
-      const created = await opencodeAdapter.createSession({ title: body.title });
-      if (projectId) {
-        const proj = findProject(store, projectId);
-        if (proj && !proj.archivedAt) {
-          const entry = normalizeSessionEntry({
-            sessionId: created.id,
-            title: created.title,
-            createdAt: created.createdAt,
-            lastUsed: created.createdAt,
-            provider: "opencode"
-          });
-          proj.sessions = proj.sessions || [];
-          proj.sessions.push(entry);
-          saveProjectsStore(store);
-        }
-      }
-      return json(res, 201, created.raw || created);
+      return json(res, 201, {
+        ok: true,
+        data: entry,
+        id: created.id,
+        ID: created.id,
+        title: created.title,
+        createdAt: created.createdAt,
+        provider: adapter.id,
+        ...(created.raw || {})
+      });
     } catch (e) {
       console.error("[hub] createSession error:", e.message);
       return json(res, 500, { ok: false, error: `createSession failed: ${e.message}` });
     }
   }
 
-  // 0c) Provider-aware Message Send: POST /opencode/session/:id/message or POST /api/sessions/:id/message
-  const sendMsgMatch = pathname.match(/^\/(?:opencode|api)\/session(?:s)?\/([^\/]+)\/message$/);
+  // 0c) Provider-aware Message Send: POST /opencode/session/:id/message or POST /api/sessions/:id/message or POST /api/opencode/sessions/:id/message
+  const sendMsgMatch = pathname.match(/^\/(?:opencode|api)\/session(?:s)?\/([^\/]+)\/message$/) ||
+                       pathname.match(/^\/api\/opencode\/sessions\/([^\/]+)\/message$/);
   if (sendMsgMatch && req.method === "POST") {
     const sid = sanitizeProjectId(decodeURIComponent(sendMsgMatch[1]));
-    const store = loadProjectsStore();
-    const adapter = providerManager.resolveProvider(sid, req.headers["x-provider"], store);
+    try {
+      const raw = await readJsonBody(req, 512 * 1024);
+      const body = JSON.parse(raw || "{}");
 
-    if (adapter.id === "antigravity") {
-      try {
-        const raw = await readJsonBody(req, 512 * 1024);
-        const body = JSON.parse(raw || "{}");
+      const headerProvider = req.headers["x-provider"]
+        ? String(req.headers["x-provider"]).toLowerCase().trim()
+        : null;
+      const headerProjectId = req.headers["x-project-id"]
+        ? sanitizeProjectId(decodeURIComponent(req.headers["x-project-id"]))
+        : null;
 
-        let pId = body.projectId || req.headers["x-project-id"] || null;
+      let pId = headerProjectId || body.projectId || UI_STATE.projectId || null;
+      let provId = headerProvider || body.provider || null;
+
+      // Immediate atomic persistence of session association and provider
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
         let sessionEntry = null;
+        let parentProject = null;
+
         for (const p of store.projects) {
           const found = (p.sessions || []).find((s) => s.sessionId === sid);
           if (found) {
-            pId = pId || p.id;
             sessionEntry = found;
+            parentProject = p;
             break;
           }
         }
-        if (!pId && UI_STATE && UI_STATE.projectId) pId = UI_STATE.projectId;
-        body.projectId = pId;
 
-        if (sessionEntry && sessionEntry.agyConversationId) {
-          adapter.sessionMap.set(sid, sessionEntry.agyConversationId);
+        if (pId && !sessionEntry) {
+          parentProject = findProject(store, pId);
+          if (parentProject) {
+            sessionEntry = normalizeSessionEntry({
+              sessionId: sid,
+              title: sid,
+              createdAt: nowIso(),
+              lastUsed: nowIso(),
+              provider: provId || parentProject.provider || "opencode"
+            });
+            parentProject.sessions = parentProject.sessions || [];
+            parentProject.sessions.push(sessionEntry);
+          }
         }
-
-        const msgResponse = await adapter.sendMessage(sid, body);
 
         if (sessionEntry) {
-          if (adapter.sessionMap.has(sid)) {
-            sessionEntry.agyConversationId = adapter.sessionMap.get(sid);
-          }
+          if (provId) sessionEntry.provider = provId;
           sessionEntry.lastUsed = nowIso();
-          saveProjectsStore(store);
+          if (!pId && parentProject) pId = parentProject.id;
         }
 
-        return json(res, 200, msgResponse);
-      } catch (e) {
-        console.error("[hub] antigravity sendMessage error:", e.message);
-        return json(res, 502, { ok: false, error: `Antigravity execution failed: ${e.message}` });
+        saveProjectsStore(store);
+      });
+
+      body.projectId = pId;
+
+      const currentStore = loadProjectsStore();
+      const adapter = providerManager.resolveProvider(sid, provId, currentStore);
+
+      // Abort controller to terminate backend execution if client closes connection
+      const abortCtrl = new AbortController();
+      req.on("close", () => {
+        if (!res.writableEnded) {
+          abortCtrl.abort();
+        }
+      });
+
+      // Pass agyConversationId to AntigravityAdapter if tracked
+      if (adapter.id === "antigravity") {
+        for (const p of currentStore.projects) {
+          const found = (p.sessions || []).find((s) => s.sessionId === sid);
+          if (found && found.agyConversationId) {
+            adapter.sessionMap.set(sid, found.agyConversationId);
+            break;
+          }
+        }
       }
+
+      console.log(`[hub] routing message for session ${sid} to provider ${adapter.id} (project: ${pId || "none"})`);
+      const msgResult = await adapter.sendMessage(sid, body, {
+        signal: abortCtrl.signal,
+        projectId: pId
+      });
+
+      // If Antigravity returned a conversationId, persist it immediately
+      if (adapter.id === "antigravity" && adapter.sessionMap.has(sid)) {
+        const agyConvId = adapter.sessionMap.get(sid);
+        await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+          const s = loadProjectsStore();
+          for (const p of s.projects) {
+            const found = (p.sessions || []).find((se) => se.sessionId === sid);
+            if (found) {
+              found.agyConversationId = agyConvId;
+              found.lastUsed = nowIso();
+              saveProjectsStore(s);
+              break;
+            }
+          }
+        });
+      }
+
+      const normalized = normalizeMessage(msgResult, sid);
+      return json(res, 200, {
+        ok: true,
+        data: normalized,
+        ...normalized
+      });
+    } catch (e) {
+      console.error(`[hub] sendMessage error for ${sid}:`, e.message);
+      const isTimeout = e.message.includes("timed out") || e.message.includes("timeout");
+      return json(res, isTimeout ? 504 : 502, {
+        ok: false,
+        error: e.message || "Message send failed"
+      });
     }
-    // If opencode, fall through to proxyToOpencode with injection!
   }
 
   // 1) opencode proxy
@@ -789,6 +876,112 @@ const server = http.createServer(async (req, res)=>{
   if(pathname==="/event" || pathname==="/global/event"){
     req.url = "/opencode" + pathname;
     return proxyToOpencode(req, res);
+  }
+
+  // 2a) System Health Diagnostic: Node.js runtime, A11y socket :8766, agy binary connectivity, Termux/Ubuntu permissions
+  if (pathname === "/api/system/health" && req.method === "GET") {
+    try {
+      const runtime = {
+        nodeVersion: process.version,
+        execPath: process.execPath,
+        pid: process.pid,
+        uptimeSeconds: Math.round(process.uptime()),
+        memoryUsage: process.memoryUsage(),
+        arch: process.arch,
+        platform: process.platform,
+        status: "ok"
+      };
+
+      // 1. Accessibility socket probe (localhost:8766)
+      const a11ySocket = await new Promise((resolve) => {
+        const r = http.get(
+          { hostname: "127.0.0.1", port: 8766, path: "/status", timeout: 2000 },
+          (resp) => {
+            let d = "";
+            resp.on("data", (c) => (d += c));
+            resp.on("end", () => {
+              try {
+                resolve({ reachable: true, statusCode: resp.statusCode, details: JSON.parse(d) });
+              } catch {
+                resolve({ reachable: true, statusCode: resp.statusCode, raw: d });
+              }
+            });
+            resp.on("error", (e) => resolve({ reachable: false, error: e.message }));
+          }
+        );
+        r.on("error", (e) => resolve({ reachable: false, error: e.message }));
+        r.setTimeout(2000, () => {
+          try { r.destroy(); } catch (_) {}
+          resolve({ reachable: false, error: "timeout" });
+        });
+      });
+
+      // 2. Connectivity with agy binary
+      const agyCheck = await new Promise((resolve) => {
+        const agyBin = fs.existsSync("/root/.local/bin/agy") ? "/root/.local/bin/agy" : "agy";
+        exec(`${agyBin} --version`, { timeout: 3500 }, (err, stdout, stderr) => {
+          if (err) {
+            resolve({ installed: false, path: agyBin, error: err.message, stderr: stderr.trim() });
+          } else {
+            resolve({ installed: true, path: agyBin, version: stdout.trim(), canExecute: true });
+          }
+        });
+      });
+
+      // 3. Execution permissions in Termux/Ubuntu
+      let canWriteTmp = false;
+      let tmpError = null;
+      try {
+        const tmpTest = `/tmp/.health_test_${Date.now()}`;
+        fs.writeFileSync(tmpTest, "ok");
+        fs.unlinkSync(tmpTest);
+        canWriteTmp = true;
+      } catch (e) {
+        tmpError = e.message;
+      }
+
+      let canWriteProjects = false;
+      let projectsError = null;
+      try {
+        const prjTest = `/sdcard/projects/opencode-companion/.health_test_${Date.now()}`;
+        fs.writeFileSync(prjTest, "ok");
+        fs.unlinkSync(prjTest);
+        canWriteProjects = true;
+      } catch (e) {
+        projectsError = e.message;
+      }
+
+      const permissions = {
+        canWriteTmp,
+        tmpError,
+        canWriteProjects,
+        projectsError,
+        uid: process.getuid ? process.getuid() : null,
+        gid: process.getgid ? process.getgid() : null,
+        isRoot: process.getuid ? process.getuid() === 0 : true,
+        cwd: process.cwd()
+      };
+
+      // 4. OpenCode daemon status
+      const ocHealth = await probeOpencodeHealth();
+
+      const isHealthy = runtime.status === "ok" && canWriteProjects && agyCheck.installed;
+
+      return json(res, 200, {
+        ok: true,
+        data: {
+          status: isHealthy ? "healthy" : "degraded",
+          timestamp: nowIso(),
+          runtime,
+          a11ySocket,
+          agy: agyCheck,
+          permissions,
+          opencode: ocHealth
+        }
+      });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: `Health check failed: ${e.message}` });
+    }
   }
 
   // 2) API hub — non-destructive session discovery
@@ -991,37 +1184,52 @@ const server = http.createServer(async (req, res)=>{
     return json(res, 200, ok(list));
   }
 
-  // POST /api/projects — create {name, description, skills?, linkedProjects?}
+  // POST /api/projects — create {name, description, instructions?, provider?, skills?, linkedProjects?}
   if(pathname==="/api/projects" && req.method==="POST"){
     try {
       const raw = await readJsonBody(req, 64*1024);
       const body = JSON.parse(raw || "{}");
       const err = validateProjectPayload(body, true);
       if (err) return json(res, 400, fail(err));
-      const store = loadProjectsStore();
-      // Duplicate name guard (case-insensitive among non-archived)
-      const normName = String(body.name).trim();
-      if (store.projects.some(p => !p.archivedAt && p.name.toLowerCase() === normName.toLowerCase())) {
-        return json(res, 409, fail(`project name "${normName}" already exists`));
+
+      const headerProv = req.headers["x-provider"] ? String(req.headers["x-provider"]).toLowerCase().trim() : null;
+      const initialProv = (body.provider && ["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim()))
+        ? String(body.provider).toLowerCase().trim()
+        : (headerProv && ["opencode", "antigravity"].includes(headerProv) ? headerProv : "opencode");
+
+      let createdProj = null;
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        const normName = String(body.name).trim();
+        if (store.projects.some(p => !p.archivedAt && p.name.toLowerCase() === normName.toLowerCase())) {
+          throw new Error(`DUPLICATE_NAME: project name "${normName}" already exists`);
+        }
+        createdProj = {
+          id: genProjectId(),
+          name: normName,
+          description: String(body.description || "").trim(),
+          instructions: String(body.instructions || "").trim(),
+          createdAt: nowIso(),
+          archivedAt: null,
+          provider: initialProv,
+          sessions: [],
+          skills: Array.isArray(body.skills) ? body.skills : [],
+          linkedProjects: Array.isArray(body.linkedProjects) ? body.linkedProjects : []
+        };
+        store.projects.push(createdProj);
+        saveProjectsStore(store);
+      });
+
+      return json(res, 201, { ok: true, data: createdProj });
+    } catch (e) {
+      if (String(e.message).includes("DUPLICATE_NAME")) {
+        return json(res, 409, fail(e.message));
       }
-      const proj = {
-        id: genProjectId(),
-        name: normName,
-        description: String(body.description || "").trim(),
-        createdAt: nowIso(),
-        archivedAt: null,
-        provider: (body.provider && ["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim())) ? String(body.provider).toLowerCase().trim() : "opencode",
-        sessions: [],
-        skills: Array.isArray(body.skills) ? body.skills : [],
-        linkedProjects: Array.isArray(body.linkedProjects) ? body.linkedProjects : []
-      };
-      store.projects.push(proj);
-      saveProjectsStore(store);
-      return json(res, 201, ok(proj));
-    } catch (e) { return json(res, 500, fail(String(e))); }
+      return json(res, 500, fail(String(e)));
+    }
   }
 
-  // PATCH /api/projects/:id — update name/description/archive (archivedAt toggle), also skills/linked
+  // PATCH /api/projects/:id — update name/description/instructions/archive (archivedAt toggle), also skills/linked
   if(pathname.startsWith("/api/projects/") && req.method==="PATCH" && !pathname.includes("/sessions")){
     const m = pathname.match(/^\/api\/projects\/([^\/]+)$/);
     if (!m) return json(res, 404, fail("not found"));
@@ -1031,40 +1239,54 @@ const server = http.createServer(async (req, res)=>{
       const body = JSON.parse(raw || "{}");
       const err = validateProjectPayload(body, false);
       if (err) return json(res, 400, fail(err));
-      const store = loadProjectsStore();
-      const proj = findProject(store, id);
-      if (!proj) return json(res, 404, fail(`project ${id} not found`));
-      if (body.name !== undefined) {
-        const newName = String(body.name).trim();
-        if (!newName) return json(res, 400, fail("name cannot be empty"));
-        // Duplicate guard excluding self
-        if (store.projects.some(p => p.id !== id && !p.archivedAt && p.name.toLowerCase() === newName.toLowerCase())) {
-          return json(res, 409, fail(`project name "${newName}" already exists`));
+
+      const headerProv = req.headers["x-provider"] ? String(req.headers["x-provider"]).toLowerCase().trim() : null;
+
+      let updatedProj = null;
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        const proj = findProject(store, id);
+        if (!proj) throw new Error(`NOT_FOUND: project ${id} not found`);
+
+        if (body.name !== undefined) {
+          const newName = String(body.name).trim();
+          if (!newName) throw new Error("VALIDATION: name cannot be empty");
+          if (store.projects.some(p => p.id !== id && !p.archivedAt && p.name.toLowerCase() === newName.toLowerCase())) {
+            throw new Error(`DUPLICATE: project name "${newName}" already exists`);
+          }
+          proj.name = newName;
         }
-        proj.name = newName;
-      }
-      if (body.description !== undefined) proj.description = String(body.description || "").trim();
-      if (body.provider !== undefined) {
-        const prov = String(body.provider).toLowerCase().trim();
-        if (["opencode", "antigravity"].includes(prov)) proj.provider = prov;
-      }
-      if (body.archived !== undefined || body.archivedAt !== undefined) {
-        // archived boolean toggles archivedAt timestamp (soft delete spec)
-        const shouldArchive = body.archived === true || (body.archivedAt !== undefined && body.archivedAt !== null);
-        if (shouldArchive && !proj.archivedAt) proj.archivedAt = nowIso();
-        else if (!shouldArchive) proj.archivedAt = null;
-        else if (body.archivedAt) proj.archivedAt = body.archivedAt;
-      }
-      if (body.skills !== undefined) proj.skills = Array.isArray(body.skills) ? body.skills : [];
-      if (body.linkedProjects !== undefined) proj.linkedProjects = Array.isArray(body.linkedProjects) ? body.linkedProjects : [];
-      if (body.sessions !== undefined) {
-        // Allow bulk replace sessions (admin) — normalize each
-        if (!Array.isArray(body.sessions)) return json(res, 400, fail("sessions must be array"));
-        proj.sessions = body.sessions.map(normalizeSessionEntry).filter(s => s.sessionId);
-      }
-      saveProjectsStore(store);
-      return json(res, 200, ok(proj));
-    } catch (e) { return json(res, 500, fail(String(e))); }
+        if (body.description !== undefined) proj.description = String(body.description || "").trim();
+        if (body.instructions !== undefined) proj.instructions = String(body.instructions || "").trim();
+        if (body.provider !== undefined) {
+          const prov = String(body.provider).toLowerCase().trim();
+          if (["opencode", "antigravity"].includes(prov)) proj.provider = prov;
+        } else if (headerProv && ["opencode", "antigravity"].includes(headerProv)) {
+          proj.provider = headerProv;
+        }
+        if (body.archived !== undefined || body.archivedAt !== undefined) {
+          const shouldArchive = body.archived === true || (body.archivedAt !== undefined && body.archivedAt !== null);
+          if (shouldArchive && !proj.archivedAt) proj.archivedAt = nowIso();
+          else if (!shouldArchive) proj.archivedAt = null;
+          else if (body.archivedAt) proj.archivedAt = body.archivedAt;
+        }
+        if (body.skills !== undefined) proj.skills = Array.isArray(body.skills) ? body.skills : [];
+        if (body.linkedProjects !== undefined) proj.linkedProjects = Array.isArray(body.linkedProjects) ? body.linkedProjects : [];
+        if (body.sessions !== undefined) {
+          if (!Array.isArray(body.sessions)) throw new Error("VALIDATION: sessions must be array");
+          proj.sessions = body.sessions.map(normalizeSessionEntry).filter(s => s.sessionId);
+        }
+        saveProjectsStore(store);
+        updatedProj = proj;
+      });
+
+      return json(res, 200, { ok: true, data: updatedProj });
+    } catch (e) {
+      if (e.message.startsWith("NOT_FOUND")) return json(res, 404, fail(e.message));
+      if (e.message.startsWith("DUPLICATE")) return json(res, 409, fail(e.message));
+      if (e.message.startsWith("VALIDATION")) return json(res, 400, fail(e.message));
+      return json(res, 500, fail(String(e)));
+    }
   }
 
   // DELETE /api/projects/:id — soft delete: set archivedAt timestamp (spec 2)
@@ -1072,13 +1294,23 @@ const server = http.createServer(async (req, res)=>{
     const m = pathname.match(/^\/api\/projects\/([^\/]+)$/);
     if (!m) return json(res, 404, fail("not found"));
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
-    const store = loadProjectsStore();
-    const proj = findProject(store, id);
-    if (!proj) return json(res, 404, fail(`project ${id} not found`));
-    if (proj.archivedAt) return json(res, 200, ok(proj)); // already archived idempotent
-    proj.archivedAt = nowIso();
-    saveProjectsStore(store);
-    return json(res, 200, ok(proj));
+    try {
+      let resultProj = null;
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        const proj = findProject(store, id);
+        if (!proj) throw new Error(`NOT_FOUND: project ${id} not found`);
+        if (!proj.archivedAt) {
+          proj.archivedAt = nowIso();
+          saveProjectsStore(store);
+        }
+        resultProj = proj;
+      });
+      return json(res, 200, { ok: true, data: resultProj });
+    } catch (e) {
+      if (e.message.startsWith("NOT_FOUND")) return json(res, 404, fail(e.message));
+      return json(res, 500, fail(String(e)));
+    }
   }
 
   // GET /api/projects/:id/sessions — list sessions for a project
@@ -1088,47 +1320,64 @@ const server = http.createServer(async (req, res)=>{
     const store = loadProjectsStore();
     const proj = findProject(store, id);
     if (!proj) return json(res, 404, fail(`project ${id} not found`));
-    // Return sessions sorted by lastUsed desc
     const sorted = [...(proj.sessions || [])].sort((a,b) => (b.lastUsed || b.createdAt || "").localeCompare(a.lastUsed || a.createdAt || ""));
-    return json(res, 200, ok(sorted));
+    return json(res, 200, { ok: true, data: sorted });
   }
 
-  // POST /api/projects/:id/sessions — associate existing opencode sessionId to project (spec 2)
-  // Body: {sessionId, title?, summary?} — sessionId is opencode session id to link
+  // POST /api/projects/:id/sessions — associate existing opencode sessionId to project (or create new if empty)
+  // Body: {sessionId?, title?, summary?, provider?, agyConversationId?}
   if(pathname.match(/^\/api\/projects\/[^\/]+\/sessions$/) && req.method==="POST"){
     try {
       const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions$/);
       const id = sanitizeProjectId(decodeURIComponent(m[1]));
       const raw = await readJsonBody(req, 64*1024);
       const body = JSON.parse(raw || "{}");
-      const sessionId = String(body.sessionId || body.id || "").trim();
-      if (!sessionId) return json(res, 400, fail("sessionId required"));
-      const store = loadProjectsStore();
-      const proj = findProject(store, id);
-      if (!proj) return json(res, 404, fail(`project ${id} not found`));
-      if (proj.archivedAt) return json(res, 409, fail(`project ${id} is archived`));
-      // Avoid duplicate association in same project
-      if ((proj.sessions || []).some(s => s.sessionId === sessionId)) {
-        return json(res, 409, fail(`session ${sessionId} already associated to project ${id}`));
-      }
-      // Remove association from other projects if any (ensure session belongs to at most one project)
-      for (const p of store.projects) {
-        if (p.id !== id) p.sessions = (p.sessions || []).filter(s => s.sessionId !== sessionId);
-      }
-      const entry = normalizeSessionEntry({
-        sessionId,
-        title: body.title,
-        summary: body.summary,
-        createdAt: body.createdAt,
-        lastUsed: body.lastUsed,
-        provider: body.provider || proj.provider || "opencode",
-        agyConversationId: body.agyConversationId
+      let sessionId = String(body.sessionId || body.id || "").trim();
+      const headerProv = req.headers["x-provider"] ? String(req.headers["x-provider"]).toLowerCase().trim() : null;
+
+      let createdEntry = null;
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        const proj = findProject(store, id);
+        if (!proj) throw new Error(`NOT_FOUND: project ${id} not found`);
+        if (proj.archivedAt) throw new Error(`ARCHIVED: project ${id} is archived`);
+
+        if (!sessionId) {
+          const provId = body.provider || headerProv || proj.provider || "opencode";
+          const adapter = providerManager.resolveProvider(null, provId, store);
+          const autoTitle = body.title || `companion:${proj.name}:${Date.now() % 100000}`;
+          const created = await adapter.createSession({ title: autoTitle, projectId: id });
+          sessionId = created.id;
+          body.title = created.title || autoTitle;
+          body.createdAt = created.createdAt || nowIso();
+        }
+
+        if ((proj.sessions || []).some(s => s.sessionId === sessionId)) {
+          throw new Error(`DUPLICATE: session ${sessionId} already associated to project ${id}`);
+        }
+        for (const p of store.projects) {
+          if (p.id !== id) p.sessions = (p.sessions || []).filter(s => s.sessionId !== sessionId);
+        }
+        createdEntry = normalizeSessionEntry({
+          sessionId,
+          title: body.title,
+          summary: body.summary,
+          createdAt: body.createdAt || nowIso(),
+          lastUsed: body.lastUsed || nowIso(),
+          provider: body.provider || headerProv || proj.provider || "opencode",
+          agyConversationId: body.agyConversationId
+        });
+        proj.sessions = proj.sessions || [];
+        proj.sessions.push(createdEntry);
+        saveProjectsStore(store);
       });
-      proj.sessions = proj.sessions || [];
-      proj.sessions.push(entry);
-      saveProjectsStore(store);
-      return json(res, 201, ok(entry));
-    } catch (e) { return json(res, 500, fail(String(e))); }
+
+      return json(res, 201, { ok: true, data: createdEntry, sessionId: createdEntry.sessionId, id: createdEntry.sessionId });
+    } catch (e) {
+      if (e.message.startsWith("NOT_FOUND")) return json(res, 404, fail(e.message));
+      if (e.message.startsWith("ARCHIVED") || e.message.startsWith("DUPLICATE")) return json(res, 409, fail(e.message));
+      return json(res, 500, fail(String(e)));
+    }
   }
 
   // PATCH /api/projects/:id/sessions/:sessionId — update session title, summary, or provider
@@ -1136,29 +1385,38 @@ const server = http.createServer(async (req, res)=>{
     const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions\/([^\/]+)$/);
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
     const sessionId = sanitizeProjectId(decodeURIComponent(m[2]));
-    const store = loadProjectsStore();
-    const proj = findProject(store, id);
-    if (!proj) return json(res, 404, fail(`project ${id} not found`));
-    const sess = (proj.sessions || []).find(s => s.sessionId === sessionId);
-    if (!sess) return json(res, 404, fail(`session ${sessionId} not found in project ${id}`));
     try {
       const raw = await readJsonBody(req, 64*1024);
       const body = JSON.parse(raw || "{}");
-      if (body.title !== undefined) sess.title = String(body.title).trim();
-      if (body.summary !== undefined) sess.summary = String(body.summary).trim();
-      if (body.provider !== undefined) {
-        const prov = String(body.provider).toLowerCase().trim();
-        if (!["opencode", "antigravity"].includes(prov)) {
-          return json(res, 400, fail("invalid provider: must be 'opencode' or 'antigravity'"));
+      let updatedSess = null;
+
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        const proj = findProject(store, id);
+        if (!proj) throw new Error(`NOT_FOUND: project ${id} not found`);
+        const sess = (proj.sessions || []).find(s => s.sessionId === sessionId);
+        if (!sess) throw new Error(`NOT_FOUND_SESSION: session ${sessionId} not found in project ${id}`);
+
+        if (body.title !== undefined) sess.title = String(body.title).trim();
+        if (body.summary !== undefined) sess.summary = String(body.summary).trim();
+        if (body.provider !== undefined) {
+          const prov = String(body.provider).toLowerCase().trim();
+          if (!["opencode", "antigravity"].includes(prov)) {
+            throw new Error("VALIDATION: invalid provider: must be 'opencode' or 'antigravity'");
+          }
+          sess.provider = prov;
         }
-        sess.provider = prov;
-      }
-      if (body.agyConversationId !== undefined) {
-        sess.agyConversationId = String(body.agyConversationId).trim();
-      }
-      saveProjectsStore(store);
-      return json(res, 200, ok(sess));
+        if (body.agyConversationId !== undefined) {
+          sess.agyConversationId = String(body.agyConversationId).trim();
+        }
+        saveProjectsStore(store);
+        updatedSess = sess;
+      });
+
+      return json(res, 200, { ok: true, data: updatedSess });
     } catch (e) {
+      if (e.message.startsWith("NOT_FOUND")) return json(res, 404, fail(e.message));
+      if (e.message.startsWith("VALIDATION")) return json(res, 400, fail(e.message));
       return json(res, 500, fail(String(e)));
     }
   }
@@ -1168,14 +1426,21 @@ const server = http.createServer(async (req, res)=>{
     const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions\/([^\/]+)$/);
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
     const sessionId = sanitizeProjectId(decodeURIComponent(m[2]));
-    const store = loadProjectsStore();
-    const proj = findProject(store, id);
-    if (!proj) return json(res, 404, fail(`project ${id} not found`));
-    const before = (proj.sessions || []).length;
-    proj.sessions = (proj.sessions || []).filter(s => s.sessionId !== sessionId);
-    if (proj.sessions.length === before) return json(res, 404, fail(`session ${sessionId} not found in project ${id}`));
-    saveProjectsStore(store);
-    return json(res, 200, ok({ removed: sessionId, projectId: id }));
+    try {
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        const proj = findProject(store, id);
+        if (!proj) throw new Error(`NOT_FOUND: project ${id} not found`);
+        const before = (proj.sessions || []).length;
+        proj.sessions = (proj.sessions || []).filter(s => s.sessionId !== sessionId);
+        if (proj.sessions.length === before) throw new Error(`NOT_FOUND_SESSION: session ${sessionId} not found in project ${id}`);
+        saveProjectsStore(store);
+      });
+      return json(res, 200, { ok: true, data: { removed: sessionId, projectId: id } });
+    } catch (e) {
+      if (e.message.startsWith("NOT_FOUND")) return json(res, 404, fail(e.message));
+      return json(res, 500, fail(String(e)));
+    }
   }
 
   // ---- Skills + Cross-Project Context + Session Summaries ----
@@ -1279,9 +1544,100 @@ const server = http.createServer(async (req, res)=>{
   if((pathname==="/api/opencode/sessions" || pathname==="/api/sessions") && req.method==="GET"){
     try {
       const list = await providerManager.listAllSessions();
+      // Overlay custom titles from projects.json
+      try {
+        const store = loadProjectsStore();
+        const customTitles = new Map();
+        for (const p of store.projects) {
+          for (const s of (p.sessions || [])) {
+            if (s.title) customTitles.set(s.sessionId, s.title);
+          }
+        }
+        for (const item of list) {
+          if (customTitles.has(item.id)) {
+            item.title = customTitles.get(item.id);
+          }
+        }
+      } catch (_) {}
       return json(res, 200, ok(list));
     } catch (e) {
       return json(res, 500, fail(`list sessions failed: ${String(e).slice(0,400)}`));
+    }
+  }
+
+  // PATCH /api/opencode/sessions/:id (and PATCH /api/sessions/:id) — rename session atomically
+  const patchSessionMatch = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)$/);
+  if (patchSessionMatch && req.method === "PATCH") {
+    const sid = sanitizeProjectId(decodeURIComponent(patchSessionMatch[1]));
+    try {
+      const raw = await readJsonBody(req, 64 * 1024);
+      const body = JSON.parse(raw || "{}");
+      const newTitle = String(body.title || body.name || "").trim();
+      if (!newTitle) return json(res, 400, fail("title required"));
+
+      let updatedInProjects = false;
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        for (const p of store.projects) {
+          for (const s of (p.sessions || [])) {
+            if (s.sessionId === sid) {
+              s.title = newTitle;
+              s.lastUsed = nowIso();
+              updatedInProjects = true;
+            }
+          }
+        }
+        if (updatedInProjects) {
+          saveProjectsStore(store);
+        }
+      });
+
+      // Also forward rename to provider adapter (opencode)
+      const adapter = providerManager.resolveProvider(sid);
+      try {
+        if (adapter && typeof adapter.renameSession === "function") {
+          await adapter.renameSession(sid, newTitle);
+        }
+      } catch (adapterErr) {
+        console.warn(`[hub] adapter.renameSession failed for ${sid}:`, adapterErr.message);
+      }
+
+      return json(res, 200, ok({ id: sid, sessionId: sid, title: newTitle }));
+    } catch (e) {
+      return json(res, 500, fail(`rename session failed: ${String(e)}`));
+    }
+  }
+
+  // DELETE /api/opencode/sessions/:id (and DELETE /api/sessions/:id) — delete session atomically
+  const deleteSessionMatch = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)$/);
+  if (deleteSessionMatch && req.method === "DELETE") {
+    const sid = sanitizeProjectId(decodeURIComponent(deleteSessionMatch[1]));
+    try {
+      // Remove from any project in projects.json
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        let changed = false;
+        for (const p of store.projects) {
+          const before = (p.sessions || []).length;
+          p.sessions = (p.sessions || []).filter(s => s.sessionId !== sid);
+          if (p.sessions.length !== before) changed = true;
+        }
+        if (changed) saveProjectsStore(store);
+      });
+
+      // Call provider adapter deleteSession
+      const adapter = providerManager.resolveProvider(sid);
+      try {
+        if (adapter && typeof adapter.deleteSession === "function") {
+          await adapter.deleteSession(sid);
+        }
+      } catch (adapterErr) {
+        console.warn(`[hub] adapter.deleteSession failed for ${sid}:`, adapterErr.message);
+      }
+
+      return json(res, 200, ok({ removed: sid }));
+    } catch (e) {
+      return json(res, 500, fail(`delete session failed: ${String(e)}`));
     }
   }
 
@@ -1290,6 +1646,48 @@ const server = http.createServer(async (req, res)=>{
     const m = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)\/messages$/);
     const sid = sanitizeProjectId(decodeURIComponent(m[1]));
     try {
+      const headerProvider = req.headers["x-provider"] ? String(req.headers["x-provider"]).toLowerCase().trim() : null;
+      const headerProjectId = req.headers["x-project-id"] ? sanitizeProjectId(decodeURIComponent(req.headers["x-project-id"])) : null;
+
+      if (headerProvider || headerProjectId) {
+        await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+          const s = loadProjectsStore();
+          let parentProj = null;
+          let sessionEntry = null;
+
+          for (const p of s.projects) {
+            const found = (p.sessions || []).find(se => se.sessionId === sid);
+            if (found) {
+              sessionEntry = found;
+              parentProj = p;
+              break;
+            }
+          }
+
+          if (headerProjectId && !sessionEntry) {
+            parentProj = findProject(s, headerProjectId);
+            if (parentProj && !parentProj.archivedAt) {
+              sessionEntry = normalizeSessionEntry({
+                sessionId: sid,
+                title: sid,
+                createdAt: nowIso(),
+                lastUsed: nowIso(),
+                provider: headerProvider || parentProj.provider || "opencode"
+              });
+              parentProj.sessions = parentProj.sessions || [];
+              parentProj.sessions.push(sessionEntry);
+            }
+          }
+
+          if (sessionEntry) {
+            if (headerProvider) sessionEntry.provider = headerProvider;
+            sessionEntry.lastUsed = nowIso();
+          }
+
+          saveProjectsStore(s);
+        });
+      }
+
       // Sync agyConversationId if stored in projects.json
       const store = loadProjectsStore();
       for (const p of store.projects) {
@@ -1299,10 +1697,18 @@ const server = http.createServer(async (req, res)=>{
         }
       }
 
-      const list = await providerManager.getUnifiedMessages(sid);
-      return json(res, 200, ok(list));
+      const abortCtrl = new AbortController();
+      req.on("close", () => {
+        if (!res.writableEnded) abortCtrl.abort();
+      });
+
+      const list = await providerManager.getUnifiedMessages(sid, { signal: abortCtrl.signal });
+      const normalizedList = (Array.isArray(list) ? list : []).map((msg, idx) => normalizeMessage(msg, sid, idx));
+
+      return json(res, 200, { ok: true, data: normalizedList });
     } catch (e) {
-      return json(res, 502, fail(`get messages failed: ${String(e).slice(0,400)}`));
+      console.error(`[hub] getMessages error for ${sid}:`, e.message);
+      return json(res, 502, { ok: false, error: `get messages failed: ${String(e.message || e).slice(0,400)}` });
     }
   }
 

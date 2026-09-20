@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.opencode.companion.data.Project
 import com.opencode.companion.ui.theme.AgyBadgeBg
 import com.opencode.companion.ui.theme.AgyBadgeBorder
@@ -197,50 +198,40 @@ fun ProjectsScreen(
                                                 onLongClick = { menuTarget = proj }
                                             )
                                     ) {
-                                        Row(
+                                        Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 14.dp, vertical = 13.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
+                                            Text(
+                                                text = proj.name,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = MaterialTheme.typography.bodyLarge.copy(
+                                                    fontSize = 15.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                ),
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                             Row(
+                                                modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                modifier = Modifier.weight(1f, fill = false)
+                                                horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
-                                                Icon(
-                                                    Icons.Outlined.Folder,
-                                                    contentDescription = "Proyecto",
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Text(
-                                                    proj.name,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    modifier = Modifier.weight(1f, fill = false)
-                                                )
                                                 val timeStr = relativeTime(proj.createdAt)
+                                                val metaText = if (!proj.description.isNullOrBlank()) "$timeStr · ${proj.description}" else timeStr
                                                 Text(
-                                                    " ◦ $timeStr",
+                                                    text = metaText,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false)
                                                 )
-                                                if (!proj.description.isNullOrBlank()) {
-                                                    Text(
-                                                        " · ${proj.description}",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
+                                                ProviderBadge(proj.resolvedProvider)
                                             }
-                                            ProviderBadge(proj.resolvedProvider)
                                         }
                                     }
 

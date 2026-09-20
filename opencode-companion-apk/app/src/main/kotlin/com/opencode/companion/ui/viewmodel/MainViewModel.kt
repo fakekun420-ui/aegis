@@ -112,21 +112,69 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    fun renameSession(sessionId: String, newTitle: String) {
+        viewModelScope.launch {
+            // Optimistic in-memory update
+            val current = _sessions.value
+            _sessions.value = current.map {
+                if (it.resolvedId == sessionId) it.copy(title = newTitle, name = newTitle) else it
+            }
+            try {
+                val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    api.renameSession(sessionId, mapOf("title" to newTitle))
+                }
+                if (resp.ok) {
+                    refreshAll()
+                } else {
+                    _error.value = resp.error ?: "Error renombrando sesión"
+                    refreshSessions()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error renombrando sesión"
+                refreshSessions()
+            }
+        }
+    }
+
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            // Optimistic in-memory removal
+            val current = _sessions.value
+            _sessions.value = current.filter { it.resolvedId != sessionId }
+            try {
+                val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    api.deleteSession(sessionId)
+                }
+                if (resp.ok) {
+                    refreshAll()
+                } else {
+                    _error.value = resp.error ?: "Error eliminando sesión"
+                    refreshSessions()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error eliminando sesión"
+                refreshSessions()
+            }
+        }
+    }
+
     suspend fun createSessionForProject(projectId: String, title: String): String? {
         return try {
             val proj = _projects.value.find { it.id == projectId }
             val provider = proj?.provider ?: "opencode"
-            val sid = createSessionViaHub(title, projectId, provider)
+            val sid = createSessionViaHub(title, projectId.ifBlank { null }, provider)
             if (sid != null) {
-                try { api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider)) } catch (_: Exception) {}
+                if (projectId.isNotBlank()) {
+                    try { api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider)) } catch (_: Exception) {}
+                }
                 refreshSessions(); refreshProjects()
             }
             sid
         } catch (e: Exception) { _error.value = e.message; null }
     }
 
-    private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? {
-        return try {
+    private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
             val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":\"${projectId ?: ""}\",\"provider\":\"$provider\"}"
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:8765/opencode/session")

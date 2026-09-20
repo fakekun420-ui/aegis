@@ -18,6 +18,12 @@ interface ApiService {
     @GET("api/opencode/sessions")
     suspend fun getOpencodeSessions(): Envelope<List<OpencodeSession>>
 
+    @PATCH("api/opencode/sessions/{id}")
+    suspend fun renameSession(@Path("id") id: String, @Body body: Map<String, String>): Envelope<Map<String, Any>>
+
+    @DELETE("api/opencode/sessions/{id}")
+    suspend fun deleteSession(@Path("id") id: String): Envelope<Map<String, Any>>
+
     @POST("api/projects/{id}/sessions")
     suspend fun linkSession(@Path("id") projectId: String, @Body body: LinkSessionRequest): Envelope<SessionRef>
 

@@ -1,5 +1,6 @@
 // providers.js — Universal AI Coding Agent Provider Abstraction
-// Supports OpenCode (HTTP serve proxy) and Antigravity (agy CLI non-interactive)
+// Robust adapter layer for OpenCode (HTTP serve mode) and Antigravity (agy CLI print/json mode)
+// Hard 90s timeouts, connection leak prevention, zombie process cleanup, atomic concurrency.
 
 import http from "node:http";
 import fs from "node:fs";
@@ -7,8 +8,156 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 // ==========================================
+// Atomic Storage & Concurrency Utilities
+// ==========================================
+
+export class FileMutex {
+  constructor() {
+    this.queues = new Map();
+  }
+
+  async runExclusive(filePath, fn) {
+    const key = path.resolve(filePath);
+    let queue = this.queues.get(key) || Promise.resolve();
+    const next = queue.then(async () => {
+      try {
+        return await fn();
+      } finally {
+        if (this.queues.get(key) === next) {
+          this.queues.delete(key);
+        }
+      }
+    });
+    this.queues.set(key, next.catch(() => {}));
+    return next;
+  }
+}
+
+export const fileMutex = new FileMutex();
+
+export function atomicReadFileSync(filePath, fallback = null) {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    const content = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(content);
+  } catch (e) {
+    console.error(`[storage] atomicReadFileSync error reading ${filePath}:`, e.message);
+    return fallback;
+  }
+}
+
+export function atomicWriteFileSync(filePath, data) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const tmpFile = path.join(
+    dir,
+    `.${path.basename(filePath)}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`
+  );
+  const content = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  const fd = fs.openSync(tmpFile, "w");
+  try {
+    fs.writeFileSync(fd, content, "utf8");
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.renameSync(tmpFile, filePath);
+}
+
+// ==========================================
+// Message Normalizer (Strict Typing)
+// Conforms to docs/FRONTEND_CONTRACT.md and Android Models.kt
+// ==========================================
+
+export function normalizeMessage(raw, sessionId = "", index = 0) {
+  if (!raw || typeof raw !== "object") {
+    const text = String(raw || "");
+    const now = Date.now();
+    return {
+      role: "assistant",
+      text,
+      info: {
+        id: `msg_${sessionId || "hub"}_${now}_${index}`,
+        role: "assistant",
+        timestamp: now,
+        time: { created: now },
+        status: "SENT",
+        deliveryStatus: "SENT"
+      },
+      parts: [{ id: `prt_${now}_${index}`, type: "text", text }]
+    };
+  }
+
+  // Extract role
+  let role = raw.role || raw.info?.role || (raw.type === "user" ? "user" : "assistant");
+  if (role !== "user" && role !== "assistant") role = "assistant";
+
+  // Extract timestamp
+  const timestamp =
+    raw.info?.timestamp ||
+    raw.info?.time?.created ||
+    raw.timestamp ||
+    raw.time?.created ||
+    Date.now();
+
+  // Extract text
+  let text = "";
+  if (typeof raw.text === "string") {
+    text = raw.text;
+  } else if (typeof raw.response === "string") {
+    text = raw.response;
+  } else if (Array.isArray(raw.parts)) {
+    text = raw.parts
+      .filter((p) => p && (p.type === "text" || !p.type) && typeof p.text === "string")
+      .map((p) => p.text)
+      .join("\n");
+  }
+
+  // Extract / normalize parts
+  let parts = [];
+  if (Array.isArray(raw.parts) && raw.parts.length > 0) {
+    parts = raw.parts.map((p, pIdx) => ({
+      id: p.id || `prt_${timestamp}_${pIdx}`,
+      type: p.type || "text",
+      text: p.text || (typeof p === "string" ? p : ""),
+      ...(p.mime ? { mime: p.mime } : {}),
+      ...(p.filename ? { filename: p.filename } : {}),
+      ...(p.url ? { url: p.url } : {})
+    }));
+  } else {
+    parts = [{ id: `prt_${timestamp}_0`, type: "text", text }];
+  }
+
+  const id = raw.info?.id || raw.id || `msg_${sessionId || "hub"}_${timestamp}_${index}`;
+  const status = raw.info?.status || raw.info?.deliveryStatus || "SENT";
+
+  const normalized = {
+    role,
+    text,
+    info: {
+      id,
+      role,
+      timestamp,
+      time: { created: timestamp },
+      status,
+      deliveryStatus: status
+    },
+    parts
+  };
+
+  if (raw._agyMeta) {
+    normalized._agyMeta = raw._agyMeta;
+  }
+
+  return normalized;
+}
+
+// ==========================================
 // Base Provider Adapter Interface
 // ==========================================
+
 export class BaseProviderAdapter {
   constructor(id, name, type = "cli") {
     this.id = id;
@@ -28,12 +177,20 @@ export class BaseProviderAdapter {
     throw new Error(`createSession() not implemented on ${this.name}`);
   }
 
-  async getMessages(sessionId) {
+  async getMessages(sessionId, opts = {}) {
     throw new Error(`getMessages() not implemented on ${this.name}`);
   }
 
-  async sendMessage(sessionId, payload = {}) {
+  async sendMessage(sessionId, payload = {}, opts = {}) {
     throw new Error(`sendMessage() not implemented on ${this.name}`);
+  }
+
+  async renameSession(sessionId, title) {
+    return { id: sessionId, title };
+  }
+
+  async deleteSession(sessionId) {
+    return { id: sessionId, deleted: true };
   }
 
   async listModels() {
@@ -44,6 +201,7 @@ export class BaseProviderAdapter {
 // ==========================================
 // OpenCode Adapter (HTTP Serve Mode)
 // ==========================================
+
 export class OpencodeAdapter extends BaseProviderAdapter {
   constructor(options = {}) {
     super("opencode", "OpenCode", "serve");
@@ -54,23 +212,43 @@ export class OpencodeAdapter extends BaseProviderAdapter {
 
   async isHealthy() {
     return new Promise((resolve) => {
+      let resolved = false;
       const r = http.get(
-        { hostname: this.host, port: this.port, path: "/global/health", timeout: 2500 },
+        {
+          hostname: this.host,
+          port: this.port,
+          path: "/global/health",
+          timeout: 2500,
+          headers: { Connection: "close" }
+        },
         (res) => {
           let d = "";
           res.on("data", (c) => (d += c));
           res.on("end", () => {
+            if (resolved) return;
+            resolved = true;
             try {
               const j = JSON.parse(d);
               resolve({ up: true, healthy: !!j.healthy, version: j.version || null });
             } catch {
-              resolve({ up: true, healthy: false, version: null });
+              resolve({ up: res.statusCode === 200, healthy: false, version: null });
             }
+          });
+          res.on("error", (e) => {
+            if (resolved) return;
+            resolved = true;
+            resolve({ up: false, healthy: false, error: e.message });
           });
         }
       );
-      r.on("error", (e) => resolve({ up: false, healthy: false, error: e.message }));
+      r.on("error", (e) => {
+        if (resolved) return;
+        resolved = true;
+        resolve({ up: false, healthy: false, error: e.message });
+      });
       r.setTimeout(2500, () => {
+        if (resolved) return;
+        resolved = true;
         try { r.destroy(); } catch (_) {}
         resolve({ up: false, healthy: false, error: "timeout" });
       });
@@ -79,32 +257,58 @@ export class OpencodeAdapter extends BaseProviderAdapter {
 
   async listSessions() {
     return new Promise((resolve, reject) => {
+      let resolved = false;
       const r = http.get(
-        { hostname: this.host, port: this.port, path: "/session", timeout: 5000 },
+        {
+          hostname: this.host,
+          port: this.port,
+          path: "/session",
+          timeout: 8000,
+          headers: { Connection: "close" }
+        },
         (res) => {
           let d = "";
           res.on("data", (c) => (d += c));
           res.on("end", () => {
+            if (resolved) return;
+            resolved = true;
             try {
               const payload = JSON.parse(d || "[]");
-              const rawList = Array.isArray(payload) ? payload : (payload.sessions || payload.data || []);
+              const rawList = Array.isArray(payload)
+                ? payload
+                : (payload.sessions || payload.data || []);
               const normalized = rawList.map((s) => ({
                 id: s.id || s.ID || "",
                 title: s.title || s.name || s.id || "untitled",
-                createdAt: s.time?.created ? new Date(s.time.created).toISOString() : (s.createdAt || s.created_at || new Date().toISOString()),
-                updatedAt: s.time?.updated ? new Date(s.time.updated).toISOString() : (s.updatedAt || s.updated_at || s.createdAt || new Date().toISOString()),
+                createdAt: s.time?.created
+                  ? new Date(s.time.created).toISOString()
+                  : (s.createdAt || s.created_at || new Date().toISOString()),
+                updatedAt: s.time?.updated
+                  ? new Date(s.time.updated).toISOString()
+                  : (s.updatedAt || s.updated_at || s.createdAt || new Date().toISOString()),
                 provider: "opencode",
                 raw: s
               }));
               resolve(normalized);
             } catch (e) {
-              reject(e);
+              reject(new Error(`Failed to parse OpenCode sessions: ${e.message}`));
             }
+          });
+          res.on("error", (e) => {
+            if (resolved) return;
+            resolved = true;
+            reject(e);
           });
         }
       );
-      r.on("error", reject);
-      r.setTimeout(5000, () => {
+      r.on("error", (e) => {
+        if (resolved) return;
+        resolved = true;
+        reject(e);
+      });
+      r.setTimeout(8000, () => {
+        if (resolved) return;
+        resolved = true;
         try { r.destroy(); } catch (_) {}
         reject(new Error("timeout GET /session"));
       });
@@ -115,6 +319,7 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     const title = opts.title || `session:${Date.now().toString(36)}`;
     const postData = JSON.stringify({ title });
     return new Promise((resolve, reject) => {
+      let resolved = false;
       const req = http.request(
         {
           hostname: this.host,
@@ -123,7 +328,8 @@ export class OpencodeAdapter extends BaseProviderAdapter {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(postData)
+            "Content-Length": Buffer.byteLength(postData),
+            Connection: "close"
           },
           timeout: 8000
         },
@@ -131,6 +337,8 @@ export class OpencodeAdapter extends BaseProviderAdapter {
           let d = "";
           res.on("data", (c) => (d += c));
           res.on("end", () => {
+            if (resolved) return;
+            resolved = true;
             try {
               const j = JSON.parse(d || "{}");
               const id = j.id || j.ID || (j.data && (j.data.id || j.data.ID)) || null;
@@ -143,13 +351,24 @@ export class OpencodeAdapter extends BaseProviderAdapter {
                 raw: j
               });
             } catch (e) {
-              reject(e);
+              reject(new Error(`Failed to parse createSession response: ${e.message}`));
             }
+          });
+          res.on("error", (e) => {
+            if (resolved) return;
+            resolved = true;
+            reject(e);
           });
         }
       );
-      req.on("error", reject);
+      req.on("error", (e) => {
+        if (resolved) return;
+        resolved = true;
+        reject(e);
+      });
       req.setTimeout(8000, () => {
+        if (resolved) return;
+        resolved = true;
         try { req.destroy(); } catch (_) {}
         reject(new Error("timeout POST /session"));
       });
@@ -158,69 +377,20 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     });
   }
 
-  async getMessages(sessionId) {
+  async renameSession(sessionId, title) {
     return new Promise((resolve, reject) => {
-      const r = http.get(
-        {
-          hostname: this.host,
-          port: this.port,
-          path: `/session/${encodeURIComponent(sessionId)}/message`,
-          timeout: 8000
-        },
-        (res) => {
-          let d = "";
-          res.on("data", (c) => (d += c));
-          res.on("end", () => {
-            try {
-              let payload;
-              try { payload = JSON.parse(d || "[]"); } catch { payload = d; }
-              const list = Array.isArray(payload) ? payload : (payload.messages || payload.data || []);
-              resolve(list);
-            } catch (e) {
-              reject(e);
-            }
-          });
-        }
-      );
-      r.on("error", reject);
-      r.setTimeout(8000, () => {
-        try { r.destroy(); } catch (_) {}
-        reject(new Error(`timeout GET /session/${sessionId}/message`));
-      });
-    });
-  }
-
-  async sendMessage(sessionId, payload = {}) {
-    // Inject system context block if projectId is present
-    let finalPayload = { ...payload };
-    const projectId = payload.projectId || null;
-    if (projectId) {
-      const block = this.getSystemContextBlock(projectId);
-      if (block) {
-        if (Array.isArray(finalPayload.parts)) {
-          finalPayload.parts = [
-            { type: "text", text: `[SYSTEM CONTEXT — skills + linked projects]\n${block}` },
-            ...finalPayload.parts
-          ];
-        } else if (typeof finalPayload.text === "string") {
-          finalPayload.text = `[SYSTEM CONTEXT — skills + linked projects]\n${block}\n\n---\n\n${finalPayload.text}`;
-        }
-      }
-    }
-
-    const postData = JSON.stringify(finalPayload);
-    return new Promise((resolve, reject) => {
+      const postData = JSON.stringify({ title });
       const req = http.request(
         {
           hostname: this.host,
           port: this.port,
-          path: `/session/${encodeURIComponent(sessionId)}/message`,
-          method: "POST",
+          path: `/session/${encodeURIComponent(sessionId)}`,
+          method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(postData)
-          },
-          timeout: 120000
+            "Content-Length": Buffer.byteLength(postData),
+            Connection: "close"
+          }
         },
         (res) => {
           let d = "";
@@ -229,17 +399,225 @@ export class OpencodeAdapter extends BaseProviderAdapter {
             try {
               const j = JSON.parse(d || "{}");
               resolve(j);
-            } catch (e) {
-              reject(new Error(`Failed to parse opencode response: ${d}`));
+            } catch {
+              resolve({ id: sessionId, title });
             }
           });
         }
       );
-      req.on("error", reject);
-      req.setTimeout(120000, () => {
+      req.on("error", (e) => reject(e));
+      req.setTimeout(8000, () => {
         try { req.destroy(); } catch (_) {}
-        reject(new Error(`timeout POST /session/${sessionId}/message`));
+        reject(new Error("timeout PATCH /session"));
       });
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  async deleteSession(sessionId) {
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        {
+          hostname: this.host,
+          port: this.port,
+          path: `/session/${encodeURIComponent(sessionId)}`,
+          method: "DELETE",
+          headers: { Connection: "close" }
+        },
+        (res) => {
+          let d = "";
+          res.on("data", (c) => (d += c));
+          res.on("end", () => {
+            resolve({ id: sessionId, deleted: true });
+          });
+        }
+      );
+      req.on("error", (e) => reject(e));
+      req.setTimeout(8000, () => {
+        try { req.destroy(); } catch (_) {}
+        reject(new Error("timeout DELETE /session"));
+      });
+      req.end();
+    });
+  }
+
+  async getMessages(sessionId, opts = {}) {
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      const reqOpts = {
+        hostname: this.host,
+        port: this.port,
+        path: `/session/${encodeURIComponent(sessionId)}/message`,
+        timeout: 15000,
+        headers: { Connection: "close" }
+      };
+
+      const r = http.get(reqOpts, (res) => {
+        let d = "";
+        res.on("data", (c) => (d += c));
+        res.on("end", () => {
+          if (resolved) return;
+          resolved = true;
+          try {
+            let payload;
+            try {
+              payload = JSON.parse(d || "[]");
+            } catch {
+              payload = d;
+            }
+            const rawList = Array.isArray(payload)
+              ? payload
+              : (payload.messages || payload.data || []);
+            const normalized = rawList.map((m, idx) => normalizeMessage(m, sessionId, idx));
+            resolve(normalized);
+          } catch (e) {
+            reject(new Error(`Failed to parse messages from OpenCode: ${e.message}`));
+          }
+        });
+        res.on("error", (e) => {
+          if (resolved) return;
+          resolved = true;
+          reject(e);
+        });
+      });
+
+      if (opts.signal) {
+        opts.signal.addEventListener("abort", () => {
+          if (resolved) return;
+          resolved = true;
+          try { r.destroy(); } catch (_) {}
+          reject(new Error("OpenCode getMessages aborted by client"));
+        }, { once: true });
+      }
+
+      r.on("error", (e) => {
+        if (resolved) return;
+        resolved = true;
+        reject(e);
+      });
+      r.setTimeout(15000, () => {
+        if (resolved) return;
+        resolved = true;
+        try { r.destroy(); } catch (_) {}
+        reject(new Error(`timeout GET /session/${sessionId}/message`));
+      });
+    });
+  }
+
+  async sendMessage(sessionId, payload = {}, opts = {}) {
+    // 1. Prepare OpenCode payload structure: ensure parts array
+    let parts = [];
+    if (Array.isArray(payload.parts) && payload.parts.length > 0) {
+      parts = [...payload.parts];
+    } else if (typeof payload.text === "string" && payload.text.trim()) {
+      parts = [{ type: "text", text: payload.text.trim() }];
+    } else if (typeof payload.prompt === "string" && payload.prompt.trim()) {
+      parts = [{ type: "text", text: payload.prompt.trim() }];
+    } else {
+      parts = [{ type: "text", text: "" }];
+    }
+
+    // 2. Handle attached files if present
+    if (Array.isArray(payload.files)) {
+      for (const f of payload.files) {
+        if (f.name) {
+          let fileText = `\n[Attached File: ${f.name} (${f.mime || "application/octet-stream"})]`;
+          if (f.base64) {
+            try {
+              const decoded = Buffer.from(f.base64, "base64").toString("utf8");
+              if (/^[\x20-\x7E\s\n\r\t]+$/.test(decoded.slice(0, 500))) {
+                fileText += `\n\`\`\`\n${decoded.slice(0, 8000)}\n\`\`\``;
+              }
+            } catch (_) {}
+          }
+          parts.push({ type: "text", text: fileText });
+        }
+      }
+    }
+
+    // 3. Inject system context block if projectId is present
+    const projectId = payload.projectId || opts.projectId || null;
+    if (projectId) {
+      const block = this.getSystemContextBlock(projectId);
+      if (block && block.trim()) {
+        parts = [
+          { type: "text", text: `[SYSTEM CONTEXT — skills + linked projects]\n${block.trim()}` },
+          ...parts
+        ];
+      }
+    }
+
+    const finalPayload = { parts };
+    if (payload.model) finalPayload.model = payload.model;
+
+    const postData = JSON.stringify(finalPayload);
+
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+
+      const req = http.request(
+        {
+          hostname: this.host,
+          port: this.port,
+          path: `/session/${encodeURIComponent(sessionId)}/message`,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(postData),
+            Connection: "close"
+          },
+          timeout: 90000 // Hard 90s timeout per specification
+        },
+        (res) => {
+          let d = "";
+          res.on("data", (c) => (d += c));
+          res.on("end", () => {
+            if (resolved) return;
+            resolved = true;
+            try {
+              const j = JSON.parse(d || "{}");
+              if (j.name === "BadRequest" || j.error) {
+                return reject(new Error(j.data?.message || j.message || j.error || "OpenCode error"));
+              }
+              const normalized = normalizeMessage(j, sessionId);
+              resolve(normalized);
+            } catch (e) {
+              reject(new Error(`Failed to parse opencode response: ${d} (${e.message})`));
+            }
+          });
+          res.on("error", (e) => {
+            if (resolved) return;
+            resolved = true;
+            reject(e);
+          });
+        }
+      );
+
+      // Manage abort signal from client connection drop
+      if (opts.signal) {
+        opts.signal.addEventListener("abort", () => {
+          if (resolved) return;
+          resolved = true;
+          try { req.destroy(); } catch (_) {}
+          reject(new Error("OpenCode sendMessage aborted by client"));
+        }, { once: true });
+      }
+
+      req.on("error", (e) => {
+        if (resolved) return;
+        resolved = true;
+        reject(e);
+      });
+
+      // Hard 90s timeout guard
+      req.setTimeout(90000, () => {
+        if (resolved) return;
+        resolved = true;
+        try { req.destroy(); } catch (_) {}
+        reject(new Error("OpenCode execution timed out after 90s"));
+      });
+
       req.write(postData);
       req.end();
     });
@@ -260,25 +638,84 @@ export class OpencodeAdapter extends BaseProviderAdapter {
 
 // ==========================================
 // Antigravity Adapter (CLI Print/JSON Mode)
+// Hard 90s timeout, process tree killing, zombie cleanup
 // ==========================================
+
 export class AntigravityAdapter extends BaseProviderAdapter {
   constructor(options = {}) {
     super("antigravity", "Antigravity", "cli");
-    this.binPath = options.binPath || (fs.existsSync("/root/.local/bin/agy") ? "/root/.local/bin/agy" : "agy");
+    this.binPath =
+      options.binPath ||
+      (fs.existsSync("/root/.local/bin/agy") ? "/root/.local/bin/agy" : "agy");
     this.brainDir = options.brainDir || "/root/.gemini/antigravity-cli/brain";
     this.cwd = options.cwd || "/sdcard/projects";
     this.getSystemContextBlock = options.getSystemContextBlock || (() => null);
     this.sessionMap = new Map(); // sessionId -> agyConversationId
+    this.activeProcesses = new Map(); // pid -> { proc, timer, kill }
+
+    // Run initial zombie cleanup on initialization
+    this.cleanupZombieProcesses();
   }
 
   async isHealthy() {
     try {
+      this.cleanupZombieProcesses();
       if (fs.existsSync(this.binPath)) {
         return { up: true, healthy: true, version: "agy" };
       }
       return { up: false, healthy: false, error: `agy binary not found at ${this.binPath}` };
     } catch (e) {
       return { up: false, healthy: false, error: e.message };
+    }
+  }
+
+  // Scan /proc to reap orphaned/zombie agy non-interactive processes
+  cleanupZombieProcesses() {
+    try {
+      if (!fs.existsSync("/proc")) return 0;
+      const entries = fs.readdirSync("/proc");
+      const myPid = process.pid;
+      const myPpid = process.ppid;
+      let reapedCount = 0;
+
+      for (const ent of entries) {
+        if (!/^\d+$/.test(ent)) continue;
+        const pid = parseInt(ent, 10);
+        if (pid === myPid || pid === myPpid) continue;
+
+        try {
+          const statPath = `/proc/${pid}/stat`;
+          const cmdlinePath = `/proc/${pid}/cmdline`;
+          if (!fs.existsSync(statPath) || !fs.existsSync(cmdlinePath)) continue;
+
+          const cmdline = fs.readFileSync(cmdlinePath, "utf8").replace(/\0/g, " ");
+          // Target only agy processes in print mode (-p / --print)
+          if (!cmdline.includes("agy") || (!cmdline.includes("-p") && !cmdline.includes("--print"))) {
+            continue;
+          }
+
+          const stat = fs.readFileSync(statPath, "utf8").split(" ");
+          const state = stat[2]; // 'Z' = zombie
+          const ppid = parseInt(stat[3], 10);
+          const tty = parseInt(stat[6], 10);
+
+          // SAFEGUARD: Never touch processes attached to an interactive terminal (pts/N)
+          if (tty !== 0) continue;
+
+          // Orphaned (ppid 1) or Zombie (state Z)
+          if (ppid === 1 || state === "Z") {
+            console.log(`[antigravity] Reaping orphaned/zombie agy process: pid=${pid}, state=${state}, ppid=${ppid}`);
+            try {
+              process.kill(pid, "SIGKILL");
+              reapedCount++;
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+      return reapedCount;
+    } catch (e) {
+      console.error("[antigravity] cleanupZombieProcesses err:", e.message);
+      return 0;
     }
   }
 
@@ -291,7 +728,11 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       for (const ent of entries) {
         if (!ent.isDirectory()) continue;
         const convId = ent.name;
-        const transcriptPath = path.join(this.brainDir, convId, ".system_generated/logs/transcript.jsonl");
+        const transcriptPath = path.join(
+          this.brainDir,
+          convId,
+          ".system_generated/logs/transcript.jsonl"
+        );
         if (!fs.existsSync(transcriptPath)) continue;
 
         let title = `Antigravity: ${convId.slice(0, 8)}`;
@@ -340,7 +781,6 @@ export class AntigravityAdapter extends BaseProviderAdapter {
   }
 
   async createSession(opts = {}) {
-    // Generate a unique session ID in standard UUID format
     const id = `agy_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
     const title = opts.title || `Antigravity session`;
     return {
@@ -356,15 +796,18 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     let str = String(raw);
     const m = str.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i);
     if (m && m[1]) str = m[1].trim();
-    // Strip XML blocks that might be in the prompt
     str = str.replace(/<ADDITIONAL_METADATA>[\s\S]*?<\/ADDITIONAL_METADATA>/gi, "").trim();
     str = str.replace(/<USER_SETTINGS_CHANGE>[\s\S]*?<\/USER_SETTINGS_CHANGE>/gi, "").trim();
     return str;
   }
 
-  async getMessages(sessionId) {
+  async getMessages(sessionId, opts = {}) {
     const convId = this.sessionMap.get(sessionId) || sessionId;
-    const transcriptPath = path.join(this.brainDir, convId, ".system_generated/logs/transcript.jsonl");
+    const transcriptPath = path.join(
+      this.brainDir,
+      convId,
+      ".system_generated/logs/transcript.jsonl"
+    );
 
     if (!fs.existsSync(transcriptPath)) {
       return [];
@@ -392,20 +835,31 @@ export class AntigravityAdapter extends BaseProviderAdapter {
 
           const createdTime = item.created_at ? new Date(item.created_at).getTime() : Date.now();
 
-          messages.push({
-            info: {
-              id: `msg_agy_${sessionId}_${item.step_index ?? messages.length}`,
-              role: isUser ? "user" : "assistant",
-              time: { created: createdTime }
-            },
-            parts: [
+          messages.push(
+            normalizeMessage(
               {
-                id: `prt_${item.step_index ?? messages.length}`,
-                type: "text",
-                text: text.trim()
-              }
-            ]
-          });
+                role: isUser ? "user" : "assistant",
+                text: text.trim(),
+                info: {
+                  id: `msg_agy_${sessionId}_${item.step_index ?? messages.length}`,
+                  role: isUser ? "user" : "assistant",
+                  time: { created: createdTime },
+                  timestamp: createdTime,
+                  status: "SENT",
+                  deliveryStatus: "SENT"
+                },
+                parts: [
+                  {
+                    id: `prt_${item.step_index ?? messages.length}`,
+                    type: "text",
+                    text: text.trim()
+                  }
+                ]
+              },
+              sessionId,
+              messages.length
+            )
+          );
         } catch (_) {}
       }
 
@@ -416,7 +870,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     }
   }
 
-  async sendMessage(sessionId, payload = {}) {
+  async sendMessage(sessionId, payload = {}, opts = {}) {
     // 1. Resolve prompt text
     let userPrompt = "";
     if (typeof payload.text === "string" && payload.text.trim()) {
@@ -425,12 +879,12 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       userPrompt = payload.prompt.trim();
     } else if (Array.isArray(payload.parts)) {
       const textParts = payload.parts
-        .filter((p) => p.type === "text" && typeof p.text === "string")
+        .filter((p) => p && (p.type === "text" || !p.type) && typeof p.text === "string")
         .map((p) => p.text);
       userPrompt = textParts.join("\n").trim();
 
       // Handle attached files if any
-      const fileParts = payload.parts.filter((p) => p.type === "file");
+      const fileParts = payload.parts.filter((p) => p && p.type === "file");
       for (const fp of fileParts) {
         if (fp.filename) {
           userPrompt += `\n\n[Attached File: ${fp.filename}]`;
@@ -438,7 +892,22 @@ export class AntigravityAdapter extends BaseProviderAdapter {
             try {
               const base64Data = fp.url.split(";base64,")[1];
               const decoded = Buffer.from(base64Data, "base64").toString("utf8");
-              // If decoded looks like plain text or markdown, append it
+              if (/^[\x20-\x7E\s\n\r\t]+$/.test(decoded.slice(0, 500))) {
+                userPrompt += `\n\`\`\`\n${decoded.slice(0, 8000)}\n\`\`\``;
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(payload.files)) {
+      for (const f of payload.files) {
+        if (f.name) {
+          userPrompt += `\n\n[Attached File: ${f.name} (${f.mime || "application/octet-stream"})]`;
+          if (f.base64) {
+            try {
+              const decoded = Buffer.from(f.base64, "base64").toString("utf8");
               if (/^[\x20-\x7E\s\n\r\t]+$/.test(decoded.slice(0, 500))) {
                 userPrompt += `\n\`\`\`\n${decoded.slice(0, 8000)}\n\`\`\``;
               }
@@ -452,19 +921,18 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       throw new Error("No user text or prompt provided in message payload");
     }
 
-    // 2. Inject system context (skills + linked projects) if available
-    const projectId = payload.projectId || null;
+    // 2. Inject system context (skills + linked projects + project instructions)
+    const projectId = payload.projectId || opts.projectId || null;
     if (projectId) {
       const block = this.getSystemContextBlock(projectId);
-      if (block) {
-        userPrompt = `[SYSTEM CONTEXT — skills + linked projects]\n${block}\n\n---\n\n${userPrompt}`;
+      if (block && block.trim()) {
+        userPrompt = `[SYSTEM CONTEXT — skills + linked projects]\n${block.trim()}\n\n---\n\n${userPrompt}`;
       }
     }
 
-    // 3. Check if we have an existing Antigravity conversation ID
+    // 3. Resolve Antigravity conversation ID
     let convId = this.sessionMap.get(sessionId) || null;
     if (!convId) {
-      // Check if sessionId itself exists in brainDir
       if (fs.existsSync(path.join(this.brainDir, sessionId))) {
         convId = sessionId;
       }
@@ -478,14 +946,38 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     if (payload.model) {
       args.push("--model", String(payload.model));
     }
-    args.push("-p", userPrompt, "--output-format", "json", "--dangerously-skip-permissions");
+    args.push(
+      "-p",
+      userPrompt,
+      "--output-format",
+      "json",
+      "--dangerously-skip-permissions",
+      "--print-timeout",
+      "85s"
+    );
 
     console.log(`[antigravity] executing agy for session ${sessionId} (convId: ${convId || "new"})...`);
 
-    // 5. Spawn agy and await output
+    // Helper to safely kill process group
+    const killGroup = (proc, signal = "SIGTERM") => {
+      if (!proc || !proc.pid) return;
+      try {
+        process.kill(-proc.pid, signal);
+      } catch (_) {
+        try {
+          proc.kill(signal);
+        } catch (__) {}
+      }
+    };
+
+    // 5. Spawn agy and await output with strict 90s hard timeout and signal handling
     const result = await new Promise((resolve, reject) => {
+      let isDone = false;
+
+      // Spawn detached so we can terminate the entire process group
       const p = spawn(this.binPath, args, {
         cwd: this.cwd,
+        detached: true,
         env: {
           ...process.env,
           HOME: "/root",
@@ -493,26 +985,67 @@ export class AntigravityAdapter extends BaseProviderAdapter {
         }
       });
 
+      if (p.pid) {
+        this.activeProcesses.set(p.pid, {
+          proc: p,
+          startTime: Date.now(),
+          kill: (sig) => killGroup(p, sig)
+        });
+      }
+
       let stdout = "";
       let stderr = "";
 
       p.stdout.on("data", (c) => (stdout += c));
       p.stderr.on("data", (c) => (stderr += c));
 
-      // 90 second timeout guard
+      // 90 second hard timeout guard with escalation
       const timer = setTimeout(() => {
-        try { p.kill("SIGTERM"); } catch (_) {}
+        if (isDone) return;
+        isDone = true;
+        console.warn(`[antigravity] Process ${p.pid} exceeded hard 90s timeout. Killing group with SIGTERM...`);
+        killGroup(p, "SIGTERM");
+        const killTimer = setTimeout(() => {
+          try {
+            console.warn(`[antigravity] Escalating to SIGKILL for process group ${p.pid}...`);
+            killGroup(p, "SIGKILL");
+          } catch (_) {}
+        }, 2000);
+        killTimer.unref();
+
+        if (p.pid) this.activeProcesses.delete(p.pid);
         reject(new Error("Antigravity CLI execution timed out after 90s"));
       }, 90000);
 
+      // Manage abort signal from client connection drop
+      if (opts.signal) {
+        opts.signal.addEventListener(
+          "abort",
+          () => {
+            if (isDone) return;
+            isDone = true;
+            clearTimeout(timer);
+            console.log(`[antigravity] Client connection aborted. Killing process group ${p.pid}...`);
+            killGroup(p, "SIGTERM");
+            setTimeout(() => killGroup(p, "SIGKILL"), 1500).unref();
+            if (p.pid) this.activeProcesses.delete(p.pid);
+            reject(new Error("Antigravity request aborted by client"));
+          },
+          { once: true }
+        );
+      }
+
       p.on("close", (code) => {
+        if (isDone) return;
+        isDone = true;
         clearTimeout(timer);
+        if (p.pid) this.activeProcesses.delete(p.pid);
+
         if (code !== 0 && !stdout.trim()) {
           return reject(new Error(`Antigravity exited with code ${code}: ${stderr.trim()}`));
         }
         try {
           const trimmed = stdout.trim();
-          // Find JSON line in stdout (in case of leading banner/warning text)
           const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
           if (!jsonMatch) {
             return reject(new Error(`No JSON found in agy output: ${trimmed}`));
@@ -525,7 +1058,10 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       });
 
       p.on("error", (err) => {
+        if (isDone) return;
+        isDone = true;
         clearTimeout(timer);
+        if (p.pid) this.activeProcesses.delete(p.pid);
         reject(new Error(`Failed to spawn agy binary: ${err.message}`));
       });
     });
@@ -537,26 +1073,34 @@ export class AntigravityAdapter extends BaseProviderAdapter {
 
     const responseText = (result.response || "").trim();
 
-    // 7. Return standard Message format matching Companion App expectations
-    return {
-      info: {
-        id: `msg_agy_${sessionId}_${Date.now()}`,
+    // 7. Return standard Message format matching Frontend Contract
+    return normalizeMessage(
+      {
         role: "assistant",
-        time: { created: Date.now() }
-      },
-      parts: [
-        {
-          id: `prt_${Date.now()}`,
-          type: "text",
-          text: responseText
+        text: responseText,
+        info: {
+          id: `msg_agy_${sessionId}_${Date.now()}`,
+          role: "assistant",
+          timestamp: Date.now(),
+          time: { created: Date.now() },
+          status: "SENT",
+          deliveryStatus: "SENT"
+        },
+        parts: [
+          {
+            id: `prt_${Date.now()}`,
+            type: "text",
+            text: responseText
+          }
+        ],
+        _agyMeta: {
+          conversationId: result.conversation_id,
+          durationSeconds: result.duration_seconds,
+          usage: result.usage
         }
-      ],
-      _agyMeta: {
-        conversationId: result.conversation_id,
-        durationSeconds: result.duration_seconds,
-        usage: result.usage
-      }
-    };
+      },
+      sessionId
+    );
   }
 
   async listModels() {
@@ -574,6 +1118,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
 // ==========================================
 // Provider Manager
 // ==========================================
+
 export class ProviderManager {
   constructor(configFilePath = "/sdcard/projects/opencode-companion/providers.json") {
     this.configFilePath = configFilePath;
@@ -584,13 +1129,28 @@ export class ProviderManager {
 
   loadConfig() {
     try {
-      if (fs.existsSync(this.configFilePath)) {
-        const raw = JSON.parse(fs.readFileSync(this.configFilePath, "utf8"));
-        if (raw.defaultProvider) this.defaultProvider = raw.defaultProvider;
+      const raw = atomicReadFileSync(this.configFilePath, null);
+      if (raw && raw.defaultProvider) {
+        this.defaultProvider = raw.defaultProvider;
       }
     } catch (e) {
       console.error("[provider-mgr] loadConfig err", e.message);
     }
+  }
+
+  async saveConfig(mutatorFn) {
+    return fileMutex.runExclusive(this.configFilePath, async () => {
+      const current = atomicReadFileSync(this.configFilePath, {
+        defaultProvider: this.defaultProvider,
+        providers: []
+      });
+      const updated = mutatorFn ? mutatorFn(current) : current;
+      if (updated.defaultProvider) {
+        this.defaultProvider = updated.defaultProvider;
+      }
+      atomicWriteFileSync(this.configFilePath, updated);
+      return updated;
+    });
   }
 
   register(adapter) {
@@ -630,7 +1190,11 @@ export class ProviderManager {
       }
     }
 
-    if (sessionId && (sessionId.startsWith("agy_") || fs.existsSync(path.join("/root/.gemini/antigravity-cli/brain", sessionId)))) {
+    if (
+      sessionId &&
+      (sessionId.startsWith("agy_") ||
+        fs.existsSync(path.join("/root/.gemini/antigravity-cli/brain", sessionId)))
+    ) {
       return this.adapters.get("antigravity");
     }
 
@@ -638,27 +1202,31 @@ export class ProviderManager {
   }
 
   // Unified messages: merges history from OpenCode and Antigravity so NO context is lost on provider switch
-  async getUnifiedMessages(sessionId) {
+  async getUnifiedMessages(sessionId, opts = {}) {
     let ocMsgs = [];
     let agyMsgs = [];
 
     const oc = this.adapters.get("opencode");
     if (oc) {
       try {
-        ocMsgs = await oc.getMessages(sessionId);
+        ocMsgs = await oc.getMessages(sessionId, opts);
       } catch (_) {}
     }
 
     const agy = this.adapters.get("antigravity");
     if (agy) {
       try {
-        agyMsgs = await agy.getMessages(sessionId);
+        agyMsgs = await agy.getMessages(sessionId, opts);
       } catch (_) {}
     }
 
     if (ocMsgs.length > 0 && agyMsgs.length > 0) {
       const merged = [...ocMsgs, ...agyMsgs];
-      merged.sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+      merged.sort((a, b) => {
+        const tA = a.info?.timestamp || a.info?.time?.created || 0;
+        const tB = b.info?.timestamp || b.info?.time?.created || 0;
+        return tA - tB;
+      });
       return merged;
     }
 

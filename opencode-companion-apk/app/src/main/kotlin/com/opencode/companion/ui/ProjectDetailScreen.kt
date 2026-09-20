@@ -1,6 +1,8 @@
 package com.opencode.companion.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,11 +12,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +35,7 @@ import com.opencode.companion.data.SessionRef
 import com.opencode.companion.data.Skill
 import com.opencode.companion.util.relativeTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ProjectDetailScreen(
     project: Project,
@@ -49,12 +53,19 @@ fun ProjectDetailScreen(
     onDeleteSkill: (String, String) -> Unit,
     onLinkProject: (String) -> Unit,
     onUnlinkProject: (String) -> Unit,
-    onPatchInstructions: (String) -> Unit = {}
+    onPatchInstructions: (String) -> Unit = {},
+    onRenameSession: (String, String) -> Unit = { _, _ -> },
+    onUnlinkSession: (String) -> Unit = { _ -> },
+    onDeleteSession: (String) -> Unit = { _ -> }
 ) {
     var composerText by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf(0) } // 0: Chats, 1: Archivos e instrucciones
     var showSkillDialog by remember { mutableStateOf(false) }
     var showInstructionsDialog by remember { mutableStateOf(false) }
+    var menuTarget by remember { mutableStateOf<SessionRef?>(null) }
+    var renameTarget by remember { mutableStateOf<SessionRef?>(null) }
+    var unlinkTarget by remember { mutableStateOf<SessionRef?>(null) }
+    var deleteTarget by remember { mutableStateOf<SessionRef?>(null) }
 
     Scaffold(
         topBar = {
@@ -196,52 +207,81 @@ fun ProjectDetailScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(sessions, key = { it.sessionId }) { s ->
-                                    OutlinedCard(
-                                        onClick = { onOpenSession(s.sessionId) },
-                                        shape = RoundedCornerShape(12.dp),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .semantics(mergeDescendants = true) { contentDescription = s.title ?: s.sessionId.take(8) }
-                                    ) {
-                                        Row(
+                                    Box {
+                                        OutlinedCard(
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                modifier = Modifier.weight(1f, fill = false)
-                                            ) {
-                                                Icon(
-                                                    Icons.Outlined.ChatBubbleOutline,
-                                                    contentDescription = "Chat",
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
+                                                .semantics(mergeDescendants = true) { contentDescription = s.title ?: s.sessionId.take(8) }
+                                                .combinedClickable(
+                                                    onClick = { onOpenSession(s.sessionId) },
+                                                    onLongClick = { menuTarget = s }
                                                 )
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
                                                 Text(
-                                                    s.title ?: s.sessionId.take(8),
+                                                    text = s.title ?: s.sessionId.take(8),
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
-                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Medium
+                                                    ),
                                                     color = MaterialTheme.colorScheme.onSurface,
-                                                    modifier = Modifier.weight(1f, fill = false)
+                                                    modifier = Modifier.fillMaxWidth()
                                                 )
-                                                val timeStr = s.lastUsed ?: s.createdAt
-                                                if (!timeStr.isNullOrBlank()) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    val timeStr = s.lastUsed ?: s.createdAt
+                                                    val metaText = if (!timeStr.isNullOrBlank()) relativeTime(timeStr) else "Sin actividad"
                                                     Text(
-                                                        " ◦ ${relativeTime(timeStr)}",
+                                                        text = metaText,
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        maxLines = 1
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.weight(1f, fill = false)
                                                     )
+                                                    ProviderBadge(s.resolvedProvider(project.provider))
                                                 }
                                             }
-                                            ProviderBadge(s.resolvedProvider(project.provider))
+                                        }
+
+                                        DropdownMenu(
+                                            expanded = menuTarget?.sessionId == s.sessionId,
+                                            onDismissRequest = { menuTarget = null },
+                                            shape = RoundedCornerShape(16.dp),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Renombrar") },
+                                                leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                                onClick = { menuTarget = null; renameTarget = s },
+                                                modifier = Modifier.semantics { contentDescription = "Renombrar" }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Desvincular del proyecto") },
+                                                leadingIcon = { Icon(Icons.Outlined.LinkOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                                onClick = { menuTarget = null; unlinkTarget = s },
+                                                modifier = Modifier.semantics { contentDescription = "Desvincular del proyecto" }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Eliminar", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold) },
+                                                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                                onClick = { menuTarget = null; deleteTarget = s },
+                                                modifier = Modifier.semantics { contentDescription = "Eliminar" }
+                                            )
                                         }
                                     }
                                 }
@@ -535,6 +575,80 @@ fun ProjectDetailScreen(
                 }
             },
             dismissButton = { TextButton(onClick = { showSkillDialog = false }) { Text("Cancelar") } }
+        )
+    }
+
+    renameTarget?.let { s ->
+        var name by remember(s.sessionId) { mutableStateOf(s.title ?: s.sessionId.take(8)) }
+        AlertDialog(
+            onDismissRequest = { renameTarget = null },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Renombrar chat", fontWeight = FontWeight.SemiBold) },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (name.isNotBlank()) {
+                            onRenameSession(s.sessionId, name.trim())
+                            renameTarget = null
+                        }
+                    }
+                ) {
+                    Text("Guardar", fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("Cancelar") } }
+        )
+    }
+
+    unlinkTarget?.let { s ->
+        AlertDialog(
+            onDismissRequest = { unlinkTarget = null },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Desvincular del proyecto", fontWeight = FontWeight.SemiBold) },
+            text = { Text("¿Desvincular \"${s.title ?: s.sessionId}\" de este proyecto?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onUnlinkSession(s.sessionId)
+                        unlinkTarget = null
+                    }
+                ) {
+                    Text("Desvincular", fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = { TextButton(onClick = { unlinkTarget = null }) { Text("Cancelar") } }
+        )
+    }
+
+    deleteTarget?.let { s ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Eliminar chat", fontWeight = FontWeight.SemiBold) },
+            text = { Text("¿Eliminar \"${s.title ?: s.sessionId}\"? Esta acción no se puede deshacer.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteSession(s.sessionId)
+                        deleteTarget = null
+                    }
+                ) {
+                    Text("Eliminar", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancelar") } }
         )
     }
 }

@@ -14,6 +14,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.opencode.companion.ui.viewmodel.ChatViewModel
 import com.opencode.companion.ui.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppNavHost() {
@@ -83,7 +84,19 @@ fun AppNavHost() {
                     onDeleteSkill = { scope, name -> detailVm.deleteSkill(scope, name) },
                     onLinkProject = { target -> detailVm.linkProject(target) },
                     onUnlinkProject = { target -> detailVm.unlinkProject(target) },
-                    onPatchInstructions = { text -> detailVm.patchInstructions(text) }
+                    onPatchInstructions = { text -> detailVm.patchInstructions(text) },
+                    onRenameSession = { sid, name ->
+                        detailVm.renameSession(sid, name)
+                        vm.refreshAll()
+                    },
+                    onUnlinkSession = { sid ->
+                        detailVm.unlinkSession(sid)
+                        vm.refreshAll()
+                    },
+                    onDeleteSession = { sid ->
+                        detailVm.deleteSession(sid)
+                        vm.refreshAll()
+                    }
                 )
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -92,6 +105,7 @@ fun AppNavHost() {
             }
         }
         composable(NavRoutes.CHATS) {
+            val scope = rememberCoroutineScope()
             ChatsScreen(
                 sessions = sessions,
                 projects = projects,
@@ -99,11 +113,18 @@ fun AppNavHost() {
                 error = vm.error.collectAsState().value,
                 onBack = { navController.popBackStack() },
                 onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) },
-                onCreateChatPlaceholder = { },
-                onRenameSession = { _, _ -> },
+                onCreateChatPlaceholder = {
+                    scope.launch {
+                        val sid = vm.createSessionForProject("", "Chat ${System.currentTimeMillis() % 10000}")
+                        if (!sid.isNullOrBlank()) {
+                            navController.navigate(NavRoutes.chat(sid))
+                        }
+                    }
+                },
+                onRenameSession = { sid, name -> vm.renameSession(sid, name) },
                 onPinSession = { _ -> },
                 onMoveSession = { sessionId, projectId -> vm.moveSession(sessionId, projectId) },
-                onDeleteSession = { _ -> },
+                onDeleteSession = { sid -> vm.deleteSession(sid) },
                 onRefresh = { vm.refreshSessions() },
                 onClearError = { vm.clearError() }
             )

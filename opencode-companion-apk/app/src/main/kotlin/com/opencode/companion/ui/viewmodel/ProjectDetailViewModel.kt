@@ -76,7 +76,7 @@ class ProjectDetailViewModel : ViewModel() {
     }
 
     fun sendNewSession(projectId: String, text: String, onCreated: (String) -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 // Create session via hub
                 val provider = _project.value?.provider ?: "opencode"
@@ -92,20 +92,123 @@ class ProjectDetailViewModel : ViewModel() {
                 val body = resp.body?.string() ?: return@launch
                 val sid = try {
                     val j = com.google.gson.JsonParser.parseString(body).asJsonObject
-                    when { j.has("id") -> j.get("id").asString; j.has("ID") -> j.get("ID").asString; j.has("data") -> {
-                        val d = j.getAsJsonObject("data")
-                        when { d.has("id") -> d.get("id").asString; d.has("ID") -> d.get("ID").asString; else -> null }
-                    }; else -> null }
+                    when {
+                        j.has("id") -> j.get("id").asString
+                        j.has("ID") -> j.get("ID").asString
+                        j.has("sessionId") -> j.get("sessionId").asString
+                        j.has("data") -> {
+                            val d = j.getAsJsonObject("data")
+                            when {
+                                d.has("id") -> d.get("id").asString
+                                d.has("ID") -> d.get("ID").asString
+                                d.has("sessionId") -> d.get("sessionId").asString
+                                else -> null
+                            }
+                        }
+                        else -> null
+                    }
                 } catch (_: Exception) { null } ?: return@launch
-                // Link to project
-                api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider))
-                // Send first message
+
+                // Link to project (if not automatically linked)
+                try {
+                    api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider))
+                } catch (_: Exception) {}
+
+                // Optimistically add to local sessions list
+                val newRef = SessionRef(sessionId = sid, title = title, createdAt = java.time.Instant.now().toString(), provider = provider)
+                _sessions.value = listOf(newRef) + _sessions.value.filter { it.sessionId != sid }
+
+                // Navigate immediately on Main dispatcher
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onCreated(sid)
+                }
+
+                // Send first message asynchronously if present without blocking navigation
                 if (text.isNotBlank()) {
-                    api.sendMessage(sid, SendMessageRequest(parts = listOf(mapOf("type" to "text", "text" to text))))
+                    try {
+                        api.sendMessage(
+                            sessionId = sid,
+                            body = SendMessageRequest(parts = listOf(mapOf("type" to "text", "text" to text))),
+                            provider = provider,
+                            projectId = projectId
+                        )
+                    } catch (msgErr: Exception) {
+                        // ignore or log
+                    }
                 }
                 load(projectId)
-                onCreated(sid)
-            } catch (e: Exception) { _error.value = e.message ?: "Error creando sesión" }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error creando sesión"
+            }
+        }
+    }
+
+    fun renameSession(sessionId: String, newTitle: String) {
+        viewModelScope.launch {
+            val pid = _project.value?.id ?: return@launch
+            // Optimistic update
+            val cur = _sessions.value
+            _sessions.value = cur.map { if (it.sessionId == sessionId) it.copy(title = newTitle) else it }
+            try {
+                val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    api.renameSession(sessionId, mapOf("title" to newTitle))
+                }
+                if (resp.ok) {
+                    load(pid)
+                } else {
+                    _error.value = resp.error ?: "Error renombrando sesión"
+                    load(pid)
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error renombrando sesión"
+                load(pid)
+            }
+        }
+    }
+
+    fun unlinkSession(sessionId: String) {
+        viewModelScope.launch {
+            val pid = _project.value?.id ?: return@launch
+            // Optimistic removal
+            val cur = _sessions.value
+            _sessions.value = cur.filter { it.sessionId != sessionId }
+            try {
+                val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    api.unlinkSession(pid, sessionId)
+                }
+                if (resp.ok) {
+                    load(pid)
+                } else {
+                    _error.value = resp.error ?: "Error desvinculando sesión"
+                    load(pid)
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error desvinculando sesión"
+                load(pid)
+            }
+        }
+    }
+
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            val pid = _project.value?.id ?: return@launch
+            // Optimistic removal
+            val cur = _sessions.value
+            _sessions.value = cur.filter { it.sessionId != sessionId }
+            try {
+                val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    api.deleteSession(sessionId)
+                }
+                if (resp.ok) {
+                    load(pid)
+                } else {
+                    _error.value = resp.error ?: "Error eliminando sesión"
+                    load(pid)
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error eliminando sesión"
+                load(pid)
+            }
         }
     }
 
