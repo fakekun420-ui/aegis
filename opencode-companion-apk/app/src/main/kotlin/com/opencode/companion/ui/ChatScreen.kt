@@ -412,6 +412,10 @@ private fun MessageBubble(msg: Message) {
     val isMem = msg.isMemoryContext()
     val stripped = if (isMem) msg.strippedText() else raw
 
+        val files = msg.fileParts()
+        val images = msg.imageParts()
+        val bitmaps = remember(images) { images.map { img -> (img.image ?: img.data)?.let { decodeBase64Bitmap(it) } } }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
@@ -459,9 +463,6 @@ private fun MessageBubble(msg: Message) {
             bottomStart = if (isUser) 16.dp else 4.dp,
             bottomEnd = if (isUser) 4.dp else 16.dp
         )
-        val files = msg.fileParts()
-        val images = msg.imageParts()
-        val bitmaps = remember(images) { images.map { img -> (img.image ?: img.data)?.let { decodeBase64Bitmap(it) } } }
         Surface(color = bubbleColor, shape = shape, modifier = Modifier.fillMaxWidth(0.86f)) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Image previews (base64 data URIs from backend)
