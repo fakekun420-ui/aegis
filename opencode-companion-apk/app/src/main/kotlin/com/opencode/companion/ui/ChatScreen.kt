@@ -414,7 +414,7 @@ private fun MessageBubble(msg: Message) {
 
         val files = msg.fileParts()
         val images = msg.imageParts()
-        val bitmaps = remember(images) { images.map { img -> (img.image ?: img.data)?.let { decodeBase64Bitmap(it) } } }
+        val bitmaps: List<android.graphics.Bitmap?> = remember(key1 = images) { images.map { img -> (img.image ?: img.data)?.let { decodeBase64Bitmap(it) } } }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
