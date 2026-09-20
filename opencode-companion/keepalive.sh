@@ -8,7 +8,12 @@ OC_PORT="4096"
 OC_HOST="127.0.0.1"
 INTERVAL=10
 LOG="$HUB_DIR/keepalive.log"
-NODE_BIN="/usr/bin/node"
+# NODE_BIN override: app mount ns (com.opencode.companion) cannot see /usr/bin/node
+# (private ns 4026535508, node lives only in termux ns 4026535555 and is NOT
+# bind-shared). su shell DOES see node, so MainActivity now passes the resolved
+# absolute path it verified (NODE_BIN="$NODE_BIN" ./keepalive.sh keeps working
+# when unset via the default below). Env override wins, default stays.
+NODE_BIN="${NODE_BIN:-/usr/bin/node}"
 OPENCODE_BIN="/data/data/com.termux/files/usr/lib/node_modules/opencode-ai/bin/opencode.exe"
 SERVER_JS="$HUB_DIR/server.js"
 

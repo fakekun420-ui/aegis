@@ -168,14 +168,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             try {
                 val script = "/sdcard/projects/opencode-companion/keepalive.sh"
                 val sysLog = "/sdcard/projects/opencode-companion/hub-startup.log"
-                // su shell joins the caller mount ns, which DOES have /usr/bin/node
-                // (verified: su -c 'test -x /usr/bin/node' -> YES). The old pid-guess
-                // found only adb fork-server (ns 5555, /proc/PID/root resolves in OUR
-                // ns, not the app's) and nsenter -t <adb-pid> -m dropped keepalive
-                // into a ns without node -> infinite relaunch loop, 45s timeout.
-                // Fix: launch keepalive.sh directly in the su shell, no nsenter.
-                // keepalive.sh self-backgrounds (--no-daemon) and owns the poll loop.
-                val direct = arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched")
+                // Resolve node INSIDE the su shell (it sees host mounts; the app ns 4026535508
+                // does not — node lives only in termux ns 4026535555). Pass it as NODE_BIN
+                // env so keepalive.sh never needs /usr/bin/node itself. No nsenter: the old
+                // pid-guess resolved /proc/PID/root in OUR ns, picked adb fork-server, and
+                // dropped keepalive where node is invisible -> infinite relaunch loop.
+                val resolve = Runtime.getRuntime().exec(arrayOf("su", "-c", "for c in /usr/bin/node /data/data/com.termux/files/usr/bin/node \$(command -v node 2>/dev/null); do [ -x \"$c\" ] && { echo \"$c\"; break; }; done; echo done"))
+                val nodeBin = try { resolve.inputStream.bufferedReader().readText().trim().lines().firstOrNull { it.isNotBlank() && it != "done" }?.trim() } catch (_: Exception) { null }
+                android.util.Log.i("OpenCodeBoot", "keepalive nodeBin=$nodeBin")
+                val direct = arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; NODE_BIN=\"${nodeBin ?: "/usr/bin/node"}\" nohup sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched")
                 val proc = Runtime.getRuntime().exec(direct)
                 execExit = proc.waitFor()
                 val outText = try { proc.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
