@@ -96,10 +96,8 @@ class ChatViewModel : ViewModel() {
                     when {
                         f.text != null -> parts += mapOf("type" to "text", "text" to "Archivo ${f.name} (${f.mime}):\n```\n${f.text.take(30000)}\n```")
                         f.base64 != null -> {
-                            if (f.mime.startsWith("image/")) {
-                                parts += mapOf("type" to "image", "mime" to f.mime, "image" to f.base64, "filename" to f.name)
-                            }
-                            parts += mapOf("type" to "file", "mime" to f.mime, "filename" to f.name, "data" to f.base64)
+                            val dataUri = "data:${f.mime};base64,${f.base64}"
+                            parts += mapOf("type" to "file", "mime" to f.mime, "filename" to f.name, "url" to dataUri)
                         }
                     }
                 }

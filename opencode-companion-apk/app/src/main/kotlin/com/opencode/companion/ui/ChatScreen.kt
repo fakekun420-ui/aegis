@@ -414,6 +414,8 @@ private fun MessageBubble(msg: Message) {
 
         val files = msg.fileParts()
         val images = msg.imageParts()
+        val imageFiles = files.filter { it.mime?.startsWith("image/") == true && it.url != null }
+        val nonImageFiles = files.filter { !(it.mime?.startsWith("image/") == true && it.url != null) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -464,9 +466,9 @@ private fun MessageBubble(msg: Message) {
         )
         Surface(color = bubbleColor, shape = shape, modifier = Modifier.fillMaxWidth(0.86f)) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Image previews (base64 data URIs from backend)
+                // Image previews (legacy type:"image" parts)
                 images.forEach { img ->
-                    val bitmap = (img.image ?: img.data)?.let { decodeBase64Bitmap(it) }
+                    val bitmap = (img.image ?: img.data ?: img.url)?.let { decodeBase64Bitmap(it) }
                     if (bitmap != null) {
                         Image(
                             bitmap = bitmap.asImageBitmap(),
@@ -478,8 +480,22 @@ private fun MessageBubble(msg: Message) {
                         FileRow(name = img.filename ?: "imagen", mime = img.mime ?: "image/*", tint = contentColor)
                     }
                 }
-                // File attachments as icon rows
-                files.forEach { f ->
+                // Image-type file parts (opencode stores images as type:file with url data URI)
+                imageFiles.forEach { img ->
+                    val bitmap = img.url?.let { decodeBase64Bitmap(it) }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = img.filename ?: "imagen adjunta",
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.FillWidth
+                        )
+                    } else {
+                        FileRow(name = img.filename ?: "imagen", mime = img.mime ?: "image/*", tint = contentColor)
+                    }
+                }
+                // Non-image file attachments as icon rows
+                nonImageFiles.forEach { f ->
                     FileRow(name = f.filename ?: "archivo", mime = f.mime ?: "", tint = contentColor)
                 }
                 if (stripped.isNotBlank() || raw.isNotBlank()) {
@@ -488,7 +504,7 @@ private fun MessageBubble(msg: Message) {
                     } else {
                         MarkdownText(stripped.ifBlank { raw })
                     }
-                } else if (images.isEmpty() && files.isEmpty()) {
+                } else if (images.isEmpty() && imageFiles.isEmpty() && nonImageFiles.isEmpty()) {
                     Text("(vacío)", color = contentColor.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
                 }
             }

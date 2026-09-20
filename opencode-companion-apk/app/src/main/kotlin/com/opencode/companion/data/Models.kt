@@ -75,7 +75,8 @@ data class MessagePart(
     val mime: String? = null,
     val filename: String? = null,
     val data: String? = null,
-    val image: String? = null
+    val image: String? = null,
+    val url: String? = null
 )
 data class Message(
     val info: MessageInfo? = null,
