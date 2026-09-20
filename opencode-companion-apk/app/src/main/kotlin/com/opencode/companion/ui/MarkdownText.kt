@@ -1,5 +1,6 @@
 package com.opencode.companion.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -38,6 +39,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, onLinkClick: ((Str
                 is MdBlock.CodeBlock -> Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(

@@ -1,10 +1,12 @@
 package com.opencode.companion.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -17,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.OpencodeSession
 import com.opencode.companion.data.Project
@@ -57,16 +60,39 @@ fun ChatsScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Chats") }, navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } }) },
-        floatingActionButton = { ExtendedFloatingActionButton(onClick = onCreateChatPlaceholder, icon = { Icon(Icons.Filled.Add, contentDescription = "Nuevo chat") }, text = { Text("+ Nuevo chat") }, modifier = Modifier.semantics { contentDescription = "Nuevo chat" }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("Chats", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)) },
+                navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = onCreateChatPlaceholder,
+                icon = { Icon(Icons.Filled.Add, contentDescription = "Nuevo chat") },
+                text = { Text("+ Nuevo chat", fontWeight = FontWeight.Medium) },
+                shape = RoundedCornerShape(16.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.semantics { contentDescription = "Nuevo chat" }
+            )
+        }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             var isRefreshing by remember { mutableStateOf(false) }
             LaunchedEffect(isLoading) { if (!isLoading) isRefreshing = false }
             if (isLoading && sessions.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar chats") }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Buscar chats" }, singleLine = true)
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Buscar chats") },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Buscar chats" },
+                    singleLine = true
+                )
                 PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = { isRefreshing = true; onRefresh() }, modifier = Modifier.fillMaxSize()) {
                     if (filtered.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -76,22 +102,28 @@ fun ChatsScreen(
                             }
                         }
                     } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 72.dp)) {
                             items(filtered, key = { it.resolvedId.ifBlank { it.hashCode().toString() } }) { sess ->
                                 val projName = sessionToProject[sess.resolvedId]
-                                Card(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = sess.resolvedTitle }.combinedClickable(onClick = { onOpenSession(sess.resolvedId) }, onLongClick = { menuTarget = sess })) {
+                                OutlinedCard(
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = sess.resolvedTitle }.combinedClickable(onClick = { onOpenSession(sess.resolvedId) }, onLongClick = { menuTarget = sess })
+                                ) {
                                     ListItem(
+                                        colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
                                         headlineContent = {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text(sess.resolvedTitle, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                                                Text(sess.resolvedTitle, maxLines = 1, modifier = Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium))
                                                 ProviderBadge(sess.resolvedProvider)
                                             }
                                         },
-                                        supportingContent = { Text(listOfNotNull(relativeTime(sess.lastActivityIso), projName).joinToString(" · "), maxLines = 1) },
-                                        leadingContent = { Icon(Icons.Filled.ChatBubble, contentDescription = "Chat") }
+                                        supportingContent = { Text(listOfNotNull(relativeTime(sess.lastActivityIso), projName).joinToString(" · "), maxLines = 1, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                        leadingContent = { Icon(Icons.Filled.ChatBubble, contentDescription = "Chat", tint = MaterialTheme.colorScheme.primary) }
                                     )
                                 }
-                                DropdownMenu(expanded = menuTarget?.resolvedId == sess.resolvedId, onDismissRequest = { menuTarget = null }) {
+                                DropdownMenu(expanded = menuTarget?.resolvedId == sess.resolvedId, onDismissRequest = { menuTarget = null }, shape = RoundedCornerShape(12.dp), containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
                                     DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menuTarget = null; renameTarget = sess }, modifier = Modifier.semantics { contentDescription = "Renombrar" })
                                     DropdownMenuItem(text = { Text("Fijar") }, onClick = { menuTarget = null; onPinSession(sess.resolvedId) }, modifier = Modifier.semantics { contentDescription = "Fijar" })
                                     DropdownMenuItem(text = { Text("Agregar a proyecto") }, onClick = { menuTarget = null; moveTarget = sess }, modifier = Modifier.semantics { contentDescription = "Agregar a proyecto" })
@@ -112,18 +144,22 @@ fun ChatsScreen(
         var name by remember(sess.resolvedId) { mutableStateOf(sess.resolvedTitle) }
         AlertDialog(
             onDismissRequest = { renameTarget = null },
-            title = { Text("Renombrar chat") },
-            text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
-            confirmButton = { TextButton(onClick = { if (name.isNotBlank()) { onRenameSession(sess.resolvedId, name.trim()); renameTarget = null } }) { Text("Guardar") } },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Renombrar chat", fontWeight = FontWeight.SemiBold) },
+            text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) },
+            confirmButton = { TextButton(onClick = { if (name.isNotBlank()) { onRenameSession(sess.resolvedId, name.trim()); renameTarget = null } }) { Text("Guardar", fontWeight = FontWeight.SemiBold) } },
             dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("Cancelar") } }
         )
     }
     deleteTarget?.let { sess ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("Eliminar chat") },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Eliminar chat", fontWeight = FontWeight.SemiBold) },
             text = { Text("¿Eliminar \"${sess.resolvedTitle}\"? Esta acción no se puede deshacer.") },
-            confirmButton = { TextButton(onClick = { onDeleteSession(sess.resolvedId); deleteTarget = null }) { Text("Eliminar") } },
+            confirmButton = { TextButton(onClick = { onDeleteSession(sess.resolvedId); deleteTarget = null }) { Text("Eliminar", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold) } },
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancelar") } }
         )
     }
@@ -131,20 +167,29 @@ fun ChatsScreen(
         var selected by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { moveTarget = null },
-            title = { Text("Agregar a proyecto") },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Agregar a proyecto", fontWeight = FontWeight.SemiBold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     projects.forEach { p ->
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            RadioButton(selected = selected == p.id, onClick = { selected = p.id })
-                            Text(p.name, modifier = Modifier.padding(start = 8.dp, top = 4.dp))
+                        Surface(
+                            onClick = { selected = p.id },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (selected == p.id) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = selected == p.id, onClick = { selected = p.id })
+                                Text(p.name, modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
-                    if (projects.isEmpty()) Text("Sin proyectos", style = MaterialTheme.typography.bodySmall)
+                    if (projects.isEmpty()) Text("Sin proyectos disponibles", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
             confirmButton = {
-                TextButton(enabled = selected != null, onClick = { selected?.let { onMoveSession(sess.resolvedId, it) }; moveTarget = null }) { Text("Mover") }
+                TextButton(enabled = selected != null, onClick = { selected?.let { onMoveSession(sess.resolvedId, it) }; moveTarget = null }) { Text("Mover", fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = { TextButton(onClick = { moveTarget = null }) { Text("Cancelar") } }
         )

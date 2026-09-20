@@ -16,6 +16,9 @@ import com.opencode.companion.data.Project
 import com.opencode.companion.ui.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainNavScreen(
@@ -33,31 +36,42 @@ fun MainNavScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
-                Spacer(Modifier.height(24.dp))
+            ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+                drawerShape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
+            ) {
+                Spacer(Modifier.height(36.dp))
                 Text(
                     "Opencode Companion",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                 )
-                HorizontalDivider()
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
                 NavigationDrawerItem(
-                    label = { Text("Chats") },
+                    label = { Text("Chats", fontWeight = FontWeight.Medium) },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
                         onNavigateChats()
                     },
-                    icon = { Icon(Icons.Filled.ChatBubble, contentDescription = null) }
+                    icon = { Icon(Icons.Filled.ChatBubble, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )
                 NavigationDrawerItem(
-                    label = { Text("Proyectos") },
+                    label = { Text("Proyectos", fontWeight = FontWeight.Medium) },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
                         onNavigateProjects()
                     },
-                    icon = { Icon(Icons.Filled.Folder, contentDescription = null) }
+                    icon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )
             }
         }
@@ -65,7 +79,7 @@ fun MainNavScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Opencode Companion") },
+                    title = { Text("Opencode Companion", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)) },
                     navigationIcon = {
                         IconButton(
                             onClick = {
@@ -77,7 +91,8 @@ fun MainNavScreen(
                         ) {
                             Icon(Icons.Filled.Menu, contentDescription = "Menú")
                         }
-                    }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
                 )
             }
         ) { padding ->

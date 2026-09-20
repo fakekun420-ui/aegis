@@ -60,13 +60,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         tts = TextToSpeech(this, this)
 
         setContent {
-            MaterialTheme(
-                colorScheme = if (true) darkColorScheme(
-                    primary = androidx.compose.ui.graphics.Color(0xFF7C5CFF),
-                    background = androidx.compose.ui.graphics.Color(0xFF0A0A0F),
-                    surface = androidx.compose.ui.graphics.Color(0xFF14141C)
-                ) else lightColorScheme()
-            ) {
+            com.opencode.companion.ui.theme.OpenCodeCompanionTheme {
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     AppNavHost()
                     if (!systemReady) {

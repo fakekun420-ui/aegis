@@ -11,6 +11,7 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -186,23 +187,14 @@ fun ChatScreen(
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(sessionId.take(8).ifBlank { "Chat" }, maxLines = 1)
+                            Text(sessionId.take(8).ifBlank { "Chat" }, maxLines = 1, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
                             if (!sessionProvider.isNullOrBlank()) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text(
-                                        text = sessionProvider.replaceFirstChar { it.uppercase() },
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
+                                ProviderBadge(sessionProvider)
                             }
                         }
                     },
                     navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                     actions = {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics { contentDescription = if (duplex) "Conversación" else "Texto" }) {
                             Text(if (duplex) "Conversación" else "Texto", style = MaterialTheme.typography.labelSmall)
@@ -226,6 +218,7 @@ fun ChatScreen(
                             AssistChip(
                                 onClick = {},
                                 label = { Text("${f.name.take(18)} ${humanSize(f.size)}", maxLines = 1) },
+                                shape = RoundedCornerShape(10.dp),
                                 trailingIcon = {
                                     IconButton(onClick = { attachedFiles = attachedFiles.filterIndexed { i, _ -> i != idx } }, modifier = Modifier.size(18.dp)) {
                                         Icon(Icons.Filled.Close, contentDescription = "Quitar", modifier = Modifier.size(12.dp))
@@ -245,6 +238,7 @@ fun ChatScreen(
                             val modelName = models.find { it.id == selectedModel }?.name ?: selectedModel ?: "Modelo"
                             Text(modelName, style = MaterialTheme.typography.labelSmall)
                         },
+                        shape = RoundedCornerShape(10.dp),
                         leadingIcon = { Icon(Icons.Filled.SmartToy, contentDescription = null, modifier = Modifier.size(16.dp)) },
                         modifier = Modifier.semantics { contentDescription = "Seleccionar modelo" }
                     )
@@ -367,6 +361,7 @@ fun ChatScreen(
                                             onClick = {
                                                 composerText = prompt
                                             },
+                                            shape = RoundedCornerShape(12.dp),
                                             label = { Text(prompt, style = MaterialTheme.typography.bodySmall) }
                                         )
                                     }
@@ -552,15 +547,16 @@ private fun MessageBubble(msg: Message, onRetry: (() -> Unit)? = null) {
         }
         val contentColor = when {
             isUser -> MaterialTheme.colorScheme.onPrimary
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
+            else -> MaterialTheme.colorScheme.onSurface
         }
-        val shape = RoundedCornerShape(
-            topStart = 16.dp, topEnd = 16.dp,
-            bottomStart = if (isUser) 16.dp else 4.dp,
-            bottomEnd = if (isUser) 4.dp else 16.dp
-        )
-        Surface(color = bubbleColor, shape = shape, modifier = Modifier.fillMaxWidth(0.86f)) {
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val shape = RoundedCornerShape(16.dp)
+        Surface(
+            color = bubbleColor,
+            shape = shape,
+            border = if (!isUser) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+            modifier = Modifier.fillMaxWidth(0.86f)
+        ) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Image previews (legacy type:"image" parts)
                 images.forEach { img ->
                     val bitmap = (img.image ?: img.data ?: img.url)?.let { decodeBase64Bitmap(it) }
@@ -700,7 +696,8 @@ private fun AssistantTypingBubble() {
     ) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier.padding(vertical = 4.dp)
         ) {
             Row(

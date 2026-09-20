@@ -17,24 +17,33 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opencode.companion.data.Project
+import com.opencode.companion.ui.theme.AgyBadgeBg
+import com.opencode.companion.ui.theme.AgyBadgeBorder
+import com.opencode.companion.ui.theme.AgyBadgeFg
+import com.opencode.companion.ui.theme.OpenCodeBadgeBg
+import com.opencode.companion.ui.theme.OpenCodeBadgeBorder
+import com.opencode.companion.ui.theme.OpenCodeBadgeFg
 import com.opencode.companion.util.relativeTime
 
 @Composable
 fun ProviderBadge(provider: String, modifier: Modifier = Modifier) {
     val isAgy = provider.equals("antigravity", ignoreCase = true)
     Surface(
-        shape = RoundedCornerShape(4.dp),
-        color = if (isAgy) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+        shape = RoundedCornerShape(8.dp),
+        color = if (isAgy) AgyBadgeBg else OpenCodeBadgeBg,
+        border = BorderStroke(1.dp, if (isAgy) AgyBadgeBorder else OpenCodeBadgeBorder),
         modifier = modifier
     ) {
         Text(
             text = if (isAgy) "Antigravity" else "OpenCode",
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isAgy) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = if (isAgy) AgyBadgeFg else OpenCodeBadgeFg,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
         )
     }
 }
@@ -70,24 +79,38 @@ fun ProjectsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Proyectos") }, navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } })
+            TopAppBar(
+                title = { Text("Proyectos", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)) },
+                navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            )
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { showCreate = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = "Nuevo proyecto") },
-                text = { Text("+ Nuevo proyecto") },
+                text = { Text("+ Nuevo proyecto", fontWeight = FontWeight.Medium) },
+                shape = RoundedCornerShape(16.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.semantics { contentDescription = "Nuevo proyecto" }
             )
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             var isRefreshing by remember { mutableStateOf(false) }
             LaunchedEffect(isLoading) { if (!isLoading) isRefreshing = false }
             if (isLoading && projects.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar") }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Buscar proyectos" }, singleLine = true)
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Buscar") },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Buscar proyectos" },
+                    singleLine = true
+                )
                 PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = { isRefreshing = true; onRefresh() }, modifier = Modifier.fillMaxSize()) {
                     if (filtered.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -97,21 +120,27 @@ fun ProjectsScreen(
                             }
                         }
                     } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 72.dp)) {
                             items(filtered, key = { it.id }) { proj ->
-                                Card(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = proj.name }.combinedClickable(onClick = { onOpenProject(proj.id) }, onLongClick = { menuTarget = proj })) {
+                                OutlinedCard(
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = proj.name }.combinedClickable(onClick = { onOpenProject(proj.id) }, onLongClick = { menuTarget = proj })
+                                ) {
                                     ListItem(
+                                        colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
                                         headlineContent = {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text(proj.name, modifier = Modifier.weight(1f, fill = false))
+                                                Text(proj.name, modifier = Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium))
                                                 ProviderBadge(proj.resolvedProvider)
                                             }
                                         },
-                                        supportingContent = { Text("${proj.description ?: "—"} · ${relativeTime(proj.createdAt)}", maxLines = 1) },
-                                        leadingContent = { Icon(Icons.Filled.Folder, contentDescription = "Proyecto") }
+                                        supportingContent = { Text("${proj.description ?: "—"} · ${relativeTime(proj.createdAt)}", maxLines = 1, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                        leadingContent = { Icon(Icons.Filled.Folder, contentDescription = "Proyecto", tint = MaterialTheme.colorScheme.primary) }
                                     )
                                 }
-                                DropdownMenu(expanded = menuTarget?.id == proj.id, onDismissRequest = { menuTarget = null }) {
+                                DropdownMenu(expanded = menuTarget?.id == proj.id, onDismissRequest = { menuTarget = null }, shape = RoundedCornerShape(12.dp), containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
                                     DropdownMenuItem(
                                         text = { Text(if (pinnedIds.contains(proj.id)) "Desfijar" else "Fijar") },
                                         onClick = { menuTarget = null; pinnedIds = if (pinnedIds.contains(proj.id)) pinnedIds - proj.id else pinnedIds + proj.id },
@@ -150,28 +179,32 @@ fun ProjectsScreen(
         var selectedProvider by remember { mutableStateOf("opencode") }
         AlertDialog(
             onDismissRequest = { showCreate = false },
-            title = { Text("Nuevo proyecto") },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Nuevo proyecto", fontWeight = FontWeight.SemiBold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = desc, onValueChange = { desc = it }, label = { Text("Descripción (opcional)") }, modifier = Modifier.fillMaxWidth())
-                    Text("Proveedor / Agente:", style = MaterialTheme.typography.labelMedium)
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = desc, onValueChange = { desc = it }, label = { Text("Descripción (opcional)") }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
+                    Text("Proveedor / Agente:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         FilterChip(
                             selected = selectedProvider == "opencode",
                             onClick = { selectedProvider = "opencode" },
-                            label = { Text("OpenCode") }
+                            label = { Text("OpenCode") },
+                            shape = RoundedCornerShape(10.dp)
                         )
                         FilterChip(
                             selected = selectedProvider == "antigravity",
                             onClick = { selectedProvider = "antigravity" },
-                            label = { Text("Antigravity") }
+                            label = { Text("Antigravity") },
+                            shape = RoundedCornerShape(10.dp)
                         )
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { if (name.isNotBlank()) { onCreateProject(name.trim(), desc.trim(), selectedProvider); showCreate = false } }) { Text("Crear") }
+                TextButton(onClick = { if (name.isNotBlank()) { onCreateProject(name.trim(), desc.trim(), selectedProvider); showCreate = false } }) { Text("Crear", fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = { TextButton(onClick = { showCreate = false }) { Text("Cancelar") } }
         )
@@ -181,32 +214,38 @@ fun ProjectsScreen(
         var desc by remember(proj.id) { mutableStateOf(proj.description ?: "") }
         AlertDialog(
             onDismissRequest = { editTarget = null },
-            title = { Text("Editar detalles") },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Editar detalles", fontWeight = FontWeight.SemiBold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = desc, onValueChange = { desc = it }, label = { Text("Descripción") }, modifier = Modifier.fillMaxWidth())
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = desc, onValueChange = { desc = it }, label = { Text("Descripción") }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
                 }
             },
-            confirmButton = { TextButton(onClick = { if (name.isNotBlank()) { onPatchProject(proj.id, name.trim(), desc.trim().ifBlank { null }); editTarget = null } }) { Text("Guardar") } },
+            confirmButton = { TextButton(onClick = { if (name.isNotBlank()) { onPatchProject(proj.id, name.trim(), desc.trim().ifBlank { null }); editTarget = null } }) { Text("Guardar", fontWeight = FontWeight.SemiBold) } },
             dismissButton = { TextButton(onClick = { editTarget = null }) { Text("Cancelar") } }
         )
     }
     archiveTarget?.let { proj ->
         AlertDialog(
             onDismissRequest = { archiveTarget = null },
-            title = { Text("Archivar proyecto") },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Archivar proyecto", fontWeight = FontWeight.SemiBold) },
             text = { Text("¿Archivar \"${proj.name}\"? Podrás verlo en la sección de archivados.") },
-            confirmButton = { TextButton(onClick = { onArchiveProject(proj.id); archiveTarget = null }) { Text("Archivar") } },
+            confirmButton = { TextButton(onClick = { onArchiveProject(proj.id); archiveTarget = null }) { Text("Archivar", fontWeight = FontWeight.SemiBold) } },
             dismissButton = { TextButton(onClick = { archiveTarget = null }) { Text("Cancelar") } }
         )
     }
     deleteTarget?.let { proj ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("Eliminar proyecto") },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Eliminar proyecto", fontWeight = FontWeight.SemiBold) },
             text = { Text("¿Eliminar \"${proj.name}\"? Se archivará.") },
-            confirmButton = { TextButton(onClick = { onDeleteProject(proj.id); deleteTarget = null }) { Text("Eliminar") } },
+            confirmButton = { TextButton(onClick = { onDeleteProject(proj.id); deleteTarget = null }) { Text("Eliminar", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold) } },
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancelar") } }
         )
     }
