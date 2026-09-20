@@ -183,7 +183,7 @@ class MainViewModel : ViewModel() {
                 .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
                 .build()
             val resp = ApiClient.rawOkHttp.newCall(req).execute()
-            val body = resp.body?.string() ?: return null
+            val body = resp.body?.string() ?: return@withContext null
             val json = com.google.gson.JsonParser.parseString(body).asJsonObject
             when {
                 json.has("id") -> json.get("id").asString
