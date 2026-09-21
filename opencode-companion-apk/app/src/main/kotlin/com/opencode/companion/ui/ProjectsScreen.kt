@@ -288,7 +288,7 @@ fun ProjectsScreen(
     if (showCreate) {
         var name by remember { mutableStateOf("") }
         var desc by remember { mutableStateOf("") }
-        var selectedProvider by remember { mutableStateOf("opencode") }
+        var selectedProvider by remember { mutableStateOf("antigravity") }
         AlertDialog(
             onDismissRequest = { showCreate = false },
             shape = RoundedCornerShape(16.dp),

@@ -133,7 +133,12 @@ fun AppNavHost() {
             val sid = backStack.arguments?.getString("sessionId") ?: ""
             val chatVm: ChatViewModel = viewModel(key = "chat_$sid")
             val session = sessions.find { it.resolvedId == sid || it.id == sid || it.ID == sid }
-            val prov = session?.provider ?: if (sid.startsWith("agy_")) "antigravity" else "opencode"
+            val prov = session?.provider ?: if (sid.startsWith("agy_") || sid.isBlank()) "antigravity" else "opencode"
+            LaunchedEffect(sid, session?.title) {
+                if (!session?.title.isNullOrBlank()) {
+                    chatVm.setSessionTitle(session.title)
+                }
+            }
             ChatScreen(
                 sessionId = sid,
                 vm = chatVm,

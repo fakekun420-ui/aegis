@@ -20,7 +20,7 @@ data class SessionRef(
 ) {
     fun resolvedProvider(projectProvider: String? = null): String {
         val p = provider ?: projectProvider
-        return if (p?.lowercase() == "antigravity") "Antigravity" else "OpenCode"
+        return if (p?.lowercase() == "antigravity" || sessionId.startsWith("agy_")) "Antigravity" else "OpenCode"
     }
 }
 
@@ -30,7 +30,7 @@ data class Project(
     val description: String? = null,
     val createdAt: String? = null,
     val archivedAt: String? = null,
-    val provider: String? = "opencode",
+    val provider: String? = "antigravity",
     val sessions: List<SessionRef>? = null,
     val skills: List<Any>? = null,
     val linkedProjects: List<String>? = null
@@ -41,7 +41,7 @@ data class Project(
 data class CreateProjectRequest(
     val name: String,
     val description: String? = null,
-    val provider: String? = "opencode"
+    val provider: String? = "antigravity"
 )
 
 data class PatchProjectRequest(
@@ -54,7 +54,7 @@ data class PatchProjectRequest(
 data class LinkSessionRequest(
     val sessionId: String,
     val title: String? = null,
-    val provider: String? = null
+    val provider: String? = "antigravity"
 )
 
 // ---- Sessions (proxy /api/opencode/sessions -> opencode /session) ----
@@ -71,9 +71,9 @@ data class OpencodeSession(
     val provider: String? = null
 ) {
     val resolvedId: String get() = id ?: ID ?: ""
-    val resolvedTitle: String get() = title ?: name ?: resolvedId.take(8)
+    val resolvedTitle: String get() = title ?: name ?: if (resolvedId.startsWith("agy_")) "Nuevo chat" else resolvedId.take(8)
     val lastActivityIso: String? get() = updatedAt ?: updatedAtAlt ?: createdAt ?: createdAtAlt
-    val resolvedProvider: String get() = if (provider?.lowercase() == "antigravity") "Antigravity" else "OpenCode"
+    val resolvedProvider: String get() = if (provider?.lowercase() == "antigravity" || resolvedId.startsWith("agy_")) "Antigravity" else "OpenCode"
 }
 
 // ---- Messages (GET /session/:id/message proxied via hub) ----

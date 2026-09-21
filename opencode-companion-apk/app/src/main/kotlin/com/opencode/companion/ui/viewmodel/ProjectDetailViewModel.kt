@@ -83,9 +83,9 @@ class ProjectDetailViewModel : ViewModel() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 // Create session via hub
-                val provider = _project.value?.provider ?: "opencode"
+                val provider = _project.value?.provider ?: "antigravity"
                 val title = "companion:${_project.value?.name ?: projectId}:${System.currentTimeMillis() % 100000}"
-                val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":\"$projectId\",\"provider\":\"$provider\"}"
+                val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":\"$projectId\",\"provider\":\"$provider\",\"model\":\"gemini-3.8-flash-high\"}"
                 val req = okhttp3.Request.Builder()
                     .url("http://127.0.0.1:8765/opencode/session")
                     .header("X-Provider", provider)

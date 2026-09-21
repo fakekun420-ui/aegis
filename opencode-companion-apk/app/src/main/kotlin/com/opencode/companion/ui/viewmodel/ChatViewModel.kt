@@ -35,11 +35,14 @@ class ChatViewModel : ViewModel() {
     private val _models = MutableStateFlow<List<ModelOption>>(emptyList())
     val models: StateFlow<List<ModelOption>> = _models
 
-    private val _selectedModel = MutableStateFlow<String?>(null)
+    private val _selectedModel = MutableStateFlow<String?>("gemini-3.8-flash-high")
     val selectedModel: StateFlow<String?> = _selectedModel
 
-    private val _selectedProvider = MutableStateFlow<String>("opencode")
+    private val _selectedProvider = MutableStateFlow<String>("antigravity")
     val selectedProvider: StateFlow<String> = _selectedProvider
+
+    private val _sessionTitle = MutableStateFlow<String?>(null)
+    val sessionTitle: StateFlow<String?> = _sessionTitle
 
     private val _currentSessionId = MutableStateFlow<String?>(null)
     val currentSessionId: StateFlow<String?> = _currentSessionId
@@ -51,6 +54,31 @@ class ChatViewModel : ViewModel() {
     val agentMode: StateFlow<String> = _agentMode
 
     private var pollingJob: Job? = null
+
+    fun setSessionTitle(title: String?) {
+        if (!title.isNullOrBlank() && !isTechnicalTitle(title)) {
+            _sessionTitle.value = title
+        }
+    }
+
+    private fun isTechnicalTitle(t: String?): Boolean {
+        if (t == null) return true
+        val s = t.trim()
+        if (s.isBlank()) return true
+        if (s.startsWith("ses_") || s.startsWith("agy_") || s.startsWith("companion:") || s.startsWith("local_")) return true
+        if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
+        return false
+    }
+
+    private fun updateTitleFromFirstMessage(msgList: List<Message>) {
+        if (_sessionTitle.value.isNullOrBlank() || isTechnicalTitle(_sessionTitle.value)) {
+            val firstPrompt = msgList.firstOrNull { it.role == "user" && it.text.isNotBlank() }?.text?.trim()
+            if (!firstPrompt.isNullOrBlank()) {
+                val clean = firstPrompt.replace("\n", " ").trim()
+                _sessionTitle.value = if (clean.length > 30) clean.take(30).trim() + "…" else clean
+            }
+        }
+    }
 
     fun selectModel(modelId: String?) {
         _selectedModel.value = modelId
@@ -75,14 +103,15 @@ class ChatViewModel : ViewModel() {
     }
 
     fun loadModels(provider: String? = null) {
-        val prov = (provider ?: _selectedProvider.value).lowercase().trim()
+        val prov = (provider ?: _selectedProvider.value).lowercase().trim().ifBlank { "antigravity" }
         viewModelScope.launch {
             try {
                 val resp = api.getModels(prov)
                 if (resp.ok && resp.data != null && resp.data.isNotEmpty()) {
                     _models.value = resp.data
-                    if (_models.value.none { it.id == _selectedModel.value }) {
-                        _selectedModel.value = resp.data.first().id
+                    if (_selectedModel.value == null || _models.value.none { it.id == _selectedModel.value }) {
+                        val defaultHigh = resp.data.find { it.id == "gemini-3.8-flash-high" }
+                        _selectedModel.value = defaultHigh?.id ?: resp.data.first().id
                     }
                 }
             } catch (_: Exception) { }
@@ -91,9 +120,13 @@ class ChatViewModel : ViewModel() {
 
     fun load(sessionId: String, provider: String? = null) {
         pollingJob?.cancel()
-        val prov = (provider ?: if (sessionId.startsWith("agy_")) "antigravity" else "opencode").lowercase().trim()
+        val prov = (provider ?: if (sessionId.isBlank() || sessionId.startsWith("agy_")) "antigravity" else "opencode").lowercase().trim()
         _selectedProvider.value = prov
+        if (_selectedModel.value.isNullOrBlank()) {
+            _selectedModel.value = "gemini-3.8-flash-high"
+        }
         if (sessionId.isBlank()) {
+            _sessionTitle.value = "Nuevo chat"
             loadModels(prov)
             return
         }
@@ -102,10 +135,24 @@ class ChatViewModel : ViewModel() {
             _loading.value = true
             _error.value = null
             loadModels(prov)
+
+            // Try to resolve human-readable title from sessions list
+            try {
+                val sessResp = api.getOpencodeSessions()
+                if (sessResp.ok && sessResp.data != null) {
+                    val found = sessResp.data.find { it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId }
+                    if (found != null && !found.title.isNullOrBlank() && !isTechnicalTitle(found.title)) {
+                        _sessionTitle.value = found.title
+                    }
+                }
+            } catch (_: Exception) {}
+
             try {
                 val resp = api.getMessages(sessionId)
                 if (resp.ok && resp.data != null) {
-                    _messages.value = resp.data.filterNot { it.isEmpty }
+                    val nonEmpties = resp.data.filterNot { it.isEmpty }
+                    _messages.value = nonEmpties
+                    updateTitleFromFirstMessage(nonEmpties)
                 } else if (!resp.ok) {
                     _error.value = resp.error ?: "Error al obtener mensajes"
                 }
@@ -146,8 +193,13 @@ class ChatViewModel : ViewModel() {
     ) {
         if (text.isBlank() && files.isEmpty()) return
 
-        val provider = (explicitProvider ?: _selectedProvider.value).lowercase().trim()
+        val provider = (explicitProvider ?: _selectedProvider.value).lowercase().trim().ifBlank { "antigravity" }
         val tempMsgId = "local_${System.currentTimeMillis()}"
+
+        if (text.isNotBlank() && (_sessionTitle.value.isNullOrBlank() || isTechnicalTitle(_sessionTitle.value))) {
+            val clean = text.replace("\n", " ").trim()
+            _sessionTitle.value = if (clean.length > 30) clean.take(30).trim() + "…" else clean
+        }
 
         viewModelScope.launch {
             _loading.value = true
@@ -226,9 +278,10 @@ class ChatViewModel : ViewModel() {
             // 5. Send message with SSE real-time token streaming
             try {
                 val currentAgentMode = _agentMode.value
+                val currentModel = _selectedModel.value ?: "gemini-3.8-flash-high"
                 val sendReq = SendMessageRequest(
                     parts = reqParts,
-                    model = _selectedModel.value,
+                    model = currentModel,
                     provider = provider,
                     agent = currentAgentMode,
                     mode = currentAgentMode
@@ -243,6 +296,7 @@ class ChatViewModel : ViewModel() {
                         .url("http://127.0.0.1:8765/api/opencode/sessions/$targetSessionId/message?stream=true")
                         .header("Accept", "text/event-stream")
                         .header("X-Provider", provider)
+                        .header("X-Model", currentModel)
                         .header("X-Agent", currentAgentMode)
                         .header("X-Mode", currentAgentMode)
                         .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
@@ -351,10 +405,10 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    private suspend fun createNewSession(provider: String = "opencode"): String? = withContext(Dispatchers.IO) {
+    private suspend fun createNewSession(provider: String = "antigravity"): String? = withContext(Dispatchers.IO) {
         try {
-            val title = "companion:${System.currentTimeMillis() % 100000}"
-            val bodyJson = "{\"title\":\"${title.replace("\"", "\\\"")}\",\"provider\":\"$provider\"}"
+            val title = "Nuevo chat"
+            val bodyJson = "{\"title\":\"${title.replace("\"", "\\\"")}\",\"provider\":\"$provider\",\"model\":\"gemini-3.8-flash-high\"}"
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:8765/opencode/session")
                 .header("X-Provider", provider)

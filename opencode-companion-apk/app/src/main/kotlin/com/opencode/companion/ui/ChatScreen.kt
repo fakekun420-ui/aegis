@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -193,12 +194,39 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             if (showTopBar) {
+                val firstUserMsg = messages.firstOrNull { it.role == "user" && it.text.isNotBlank() }?.text?.trim()
+                val displayTitle = when {
+                    !sessionTitle.isNullOrBlank() && !isTechnicalSessionId(sessionTitle) -> sessionTitle!!
+                    !firstUserMsg.isNullOrBlank() -> {
+                        val clean = firstUserMsg.replace("\n", " ").trim()
+                        if (clean.length > 30) clean.take(30).trim() + "…" else clean
+                    }
+                    else -> "Nuevo chat"
+                }
+                val effectiveProvider = sessionProvider ?: selectedProvider
+
                 TopAppBar(
                     title = {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(sessionId.take(8).ifBlank { "Chat" }, maxLines = 1, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                            if (!sessionProvider.isNullOrBlank()) {
-                                ProviderBadge(sessionProvider)
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = displayTitle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                if (!effectiveProvider.isNullOrBlank()) {
+                                    ProviderBadge(effectiveProvider)
+                                }
+                            }
+                            if (sessionId.isNotBlank()) {
+                                Text(
+                                    text = sessionId.take(16),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    maxLines = 1
+                                )
                             }
                         }
                     },
@@ -219,7 +247,7 @@ fun ChatScreen(
         bottomBar = {
             Column(modifier = Modifier.navigationBarsPadding().imePadding()) {
                 val modelDisplayName = models.find { it.id == selectedModel }?.name
-                    ?: if (!selectedModel.isNullOrBlank()) selectedModel!! else "Gemini 3.6 Flash"
+                    ?: if (!selectedModel.isNullOrBlank()) selectedModel!! else "Gemini 3.8 Flash (High)"
 
                 UnifiedFloatingComposer(
                     text = composerText,
@@ -1082,4 +1110,13 @@ private fun startListeningInternal(
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
     }
     try { sr.startListening(intent); setListening(true) } catch (e: Exception) { setError(e.message); setListening(false) }
+}
+
+private fun isTechnicalSessionId(t: String?): Boolean {
+    if (t == null) return true
+    val s = t.trim()
+    if (s.isBlank()) return true
+    if (s.startsWith("ses_") || s.startsWith("agy_") || s.startsWith("companion:") || s.startsWith("local_")) return true
+    if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
+    return false
 }

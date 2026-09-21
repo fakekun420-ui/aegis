@@ -762,6 +762,7 @@ const server = http.createServer(async (req, res)=>{
         const p = findProject(store, projectId);
         if (p && p.provider) provId = p.provider;
       }
+      if (!provId) provId = "antigravity";
 
       const adapter = providerManager.resolveProvider(null, provId, store);
       console.log(`[hub] creating session via ${adapter.id} (title: ${body.title || "untitled"}, project: ${projectId || "none"})`);
@@ -889,6 +890,13 @@ const server = http.createServer(async (req, res)=>{
                 (body.projectId && String(body.projectId).trim()) ||
                 null;
       let provId = headerProvider || body.provider || null;
+      if (!provId) {
+        if (sid.startsWith("agy_") || antigravityAdapter.sessionMap.has(sid) || fs.existsSync(path.join(antigravityAdapter.brainDir, sid))) {
+          provId = "antigravity";
+        } else {
+          provId = "antigravity";
+        }
+      }
 
       // Immediate atomic persistence of session association and provider
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
@@ -915,7 +923,7 @@ const server = http.createServer(async (req, res)=>{
               title: existingTitle,
               createdAt: nowIso(),
               lastUsed: nowIso(),
-              provider: provId || parentProject.provider || "opencode"
+              provider: provId || parentProject.provider || "antigravity"
             });
             parentProject.sessions = parentProject.sessions || [];
             parentProject.sessions.push(sessionEntry);
@@ -931,7 +939,33 @@ const server = http.createServer(async (req, res)=>{
         saveProjectsStore(store);
       });
 
+      // Auto-update session title from first prompt if title is technical or placeholder
+      const promptText = typeof body.text === "string" ? body.text : (body.prompt || (Array.isArray(body.parts) && body.parts[0]?.text) || "");
+      if (promptText && promptText.trim()) {
+        await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+          const store = loadProjectsStore();
+          store.sessionTitles = store.sessionTitles || {};
+          const curTitle = store.sessionTitles[sid] || resolveExistingSessionTitle(store, sid);
+          if (!curTitle || curTitle.startsWith("companion:") || curTitle.startsWith("session:") || curTitle.startsWith("agy_") || curTitle.startsWith("ses_") || curTitle === "Nuevo chat" || curTitle === "Antigravity session" || /^[0-9a-fA-F-]{8,}$/.test(curTitle)) {
+            const cleanPrompt = promptText.replace(/[\r\n]+/g, " ").trim();
+            const autoTitle = cleanPrompt.length > 30 ? cleanPrompt.slice(0, 30).trim() + "…" : cleanPrompt;
+            store.sessionTitles[sid] = autoTitle;
+            for (const p of store.projects) {
+              const found = (p.sessions || []).find(s => s.sessionId === sid || s.agyConversationId === sid);
+              if (found) {
+                found.title = autoTitle;
+                break;
+              }
+            }
+            saveProjectsStore(store);
+          }
+        });
+      }
+
       body.projectId = pId;
+      if (!body.model) {
+        body.model = "gemini-3.8-flash-high";
+      }
       const agentMode = body.agent || body.mode || req.headers["x-agent"] || req.headers["x-mode"] || "build";
       body.agent = agentMode;
       body.mode = agentMode;
@@ -1361,7 +1395,7 @@ const server = http.createServer(async (req, res)=>{
       const headerProv = req.headers["x-provider"] ? String(req.headers["x-provider"]).toLowerCase().trim() : null;
       const initialProv = (body.provider && ["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim()))
         ? String(body.provider).toLowerCase().trim()
-        : (headerProv && ["opencode", "antigravity"].includes(headerProv) ? headerProv : "opencode");
+        : (headerProv && ["opencode", "antigravity"].includes(headerProv) ? headerProv : "antigravity");
 
       let createdProj = null;
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
@@ -1540,9 +1574,9 @@ const server = http.createServer(async (req, res)=>{
         if (proj.archivedAt) throw new Error(`ARCHIVED: project ${id} is archived`);
 
         if (!sessionId) {
-          const provId = body.provider || headerProv || proj.provider || "opencode";
+          const provId = body.provider || headerProv || proj.provider || "antigravity";
           const adapter = providerManager.resolveProvider(null, provId, store);
-          const autoTitle = body.title || `companion:${proj.name}:${Date.now() % 100000}`;
+          const autoTitle = body.title || "Nuevo chat";
           const created = await adapter.createSession({ title: autoTitle, projectId: id });
           sessionId = created.id;
           body.title = created.title || autoTitle;
@@ -1927,7 +1961,7 @@ const server = http.createServer(async (req, res)=>{
   // GET /api/opencode/models (and GET /api/models) — list available models for the model selector
   if((pathname === "/api/opencode/models" || pathname === "/api/models") && req.method === "GET") {
     const prov = url.searchParams.get("provider");
-    if (prov === "antigravity") {
+    if (prov === "antigravity" || !prov) {
       const models = await antigravityAdapter.listModels();
       return json(res, 200, ok(models));
     }

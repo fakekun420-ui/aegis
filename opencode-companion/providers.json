@@ -1,5 +1,5 @@
 {
-  "defaultProvider": "opencode",
+  "defaultProvider": "antigravity",
   "providers": [
     {
       "id": "opencode",

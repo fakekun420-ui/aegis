@@ -597,6 +597,29 @@ export class OpencodeAdapter extends BaseProviderAdapter {
               if (j.name === "BadRequest" || j.error) {
                 return reject(new Error(j.data?.message || j.message || j.error || "OpenCode error"));
               }
+              const isUserMsg = j.role === "user" || j.type === "user" || (j.info && j.info.role === "user");
+              if (isUserMsg) {
+                console.log(`[opencode] user prompt acknowledged for ${sessionId}, polling for assistant response...`);
+                const startTime = Date.now();
+                const pollTimer = setInterval(async () => {
+                  if (Date.now() - startTime > 45000) {
+                    clearInterval(pollTimer);
+                    return resolve(normalizeMessage({ role: "assistant", text: "" }, sessionId));
+                  }
+                  try {
+                    const msgs = await this.getMessages(sessionId);
+                    const lastAssistant = msgs.filter((m) => m.role === "assistant" && m.text).pop();
+                    if (lastAssistant) {
+                      clearInterval(pollTimer);
+                      if (typeof opts.onChunk === "function" && lastAssistant.text) {
+                        try { opts.onChunk(lastAssistant.text); } catch (_) {}
+                      }
+                      return resolve(lastAssistant);
+                    }
+                  } catch (_) {}
+                }, 1000);
+                return;
+              }
               const normalized = normalizeMessage(j, sessionId);
               if (typeof opts.onChunk === "function" && normalized.text) {
                 try { opts.onChunk(normalized.text); } catch (_) {}
@@ -861,7 +884,9 @@ export class AntigravityAdapter extends BaseProviderAdapter {
 
   async createSession(opts = {}) {
     const id = `agy_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-    const title = opts.title || `Antigravity session`;
+    const title = opts.title && !opts.title.startsWith("companion:") && !opts.title.startsWith("session:")
+      ? opts.title
+      : "Nuevo chat";
     return {
       id,
       title,
@@ -1074,9 +1099,8 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     if (convId && fs.existsSync(path.join(this.brainDir, convId))) {
       args.push("--conversation", convId);
     }
-    if (payload.model) {
-      args.push("--model", String(payload.model));
-    }
+    const modelToUse = payload.model || "gemini-3.8-flash-high";
+    args.push("--model", String(modelToUse));
     const agentMode = payload.agent || payload.mode || opts.agent || opts.mode || "build";
     if (agentMode === "plan") {
       args.push("--mode", "plan");
@@ -1195,7 +1219,24 @@ export class AntigravityAdapter extends BaseProviderAdapter {
           if (!afterConvId && fs.existsSync(this.brainDir)) {
             const curDirs = fs.readdirSync(this.brainDir);
             const newDirs = curDirs.filter((d) => !beforeDirs.has(d));
-            if (newDirs.length > 0) afterConvId = newDirs[0];
+            if (newDirs.length > 0) {
+              newDirs.sort((a, b) => {
+                try {
+                  return fs.statSync(path.join(this.brainDir, b)).mtimeMs - fs.statSync(path.join(this.brainDir, a)).mtimeMs;
+                } catch (_) { return 0; }
+              });
+              afterConvId = newDirs[0];
+            } else {
+              const allDirs = curDirs.filter((d) => !d.startsWith("."));
+              allDirs.sort((a, b) => {
+                try {
+                  return fs.statSync(path.join(this.brainDir, b)).mtimeMs - fs.statSync(path.join(this.brainDir, a)).mtimeMs;
+                } catch (_) { return 0; }
+              });
+              if (allDirs.length > 0 && Date.now() - fs.statSync(path.join(this.brainDir, allDirs[0])).mtimeMs < 60000) {
+                afterConvId = allDirs[0];
+              }
+            }
           }
           if (afterConvId) this.sessionMap.set(sessionId, afterConvId);
 
@@ -1285,7 +1326,7 @@ export class ProviderManager {
   constructor(configFilePath = "/sdcard/projects/opencode-companion/providers.json") {
     this.configFilePath = configFilePath;
     this.adapters = new Map();
-    this.defaultProvider = "opencode";
+    this.defaultProvider = "antigravity";
     this.loadConfig();
   }
 
