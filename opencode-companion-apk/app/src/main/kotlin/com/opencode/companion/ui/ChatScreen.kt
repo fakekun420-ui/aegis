@@ -67,6 +67,7 @@ fun ChatScreen(
 ) {
     val context = LocalContext.current
     val messages by vm.messages.collectAsState()
+    val sessionTitle by vm.sessionTitle.collectAsState()
     val loading by vm.loading.collectAsState()
     val error by vm.error.collectAsState()
     val models by vm.models.collectAsState()
