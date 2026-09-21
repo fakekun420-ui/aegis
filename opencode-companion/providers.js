@@ -871,8 +871,23 @@ export class AntigravityAdapter extends BaseProviderAdapter {
   }
 
   async deleteSession(sessionId) {
-    const convId = this.sessionMap.get(sessionId) || sessionId;
+    let convId = this.sessionMap.get(sessionId) || sessionId;
     this.sessionMap.delete(sessionId);
+
+    // Also check if any project in projects.json has this session's agyConversationId
+    try {
+      const store = loadProjectsStore();
+      for (const p of store.projects) {
+        const f = (p.sessions || []).find(s => s.sessionId === sessionId || s.agyConversationId === sessionId);
+        if (f && f.agyConversationId) {
+          const cDir = path.join(this.brainDir, f.agyConversationId);
+          if (fs.existsSync(cDir)) {
+            try { fs.rmSync(cDir, { recursive: true, force: true }); } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+
     const targetDir = path.join(this.brainDir, convId);
     if (fs.existsSync(targetDir)) {
       try {
@@ -882,22 +897,34 @@ export class AntigravityAdapter extends BaseProviderAdapter {
         console.warn(`[antigravity] failed to remove brain directory ${targetDir}:`, err.message);
       }
     }
+
+    // Also check direct sessionId directory if distinct
+    const directDir = path.join(this.brainDir, sessionId);
+    if (directDir !== targetDir && fs.existsSync(directDir)) {
+      try {
+        fs.rmSync(directDir, { recursive: true, force: true });
+        console.log(`[antigravity] purged brain directory: ${directDir}`);
+      } catch (_) {}
+    }
+
     return { ok: true, removed: sessionId };
   }
 
   _cleanPromptContent(raw) {
     if (!raw) return "";
     let str = String(raw);
-    const m = str.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i);
-    if (m && m[1]) return m[1].trim();
-    str = str.replace(/<SYSTEM_INSTRUCTION>[\s\S]*?<\/SYSTEM_INSTRUCTION>/gi, "").trim();
-    str = str.replace(/<SYSTEM_CONTEXT[\s\S]*?<\/SYSTEM_CONTEXT>/gi, "").trim();
+    const m = str.match(/<USER_REQUEST>([\s\S]*?)(?:<\/USER_REQUEST>|$)/i);
+    if (m && m[1]) str = m[1];
+    str = str.replace(/\/\/?(?:PLAN|plan|BUILD|build)\s*/g, "");
+    str = str.replace(/<SYSTEM_INSTRUCTION>[\s\S]*?(?:<\/SYSTEM_INSTRUCTION>|$)/gi, "").trim();
+    str = str.replace(/<SYSTEM_CONTEXT[\s\S]*?(?:<\/SYSTEM_CONTEXT>|$)/gi, "").trim();
     str = str.replace(/\[SYSTEM CONTEXT[\s\S]*?\][\s\S]*?(?:---\n\n|$)/gi, "").trim();
     str = str.replace(/# PONY-TAIL[\s\S]*?(?:---\n\n|$)/gi, "").trim();
+    str = str.replace(/## 1\. Entorno[\s\S]*?(?:---\n\n|$)/gi, "").trim();
     str = str.replace(/<memory_context>[\s\S]*?<\/memory_context>/gi, "").trim();
     str = str.replace(/<ADDITIONAL_METADATA>[\s\S]*?<\/ADDITIONAL_METADATA>/gi, "").trim();
     str = str.replace(/<USER_SETTINGS_CHANGE>[\s\S]*?<\/USER_SETTINGS_CHANGE>/gi, "").trim();
-    return str;
+    return str.trim();
   }
 
   async getMessages(sessionId, opts = {}) {

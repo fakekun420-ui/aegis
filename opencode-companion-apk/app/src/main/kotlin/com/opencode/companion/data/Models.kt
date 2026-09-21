@@ -114,18 +114,21 @@ data class Message(
     }
     fun strippedText(): String {
         var t = text
-        val reqMatch = Regex("<USER_REQUEST>([\\s\\S]*?)</USER_REQUEST>", RegexOption.IGNORE_CASE).find(t)
-        if (reqMatch != null) {
-            return reqMatch.groupValues[1].trim()
+        val reqMatch = Regex("<USER_REQUEST>([\\s\\S]*?)(?:</USER_REQUEST>|$)", RegexOption.IGNORE_CASE).find(t)
+        if (reqMatch != null && reqMatch.groupValues[1].isNotBlank()) {
+            t = reqMatch.groupValues[1].trim()
         }
-        t = Regex("<SYSTEM_INSTRUCTION>[\\s\\S]*?</SYSTEM_INSTRUCTION>", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("<SYSTEM_CONTEXT>[\\s\\S]*?</SYSTEM_CONTEXT>", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = Regex("^\\s*//?/?(?:PLAN|plan|BUILD|build)\\s*", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = Regex("<SYSTEM_INSTRUCTION>[\\s\\S]*?(?:</SYSTEM_INSTRUCTION>|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = Regex("<SYSTEM_CONTEXT>[\\s\\S]*?(?:</SYSTEM_CONTEXT>|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
         t = Regex("\\[SYSTEM CONTEXT[\\s\\S]*?\\][\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
         t = Regex("# PONY-TAIL[\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = Regex("## 1\\. Entorno[\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
         t = Regex("<memory_context[\\s\\S]*?</memory_context>", RegexOption.IGNORE_CASE).replace(t, "").trim()
         t = Regex("<project_knowledge[\\s\\S]*?</project_knowledge>", RegexOption.IGNORE_CASE).replace(t, "").trim()
         t = Regex("<ADDITIONAL_METADATA>[\\s\\S]*?</ADDITIONAL_METADATA>", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        return t
+        t = Regex("<USER_SETTINGS_CHANGE>[\\s\\S]*?</USER_SETTINGS_CHANGE>", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        return t.trim()
     }
     val isEmpty: Boolean get() = text.isBlank() && strippedText().isBlank() && fileParts().isEmpty() && imageParts().isEmpty()
     fun fileParts(): List<MessagePart> = parts?.filter { it.type == "file" } ?: emptyList()

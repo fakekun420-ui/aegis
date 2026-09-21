@@ -286,8 +286,26 @@ fun ChatsScreen(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             title = { Text("Eliminar chat", fontWeight = FontWeight.SemiBold) },
             text = { Text("¿Eliminar \"${sess.resolvedTitle}\"? Esta acción no se puede deshacer.") },
-            confirmButton = { TextButton(onClick = { onDeleteSession(sess.resolvedId); deleteTarget = null }) { Text("Eliminar", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold) } },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancelar") } }
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val sid = sess.resolvedId
+                        deleteTarget = null
+                        onDeleteSession(sid)
+                    },
+                    modifier = Modifier.semantics { contentDescription = "Confirmar eliminar" }
+                ) {
+                    Text("Eliminar", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { deleteTarget = null },
+                    modifier = Modifier.semantics { contentDescription = "Cancelar eliminar" }
+                ) {
+                    Text("Cancelar")
+                }
+            }
         )
     }
 

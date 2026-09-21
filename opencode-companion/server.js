@@ -808,8 +808,7 @@ const server = http.createServer(async (req, res)=>{
   }
 
   // 0b2) Provider-aware Session Deletion: DELETE /api/opencode/sessions/:id, DELETE /api/sessions/:id, DELETE /opencode/session/:id, DELETE /opencode/sessions/:id
-  const deleteSessionIntercept = pathname.match(/^\/(?:opencode|api)\/session(?:s)?\/([^\/]+)$/) ||
-                                 pathname.match(/^\/api\/opencode\/sessions\/([^\/]+)$/);
+  const deleteSessionIntercept = pathname.match(/^\/(?:api\/opencode|opencode|api)\/session(?:s)?\/([^\/]+)$/);
   if (deleteSessionIntercept && req.method === "DELETE") {
     const sid = sanitizeProjectId(decodeURIComponent(deleteSessionIntercept[1]));
     try {
@@ -819,7 +818,7 @@ const server = http.createServer(async (req, res)=>{
         let changed = false;
         for (const p of store.projects) {
           const before = (p.sessions || []).length;
-          p.sessions = (p.sessions || []).filter(s => s.sessionId !== sid);
+          p.sessions = (p.sessions || []).filter(s => s.sessionId !== sid && s.agyConversationId !== sid);
           if (p.sessions.length !== before) changed = true;
         }
         if (store.sessionTitles && store.sessionTitles[sid]) {
@@ -829,13 +828,15 @@ const server = http.createServer(async (req, res)=>{
         if (changed) saveProjectsStore(store);
       });
 
-      // 2. Provider cleanup
-      let isAgy = sid.startsWith("agy_");
+      // 2. Provider cleanup — detects agy_ prefix, in-memory sessionMap, brain directory, or projects.json record
+      let isAgy = sid.startsWith("agy_") ||
+                  antigravityAdapter.sessionMap.has(sid) ||
+                  fs.existsSync(path.join(antigravityAdapter.brainDir, sid));
       if (!isAgy) {
         const checkStore = loadProjectsStore();
         for (const p of checkStore.projects) {
-          const f = (p.sessions || []).find((s) => s.sessionId === sid);
-          if (f && f.provider === "antigravity") {
+          const f = (p.sessions || []).find((s) => s.sessionId === sid || s.agyConversationId === sid);
+          if (f && (f.provider === "antigravity" || f.agyConversationId)) {
             isAgy = true;
             break;
           }

@@ -34,13 +34,20 @@ class MainViewModel : ViewModel() {
 
     fun clearError() { _error.value = null }
 
+    private val _deletedSessionIds = mutableSetOf<String>()
+
     fun refreshProjects() {
         viewModelScope.launch {
             _loadingProjects.value = true
             try {
                 val resp = api.getProjects()
-                if (resp.ok && resp.data != null) _projects.value = resp.data
-                else _error.value = resp.error ?: "getProjects failed"
+                if (resp.ok && resp.data != null) {
+                    _projects.value = resp.data.map { proj ->
+                        if (proj.sessions != null) {
+                            proj.copy(sessions = proj.sessions.filter { it.sessionId !in _deletedSessionIds })
+                        } else proj
+                    }
+                } else _error.value = resp.error ?: "getProjects failed"
             } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
             finally { _loadingProjects.value = false }
         }
@@ -51,8 +58,12 @@ class MainViewModel : ViewModel() {
             _loadingSessions.value = true
             try {
                 val resp = api.getOpencodeSessions()
-                if (resp.ok && resp.data != null) _sessions.value = resp.data
-                else _error.value = resp.error ?: "getSessions failed"
+                if (resp.ok && resp.data != null) {
+                    _sessions.value = resp.data.filter {
+                        val rid = it.resolvedId
+                        rid !in _deletedSessionIds && (it.id ?: "") !in _deletedSessionIds && (it.ID ?: "") !in _deletedSessionIds
+                    }
+                } else _error.value = resp.error ?: "getSessions failed"
             } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
             finally { _loadingSessions.value = false }
         }
@@ -144,13 +155,16 @@ class MainViewModel : ViewModel() {
 
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
+            _deletedSessionIds.add(sessionId)
             // Optimistic in-memory removal from sessions list
             val current = _sessions.value
-            _sessions.value = current.filter { it.resolvedId != sessionId && it.id != sessionId && it.ID != sessionId }
+            _sessions.value = current.filter {
+                it.resolvedId != sessionId && it.id != sessionId && it.ID != sessionId && it.resolvedId !in _deletedSessionIds
+            }
             // Optimistic removal from projects sessions list
             _projects.value = _projects.value.map { proj ->
                 if (proj.sessions != null) {
-                    proj.copy(sessions = proj.sessions.filter { it.sessionId != sessionId })
+                    proj.copy(sessions = proj.sessions.filter { it.sessionId != sessionId && it.sessionId !in _deletedSessionIds })
                 } else proj
             }
             try {

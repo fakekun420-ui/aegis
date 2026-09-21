@@ -47,6 +47,8 @@ class ProjectDetailViewModel : ViewModel() {
         }
     }
 
+    private val _deletedSessionIds = mutableSetOf<String>()
+
     fun load(projectId: String) {
         viewModelScope.launch {
             _loading.value = true
@@ -59,7 +61,9 @@ class ProjectDetailViewModel : ViewModel() {
                 // Sessions for project
                 try {
                     val sResp = api.getProjectSessions(projectId)
-                    if (sResp.ok && sResp.data != null) _sessions.value = sResp.data
+                    if (sResp.ok && sResp.data != null) {
+                        _sessions.value = sResp.data.filter { it.sessionId !in _deletedSessionIds }
+                    }
                 } catch (_: Exception) {}
                 // Skills
                 try {
@@ -192,9 +196,10 @@ class ProjectDetailViewModel : ViewModel() {
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
             val pid = _project.value?.id ?: return@launch
+            _deletedSessionIds.add(sessionId)
             // Optimistic removal
             val cur = _sessions.value
-            _sessions.value = cur.filter { it.sessionId != sessionId }
+            _sessions.value = cur.filter { it.sessionId != sessionId && it.sessionId !in _deletedSessionIds }
             try {
                 val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     api.deleteSession(sessionId)

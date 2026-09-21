@@ -153,7 +153,17 @@
       "createdAt": "2026-09-21T01:02:11.981Z",
       "archivedAt": null,
       "provider": "antigravity",
-      "sessions": [],
+      "sessions": [
+        {
+          "sessionId": "agy_mualztby_5ww2v8e4",
+          "title": "companion:Proyecto PonyTail QA:84855",
+          "createdAt": "2026-09-21T02:11:24.887Z",
+          "lastUsed": "2026-09-21T02:11:39.464Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "b3bb8493-673d-4c44-b395-24698c200d26"
+        }
+      ],
       "skills": [],
       "linkedProjects": []
     }
@@ -166,6 +176,7 @@
     "ed8f444b-168f-4e64-8c19-e832ab542c77": "Backend",
     "agy_muaiwngj_mq4t87k5": "Streaming Test Session",
     "agy_muajdj1m_pq7mee22": "companion:85851",
-    "7cd5e3ec-156e-4696-ae9e-7ff5f72135e8": "El dispositivo se reinició repentinamente. Retoma y continúa"
+    "7cd5e3ec-156e-4696-ae9e-7ff5f72135e8": "El dispositivo se reinició repentinamente. Retoma y continúa",
+    "agy_mualztby_5ww2v8e4": "companion:Proyecto PonyTail QA:84855"
   }
 }

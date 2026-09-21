@@ -41,6 +41,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -689,18 +690,18 @@ private fun TerminalStreamingTurn(streamText: String) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Generando respuesta…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
+                    color = Color(0xFF8B949E)
                 )
                 Text(
                     cursor,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    color = Color(0xFF58A6FF),
                     fontWeight = FontWeight.Bold
                 )
             }
         } else {
-            MarkdownText(text = streamText + cursor)
+            MarkdownText(text = streamText, cursor = cursor)
         }
     }
 }
@@ -724,13 +725,13 @@ private fun TerminalActivityCursor() {
     ) {
         Text(
             "Generando respuesta…",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
+            color = Color(0xFF8B949E)
         )
         Text(
             cursor,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+            color = Color(0xFF58A6FF),
             fontWeight = FontWeight.Bold
         )
     }

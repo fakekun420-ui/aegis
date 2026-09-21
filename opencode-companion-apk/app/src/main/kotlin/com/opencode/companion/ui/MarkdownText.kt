@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -26,58 +27,131 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 /**
- * Lightweight markdown renderer — no external library.
- * Handles: #/##/### headers, ``` code blocks (with language header & copy button), **bold**, *italic*, `inline code`, - lists, [links](url), > blockquotes.
- * Uses Claude-inspired Serif reading typography and clean styled surfaces.
+ * Terminal / CLI Wizard Markdown Renderer for OpenCode & Antigravity.
+ * Estandarizado a tipografía de consola limpia (sans-serif / monospace en #E6EDF3 / #8B949E).
+ * Elimina negritas y cursivas estridentes o invasivas, manteniendo legibilidad austera y rápida.
  */
 @Composable
-fun MarkdownText(text: String, modifier: Modifier = Modifier, onLinkClick: ((String) -> Unit)? = null) {
+fun MarkdownText(
+    text: String,
+    modifier: Modifier = Modifier,
+    cursor: String = "",
+    onLinkClick: ((String) -> Unit)? = null
+) {
     val blocks = remember(text) { parseMarkdown(text) }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (block in blocks) {
+        blocks.forEachIndexed { index, block ->
+            val isLast = index == blocks.lastIndex
+            val trailingCursor = if (isLast) cursor else ""
+
             when (block) {
                 is MdBlock.Header -> Text(
-                    block.text,
+                    text = buildInline(block.text, trailingCursor),
                     style = when (block.level) {
-                        1 -> MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
-                        2 -> MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
-                        else -> MaterialTheme.typography.titleSmall.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+                        1 -> MaterialTheme.typography.titleMedium.copy(
+                            fontFamily = FontFamily.SansSerif,
+                            fontSize = 16.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 22.sp
+                        )
+                        2 -> MaterialTheme.typography.titleSmall.copy(
+                            fontFamily = FontFamily.SansSerif,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 20.sp
+                        )
+                        else -> MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = FontFamily.SansSerif,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 19.sp
+                        )
                     },
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = Color(0xFF79C0FF)
                 )
-                is MdBlock.CodeBlock -> CodeBlockItem(block)
+                is MdBlock.CodeBlock -> {
+                    CodeBlockItem(block)
+                    if (trailingCursor.isNotBlank()) {
+                        Text(
+                            text = trailingCursor,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF58A6FF)
+                        )
+                    }
+                }
                 is MdBlock.Quote -> Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    color = Color(0xFF161B22).copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(4.dp),
+                    border = BorderStroke(1.dp, Color(0xFF30363D))
                 ) {
                     Text(
-                        block.text,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Serif, fontSize = 14.sp, lineHeight = 20.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        buildInline(block.text, trailingCursor),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.SansSerif,
+                            fontSize = 13.5.sp,
+                            lineHeight = 19.sp
+                        ),
+                        color = Color(0xFF8B949E)
                     )
                 }
-                is MdBlock.BulletList -> Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    block.items.forEach { item ->
+                is MdBlock.BulletList -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    block.items.forEachIndexed { itemIdx, item ->
+                        val itemCursor = if (isLast && itemIdx == block.items.lastIndex) trailingCursor else ""
                         Row {
-                            Text("• ", style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(buildInline(item), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp, lineHeight = 22.sp), color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                "• ",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontSize = 14.5.sp
+                                ),
+                                color = Color(0xFF8B949E)
+                            )
+                            Text(
+                                buildInline(item, itemCursor),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontSize = 14.5.sp,
+                                    lineHeight = 21.sp
+                                ),
+                                color = Color(0xFFE6EDF3)
+                            )
                         }
                     }
                 }
-                is MdBlock.OrderedList -> Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    block.items.forEachIndexed { idx, item ->
+                is MdBlock.OrderedList -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    block.items.forEachIndexed { itemIdx, item ->
+                        val itemCursor = if (isLast && itemIdx == block.items.lastIndex) trailingCursor else ""
                         Row {
-                            Text("${idx + 1}. ", style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(buildInline(item), style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp, lineHeight = 22.sp), color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                "${itemIdx + 1}. ",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontSize = 14.5.sp
+                                ),
+                                color = Color(0xFF8B949E)
+                            )
+                            Text(
+                                buildInline(item, itemCursor),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontSize = 14.5.sp,
+                                    lineHeight = 21.sp
+                                ),
+                                color = Color(0xFFE6EDF3)
+                            )
                         }
                     }
                 }
                 is MdBlock.Paragraph -> Text(
-                    buildInline(block.text),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif, fontSize = 15.sp, lineHeight = 22.sp),
-                    color = MaterialTheme.colorScheme.onSurface
+                    buildInline(block.text, trailingCursor),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.SansSerif,
+                        fontSize = 14.5.sp,
+                        lineHeight = 21.sp
+                    ),
+                    color = Color(0xFFE6EDF3)
                 )
             }
         }
@@ -97,16 +171,16 @@ private fun CodeBlockItem(block: MdBlock.CodeBlock) {
     }
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = Color(0xFF0D1117),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, Color(0xFF30363D)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .background(Color(0xFF161B22))
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -115,8 +189,8 @@ private fun CodeBlockItem(block: MdBlock.CodeBlock) {
                     text = block.language.ifBlank { "código" }.uppercase(),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF8B949E)
                 )
                 TextButton(
                     onClick = {
@@ -130,13 +204,13 @@ private fun CodeBlockItem(block: MdBlock.CodeBlock) {
                         if (copied) Icons.Filled.Done else Icons.Outlined.ContentCopy,
                         contentDescription = null,
                         modifier = Modifier.size(13.dp),
-                        tint = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (copied) Color(0xFF3FB950) else Color(0xFF8B949E)
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
                         if (copied) "¡Copiado!" else "Copiar",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        color = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+                        color = if (copied) Color(0xFF3FB950) else Color(0xFF8B949E)
                     )
                 }
             }
@@ -149,8 +223,8 @@ private fun CodeBlockItem(block: MdBlock.CodeBlock) {
                     .padding(12.dp)
                     .horizontalScroll(rememberScrollState()),
                 fontFamily = FontFamily.Monospace,
-                fontSize = 12.5.sp,
-                lineHeight = 18.sp
+                fontSize = 12.sp,
+                lineHeight = 17.5.sp
             )
         }
     }
@@ -160,12 +234,12 @@ private fun highlightCode(code: String, language: String): AnnotatedString {
     val lang = language.lowercase().trim()
     val builder = AnnotatedString.Builder()
 
-    val keywordColor = Color(0xFFBA68C8)      // Purple accent for keywords
-    val stringColor = Color(0xFF81C784)       // Soft green for strings
-    val commentColor = Color(0xFF9E9E9E)      // Muted gray for comments
-    val numberColor = Color(0xFFFFB74D)       // Soft orange for numbers
-    val typeColor = Color(0xFF4DD0E1)         // Cyan for types / builtins
-    val defaultColor = Color(0xFFE0E0E0)      // Soft crisp light for plain text
+    val keywordColor = Color(0xFF79C0FF)      // Terminal cyan / blue
+    val stringColor = Color(0xFF7EE787)       // Subtle green
+    val commentColor = Color(0xFF8B949E)      // Muted gray
+    val numberColor = Color(0xFFD2A8FF)       // Light purple
+    val typeColor = Color(0xFFFFA657)         // Light orange
+    val defaultColor = Color(0xFFE6EDF3)      // Crisp console text
 
     val kotlinKeywords = setOf(
         "fun", "val", "var", "class", "object", "interface", "import", "package", "return",
@@ -211,7 +285,7 @@ private fun highlightCode(code: String, language: String): AnnotatedString {
         if (trimmed.startsWith(commentPrefix)) {
             val indent = line.takeWhile { it.isWhitespace() }
             builder.append(indent)
-            builder.withStyle(SpanStyle(color = commentColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+            builder.withStyle(SpanStyle(color = commentColor)) {
                 append(trimmed)
             }
             return@forEachIndexed
@@ -224,7 +298,7 @@ private fun highlightCode(code: String, language: String): AnnotatedString {
             val token = match.value
             when {
                 token.startsWith("//") || token.startsWith("#") -> {
-                    builder.withStyle(SpanStyle(color = commentColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+                    builder.withStyle(SpanStyle(color = commentColor)) {
                         append(token)
                     }
                 }
@@ -239,7 +313,7 @@ private fun highlightCode(code: String, language: String): AnnotatedString {
                     }
                 }
                 keywords.contains(token) -> {
-                    builder.withStyle(SpanStyle(color = keywordColor, fontWeight = FontWeight.Bold)) {
+                    builder.withStyle(SpanStyle(color = keywordColor, fontWeight = FontWeight.Medium)) {
                         append(token)
                     }
                 }
@@ -318,37 +392,21 @@ private fun parseMarkdown(src: String): List<MdBlock> {
     return blocks
 }
 
-private fun buildInline(src: String): AnnotatedString {
+/**
+ * Parses inline markdown: strips raw delimiters (**bold**, *italic*, `code`, [text](url))
+ * and renders subtle console styling without invasive or strident bold fonts.
+ */
+private fun buildInline(src: String, cursor: String = ""): AnnotatedString {
     val builder = AnnotatedString.Builder()
     var s = src
-    // Very simple inline parsing: **bold**, *italic*, `code`, [text](url) -> text + link
-    // We do sequential replacement with spans — keep it simple for Phase 2
-    // Use a tiny state machine: scan for markers
+
+    // 1. First process links: [text](url) -> extract text
     val linkRegex = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)""")
-    val codeRegex = Regex("`([^`]+)`")
-    val boldRegex = Regex("\\*\\*(.+?)\\*\\*")
-    val italicRegex = Regex("(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)")
-
-    // For simplicity, build as plain with styles appended — handle links/code/bold/italic via AnnotatedString
-    // We'll strip markers and push styles
-    // Step: replace code spans first (protect interior)
-    val codeSpans = mutableListOf<Pair<IntRange, String>>()
-    // We build final by iterating char by char — simplest: just handle bold/italic/code via manual scan
-
-    // Fallback simple: if no markers, return plain
-    if (!src.contains("**") && !src.contains("`") && !src.contains("[") && !Regex("\\*[^*]+\\*").containsMatchIn(src)) {
-        builder.append(src)
-        return builder.toAnnotatedString()
-    }
-
-    // Tokenize: we handle **bold** -> bold, `code` -> monospace+bg, *italic* -> italic, [t](u) -> underline+link
-    // Approach: replace links first
-    var pos = 0
     val linkMatches = linkRegex.findAll(s).toList()
+    val linkRanges = mutableListOf<Triple<Int, Int, String>>()
+
+    var cleanText = s
     if (linkMatches.isNotEmpty()) {
-        // Build with links as underlined segments
-        val linkRanges = mutableListOf<Triple<Int, Int, String>>()
-        // We'll annotate after building full string without link syntax: [text](url) -> text
         val sb = StringBuilder()
         var lastEnd = 0
         for (m in linkMatches) {
@@ -362,37 +420,90 @@ private fun buildInline(src: String): AnnotatedString {
             lastEnd = m.range.last + 1
         }
         sb.append(s.substring(lastEnd))
-        s = sb.toString()
-        // Now s has links expanded to plain text; we can build inline for remaining markers and then annotate links
-        val base = buildInlineSimple(s)
-        // Re-apply link annotations
-        val out = AnnotatedString.Builder()
-        out.append(base)
-        for ((st, en, url) in linkRanges) {
-            out.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = Color(0xFF7C5CFF)), st, en)
-            out.addStringAnnotation("URL", url, st, en)
+        cleanText = sb.toString()
+    }
+
+    // 2. Tokenize inline markers: `code`, **bold**, *italic*
+    // Using a regex to extract clean spans
+    val tokenRegex = Regex("""(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|[^\s`*]+|\s+)""")
+    val tokens = tokenRegex.findAll(cleanText)
+
+    for (match in tokens) {
+        val t = match.value
+        when {
+            t.startsWith("`") && t.endsWith("`") && t.length >= 2 -> {
+                val inner = t.substring(1, t.length - 1)
+                builder.withStyle(
+                    SpanStyle(
+                        fontFamily = FontFamily.Monospace,
+                        background = Color(0xFF1E2228),
+                        color = Color(0xFF79C0FF),
+                        fontSize = 12.5.sp
+                    )
+                ) {
+                    append(inner)
+                }
+            }
+            t.startsWith("**") && t.endsWith("**") && t.length >= 4 -> {
+                val inner = t.substring(2, t.length - 2)
+                // Subtle bold: clean contrast in #FFFFFF with SemiBold, no heavy distortion
+                builder.withStyle(
+                    SpanStyle(
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFFFFFFFF)
+                    )
+                ) {
+                    append(inner)
+                }
+            }
+            t.startsWith("*") && t.endsWith("*") && t.length >= 2 -> {
+                val inner = t.substring(1, t.length - 1)
+                builder.withStyle(
+                    SpanStyle(
+                        fontStyle = FontStyle.Italic,
+                        color = Color(0xFFD0D7DE)
+                    )
+                ) {
+                    append(inner)
+                }
+            }
+            else -> {
+                builder.append(t)
+            }
         }
-        return out.toAnnotatedString()
     }
 
-    return buildInlineSimple(s)
-}
+    // 3. Append cursor at end if provided
+    if (cursor.isNotEmpty()) {
+        builder.withStyle(
+            SpanStyle(
+                color = Color(0xFF58A6FF),
+                fontWeight = FontWeight.Bold
+            )
+        ) {
+            append(cursor)
+        }
+    }
 
-private fun buildInlineSimple(src: String): AnnotatedString {
-    val b = AnnotatedString.Builder()
-    b.append(src)
-    // Bold
-    for (m in Regex("\\*\\*(.+?)\\*\\*").findAll(src)) {
-        val inner = m.groupValues[1]
-        val start = m.range.first
-        val end = m.range.last + 1
-        b.addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
+    // 4. Re-apply link annotations if applicable
+    val result = builder.toAnnotatedString()
+    if (linkRanges.isNotEmpty()) {
+        val finalB = AnnotatedString.Builder(result)
+        for ((st, en, url) in linkRanges) {
+            if (en <= finalB.length) {
+                finalB.addStyle(
+                    SpanStyle(
+                        textDecoration = TextDecoration.Underline,
+                        color = Color(0xFF58A6FF)
+                    ),
+                    st,
+                    en
+                )
+                finalB.addStringAnnotation("URL", url, st, en)
+            }
+        }
+        return finalB.toAnnotatedString()
     }
-    // Inline code
-    for (m in Regex("`([^`]+)`").findAll(src)) {
-        val start = m.range.first
-        val end = m.range.last + 1
-        b.addStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Color(0xFF1A1A2E), fontSize = 12.sp), start, end)
-    }
-    return b.toAnnotatedString()
+
+    return result
 }
