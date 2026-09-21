@@ -8,14 +8,6 @@
       "archivedAt": null,
       "sessions": [
         {
-          "sessionId": "ses_f4c5592adffe5cWhDvFeOX8Ip3",
-          "title": "companion:Agencia de Marketing:85820",
-          "createdAt": "2026-09-18T08:38:06.075Z",
-          "lastUsed": "2026-09-18T08:38:06.075Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
           "sessionId": "ses_f8ba7151affeV44tOLJQ7MPZCT",
           "title": "DepegaLab",
           "createdAt": "2026-09-20T02:41:29.919Z",
@@ -23,90 +15,10 @@
           "summary": ""
         },
         {
-          "sessionId": "ses_f3ffa6589ffe34zBDKdRfTHXzE",
-          "title": "test-debug-session",
-          "createdAt": "2026-09-20T18:13:07.845Z",
-          "lastUsed": "2026-09-20T18:13:07.845Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
-          "sessionId": "ses_f3feb1c76ffe7ck8kq7TRpOjhU",
-          "title": "companion:test",
-          "createdAt": "2026-09-20T18:29:49.606Z",
-          "lastUsed": "2026-09-20T18:29:49.606Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
-          "sessionId": "ses_f3fe72bf9ffejB9jmGfqTO5bwz",
-          "title": "companion:47730",
-          "createdAt": "2026-09-20T18:34:07.765Z",
-          "lastUsed": "2026-09-20T18:34:07.765Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
-          "sessionId": "ses_f3fccbe0effe4L750SATzTU3Gk",
-          "title": "companion:79801",
-          "createdAt": "2026-09-20T19:02:59.841Z",
-          "lastUsed": "2026-09-20T19:02:59.841Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
-          "sessionId": "ses_f3fc90cabffej1fkAOTTwVTjPN",
-          "title": "companion:21825",
-          "createdAt": "2026-09-20T19:07:01.858Z",
-          "lastUsed": "2026-09-20T19:07:01.858Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
-          "sessionId": "ses_f3fafc39affeq9hAnhTJc3xs77",
-          "title": "Test Claude Code Blocks",
-          "createdAt": "2026-09-20T19:34:38.972Z",
-          "lastUsed": "2026-09-20T22:51:27.285Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
-          "sessionId": "ses_f3fa028faffeHZPnvB3SKpd3St",
-          "title": "e2e-opencode-test",
-          "createdAt": "2026-09-20T19:51:41.586Z",
-          "lastUsed": "2026-09-20T19:52:05.367Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
-          "sessionId": "ses_f3f6c8d82ffetHzVl7nD2bIvwu",
-          "title": "companion:83684",
-          "createdAt": "2026-09-20T20:48:03.736Z",
-          "lastUsed": "2026-09-20T20:48:03.751Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
-          "sessionId": "ses_f3f1e97f7ffeAwyBXHAch8Pd23",
-          "title": "companion:92785",
-          "createdAt": "2026-09-20T22:13:12.908Z",
-          "lastUsed": "2026-09-20T22:16:55.257Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
-          "sessionId": "ses_f3f027485ffeC10AWQQDH0HxX5",
-          "title": "companion:36892",
-          "createdAt": "2026-09-20T22:43:56.953Z",
-          "lastUsed": "2026-09-20T22:43:56.988Z",
-          "summary": "",
-          "provider": "opencode"
-        },
-        {
           "sessionId": "agy_muajdj1m_pq7mee22",
           "title": "companion:85851",
           "createdAt": "2026-09-21T00:58:05.867Z",
-          "lastUsed": "2026-09-21T00:58:25.202Z",
+          "lastUsed": "2026-09-21T01:12:29.874Z",
           "summary": "",
           "provider": "antigravity",
           "agyConversationId": "7125314e-1759-4613-baf8-2f1892c66503"
@@ -197,6 +109,14 @@
           "lastUsed": "2026-09-20T22:46:07.624Z",
           "summary": "",
           "provider": "antigravity"
+        },
+        {
+          "sessionId": "7cd5e3ec-156e-4696-ae9e-7ff5f72135e8",
+          "title": "El dispositivo se reinició repentinamente. Retoma y continúa",
+          "createdAt": "2026-09-21T01:10:09.433Z",
+          "lastUsed": "2026-09-21T01:10:09.434Z",
+          "summary": "",
+          "provider": "antigravity"
         }
       ],
       "skills": [],
@@ -239,23 +159,13 @@
     }
   ],
   "sessionTitles": {
-    "ses_f4c5592adffe5cWhDvFeOX8Ip3": "companion:Agencia de Marketing:85820",
     "ses_f8ba7151affeV44tOLJQ7MPZCT": "DepegaLab",
-    "ses_f3ffa6589ffe34zBDKdRfTHXzE": "test-debug-session",
-    "ses_f3feb1c76ffe7ck8kq7TRpOjhU": "companion:test",
-    "ses_f3fe72bf9ffejB9jmGfqTO5bwz": "companion:47730",
-    "ses_f3fccbe0effe4L750SATzTU3Gk": "companion:79801",
-    "ses_f3fc90cabffej1fkAOTTwVTjPN": "companion:21825",
-    "ses_f3fafc39affeq9hAnhTJc3xs77": "Test Claude Code Blocks",
-    "ses_f3fa028faffeHZPnvB3SKpd3St": "e2e-opencode-test",
-    "ses_f3f6c8d82ffetHzVl7nD2bIvwu": "companion:83684",
     "agy_mua2vw5p_y1o73xiz": "companion:Antigravity POC Project:001",
     "ses_f4c94c66dffenoqFOCFaytnre7": "Arquitecto",
     "0adc77f9-68a1-4e32-8e03-d012d3a287c4": "Frontend QA Verified",
     "ed8f444b-168f-4e64-8c19-e832ab542c77": "Backend",
-    "ses_f3f1e97f7ffeAwyBXHAch8Pd23": "companion:92785",
-    "ses_f3f027485ffeC10AWQQDH0HxX5": "companion:36892",
     "agy_muaiwngj_mq4t87k5": "Streaming Test Session",
-    "agy_muajdj1m_pq7mee22": "companion:85851"
+    "agy_muajdj1m_pq7mee22": "companion:85851",
+    "7cd5e3ec-156e-4696-ae9e-7ff5f72135e8": "El dispositivo se reinició repentinamente. Retoma y continúa"
   }
 }

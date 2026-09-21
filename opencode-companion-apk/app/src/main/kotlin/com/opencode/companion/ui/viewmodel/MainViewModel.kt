@@ -144,9 +144,15 @@ class MainViewModel : ViewModel() {
 
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
-            // Optimistic in-memory removal
+            // Optimistic in-memory removal from sessions list
             val current = _sessions.value
-            _sessions.value = current.filter { it.resolvedId != sessionId }
+            _sessions.value = current.filter { it.resolvedId != sessionId && it.id != sessionId && it.ID != sessionId }
+            // Optimistic removal from projects sessions list
+            _projects.value = _projects.value.map { proj ->
+                if (proj.sessions != null) {
+                    proj.copy(sessions = proj.sessions.filter { it.sessionId != sessionId })
+                } else proj
+            }
             try {
                 val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     api.deleteSession(sessionId)
@@ -168,10 +174,11 @@ class MainViewModel : ViewModel() {
         return try {
             val proj = _projects.value.find { it.id == projectId }
             val provider = proj?.provider ?: "opencode"
-            val sid = createSessionViaHub(title, projectId.ifBlank { null }, provider)
+            val effectiveProjectId = projectId.trim().ifBlank { null }
+            val sid = createSessionViaHub(title, effectiveProjectId, provider)
             if (sid != null) {
-                if (projectId.isNotBlank()) {
-                    try { api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider)) } catch (_: Exception) {}
+                if (effectiveProjectId != null) {
+                    try { api.linkSession(effectiveProjectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider)) } catch (_: Exception) {}
                 }
                 refreshSessions(); refreshProjects()
             }
@@ -181,11 +188,12 @@ class MainViewModel : ViewModel() {
 
     private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
-            val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":\"${projectId ?: ""}\",\"provider\":\"$provider\"}"
+            val pIdStr = if (!projectId.isNullOrBlank()) "\"$projectId\"" else "null"
+            val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":$pIdStr,\"provider\":\"$provider\"}"
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:8765/opencode/session")
                 .header("X-Provider", provider)
-                .apply { if (projectId != null) header("X-Project-Id", projectId) }
+                .apply { if (!projectId.isNullOrBlank()) header("X-Project-Id", projectId) }
                 .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
                 .build()
             val resp = ApiClient.rawOkHttp.newCall(req).execute()

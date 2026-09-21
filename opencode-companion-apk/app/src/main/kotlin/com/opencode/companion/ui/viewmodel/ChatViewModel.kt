@@ -47,6 +47,9 @@ class ChatViewModel : ViewModel() {
     private val _streamingText = MutableStateFlow<String?>(null)
     val streamingText: StateFlow<String?> = _streamingText
 
+    private val _agentMode = MutableStateFlow<String>("build") // "plan" | "build"
+    val agentMode: StateFlow<String> = _agentMode
+
     private var pollingJob: Job? = null
 
     fun selectModel(modelId: String?) {
@@ -57,6 +60,14 @@ class ChatViewModel : ViewModel() {
         val p = provider.lowercase().trim()
         _selectedProvider.value = p
         loadModels(p)
+    }
+
+    fun toggleAgentMode() {
+        _agentMode.value = if (_agentMode.value == "plan") "build" else "plan"
+    }
+
+    fun setAgentMode(mode: String) {
+        _agentMode.value = if (mode.lowercase().trim() == "plan") "plan" else "build"
     }
 
     fun clearError() {
@@ -214,10 +225,13 @@ class ChatViewModel : ViewModel() {
 
             // 5. Send message with SSE real-time token streaming
             try {
+                val currentAgentMode = _agentMode.value
                 val sendReq = SendMessageRequest(
                     parts = reqParts,
                     model = _selectedModel.value,
-                    provider = provider
+                    provider = provider,
+                    agent = currentAgentMode,
+                    mode = currentAgentMode
                 )
                 val bodyJson = com.google.gson.Gson().toJson(sendReq)
 
@@ -229,6 +243,8 @@ class ChatViewModel : ViewModel() {
                         .url("http://127.0.0.1:8765/api/opencode/sessions/$targetSessionId/message?stream=true")
                         .header("Accept", "text/event-stream")
                         .header("X-Provider", provider)
+                        .header("X-Agent", currentAgentMode)
+                        .header("X-Mode", currentAgentMode)
                         .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
                         .build()
 

@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -70,6 +71,7 @@ fun ChatScreen(
     val selectedModel by vm.selectedModel.collectAsState()
     val selectedProvider by vm.selectedProvider.collectAsState()
     val streamingText by vm.streamingText.collectAsState()
+    val agentMode by vm.agentMode.collectAsState()
     var showModelSheet by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
@@ -248,7 +250,9 @@ fun ChatScreen(
                     onRemoveFile = { idx -> attachedFiles = attachedFiles.filterIndexed { i, _ -> i != idx } },
                     selectedModelName = modelDisplayName,
                     onSelectModelClick = { showModelSheet = true },
-                    onVoice = onVoice
+                    onVoice = onVoice,
+                    agentMode = agentMode,
+                    onToggleAgentMode = { vm.toggleAgentMode() }
                 )
             }
         }
@@ -342,22 +346,24 @@ fun ChatScreen(
                         }
                         else -> LazyColumn(
                             state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(messages, key = { it.info?.id ?: it.hashCode().toString() }) { msg ->
-                                MessageBubble(msg, onRetry = {
+                                TerminalConsoleTurn(msg, onRetry = {
                                     vm.retryMessage(msg, sessionId)
                                 })
                             }
                             if (streamingText != null) {
                                 item(key = "streaming_live") {
-                                    StreamingAssistantBubble(streamingText!!)
+                                    TerminalStreamingTurn(streamingText!!)
                                 }
                             } else if (loading) {
                                 item(key = "typing_dots") {
-                                    AssistantTypingBubble()
+                                    TerminalActivityCursor()
                                 }
                             }
                         }
@@ -490,11 +496,12 @@ private fun FileRow(name: String, mime: String, tint: androidx.compose.ui.graphi
 }
 
 @Composable
-private fun MessageBubble(msg: Message, onRetry: (() -> Unit)? = null) {
+private fun TerminalConsoleTurn(msg: Message, onRetry: (() -> Unit)? = null) {
     val isUser = msg.role == "user"
     val raw = msg.text
+    val stripped = msg.strippedText()
     val isMem = msg.isMemoryContext()
-    val stripped = if (isMem) msg.strippedText() else raw
+    val displayContent = stripped.ifBlank { raw }.trim()
     val deliveryStatus = msg.info?.deliveryStatus ?: if (isUser) MessageDeliveryStatus.SENT else null
 
     val files = msg.fileParts()
@@ -502,126 +509,161 @@ private fun MessageBubble(msg: Message, onRetry: (() -> Unit)? = null) {
     val imageFiles = files.filter { it.mime?.startsWith("image/") == true && it.url != null }
     val nonImageFiles = files.filter { !(it.mime?.startsWith("image/") == true && it.url != null) }
 
+    if (isMem && displayContent.isBlank()) {
+        return
+    }
+
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        if (isMem && stripped.isBlank()) {
-            return@Column
-        }
+        if (isUser) {
+            // User Prompt in terminal wizard format: Prompt prefix ❯, clear light text color
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = "❯ ",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        ),
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        if (displayContent.isNotBlank()) {
+                            Text(
+                                text = displayContent,
+                                color = Color(0xFFF2F2ED), // Distinct clear light prompt text
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    lineHeight = 22.sp
+                                )
+                            )
+                        } else if (images.isEmpty() && imageFiles.isEmpty() && nonImageFiles.isEmpty()) {
+                            Text(
+                                "(mensaje vacío)",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
 
-        val bubbleColor = when {
-            isUser -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.surfaceVariant
-        }
-        val contentColor = when {
-            isUser -> MaterialTheme.colorScheme.onPrimary
-            else -> MaterialTheme.colorScheme.onSurface
-        }
-        val shape = RoundedCornerShape(16.dp)
-        Surface(
-            color = bubbleColor,
-            shape = shape,
-            border = if (!isUser) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
-            modifier = Modifier.fillMaxWidth(0.86f)
-        ) {
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // Image previews (legacy type:"image" parts)
-                images.forEach { img ->
-                    val bitmap = (img.image ?: img.data ?: img.url)?.let { decodeBase64Bitmap(it) }
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = img.filename ?: "imagen adjunta",
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.FillWidth
-                        )
-                    } else {
-                        FileRow(name = img.filename ?: "imagen", mime = img.mime ?: "image/*", tint = contentColor)
-                    }
-                }
-                // Image-type file parts (opencode stores images as type:file with url data URI)
-                imageFiles.forEach { img ->
-                    val bitmap = img.url?.let { decodeBase64Bitmap(it) }
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = img.filename ?: "imagen adjunta",
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.FillWidth
-                        )
-                    } else {
-                        FileRow(name = img.filename ?: "imagen", mime = img.mime ?: "image/*", tint = contentColor)
-                    }
-                }
-                // Non-image file attachments as icon rows
-                nonImageFiles.forEach { f ->
-                    FileRow(name = f.filename ?: "archivo", mime = f.mime ?: "", tint = contentColor)
-                }
-                if (stripped.isNotBlank() || raw.isNotBlank()) {
-                    if (isUser) {
-                        Text(stripped.ifBlank { raw }, color = contentColor, style = MaterialTheme.typography.bodyMedium)
-                    } else {
-                        MarkdownText(stripped.ifBlank { raw })
-                    }
-                } else if (images.isEmpty() && imageFiles.isEmpty() && nonImageFiles.isEmpty()) {
-                    Text("(vacío)", color = contentColor.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
-                }
-
-                // Delivery Status for User Messages
-                if (isUser && deliveryStatus != null) {
-                    Row(
-                        modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        when (deliveryStatus) {
-                            MessageDeliveryStatus.PENDING -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(10.dp),
-                                    strokeWidth = 1.5.dp,
-                                    color = contentColor.copy(alpha = 0.7f)
-                                )
-                                Text(
-                                    "Enviando…",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                    color = contentColor.copy(alpha = 0.7f)
-                                )
-                            }
-                            MessageDeliveryStatus.ERROR -> {
-                                Icon(
-                                    Icons.Filled.ErrorOutline,
-                                    contentDescription = "Error",
-                                    tint = MaterialTheme.colorScheme.errorContainer,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Text(
-                                    "Error al enviar",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                    color = MaterialTheme.colorScheme.errorContainer
-                                )
-                                if (onRetry != null) {
-                                    Text(
-                                        "• Reintentar",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 10.sp
-                                        ),
-                                        color = MaterialTheme.colorScheme.errorContainer,
-                                        modifier = Modifier.clickable { onRetry() }
+                        // Attached images/files
+                        if (images.isNotEmpty() || imageFiles.isNotEmpty() || nonImageFiles.isNotEmpty()) {
+                            Spacer(Modifier.height(4.dp))
+                            images.forEach { img ->
+                                val bitmap = (img.image ?: img.data ?: img.url)?.let { decodeBase64Bitmap(it) }
+                                if (bitmap != null) {
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = img.filename ?: "imagen adjunta",
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.7f)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.FillWidth
                                     )
+                                } else {
+                                    FileRow(name = img.filename ?: "imagen", mime = img.mime ?: "image/*", tint = Color(0xFFD4D4D0))
                                 }
                             }
-                            MessageDeliveryStatus.SENT -> {
-                                Icon(
-                                    Icons.Filled.Done,
-                                    contentDescription = "Enviado",
-                                    tint = contentColor.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(12.dp)
-                                )
+                            imageFiles.forEach { img ->
+                                val bitmap = img.url?.let { decodeBase64Bitmap(it) }
+                                if (bitmap != null) {
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = img.filename ?: "imagen adjunta",
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.7f)
+                                            .heightIn(max = 260.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.FillWidth
+                                    )
+                                } else {
+                                    FileRow(name = img.filename ?: "imagen", mime = img.mime ?: "image/*", tint = Color(0xFFD4D4D0))
+                                }
+                            }
+                            nonImageFiles.forEach { f ->
+                                FileRow(name = f.filename ?: "archivo", mime = f.mime ?: "", tint = Color(0xFFD4D4D0))
+                            }
+                        }
+
+                        // Delivery Status indicator
+                        if (deliveryStatus != null && deliveryStatus != MessageDeliveryStatus.SENT) {
+                            Row(
+                                modifier = Modifier.padding(top = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                when (deliveryStatus) {
+                                    MessageDeliveryStatus.PENDING -> {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(10.dp),
+                                            strokeWidth = 1.5.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            "Enviando…",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    MessageDeliveryStatus.ERROR -> {
+                                        Icon(
+                                            Icons.Filled.ErrorOutline,
+                                            contentDescription = "Error",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Text(
+                                            "Error al enviar",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                        if (onRetry != null) {
+                                            Text(
+                                                "• Reintentar",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 10.sp
+                                                ),
+                                                color = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.clickable { onRetry() }
+                                            )
+                                        }
+                                    }
+                                    else -> {}
+                                }
                             }
                         }
                     }
+                }
+            }
+        } else {
+            // Assistant Turn: Full-width continuous text and markdown
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, top = 2.dp, bottom = 4.dp)
+            ) {
+                if (displayContent.isNotBlank()) {
+                    MarkdownText(text = displayContent)
+                } else {
+                    Text(
+                        "(sin respuesta)",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }
@@ -629,7 +671,7 @@ private fun MessageBubble(msg: Message, onRetry: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun StreamingAssistantBubble(streamText: String) {
+private fun TerminalStreamingTurn(streamText: String) {
     var cursorVisible by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -637,115 +679,60 @@ private fun StreamingAssistantBubble(streamText: String) {
             cursorVisible = !cursorVisible
         }
     }
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.Start
+    val cursor = if (cursorVisible) " ▋" else ""
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = 2.dp, bottom = 4.dp)
     ) {
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            modifier = Modifier.fillMaxWidth(0.86f)
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                val cursor = if (cursorVisible) " ▋" else ""
-                if (streamText.isBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Generando respuesta…",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            cursor,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                } else {
-                    MarkdownText(text = streamText + cursor)
-                }
+        if (streamText.isBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Generando respuesta…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    cursor,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
             }
+        } else {
+            MarkdownText(text = streamText + cursor)
         }
     }
 }
 
 @Composable
-private fun AssistantTypingBubble() {
-    val infiniteTransition = rememberInfiniteTransition(label = "typing_dots")
-    val dot1 by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, delayMillis = 0, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dot1"
-    )
-    val dot2 by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, delayMillis = 180, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dot2"
-    )
-    val dot3 by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, delayMillis = 360, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dot3"
-    )
-
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            modifier = Modifier.padding(vertical = 4.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .background(
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dot1),
-                            shape = CircleShape
-                        )
-                )
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .background(
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dot2),
-                            shape = CircleShape
-                        )
-                )
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .background(
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dot3),
-                            shape = CircleShape
-                        )
-                )
-            }
+private fun TerminalActivityCursor() {
+    var cursorVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(500)
+            cursorVisible = !cursorVisible
         }
+    }
+    val cursor = if (cursorVisible) " ▋" else ""
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            "Generando respuesta…",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            cursor,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -761,7 +748,9 @@ private fun UnifiedFloatingComposer(
     onRemoveFile: (Int) -> Unit,
     selectedModelName: String,
     onSelectModelClick: () -> Unit,
-    onVoice: () -> Unit
+    onVoice: () -> Unit,
+    agentMode: String = "build",
+    onToggleAgentMode: () -> Unit = {}
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -846,6 +835,33 @@ private fun UnifiedFloatingComposer(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
+                    // Botón de Agente PLAN / BUILD: 'P' amarillo mostaza / 'B' azul
+                    val isPlan = agentMode.lowercase() == "plan"
+                    val buttonBg = if (isPlan) Color(0xFFD4A017) else Color(0xFF1E88E5)
+                    val letterColor = if (isPlan) Color(0xFF141413) else Color.White
+                    val letter = if (isPlan) "P" else "B"
+                    val modeDesc = if (isPlan) "Modo Plan (solo lectura)" else "Modo Build (ejecución y edición)"
+                    Surface(
+                        onClick = onToggleAgentMode,
+                        shape = CircleShape,
+                        color = buttonBg,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .semantics { contentDescription = modeDesc }
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                text = letter,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                ),
+                                color = letterColor
+                            )
+                        }
+                    }
+
                     Surface(
                         onClick = onSelectModelClick,
                         shape = CircleShape,

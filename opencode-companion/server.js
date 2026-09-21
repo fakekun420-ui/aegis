@@ -519,8 +519,7 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
       }
     } catch {}
   }
-  // Also fallback to UI_STATE projectId if header missing (client persisted active project)
-  if (!projectId && UI_STATE && UI_STATE.projectId) projectId = UI_STATE.projectId;
+  // Do NOT fallback to UI_STATE.projectId — sessions created outside a project must remain strictly loose
   if (!projectId && !fs.existsSync(path.join(__dirname, "context", "pony-tail-global.md"))) {
     return modified ? Buffer.from(JSON.stringify(parsed)) : null;
   }
@@ -541,17 +540,11 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
     console.log(`[proxy] skip injection: payload would exceed 512KB cap (${approxPayloadLen} bytes) for project ${projectId}`);
     return null;
   }
-  // Build system-prepend injection — opencode messages expect parts[]. Prepend a system parts entry.
-  // JSON.stringify will properly escape all characters in block; no manual escaping needed.
-  if (Array.isArray(parsed.parts)) {
-    parsed.parts = [{ type: "text", text: `[SYSTEM CONTEXT — skills + linked projects]\n${block}` }, ...parsed.parts];
-  } else if (typeof parsed.text === "string") {
-    parsed.text = `[SYSTEM CONTEXT — skills + linked projects]\n${block}\n\n---\n\n${parsed.text}`;
-  } else if (typeof parsed.prompt === "string") {
-    parsed.prompt = `[SYSTEM CONTEXT]\n${block}\n\n---\n\n${parsed.prompt}`;
+  // Pass system context silently in background via dedicated 'system' field — NEVER into user parts
+  if (typeof parsed.system === "string" && parsed.system.trim()) {
+    parsed.system = `${block.trim()}\n\n${parsed.system.trim()}`;
   } else {
-    // Generic fallback: stash in systemContext field for observability; don't break unknown shapes
-    parsed.systemContext = `[SYSTEM CONTEXT]\n${block}`;
+    parsed.system = block.trim();
   }
   // Do NOT add debug fields to payload sent to provider; keep meta for logging only via header/log
   const outBuf = Buffer.from(JSON.stringify(parsed));
@@ -759,18 +752,11 @@ const server = http.createServer(async (req, res)=>{
         : null;
 
       let provId = body.provider || headerProv || null;
-      let projectId = body.projectId || headerProj || UI_STATE.projectId || null;
+      // Strict project association: ONLY if body.projectId or headerProj is explicitly provided.
+      // NEVER fallback to UI_STATE.projectId or infer from title (prevents auto-linking to 'Agencia de Marketing').
+      let projectId = (body.projectId && String(body.projectId).trim()) || (headerProj && String(headerProj).trim()) || null;
 
       const store = loadProjectsStore();
-
-      if (!projectId && typeof body.title === "string") {
-        for (const p of store.projects) {
-          if (body.title.includes(`:${p.name}:`) || body.title.includes(`:${p.id}:`)) {
-            projectId = p.id;
-            break;
-          }
-        }
-      }
 
       if (!provId && projectId) {
         const p = findProject(store, projectId);
@@ -844,14 +830,26 @@ const server = http.createServer(async (req, res)=>{
       });
 
       // 2. Provider cleanup
-      if (sid.startsWith("agy_")) {
+      let isAgy = sid.startsWith("agy_");
+      if (!isAgy) {
+        const checkStore = loadProjectsStore();
+        for (const p of checkStore.projects) {
+          const f = (p.sessions || []).find((s) => s.sessionId === sid);
+          if (f && f.provider === "antigravity") {
+            isAgy = true;
+            break;
+          }
+        }
+      }
+
+      if (isAgy) {
         // Antigravity session: purge local brain directory, never delegate to OpenCode
         try {
           await antigravityAdapter.deleteSession(sid);
         } catch (e) {
           console.warn(`[hub] antigravityAdapter.deleteSession warning:`, e.message);
         }
-        return json(res, 200, { ok: true, data: { removed: sid }, removed: sid });
+        return json(res, 200, { ok: true, data: { removed: sid, storagePurged: true }, removed: sid });
       } else {
         // OpenCode session
         try {
@@ -861,7 +859,7 @@ const server = http.createServer(async (req, res)=>{
         } catch (e) {
           console.warn(`[hub] opencodeAdapter.deleteSession warning:`, e.message);
         }
-        return json(res, 200, { ok: true, data: { removed: sid }, removed: sid });
+        return json(res, 200, { ok: true, data: { removed: sid, storagePurged: true }, removed: sid });
       }
     } catch (e) {
       console.error(`[hub] DELETE session error for ${sid}:`, e.message);
@@ -885,7 +883,10 @@ const server = http.createServer(async (req, res)=>{
         ? sanitizeProjectId(decodeURIComponent(req.headers["x-project-id"]))
         : null;
 
-      let pId = headerProjectId || body.projectId || UI_STATE.projectId || null;
+      // Strict project association: ONLY use explicit project ID; never fallback to UI_STATE.projectId!
+      let pId = (headerProjectId && String(headerProjectId).trim()) ||
+                (body.projectId && String(body.projectId).trim()) ||
+                null;
       let provId = headerProvider || body.provider || null;
 
       // Immediate atomic persistence of session association and provider
@@ -903,6 +904,7 @@ const server = http.createServer(async (req, res)=>{
           }
         }
 
+        // Only link to a project if pId was EXPLICITLY given and session wasn't already in a project
         if (pId && !sessionEntry) {
           parentProject = findProject(store, pId);
           if (parentProject) {
@@ -929,6 +931,9 @@ const server = http.createServer(async (req, res)=>{
       });
 
       body.projectId = pId;
+      const agentMode = body.agent || body.mode || req.headers["x-agent"] || req.headers["x-mode"] || "build";
+      body.agent = agentMode;
+      body.mode = agentMode;
 
       const currentStore = loadProjectsStore();
       const adapter = providerManager.resolveProvider(sid, provId, currentStore);
@@ -966,10 +971,12 @@ const server = http.createServer(async (req, res)=>{
         });
       }
 
-      console.log(`[hub] routing message for session ${sid} to provider ${adapter.id} (project: ${pId || "none"}, streaming: ${isStream})`);
+      console.log(`[hub] routing message for session ${sid} to provider ${adapter.id} (project: ${pId || "none"}, mode: ${agentMode}, streaming: ${isStream})`);
       const msgResult = await adapter.sendMessage(sid, body, {
         signal: abortCtrl.signal,
         projectId: pId,
+        agent: agentMode,
+        mode: agentMode,
         onChunk: isStream ? (chunk) => {
           if (!res.writableEnded) {
             res.write(`data: ${JSON.stringify({ type: "chunk", text: chunk })}\n\n`);

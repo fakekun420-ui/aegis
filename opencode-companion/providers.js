@@ -541,19 +541,17 @@ export class OpencodeAdapter extends BaseProviderAdapter {
       }
     }
 
-    // 3. Inject system context block if projectId is present
+    // 3. Inject system context block silently as a system prompt (NEVER in visible parts)
     const projectId = payload.projectId || opts.projectId || null;
-    if (projectId) {
-      const block = this.getSystemContextBlock(projectId);
-      if (block && block.trim()) {
-        parts = [
-          { type: "text", text: `[SYSTEM CONTEXT — skills + linked projects]\n${block.trim()}` },
-          ...parts
-        ];
-      }
-    }
-
+    const block = this.getSystemContextBlock(projectId);
     const finalPayload = { parts };
+    if (payload.system && typeof payload.system === "string") {
+      finalPayload.system = payload.system;
+    } else if (block && block.trim()) {
+      finalPayload.system = block.trim();
+    }
+    const agentMode = payload.agent || payload.mode || opts.agent || opts.mode || "build";
+    finalPayload.agent = agentMode;
     if (payload.model) {
       if (typeof payload.model === "object" && payload.model.modelID) {
         finalPayload.model = payload.model;
@@ -891,7 +889,12 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     if (!raw) return "";
     let str = String(raw);
     const m = str.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i);
-    if (m && m[1]) str = m[1].trim();
+    if (m && m[1]) return m[1].trim();
+    str = str.replace(/<SYSTEM_INSTRUCTION>[\s\S]*?<\/SYSTEM_INSTRUCTION>/gi, "").trim();
+    str = str.replace(/<SYSTEM_CONTEXT[\s\S]*?<\/SYSTEM_CONTEXT>/gi, "").trim();
+    str = str.replace(/\[SYSTEM CONTEXT[\s\S]*?\][\s\S]*?(?:---\n\n|$)/gi, "").trim();
+    str = str.replace(/# PONY-TAIL[\s\S]*?(?:---\n\n|$)/gi, "").trim();
+    str = str.replace(/<memory_context>[\s\S]*?<\/memory_context>/gi, "").trim();
     str = str.replace(/<ADDITIONAL_METADATA>[\s\S]*?<\/ADDITIONAL_METADATA>/gi, "").trim();
     str = str.replace(/<USER_SETTINGS_CHANGE>[\s\S]*?<\/USER_SETTINGS_CHANGE>/gi, "").trim();
     return str;
@@ -1017,14 +1020,14 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       throw new Error("No user text or prompt provided in message payload");
     }
 
-    // 2. Inject system context (skills + linked projects + project instructions)
+    // 2. Inject system context silently as background instructions (never in visible user prompt)
     const projectId = payload.projectId || opts.projectId || null;
-    if (projectId) {
-      const block = this.getSystemContextBlock(projectId);
-      if (block && block.trim()) {
-        userPrompt = `[SYSTEM CONTEXT — skills + linked projects]\n${block.trim()}\n\n---\n\n${userPrompt}`;
-      }
+    const block = this.getSystemContextBlock(projectId);
+    let promptForAgy = "";
+    if (block && block.trim()) {
+      promptForAgy += `<SYSTEM_INSTRUCTION>\n${block.trim()}\n</SYSTEM_INSTRUCTION>\n\n`;
     }
+    promptForAgy += `<USER_REQUEST>\n${userPrompt}\n</USER_REQUEST>`;
 
     // 3. Resolve Antigravity conversation ID
     let convId = this.sessionMap.get(sessionId) || null;
@@ -1047,7 +1050,13 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     if (payload.model) {
       args.push("--model", String(payload.model));
     }
-    args.push("-p", userPrompt);
+    const agentMode = payload.agent || payload.mode || opts.agent || opts.mode || "build";
+    if (agentMode === "plan") {
+      args.push("--mode", "plan");
+    } else {
+      args.push("--mode", "accept-edits");
+    }
+    args.push("-p", promptForAgy);
     if (isStreaming) {
       args.push("--output-format", "text");
     } else {

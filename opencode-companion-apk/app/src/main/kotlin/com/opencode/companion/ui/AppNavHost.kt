@@ -95,7 +95,7 @@ fun AppNavHost() {
                     },
                     onDeleteSession = { sid ->
                         detailVm.deleteSession(sid)
-                        vm.refreshAll()
+                        vm.deleteSession(sid)
                     }
                 )
             } else {

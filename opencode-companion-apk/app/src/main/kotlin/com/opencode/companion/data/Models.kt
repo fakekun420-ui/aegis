@@ -114,8 +114,17 @@ data class Message(
     }
     fun strippedText(): String {
         var t = text
+        val reqMatch = Regex("<USER_REQUEST>([\\s\\S]*?)</USER_REQUEST>", RegexOption.IGNORE_CASE).find(t)
+        if (reqMatch != null) {
+            return reqMatch.groupValues[1].trim()
+        }
+        t = Regex("<SYSTEM_INSTRUCTION>[\\s\\S]*?</SYSTEM_INSTRUCTION>", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = Regex("<SYSTEM_CONTEXT>[\\s\\S]*?</SYSTEM_CONTEXT>", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = Regex("\\[SYSTEM CONTEXT[\\s\\S]*?\\][\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = Regex("# PONY-TAIL[\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
         t = Regex("<memory_context[\\s\\S]*?</memory_context>", RegexOption.IGNORE_CASE).replace(t, "").trim()
         t = Regex("<project_knowledge[\\s\\S]*?</project_knowledge>", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = Regex("<ADDITIONAL_METADATA>[\\s\\S]*?</ADDITIONAL_METADATA>", RegexOption.IGNORE_CASE).replace(t, "").trim()
         return t
     }
     val isEmpty: Boolean get() = text.isBlank() && strippedText().isBlank() && fileParts().isEmpty() && imageParts().isEmpty()
@@ -132,7 +141,9 @@ data class Message(
 data class SendMessageRequest(
     val parts: List<Map<String, String>>,
     val model: String? = null,
-    val provider: String? = null
+    val provider: String? = null,
+    val agent: String? = null,
+    val mode: String? = null
 )
 
 data class Skill(
