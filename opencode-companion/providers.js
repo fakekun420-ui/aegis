@@ -600,6 +600,9 @@ export class OpencodeAdapter extends BaseProviderAdapter {
                 return reject(new Error(j.data?.message || j.message || j.error || "OpenCode error"));
               }
               const normalized = normalizeMessage(j, sessionId);
+              if (typeof opts.onChunk === "function" && normalized.text) {
+                try { opts.onChunk(normalized.text); } catch (_) {}
+              }
               resolve(normalized);
             } catch (e) {
               reject(new Error(`Failed to parse opencode response: ${d} (${e.message})`));
@@ -869,6 +872,21 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     };
   }
 
+  async deleteSession(sessionId) {
+    const convId = this.sessionMap.get(sessionId) || sessionId;
+    this.sessionMap.delete(sessionId);
+    const targetDir = path.join(this.brainDir, convId);
+    if (fs.existsSync(targetDir)) {
+      try {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+        console.log(`[antigravity] purged brain directory: ${targetDir}`);
+      } catch (err) {
+        console.warn(`[antigravity] failed to remove brain directory ${targetDir}:`, err.message);
+      }
+    }
+    return { ok: true, removed: sessionId };
+  }
+
   _cleanPromptContent(raw) {
     if (!raw) return "";
     let str = String(raw);
@@ -1017,6 +1035,11 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     }
 
     // 4. Build agy CLI spawn arguments
+    const isStreaming = typeof opts.onChunk === "function";
+    const beforeDirs = new Set(
+      fs.existsSync(this.brainDir) ? fs.readdirSync(this.brainDir) : []
+    );
+
     const args = [];
     if (convId && fs.existsSync(path.join(this.brainDir, convId))) {
       args.push("--conversation", convId);
@@ -1024,17 +1047,19 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     if (payload.model) {
       args.push("--model", String(payload.model));
     }
+    args.push("-p", userPrompt);
+    if (isStreaming) {
+      args.push("--output-format", "text");
+    } else {
+      args.push("--output-format", "json");
+    }
     args.push(
-      "-p",
-      userPrompt,
-      "--output-format",
-      "json",
       "--dangerously-skip-permissions",
       "--print-timeout",
       "85s"
     );
 
-    console.log(`[antigravity] executing agy for session ${sessionId} (convId: ${convId || "new"})...`);
+    console.log(`[antigravity] executing agy for session ${sessionId} (convId: ${convId || "new"}, streaming: ${isStreaming})...`);
 
     // Helper to safely kill process group
     const killGroup = (proc, signal = "SIGTERM") => {
@@ -1074,7 +1099,13 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       let stdout = "";
       let stderr = "";
 
-      p.stdout.on("data", (c) => (stdout += c));
+      p.stdout.on("data", (c) => {
+        const text = c.toString("utf8");
+        stdout += text;
+        if (isStreaming && typeof opts.onChunk === "function") {
+          try { opts.onChunk(text); } catch (_) {}
+        }
+      });
       p.stderr.on("data", (c) => (stderr += c));
 
       // 90 second hard timeout guard with escalation
@@ -1122,6 +1153,23 @@ export class AntigravityAdapter extends BaseProviderAdapter {
         if (code !== 0 && !stdout.trim()) {
           return reject(new Error(`Antigravity exited with code ${code}: ${stderr.trim()}`));
         }
+
+        if (isStreaming) {
+          let afterConvId = convId;
+          if (!afterConvId && fs.existsSync(this.brainDir)) {
+            const curDirs = fs.readdirSync(this.brainDir);
+            const newDirs = curDirs.filter((d) => !beforeDirs.has(d));
+            if (newDirs.length > 0) afterConvId = newDirs[0];
+          }
+          if (afterConvId) this.sessionMap.set(sessionId, afterConvId);
+
+          return resolve({
+            response: stdout.trim(),
+            role: "assistant",
+            conversation_id: afterConvId || sessionId
+          });
+        }
+
         try {
           const trimmed = stdout.trim();
           const jsonMatch = trimmed.match(/\{[\s\S]*\}/);

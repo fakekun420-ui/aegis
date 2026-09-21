@@ -251,9 +251,50 @@ function buildSkillsContext(projectId) {
   if (!skills.length) return "";
   return skills.map(s => `### Skill: ${s.name} [${s.scope}]\n${s.content}`).join("\n\n---\n\n");
 }
+function loadPonyTailContext(projectId) {
+  const blocks = [];
+  const globalFile = path.join(__dirname, "context", "pony-tail-global.md");
+  if (fs.existsSync(globalFile)) {
+    try {
+      const globalContent = fs.readFileSync(globalFile, "utf8");
+      blocks.push(globalContent.trim());
+    } catch (e) {
+      console.warn("[ponytail] failed reading pony-tail-global.md:", e.message);
+    }
+  }
+
+  if (projectId) {
+    try {
+      const store = loadProjectsStore();
+      const proj = findProject(store, projectId);
+      if (proj && proj.name) {
+        const projDir = path.join(PROJECTS_ROOT, proj.name);
+        const projPonyTail = path.join(projDir, ".ponytail.md");
+        if (fs.existsSync(projPonyTail)) {
+          const content = fs.readFileSync(projPonyTail, "utf8");
+          blocks.push(content.trim());
+        }
+      }
+    } catch (e) {
+      console.warn("[ponytail] failed reading project .ponytail.md:", e.message);
+    }
+  }
+
+  if (blocks.length > 0) {
+    blocks.push(
+      "<!-- PONY-TAIL DIRECTIVE -->\n*Instrucción de Sistema:* Cuando alcances un hito, refactorización o funcionalidad relevante 100% verificada en este proyecto, debes actualizar automáticamente el archivo `.ponytail.md` en la raíz del proyecto para registrar los avances. Tienes estrictamente prohibido modificar el archivo global `pony-tail-global.md`."
+    );
+  }
+
+  return blocks.join("\n\n---\n\n");
+}
+
 function buildSystemContextBlock(projectId) {
-  // Compose project instructions + skills + cross-project context into a single system block
+  // Compose pony-tail context + project instructions + skills + cross-project context
   const parts = [];
+  const ponyTailBlock = loadPonyTailContext(projectId);
+  if (ponyTailBlock) parts.push(ponyTailBlock);
+
   if (projectId) {
     const store = loadProjectsStore();
     const proj = findProject(store, projectId);
@@ -480,16 +521,18 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
   }
   // Also fallback to UI_STATE projectId if header missing (client persisted active project)
   if (!projectId && UI_STATE && UI_STATE.projectId) projectId = UI_STATE.projectId;
-  if (!projectId) return modified ? Buffer.from(JSON.stringify(parsed)) : null;
+  if (!projectId && !fs.existsSync(path.join(__dirname, "context", "pony-tail-global.md"))) {
+    return modified ? Buffer.from(JSON.stringify(parsed)) : null;
+  }
   let block = buildSystemContextBlock(projectId);
   if (!block) return modified ? Buffer.from(JSON.stringify(parsed)) : null;
   // Defensive sanitization: remove control chars that break JSON/provider validation, keep \n \r \t
   // Also normalize: skills/summaries may contain unescaped quotes/backticks/binary
   block = String(block).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, " ");
-  // Size cap: prevent oversized injection exceeding provider limit (12KB text ~3k tokens)
-  const MAX_BLOCK_CHARS = 12000;
+  // Size cap: prevent oversized injection exceeding provider limit (24KB text ~6k tokens)
+  const MAX_BLOCK_CHARS = 24000;
   if (block.length > MAX_BLOCK_CHARS) {
-    block = block.slice(0, MAX_BLOCK_CHARS) + "\n\n[truncated: context exceeds 12KB cap]";
+    block = block.slice(0, MAX_BLOCK_CHARS) + "\n\n[truncated: context exceeds 24KB cap]";
   }
   // Final size guard: if full payload would exceed 512KB (shouldTryInject boundary), truncate further
   const approxPayloadLen = originalBodyBuf.length + block.length + 256;
@@ -778,6 +821,54 @@ const server = http.createServer(async (req, res)=>{
     }
   }
 
+  // 0b2) Provider-aware Session Deletion: DELETE /api/opencode/sessions/:id, DELETE /api/sessions/:id, DELETE /opencode/session/:id, DELETE /opencode/sessions/:id
+  const deleteSessionIntercept = pathname.match(/^\/(?:opencode|api)\/session(?:s)?\/([^\/]+)$/) ||
+                                 pathname.match(/^\/api\/opencode\/sessions\/([^\/]+)$/);
+  if (deleteSessionIntercept && req.method === "DELETE") {
+    const sid = sanitizeProjectId(decodeURIComponent(deleteSessionIntercept[1]));
+    try {
+      // 1. Remove atomically from all projects and purge from sessionTitles in projects.json
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        let changed = false;
+        for (const p of store.projects) {
+          const before = (p.sessions || []).length;
+          p.sessions = (p.sessions || []).filter(s => s.sessionId !== sid);
+          if (p.sessions.length !== before) changed = true;
+        }
+        if (store.sessionTitles && store.sessionTitles[sid]) {
+          delete store.sessionTitles[sid];
+          changed = true;
+        }
+        if (changed) saveProjectsStore(store);
+      });
+
+      // 2. Provider cleanup
+      if (sid.startsWith("agy_")) {
+        // Antigravity session: purge local brain directory, never delegate to OpenCode
+        try {
+          await antigravityAdapter.deleteSession(sid);
+        } catch (e) {
+          console.warn(`[hub] antigravityAdapter.deleteSession warning:`, e.message);
+        }
+        return json(res, 200, { ok: true, data: { removed: sid }, removed: sid });
+      } else {
+        // OpenCode session
+        try {
+          if (typeof opencodeAdapter.deleteSession === "function") {
+            await opencodeAdapter.deleteSession(sid);
+          }
+        } catch (e) {
+          console.warn(`[hub] opencodeAdapter.deleteSession warning:`, e.message);
+        }
+        return json(res, 200, { ok: true, data: { removed: sid }, removed: sid });
+      }
+    } catch (e) {
+      console.error(`[hub] DELETE session error for ${sid}:`, e.message);
+      return json(res, 500, fail(`delete session failed: ${e.message}`));
+    }
+  }
+
   // 0c) Provider-aware Message Send: POST /opencode/session/:id/message or POST /api/sessions/:id/message or POST /api/opencode/sessions/:id/message
   const sendMsgMatch = pathname.match(/^\/(?:opencode|api)\/session(?:s)?\/([^\/]+)\/message$/) ||
                        pathname.match(/^\/api\/opencode\/sessions\/([^\/]+)\/message$/);
@@ -861,10 +952,29 @@ const server = http.createServer(async (req, res)=>{
         }
       }
 
-      console.log(`[hub] routing message for session ${sid} to provider ${adapter.id} (project: ${pId || "none"})`);
+      const isStream = url.searchParams.get("stream") === "true" ||
+                       (req.headers["accept"] && req.headers["accept"].includes("text/event-stream"));
+
+      if (isStream) {
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "*",
+          "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+        });
+      }
+
+      console.log(`[hub] routing message for session ${sid} to provider ${adapter.id} (project: ${pId || "none"}, streaming: ${isStream})`);
       const msgResult = await adapter.sendMessage(sid, body, {
         signal: abortCtrl.signal,
-        projectId: pId
+        projectId: pId,
+        onChunk: isStream ? (chunk) => {
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ type: "chunk", text: chunk })}\n\n`);
+          }
+        } : null
       });
 
       // If Antigravity returned a conversationId, persist it immediately
@@ -885,6 +995,15 @@ const server = http.createServer(async (req, res)=>{
       }
 
       const normalized = normalizeMessage(msgResult, sid);
+
+      if (isStream) {
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ type: "done", message: normalized })}\n\n`);
+          res.end();
+        }
+        return;
+      }
+
       return json(res, 200, {
         ok: true,
         data: normalized,
@@ -892,6 +1011,13 @@ const server = http.createServer(async (req, res)=>{
       });
     } catch (e) {
       console.error(`[hub] sendMessage error for ${sid}:`, e.message);
+      if (isStream && res.headersSent) {
+        try {
+          res.write(`data: ${JSON.stringify({ type: "error", error: e.message || "Message send failed" })}\n\n`);
+          res.end();
+        } catch (_) {}
+        return;
+      }
       const isTimeout = e.message.includes("timed out") || e.message.includes("timeout");
       return json(res, isTimeout ? 504 : 502, {
         ok: false,
@@ -1251,6 +1377,37 @@ const server = http.createServer(async (req, res)=>{
         store.projects.push(createdProj);
         saveProjectsStore(store);
       });
+
+      // Initialize project directory on disk (PROJECTS_ROOT) and default .ponytail.md
+      try {
+        const projDir = path.join(PROJECTS_ROOT, createdProj.name);
+        if (!fs.existsSync(projDir)) {
+          fs.mkdirSync(projDir, { recursive: true });
+        }
+        const ponyTailFile = path.join(projDir, ".ponytail.md");
+        if (!fs.existsSync(ponyTailFile)) {
+          fs.writeFileSync(
+            ponyTailFile,
+            `# PONY-TAIL DE PROYECTO: ${createdProj.name}
+**Ubicación:** \`${ponyTailFile}\`  
+**Hereda de:** \`/sdcard/projects/opencode-companion/context/pony-tail-global.md\`  
+**Última Actualización:** ${nowIso().split("T")[0]}  
+**Proveedor:** ${createdProj.provider}  
+**Estado General:** Inicializado  
+
+---
+
+## 1. Arquitectura y Resumen
+- **Nombre:** ${createdProj.name}
+- **Descripción:** ${createdProj.description || "Sin descripción"}
+- **Proveedor predeterminado:** ${createdProj.provider}
+- **Instrucciones:** ${createdProj.instructions || "Estándar"}
+`
+          );
+        }
+      } catch (err) {
+        console.warn(`[hub] failed to initialize project directory on disk:`, err.message);
+      }
 
       return json(res, 201, { ok: true, data: createdProj });
     } catch (e) {

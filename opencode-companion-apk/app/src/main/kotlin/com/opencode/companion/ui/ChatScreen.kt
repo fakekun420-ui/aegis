@@ -68,6 +68,8 @@ fun ChatScreen(
     val error by vm.error.collectAsState()
     val models by vm.models.collectAsState()
     val selectedModel by vm.selectedModel.collectAsState()
+    val selectedProvider by vm.selectedProvider.collectAsState()
+    val streamingText by vm.streamingText.collectAsState()
     var showModelSheet by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
@@ -77,9 +79,9 @@ fun ChatScreen(
         vm.load(sessionId, sessionProvider)
     }
 
-    // Auto-scroll on new messages / loading state changes
-    LaunchedEffect(messages.size, loading) {
-        val totalCount = messages.size + (if (loading && messages.isNotEmpty()) 1 else 0)
+    // Auto-scroll on new messages / loading / streaming state changes
+    LaunchedEffect(messages.size, loading, streamingText) {
+        val totalCount = messages.size + (if (streamingText != null || (loading && messages.isNotEmpty())) 1 else 0)
         if (totalCount > 0) {
             delay(80)
             try { listState.animateScrollToItem(totalCount - 1) } catch (_: Exception) {}
@@ -349,8 +351,12 @@ fun ChatScreen(
                                     vm.retryMessage(msg, sessionId)
                                 })
                             }
-                            if (loading) {
-                                item {
+                            if (streamingText != null) {
+                                item(key = "streaming_live") {
+                                    StreamingAssistantBubble(streamingText!!)
+                                }
+                            } else if (loading) {
+                                item(key = "typing_dots") {
                                     AssistantTypingBubble()
                                 }
                             }
@@ -414,13 +420,32 @@ fun ChatScreen(
     if (showModelSheet) {
         ModalBottomSheet(onDismissRequest = { showModelSheet = false }) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Seleccionar modelo", style = MaterialTheme.typography.titleMedium)
+                Text("Proveedor y Modelo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Elige el motor y modelo para esta sesión:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    FilterChip(
+                        selected = selectedProvider == "opencode",
+                        onClick = { vm.selectProvider("opencode") },
+                        label = { Text("OpenCode Zen") },
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    FilterChip(
+                        selected = selectedProvider == "antigravity",
+                        onClick = { vm.selectProvider("antigravity") },
+                        label = { Text("Antigravity") },
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
                 models.forEach { model ->
                     ListItem(
-                        headlineContent = { Text(model.name) },
+                        headlineContent = { Text(model.name, fontWeight = if (model.id == selectedModel) FontWeight.SemiBold else FontWeight.Normal) },
                         supportingContent = { model.description?.let { Text(it) } },
                         leadingContent = {
                             RadioButton(
@@ -597,6 +622,52 @@ private fun MessageBubble(msg: Message, onRetry: (() -> Unit)? = null) {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamingAssistantBubble(streamText: String) {
+    var cursorVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(500)
+            cursorVisible = !cursorVisible
+        }
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.Start
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth(0.86f)
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val cursor = if (cursorVisible) " ▋" else ""
+                if (streamText.isBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Generando respuesta…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            cursor,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    MarkdownText(text = streamText + cursor)
                 }
             }
         }

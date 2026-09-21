@@ -193,6 +193,28 @@
       "skills": [],
       "linkedProjects": [],
       "instructions": "Instrucciones personalizadas del proyecto: actuar con máxima precisión y modularidad."
+    },
+    {
+      "id": "muaivp64-1azqz5",
+      "name": "QA-Antigravity-TestProject",
+      "description": "Test project with Antigravity provider",
+      "instructions": "",
+      "createdAt": "2026-09-21T00:44:13.996Z",
+      "archivedAt": "2026-09-21T00:46:58.913Z",
+      "provider": "antigravity",
+      "sessions": [
+        {
+          "sessionId": "agy_muaiwngj_mq4t87k5",
+          "title": "Streaming Test Session",
+          "createdAt": "2026-09-21T00:44:58.435Z",
+          "lastUsed": "2026-09-21T00:45:10.922Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "2cc9a275-aeb7-463e-9140-3699644f99c9"
+        }
+      ],
+      "skills": [],
+      "linkedProjects": []
     }
   ],
   "sessionTitles": {
@@ -211,6 +233,7 @@
     "0adc77f9-68a1-4e32-8e03-d012d3a287c4": "Frontend QA Verified",
     "ed8f444b-168f-4e64-8c19-e832ab542c77": "Backend",
     "ses_f3f1e97f7ffeAwyBXHAch8Pd23": "companion:92785",
-    "ses_f3f027485ffeC10AWQQDH0HxX5": "companion:36892"
+    "ses_f3f027485ffeC10AWQQDH0HxX5": "companion:36892",
+    "agy_muaiwngj_mq4t87k5": "Streaming Test Session"
   }
 }

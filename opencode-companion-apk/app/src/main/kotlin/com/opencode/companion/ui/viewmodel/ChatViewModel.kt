@@ -44,6 +44,9 @@ class ChatViewModel : ViewModel() {
     private val _currentSessionId = MutableStateFlow<String?>(null)
     val currentSessionId: StateFlow<String?> = _currentSessionId
 
+    private val _streamingText = MutableStateFlow<String?>(null)
+    val streamingText: StateFlow<String?> = _streamingText
+
     private var pollingJob: Job? = null
 
     fun selectModel(modelId: String?) {
@@ -209,31 +212,87 @@ class ChatViewModel : ViewModel() {
                 }
             }
 
-            // 5. Send message via Retrofit with explicit provider and model
+            // 5. Send message with SSE real-time token streaming
             try {
                 val sendReq = SendMessageRequest(
                     parts = reqParts,
                     model = _selectedModel.value,
                     provider = provider
                 )
-                val responseMsg = api.sendMessage(
-                    sessionId = targetSessionId,
-                    body = sendReq,
-                    provider = provider
-                )
+                val bodyJson = com.google.gson.Gson().toJson(sendReq)
 
-                // If responseMsg arrived directly with assistant parts
-                if (!responseMsg.isEmpty) {
-                    messageDelivered = true
-                    pollingJob?.cancel()
+                var sseSuccess = false
+                _streamingText.value = ""
 
-                    // Mark user message as SENT and append response
-                    val updated = _messages.value.map {
-                        if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
+                try {
+                    val streamReq = okhttp3.Request.Builder()
+                        .url("http://127.0.0.1:8765/api/opencode/sessions/$targetSessionId/message?stream=true")
+                        .header("Accept", "text/event-stream")
+                        .header("X-Provider", provider)
+                        .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
+                        .build()
+
+                    val sseResp = withContext(Dispatchers.IO) { ApiClient.rawOkHttp.newCall(streamReq).execute() }
+                    if (sseResp.isSuccessful && sseResp.body != null) {
+                        val reader = sseResp.body!!.charStream().buffered()
+                        val sb = java.lang.StringBuilder()
+                        var line: String? = null
+                        while (withContext(Dispatchers.IO) { reader.readLine() }.also { line = it } != null) {
+                            val cur = line ?: break
+                            if (cur.startsWith("data: ")) {
+                                val dataStr = cur.removePrefix("data: ").trim()
+                                try {
+                                    val jsonObj = com.google.gson.JsonParser.parseString(dataStr).asJsonObject
+                                    val type = if (jsonObj.has("type")) jsonObj.get("type").asString else ""
+                                    if (type == "chunk" && jsonObj.has("text")) {
+                                        val chunk = jsonObj.get("text").asString
+                                        sb.append(chunk)
+                                        _streamingText.value = sb.toString()
+                                    } else if (type == "done" && jsonObj.has("message")) {
+                                        val msgObj = jsonObj.getAsJsonObject("message")
+                                        val finalMsg = com.google.gson.Gson().fromJson(msgObj, Message::class.java)
+                                        if (finalMsg != null && !finalMsg.isEmpty) {
+                                            messageDelivered = true
+                                            pollingJob?.cancel()
+                                            val updated = _messages.value.map {
+                                                if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
+                                            }
+                                            val exists = updated.any { it.info?.id == finalMsg.info?.id }
+                                            _messages.value = if (exists) updated else updated + finalMsg
+                                            sseSuccess = true
+                                        }
+                                        break
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
                     }
-                    val exists = updated.any { it.info?.id == responseMsg.info?.id }
-                    _messages.value = if (exists) updated else updated + responseMsg
-                    _loading.value = false
+                } catch (_: Exception) {
+                    sseSuccess = false
+                } finally {
+                    _streamingText.value = null
+                }
+
+                if (!sseSuccess && !messageDelivered) {
+                    val responseMsg = api.sendMessage(
+                        sessionId = targetSessionId,
+                        body = sendReq,
+                        provider = provider
+                    )
+
+                    // If responseMsg arrived directly with assistant parts
+                    if (!responseMsg.isEmpty) {
+                        messageDelivered = true
+                        pollingJob?.cancel()
+
+                        // Mark user message as SENT and append response
+                        val updated = _messages.value.map {
+                            if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
+                        }
+                        val exists = updated.any { it.info?.id == responseMsg.info?.id }
+                        _messages.value = if (exists) updated else updated + responseMsg
+                        _loading.value = false
+                    }
                 }
 
                 // Follow-up sync to get canonical messages from DB
@@ -269,6 +328,7 @@ class ChatViewModel : ViewModel() {
                     _error.value = "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
                 }
             } finally {
+                _streamingText.value = null
                 _loading.value = false
                 pollingJob?.cancel()
             }
