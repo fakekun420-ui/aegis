@@ -306,6 +306,14 @@ function buildSystemContextBlock(projectId) {
   if (skillsBlock) parts.push(`# Active Skills\n${skillsBlock}`);
   const crossBlock = buildCrossProjectContext(projectId);
   if (crossBlock) parts.push(`# Cross-Project Context (linked projects)\n${crossBlock}`);
+
+  // Execution Engine & Tool-Calling Parity Directive
+  parts.push(
+    `# MOTOR DE EJECUCIÓN Y TOOL-CALLING ACTIVO\n` +
+    `Tienes permisos automáticos de ejecución de herramientas activados (--dangerously-skip-permissions / auto-approve).\n` +
+    `NO actúes como un chatbot pasivo de solo texto. Cuando el usuario solicite ejecutar un comando, inspeccionar el entorno, montar rutas, crear o modificar archivos, correr diagnósticos, o resolver un problema técnico, NO te limites a responder únicamente con texto estático o sugerencias teóricas: EJECUTA de inmediato las herramientas y comandos bash correspondientes (usando run_command o bash, y si requieres inspeccionar el sistema host Android o comandos de root, puedes usar nsenter -t 1 -m o herramientas directas de sistema) para inspeccionar, aplicar cambios y reportar los resultados reales obtenidos de la ejecución.`
+  );
+
   return parts.join("\n\n");
 }
 
@@ -874,6 +882,8 @@ const server = http.createServer(async (req, res)=>{
                        pathname.match(/^\/api\/opencode\/sessions\/([^\/]+)\/message$/);
   if (sendMsgMatch && req.method === "POST") {
     const sid = sanitizeProjectId(decodeURIComponent(sendMsgMatch[1]));
+    const isStream = url.searchParams.get("stream") === "true" ||
+                     (req.headers["accept"] && req.headers["accept"].includes("text/event-stream"));
     try {
       const raw = await readJsonBody(req, 512 * 1024);
       const body = JSON.parse(raw || "{}");
@@ -992,9 +1002,6 @@ const server = http.createServer(async (req, res)=>{
         }
       }
 
-      const isStream = url.searchParams.get("stream") === "true" ||
-                       (req.headers["accept"] && req.headers["accept"].includes("text/event-stream"));
-
       if (isStream) {
         res.writeHead(200, {
           "Content-Type": "text/event-stream; charset=utf-8",
@@ -1012,6 +1019,11 @@ const server = http.createServer(async (req, res)=>{
         projectId: pId,
         agent: agentMode,
         mode: agentMode,
+        onStreamEvent: isStream ? (evt) => {
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify(evt)}\n\n`);
+          }
+        } : null,
         onChunk: isStream ? (chunk) => {
           if (!res.writableEnded) {
             res.write(`data: ${JSON.stringify({ type: "chunk", text: chunk })}\n\n`);

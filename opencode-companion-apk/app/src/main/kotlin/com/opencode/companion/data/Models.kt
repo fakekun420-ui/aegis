@@ -88,6 +88,40 @@ data class MessageInfo(
     val deliveryStatus: MessageDeliveryStatus get() = status ?: MessageDeliveryStatus.SENT
 }
 
+data class ToolState(
+    val status: String? = null,
+    val input: Map<String, Any?>? = null,
+    val output: String? = null,
+    val exitCode: Int? = null,
+    val duration: Double? = null
+) {
+    val command: String get() {
+        val direct = input?.get("command") as? String
+            ?: input?.get("CommandLine") as? String
+            ?: input?.get("cmd") as? String
+        if (!direct.isNullOrBlank()) return direct.trim().removeSurrounding("\"")
+        val path = input?.get("path") as? String
+            ?: input?.get("AbsolutePath") as? String
+            ?: input?.get("TargetFile") as? String
+        if (!path.isNullOrBlank()) return path.trim().removeSurrounding("\"")
+        val query = input?.get("query") as? String
+        if (!query.isNullOrBlank()) return query.trim().removeSurrounding("\"")
+        val url = input?.get("Url") as? String ?: input?.get("url") as? String
+        if (!url.isNullOrBlank()) return url.trim().removeSurrounding("\"")
+        return ""
+    }
+}
+
+data class LiveToolExecution(
+    val id: String,
+    val tool: String,
+    val command: String,
+    val status: String = "running",
+    val output: String? = null,
+    val exitCode: Int? = null,
+    val duration: Double? = null
+)
+
 data class MessagePart(
     val id: String? = null,
     val type: String? = null,
@@ -96,7 +130,10 @@ data class MessagePart(
     val filename: String? = null,
     val data: String? = null,
     val image: String? = null,
-    val url: String? = null
+    val url: String? = null,
+    val tool: String? = null,
+    val callID: String? = null,
+    val state: ToolState? = null
 )
 
 data class Message(
@@ -130,9 +167,10 @@ data class Message(
         t = Regex("<USER_SETTINGS_CHANGE>[\\s\\S]*?</USER_SETTINGS_CHANGE>", RegexOption.IGNORE_CASE).replace(t, "").trim()
         return t.trim()
     }
-    val isEmpty: Boolean get() = text.isBlank() && strippedText().isBlank() && fileParts().isEmpty() && imageParts().isEmpty()
+    val isEmpty: Boolean get() = text.isBlank() && strippedText().isBlank() && fileParts().isEmpty() && imageParts().isEmpty() && toolParts().isEmpty()
     fun fileParts(): List<MessagePart> = parts?.filter { it.type == "file" } ?: emptyList()
     fun imageParts(): List<MessagePart> = parts?.filter { it.type == "image" } ?: emptyList()
+    fun toolParts(): List<MessagePart> = parts?.filter { it.type == "tool" } ?: emptyList()
 
     val isPending: Boolean get() = info?.deliveryStatus == MessageDeliveryStatus.PENDING
     val isError: Boolean get() = info?.deliveryStatus == MessageDeliveryStatus.ERROR

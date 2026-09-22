@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.opencode.companion.data.AttachedFile
+import com.opencode.companion.data.LiveToolExecution
 import com.opencode.companion.data.Message
 import com.opencode.companion.data.MessageDeliveryStatus
 import com.opencode.companion.ui.viewmodel.ChatViewModel
@@ -74,6 +75,7 @@ fun ChatScreen(
     val selectedModel by vm.selectedModel.collectAsState()
     val selectedProvider by vm.selectedProvider.collectAsState()
     val streamingText by vm.streamingText.collectAsState()
+    val streamingTools by vm.streamingTools.collectAsState()
     val agentMode by vm.agentMode.collectAsState()
     var showModelSheet by remember { mutableStateOf(false) }
 
@@ -84,11 +86,12 @@ fun ChatScreen(
         vm.load(sessionId, sessionProvider)
     }
 
-    // Auto-scroll on new messages / loading / streaming state changes
-    LaunchedEffect(messages.size, loading, streamingText) {
-        val totalCount = messages.size + (if (streamingText != null || (loading && messages.isNotEmpty())) 1 else 0)
+    // Auto-scroll on new messages / loading / streaming tools or text changes
+    LaunchedEffect(messages.size, loading, streamingText, streamingTools) {
+        val hasLive = streamingText != null || streamingTools.isNotEmpty() || (loading && messages.isNotEmpty())
+        val totalCount = messages.size + (if (hasLive) 1 else 0)
         if (totalCount > 0) {
-            delay(80)
+            delay(50)
             try { listState.animateScrollToItem(totalCount - 1) } catch (_: Exception) {}
         }
     }
@@ -387,9 +390,9 @@ fun ChatScreen(
                                     vm.retryMessage(msg, sessionId)
                                 })
                             }
-                            if (streamingText != null) {
+                            if (streamingText != null || streamingTools.isNotEmpty()) {
                                 item(key = "streaming_live") {
-                                    TerminalStreamingTurn(streamingText!!)
+                                    TerminalStreamingTurn(streamingText ?: "", streamingTools)
                                 }
                             } else if (loading) {
                                 item(key = "typing_dots") {
@@ -680,13 +683,36 @@ private fun TerminalConsoleTurn(msg: Message, onRetry: (() -> Unit)? = null) {
                 }
             }
         } else {
-            // Assistant Turn: Full-width continuous text and markdown
-            Box(
+            // Assistant Turn: Continuous CLI wizard rendering with tool steps & markdown
+            val parts = msg.parts ?: emptyList()
+            val hasToolParts = parts.any { it.type == "tool" }
+
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, top = 2.dp, bottom = 4.dp)
+                    .padding(start = 16.dp, top = 2.dp, bottom = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (displayContent.isNotBlank()) {
+                if (hasToolParts) {
+                    parts.forEach { part ->
+                        if (part.type == "tool") {
+                            ToolExecutionCard(
+                                tool = part.tool ?: "bash",
+                                command = part.state?.command ?: "",
+                                output = part.state?.output,
+                                status = part.state?.status ?: "completed",
+                                exitCode = part.state?.exitCode ?: 0,
+                                duration = part.state?.duration
+                            )
+                        } else if (part.type == "text" && !part.text.isNullOrBlank()) {
+                            MarkdownText(text = part.text.trim())
+                        }
+                    }
+                    val hasRenderedText = parts.any { it.type == "text" && !it.text.isNullOrBlank() }
+                    if (!hasRenderedText && displayContent.isNotBlank()) {
+                        MarkdownText(text = displayContent)
+                    }
+                } else if (displayContent.isNotBlank()) {
                     MarkdownText(text = displayContent)
                 } else {
                     Text(
@@ -701,7 +727,10 @@ private fun TerminalConsoleTurn(msg: Message, onRetry: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun TerminalStreamingTurn(streamText: String) {
+private fun TerminalStreamingTurn(
+    streamText: String,
+    streamingTools: List<LiveToolExecution>
+) {
     var cursorVisible by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -710,24 +739,41 @@ private fun TerminalStreamingTurn(streamText: String) {
         }
     }
     val cursor = if (cursorVisible) " ▋" else ""
-    Box(
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, top = 2.dp, bottom = 4.dp)
+            .padding(start = 16.dp, top = 2.dp, bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Live Tool Execution steps
+        streamingTools.forEach { exec ->
+            ToolExecutionCard(
+                tool = exec.tool,
+                command = exec.command,
+                output = exec.output,
+                status = exec.status,
+                exitCode = exec.exitCode,
+                duration = exec.duration
+            )
+        }
+
+        // Generative text streaming
         if (streamText.isBlank()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Generando respuesta…",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
-                    color = Color(0xFF8B949E)
-                )
-                Text(
-                    cursor,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    color = Color(0xFF58A6FF),
-                    fontWeight = FontWeight.Bold
-                )
+            if (streamingTools.isEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Generando respuesta…",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
+                        color = Color(0xFF8B949E)
+                    )
+                    Text(
+                        cursor,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        color = Color(0xFF58A6FF),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         } else {
             MarkdownText(text = streamText, cursor = cursor)

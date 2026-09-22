@@ -2,6 +2,7 @@ package com.opencode.companion.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -71,6 +72,24 @@ fun MarkdownText(
                 )
                 is MdBlock.CodeBlock -> {
                     CodeBlockItem(block)
+                    if (trailingCursor.isNotBlank()) {
+                        Text(
+                            text = trailingCursor,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF58A6FF)
+                        )
+                    }
+                }
+                is MdBlock.ToolExecution -> {
+                    ToolExecutionCard(
+                        tool = block.tool,
+                        command = block.command,
+                        output = block.output,
+                        status = block.status,
+                        exitCode = block.exitCode,
+                        duration = block.duration
+                    )
                     if (trailingCursor.isNotBlank()) {
                         Text(
                             text = trailingCursor,
@@ -337,6 +356,14 @@ private fun highlightCode(code: String, language: String): AnnotatedString {
 private sealed class MdBlock {
     data class Header(val level: Int, val text: String) : MdBlock()
     data class CodeBlock(val code: String, val language: String = "") : MdBlock()
+    data class ToolExecution(
+        val tool: String,
+        val command: String,
+        val output: String? = null,
+        val status: String = "completed",
+        val exitCode: Int? = 0,
+        val duration: Double? = null
+    ) : MdBlock()
     data class Quote(val text: String) : MdBlock()
     data class BulletList(val items: List<String>) : MdBlock()
     data class OrderedList(val items: List<String>) : MdBlock()
@@ -377,7 +404,23 @@ private fun parseMarkdown(src: String): List<MdBlock> {
         }
         if (inCode) { codeBuf.appendLine(line); i++; continue }
         if (trimmed.isEmpty()) { flushLists(); i++; continue }
+
+        val toolMatch = Regex("^[❯●>]\\s*(bash|run_command|view_file|write_to_file|replace_file_content|sed_file|grep_search|list_dir|command_status|manage_task|edit|read|glob|grep|lsp|websearch|webfetch)\\((.*?)\\)", RegexOption.IGNORE_CASE).find(trimmed)
+
         when {
+            toolMatch != null -> {
+                flushLists()
+                val rawTool = toolMatch.groupValues[1]
+                val normTool = if (rawTool.equals("run_command", ignoreCase = true)) "bash" else rawTool.lowercase()
+                val cmd = toolMatch.groupValues[2]
+                blocks += MdBlock.ToolExecution(
+                    tool = normTool,
+                    command = cmd,
+                    status = "completed",
+                    exitCode = 0
+                )
+                i++
+            }
             trimmed.startsWith("# ") -> { flushLists(); blocks += MdBlock.Header(1, trimmed.removePrefix("# ").trim()); i++ }
             trimmed.startsWith("## ") -> { flushLists(); blocks += MdBlock.Header(2, trimmed.removePrefix("## ").trim()); i++ }
             trimmed.startsWith("### ") -> { flushLists(); blocks += MdBlock.Header(3, trimmed.removePrefix("### ").trim()); i++ }
@@ -506,4 +549,187 @@ private fun buildInline(src: String, cursor: String = ""): AnnotatedString {
     }
 
     return result
+}
+
+/**
+ * CLI Wizard Continuous Tool Execution Card for OpenCode Companion & Antigravity.
+ * Renderiza pasos de ejecución en tiempo real: comando ❯ bash(...), progreso,
+ * código de salida (exit code) y bloque de consola terminal `#0D1117`.
+ */
+@Composable
+fun ToolExecutionCard(
+    tool: String,
+    command: String,
+    output: String? = null,
+    status: String = "completed",
+    exitCode: Int? = 0,
+    duration: Double? = null,
+    modifier: Modifier = Modifier
+) {
+    val clipboardManager = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2000)
+            copied = false
+        }
+    }
+
+    val isRunning = status == "running"
+    val isError = status == "error" || (exitCode != null && exitCode != 0)
+    val statusColor = when {
+        isRunning -> Color(0xFFD29922)
+        isError -> Color(0xFFF85149)
+        else -> Color(0xFF3FB950)
+    }
+    val statusBg = when {
+        isRunning -> Color(0xFF2E2412)
+        isError -> Color(0xFF381E20)
+        else -> Color(0xFF1B2C20)
+    }
+    val statusText = when {
+        isRunning -> "ejecutando…"
+        isError -> "exit ${exitCode ?: 1}"
+        else -> "exit 0"
+    }
+
+    Surface(
+        color = Color(0xFF0D1117),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, Color(0xFF30363D)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column {
+            // Header row: prompt symbol ❯, tool(command), and status badge
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF161B22))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "❯",
+                        color = Color(0xFF58A6FF),
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    val cleanCmd = command.trim().removeSurrounding("\"")
+                    val displayCmd = if (cleanCmd.isNotBlank()) "$tool($cleanCmd)" else "$tool()"
+                    Text(
+                        text = displayCmd,
+                        color = Color(0xFF79C0FF),
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.5.sp,
+                        maxLines = 1
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (duration != null && duration > 0) {
+                        Text(
+                            text = String.format(java.util.Locale.US, "%.2fs", duration),
+                            color = Color(0xFF8B949E),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    Surface(
+                        color = statusBg,
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (isRunning) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(9.dp),
+                                    strokeWidth = 1.5.dp,
+                                    color = statusColor
+                                )
+                            }
+                            Text(
+                                text = statusText,
+                                color = statusColor,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Console output container (if output present)
+            if (!output.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "CONSOLE OUTPUT",
+                                color = Color(0xFF8B949E),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (copied) "¡Copiado!" else "Copiar",
+                                color = if (copied) Color(0xFF3FB950) else Color(0xFF58A6FF),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.5.sp,
+                                modifier = Modifier.clickable {
+                                    clipboardManager.setText(AnnotatedString(output))
+                                    copied = true
+                                }
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Surface(
+                            color = Color(0xFF090D13),
+                            shape = RoundedCornerShape(4.dp),
+                            border = BorderStroke(1.dp, Color(0xFF21262D)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = output.trim(),
+                                color = Color(0xFFC9D1D9),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.5.sp,
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .horizontalScroll(rememberScrollState())
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

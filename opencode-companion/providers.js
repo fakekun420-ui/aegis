@@ -124,7 +124,10 @@ export function normalizeMessage(raw, sessionId = "", index = 0) {
       text: p.text || (typeof p === "string" ? p : ""),
       ...(p.mime ? { mime: p.mime } : {}),
       ...(p.filename ? { filename: p.filename } : {}),
-      ...(p.url ? { url: p.url } : {})
+      ...(p.url ? { url: p.url } : {}),
+      ...(p.tool ? { tool: p.tool } : {}),
+      ...(p.callID ? { callID: p.callID } : {}),
+      ...(p.state ? { state: p.state } : {})
     }));
   } else {
     parts = [{ id: `prt_${timestamp}_0`, type: "text", text }];
@@ -969,51 +972,123 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       const lines = content.trim().split("\n").filter(Boolean);
       const messages = [];
 
+      let currentTurnParts = [];
+      let currentTurnText = [];
+      let lastToolCall = null;
+      let currentAssistantTime = null;
+
+      const flushAssistantTurn = () => {
+        if (currentTurnParts.length === 0 && currentTurnText.length === 0) return;
+        const respText = currentTurnText.join("\n").trim();
+        const t = currentAssistantTime || Date.now();
+        messages.push(
+          normalizeMessage(
+            {
+              role: "assistant",
+              text: respText,
+              info: {
+                id: `msg_agy_${sessionId}_asst_${messages.length}`,
+                role: "assistant",
+                time: { created: t },
+                timestamp: t,
+                status: "SENT",
+                deliveryStatus: "SENT"
+              },
+              parts: [...currentTurnParts]
+            },
+            sessionId,
+            messages.length
+          )
+        );
+        currentTurnParts = [];
+        currentTurnText = [];
+        currentAssistantTime = null;
+      };
+
       for (const lineStr of lines) {
         try {
           const item = JSON.parse(lineStr);
           const isUser = item.source === "USER_EXPLICIT" || item.type === "USER_INPUT";
-          const isAssistant = item.source === "MODEL" || item.type === "PLANNER_RESPONSE";
 
-          if (!isUser && !isAssistant) continue;
-
-          let text = item.content || "";
           if (isUser) {
+            flushAssistantTurn();
+            let text = item.content || "";
             text = this._cleanPromptContent(text);
+            if (!text.trim()) continue;
+            const createdTime = item.created_at ? new Date(item.created_at).getTime() : Date.now();
+            messages.push(
+              normalizeMessage(
+                {
+                  role: "user",
+                  text: text.trim(),
+                  info: {
+                    id: `msg_agy_${sessionId}_usr_${messages.length}`,
+                    role: "user",
+                    time: { created: createdTime },
+                    timestamp: createdTime,
+                    status: "SENT",
+                    deliveryStatus: "SENT"
+                  },
+                  parts: [
+                    {
+                      id: `prt_usr_${messages.length}`,
+                      type: "text",
+                      text: text.trim()
+                    }
+                  ]
+                },
+                sessionId,
+                messages.length
+              )
+            );
+            continue;
           }
 
-          if (!text.trim()) continue;
-
-          const createdTime = item.created_at ? new Date(item.created_at).getTime() : Date.now();
-
-          messages.push(
-            normalizeMessage(
-              {
-                role: isUser ? "user" : "assistant",
-                text: text.trim(),
-                info: {
-                  id: `msg_agy_${sessionId}_${item.step_index ?? messages.length}`,
-                  role: isUser ? "user" : "assistant",
-                  time: { created: createdTime },
-                  timestamp: createdTime,
-                  status: "SENT",
-                  deliveryStatus: "SENT"
-                },
-                parts: [
-                  {
-                    id: `prt_${item.step_index ?? messages.length}`,
-                    type: "text",
-                    text: text.trim()
-                  }
-                ]
-              },
-              sessionId,
-              messages.length
-            )
-          );
+          // Assistant steps: tool calls, outputs, or text
+          if (item.tool_calls && Array.isArray(item.tool_calls) && item.tool_calls.length > 0) {
+            for (const tc of item.tool_calls) {
+              const rawToolName = tc.name || "bash";
+              lastToolCall = {
+                tool: rawToolName === "run_command" ? "bash" : rawToolName,
+                input: tc.args || {},
+                step_index: item.step_index ?? currentTurnParts.length
+              };
+            }
+            if (item.created_at) currentAssistantTime = new Date(item.created_at).getTime();
+          } else if (lastToolCall && (item.type === "GENERIC" || item.content)) {
+            const out = item.content || "";
+            const exitMatch = out.match(/exited with code (\d+)/i);
+            const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : 0;
+            currentTurnParts.push({
+              id: `prt_tool_${sessionId}_${lastToolCall.step_index}`,
+              type: "tool",
+              tool: lastToolCall.tool,
+              callID: `call_${lastToolCall.step_index}`,
+              state: {
+                status: exitCode === 0 ? "completed" : "error",
+                input: lastToolCall.input,
+                output: out,
+                exitCode
+              }
+            });
+            lastToolCall = null;
+            if (item.created_at) currentAssistantTime = new Date(item.created_at).getTime();
+          } else if (item.content && (item.source === "MODEL" || item.type === "PLANNER_RESPONSE")) {
+            const trimmed = item.content.trim();
+            if (trimmed) {
+              currentTurnParts.push({
+                id: `prt_text_${sessionId}_${item.step_index ?? currentTurnParts.length}`,
+                type: "text",
+                text: trimmed
+              });
+              currentTurnText.push(trimmed);
+            }
+            if (item.created_at) currentAssistantTime = new Date(item.created_at).getTime();
+          }
         } catch (_) {}
       }
 
+      flushAssistantTurn();
       return messages;
     } catch (e) {
       console.error(`[antigravity] getMessages err for ${sessionId}:`, e.message);
@@ -1108,11 +1183,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       args.push("--mode", "accept-edits");
     }
     args.push("-p", promptForAgy);
-    if (isStreaming) {
-      args.push("--output-format", "text");
-    } else {
-      args.push("--output-format", "json");
-    }
+    args.push("--output-format", "stream-json");
     args.push(
       "--dangerously-skip-permissions",
       "--print-timeout",
@@ -1158,12 +1229,120 @@ export class AntigravityAdapter extends BaseProviderAdapter {
 
       let stdout = "";
       let stderr = "";
+      let ndjsonBuffer = "";
+      const activeTools = new Map();
+      const completedToolParts = [];
+      let accumulatedText = "";
+      let finalResultResponse = "";
+      let detectedConvId = convId;
+
+      const handleAgyJsonEvent = (evt) => {
+        if (!evt || typeof evt !== "object") return;
+        if (evt.event === "init" && evt.conversation_id) {
+          detectedConvId = evt.conversation_id;
+        } else if (evt.event === "step_update" && evt.step_update) {
+          const step = evt.step_update;
+          if (step.conversation_id) detectedConvId = step.conversation_id;
+          if (step.step_type === "tool") {
+            const rawToolName = step.tool_name || step.tool_info?.name || "bash";
+            const toolName = rawToolName === "run_command" ? "bash" : rawToolName;
+            const params = step.tool_info?.parameters || {};
+            const callId = `call_${sessionId}_${step.step_index}`;
+
+            if (step.state === "ACTIVE") {
+              activeTools.set(step.step_index, {
+                id: callId,
+                tool: toolName,
+                input: params,
+                status: "running"
+              });
+              if (typeof opts.onStreamEvent === "function") {
+                try {
+                  opts.onStreamEvent({
+                    type: "tool_start",
+                    tool: toolName,
+                    callID: callId,
+                    input: params,
+                    stepIndex: step.step_index
+                  });
+                } catch (_) {}
+              }
+            } else if (step.state === "DONE") {
+              const output = step.tool_info?.output || "";
+              const duration = step.duration_seconds || 0;
+              let exitCode = 0;
+              const exitMatch = output.match(/exited with code (\d+)/i);
+              if (exitMatch) exitCode = parseInt(exitMatch[1], 10);
+
+              const toolItem = activeTools.get(step.step_index) || { id: callId, tool: toolName, input: params };
+              toolItem.status = exitCode === 0 ? "completed" : "error";
+              toolItem.output = output;
+              toolItem.exitCode = exitCode;
+              toolItem.duration = duration;
+
+              completedToolParts.push({
+                id: `prt_${callId}`,
+                type: "tool",
+                tool: toolName,
+                callID: callId,
+                state: {
+                  status: toolItem.status,
+                  input: params,
+                  output,
+                  exitCode,
+                  duration
+                }
+              });
+
+              if (typeof opts.onStreamEvent === "function") {
+                try {
+                  opts.onStreamEvent({
+                    type: "tool_done",
+                    tool: toolName,
+                    callID: callId,
+                    input: params,
+                    output,
+                    exitCode,
+                    duration,
+                    stepIndex: step.step_index
+                  });
+                } catch (_) {}
+              }
+            }
+          } else if (step.step_type === "agent_response") {
+            if (step.text_delta) {
+              accumulatedText += step.text_delta;
+              if (typeof opts.onStreamEvent === "function") {
+                try {
+                  opts.onStreamEvent({
+                    type: "chunk",
+                    text: step.text_delta
+                  });
+                } catch (_) {}
+              } else if (typeof opts.onChunk === "function") {
+                try { opts.onChunk(step.text_delta); } catch (_) {}
+              }
+            }
+          }
+        } else if (evt.event === "result" && evt.result) {
+          if (evt.result.conversation_id) detectedConvId = evt.result.conversation_id;
+          if (evt.result.response) finalResultResponse = evt.result.response;
+        }
+      };
 
       p.stdout.on("data", (c) => {
         const text = c.toString("utf8");
         stdout += text;
-        if (isStreaming && typeof opts.onChunk === "function") {
-          try { opts.onChunk(text); } catch (_) {}
+        ndjsonBuffer += text;
+        const lines = ndjsonBuffer.split("\n");
+        ndjsonBuffer = lines.pop();
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const evt = JSON.parse(trimmed);
+            handleAgyJsonEvent(evt);
+          } catch (_) {}
         }
       });
       p.stderr.on("data", (c) => (stderr += c));
@@ -1210,54 +1389,62 @@ export class AntigravityAdapter extends BaseProviderAdapter {
         clearTimeout(timer);
         if (p.pid) this.activeProcesses.delete(p.pid);
 
-        if (code !== 0 && !stdout.trim()) {
+        if (ndjsonBuffer.trim()) {
+          try {
+            const evt = JSON.parse(ndjsonBuffer.trim());
+            handleAgyJsonEvent(evt);
+          } catch (_) {}
+        }
+
+        const responseText = (finalResultResponse || accumulatedText || "").trim();
+
+        if (code !== 0 && !stdout.trim() && !responseText) {
           return reject(new Error(`Antigravity exited with code ${code}: ${stderr.trim()}`));
         }
 
-        if (isStreaming) {
-          let afterConvId = convId;
-          if (!afterConvId && fs.existsSync(this.brainDir)) {
-            const curDirs = fs.readdirSync(this.brainDir);
-            const newDirs = curDirs.filter((d) => !beforeDirs.has(d));
-            if (newDirs.length > 0) {
-              newDirs.sort((a, b) => {
-                try {
-                  return fs.statSync(path.join(this.brainDir, b)).mtimeMs - fs.statSync(path.join(this.brainDir, a)).mtimeMs;
-                } catch (_) { return 0; }
-              });
-              afterConvId = newDirs[0];
-            } else {
-              const allDirs = curDirs.filter((d) => !d.startsWith("."));
-              allDirs.sort((a, b) => {
-                try {
-                  return fs.statSync(path.join(this.brainDir, b)).mtimeMs - fs.statSync(path.join(this.brainDir, a)).mtimeMs;
-                } catch (_) { return 0; }
-              });
-              if (allDirs.length > 0 && Date.now() - fs.statSync(path.join(this.brainDir, allDirs[0])).mtimeMs < 60000) {
-                afterConvId = allDirs[0];
-              }
+        let afterConvId = detectedConvId || convId;
+        if (!afterConvId && fs.existsSync(this.brainDir)) {
+          const curDirs = fs.readdirSync(this.brainDir);
+          const newDirs = curDirs.filter((d) => !beforeDirs.has(d));
+          if (newDirs.length > 0) {
+            newDirs.sort((a, b) => {
+              try {
+                return fs.statSync(path.join(this.brainDir, b)).mtimeMs - fs.statSync(path.join(this.brainDir, a)).mtimeMs;
+              } catch (_) { return 0; }
+            });
+            afterConvId = newDirs[0];
+          } else {
+            const allDirs = curDirs.filter((d) => !d.startsWith("."));
+            allDirs.sort((a, b) => {
+              try {
+                return fs.statSync(path.join(this.brainDir, b)).mtimeMs - fs.statSync(path.join(this.brainDir, a)).mtimeMs;
+              } catch (_) { return 0; }
+            });
+            if (allDirs.length > 0 && Date.now() - fs.statSync(path.join(this.brainDir, allDirs[0])).mtimeMs < 60000) {
+              afterConvId = allDirs[0];
             }
           }
-          if (afterConvId) this.sessionMap.set(sessionId, afterConvId);
+        }
+        if (afterConvId) this.sessionMap.set(sessionId, afterConvId);
 
-          return resolve({
-            response: stdout.trim(),
-            role: "assistant",
-            conversation_id: afterConvId || sessionId
+        const parts = [
+          ...completedToolParts
+        ];
+        if (responseText) {
+          parts.push({
+            id: `prt_text_${Date.now()}`,
+            type: "text",
+            text: responseText
           });
         }
 
-        try {
-          const trimmed = stdout.trim();
-          const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-          if (!jsonMatch) {
-            return reject(new Error(`No JSON found in agy output: ${trimmed}`));
-          }
-          const parsed = JSON.parse(jsonMatch[0]);
-          resolve(parsed);
-        } catch (e) {
-          reject(new Error(`Failed to parse agy JSON: ${stdout} (error: ${e.message})`));
-        }
+        return resolve({
+          response: responseText,
+          text: responseText,
+          role: "assistant",
+          conversation_id: afterConvId || sessionId,
+          parts
+        });
       });
 
       p.on("error", (err) => {
@@ -1274,7 +1461,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       this.sessionMap.set(sessionId, result.conversation_id);
     }
 
-    const responseText = (result.response || "").trim();
+    const responseText = (result.response || result.text || "").trim();
 
     // 7. Return standard Message format matching Frontend Contract
     return normalizeMessage(
@@ -1289,7 +1476,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
           status: "SENT",
           deliveryStatus: "SENT"
         },
-        parts: [
+        parts: result.parts && result.parts.length > 0 ? result.parts : [
           {
             id: `prt_${Date.now()}`,
             type: "text",
@@ -1297,9 +1484,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
           }
         ],
         _agyMeta: {
-          conversationId: result.conversation_id,
-          durationSeconds: result.duration_seconds,
-          usage: result.usage
+          conversationId: result.conversation_id
         }
       },
       sessionId

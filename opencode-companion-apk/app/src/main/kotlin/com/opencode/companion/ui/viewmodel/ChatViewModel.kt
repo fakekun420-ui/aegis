@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.opencode.companion.data.ApiClient
 import com.opencode.companion.data.AttachedFile
+import com.opencode.companion.data.LiveToolExecution
 import com.opencode.companion.data.Message
 import com.opencode.companion.data.MessageDeliveryStatus
 import com.opencode.companion.data.MessageInfo
@@ -35,13 +36,16 @@ class ChatViewModel : ViewModel() {
     private val _models = MutableStateFlow<List<ModelOption>>(emptyList())
     val models: StateFlow<List<ModelOption>> = _models
 
+    private val _modelsLoading = MutableStateFlow(false)
+    val modelsLoading: StateFlow<Boolean> = _modelsLoading
+
     private val _selectedModel = MutableStateFlow<String?>("gemini-3.8-flash-high")
     val selectedModel: StateFlow<String?> = _selectedModel
 
     private val _selectedProvider = MutableStateFlow<String>("antigravity")
     val selectedProvider: StateFlow<String> = _selectedProvider
 
-    private val _sessionTitle = MutableStateFlow<String?>(null)
+    private val _sessionTitle = MutableStateFlow<String?>("Nuevo chat")
     val sessionTitle: StateFlow<String?> = _sessionTitle
 
     private val _currentSessionId = MutableStateFlow<String?>(null)
@@ -49,6 +53,9 @@ class ChatViewModel : ViewModel() {
 
     private val _streamingText = MutableStateFlow<String?>(null)
     val streamingText: StateFlow<String?> = _streamingText
+
+    private val _streamingTools = MutableStateFlow<List<LiveToolExecution>>(emptyList())
+    val streamingTools: StateFlow<List<LiveToolExecution>> = _streamingTools
 
     private val _agentMode = MutableStateFlow<String>("build") // "plan" | "build"
     val agentMode: StateFlow<String> = _agentMode
@@ -290,6 +297,7 @@ class ChatViewModel : ViewModel() {
 
                 var sseSuccess = false
                 _streamingText.value = ""
+                _streamingTools.value = emptyList()
 
                 try {
                     val streamReq = okhttp3.Request.Builder()
@@ -314,24 +322,78 @@ class ChatViewModel : ViewModel() {
                                 try {
                                     val jsonObj = com.google.gson.JsonParser.parseString(dataStr).asJsonObject
                                     val type = if (jsonObj.has("type")) jsonObj.get("type").asString else ""
-                                    if (type == "chunk" && jsonObj.has("text")) {
-                                        val chunk = jsonObj.get("text").asString
-                                        sb.append(chunk)
-                                        _streamingText.value = sb.toString()
-                                    } else if (type == "done" && jsonObj.has("message")) {
-                                        val msgObj = jsonObj.getAsJsonObject("message")
-                                        val finalMsg = com.google.gson.Gson().fromJson(msgObj, Message::class.java)
-                                        if (finalMsg != null && !finalMsg.isEmpty) {
-                                            messageDelivered = true
-                                            pollingJob?.cancel()
-                                            val updated = _messages.value.map {
-                                                if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
+                                    when (type) {
+                                        "chunk" -> {
+                                            if (jsonObj.has("text")) {
+                                                val chunk = jsonObj.get("text").asString
+                                                sb.append(chunk)
+                                                _streamingText.value = sb.toString()
                                             }
-                                            val exists = updated.any { it.info?.id == finalMsg.info?.id }
-                                            _messages.value = if (exists) updated else updated + finalMsg
-                                            sseSuccess = true
                                         }
-                                        break
+                                        "tool_start" -> {
+                                            val rawTool = if (jsonObj.has("tool")) jsonObj.get("tool").asString else "bash"
+                                            val tool = if (rawTool == "run_command") "bash" else rawTool
+                                            val callId = if (jsonObj.has("callID")) jsonObj.get("callID").asString else "tool_${System.currentTimeMillis()}"
+                                            val inputObj = if (jsonObj.has("input") && jsonObj.get("input").isJsonObject) jsonObj.getAsJsonObject("input") else null
+                                            val cmd = inputObj?.let {
+                                                (if (it.has("CommandLine")) it.get("CommandLine").asString else null)
+                                                    ?: (if (it.has("command")) it.get("command").asString else null)
+                                                    ?: (if (it.has("cmd")) it.get("cmd").asString else null)
+                                                    ?: (if (it.has("path")) it.get("path").asString else null)
+                                                    ?: (if (it.has("AbsolutePath")) it.get("AbsolutePath").asString else null)
+                                                    ?: (if (it.has("TargetFile")) it.get("TargetFile").asString else null)
+                                                    ?: (if (it.has("query")) it.get("query").asString else null)
+                                                    ?: (if (it.has("Url")) it.get("Url").asString else null)
+                                            } ?: ""
+                                            val cleanCmd = cmd.trim().removeSurrounding("\"")
+                                            val newExec = LiveToolExecution(
+                                                id = callId,
+                                                tool = tool,
+                                                command = cleanCmd,
+                                                status = "running"
+                                            )
+                                            _streamingTools.value = _streamingTools.value.filterNot { it.id == callId } + newExec
+                                        }
+                                        "tool_done" -> {
+                                            val rawTool = if (jsonObj.has("tool")) jsonObj.get("tool").asString else "bash"
+                                            val tool = if (rawTool == "run_command") "bash" else rawTool
+                                            val callId = if (jsonObj.has("callID")) jsonObj.get("callID").asString else ""
+                                            val output = if (jsonObj.has("output")) jsonObj.get("output").asString else ""
+                                            val exitCode = if (jsonObj.has("exitCode")) jsonObj.get("exitCode").asInt else 0
+                                            val duration = if (jsonObj.has("duration")) jsonObj.get("duration").asDouble else null
+                                            val inputObj = if (jsonObj.has("input") && jsonObj.get("input").isJsonObject) jsonObj.getAsJsonObject("input") else null
+                                            val cmd = inputObj?.let {
+                                                (if (it.has("CommandLine")) it.get("CommandLine").asString else null)
+                                                    ?: (if (it.has("command")) it.get("command").asString else null)
+                                            } ?: ""
+                                            val cleanCmd = cmd.trim().removeSurrounding("\"")
+                                            _streamingTools.value = _streamingTools.value.map {
+                                                if (it.id == callId || (it.tool == tool && it.status == "running")) {
+                                                    it.copy(
+                                                        status = if (exitCode == 0) "completed" else "error",
+                                                        output = output,
+                                                        exitCode = exitCode,
+                                                        duration = duration,
+                                                        command = if (cleanCmd.isNotBlank()) cleanCmd else it.command
+                                                    )
+                                                } else it
+                                            }
+                                        }
+                                        "done" -> {
+                                            val msgObj = jsonObj.getAsJsonObject("message")
+                                            val finalMsg = com.google.gson.Gson().fromJson(msgObj, Message::class.java)
+                                            if (finalMsg != null && !finalMsg.isEmpty) {
+                                                messageDelivered = true
+                                                pollingJob?.cancel()
+                                                val updated = _messages.value.map {
+                                                    if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
+                                                }
+                                                val exists = updated.any { it.info?.id == finalMsg.info?.id }
+                                                _messages.value = if (exists) updated else updated + finalMsg
+                                                sseSuccess = true
+                                            }
+                                            break
+                                        }
                                     }
                                 } catch (_: Exception) {}
                             }
@@ -341,6 +403,7 @@ class ChatViewModel : ViewModel() {
                     sseSuccess = false
                 } finally {
                     _streamingText.value = null
+                    _streamingTools.value = emptyList()
                 }
 
                 if (!sseSuccess && !messageDelivered) {

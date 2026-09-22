@@ -117,6 +117,15 @@
           "lastUsed": "2026-09-21T01:10:09.434Z",
           "summary": "",
           "provider": "antigravity"
+        },
+        {
+          "sessionId": "agy_muasijwx_tacnpgwh",
+          "title": "lo que harás en este chat será…",
+          "createdAt": "2026-09-21T05:13:56.844Z",
+          "lastUsed": "2026-09-21T05:24:14.212Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "fccc1cc7-a31d-489a-8fed-c23d706160d5"
         }
       ],
       "skills": [],
@@ -166,6 +175,36 @@
       ],
       "skills": [],
       "linkedProjects": []
+    },
+    {
+      "id": "muaox5lr-eru8gb",
+      "name": "Petite Raw",
+      "description": "Estrategias de crecimiento",
+      "instructions": "",
+      "createdAt": "2026-09-21T03:33:19.647Z",
+      "archivedAt": null,
+      "provider": "antigravity",
+      "sessions": [
+        {
+          "sessionId": "agy_muaox9z7_ymaw91yq",
+          "title": "Embudos de tráfico",
+          "createdAt": "2026-09-21T03:33:25.334Z",
+          "lastUsed": "2026-09-21T03:34:51.683Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "a6e92078-909e-46c8-8dba-9bbe8218041c"
+        },
+        {
+          "sessionId": "agy_muaozdm5_s06mr1sj",
+          "title": "Hola, me ayudarás siendo un es…",
+          "createdAt": "2026-09-21T03:35:03.355Z",
+          "lastUsed": "2026-09-21T03:35:19.267Z",
+          "summary": "",
+          "provider": "antigravity"
+        }
+      ],
+      "skills": [],
+      "linkedProjects": []
     }
   ],
   "sessionTitles": {
@@ -178,6 +217,11 @@
     "agy_muajdj1m_pq7mee22": "companion:85851",
     "7cd5e3ec-156e-4696-ae9e-7ff5f72135e8": "El dispositivo se reinició repentinamente. Retoma y continúa",
     "agy_mualztby_5ww2v8e4": "companion:Proyecto PonyTail QA:84855",
-    "agy_muaoqrmw_gm5o6yd4": "Capital de Francia"
+    "agy_muaoqrmw_gm5o6yd4": "Capital de Francia",
+    "agy_muaox9z7_ymaw91yq": "Embudos de tráfico",
+    "agy_muaozdm5_s06mr1sj": "Hola, me ayudarás siendo un es…",
+    "agy_muasfxu2_nyhm2cdd": "que puedes hacer?",
+    "agy_muasijwx_tacnpgwh": "lo que harás en este chat será…",
+    "agy_mubtwxr2_rgejv65j": "hola"
   }
 }
