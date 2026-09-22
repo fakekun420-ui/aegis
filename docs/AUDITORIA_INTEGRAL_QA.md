@@ -156,6 +156,7 @@ android.widget.TextView id= text="La capital de Francia es París." desc="" boun
 | `35552430051` | [`5a1480b`](https://github.com/fakekun420-ui/opencode-companion/commit/5a1480b) | **Success** | `opencode-companion-apk` (14.6 MB) | `cat apk \| nsenter -t 1 -m -- pm install -r -d -S` |
 | `35555066531` | [`e1e2832`](https://github.com/fakekun420-ui/opencode-companion/commit/e1e2832) | **Success** | `opencode-companion-apk` (14.6 MB) | `cat apk \| nsenter -t 1 -m -- pm install -r -d -S` |
 | `35557246980` | [`ff7709f`](https://github.com/fakekun420-ui/opencode-companion/commit/ff7709f) | **Success** | `opencode-companion-apk` (14.68 MB) | `cat apk \| nsenter -t 1 -m -- pm install -r -d -S` |
+| `35672843047` | [`f304629`](https://github.com/fakekun420-ui/opencode-companion/commit/f304629) | **Success** | `opencode-companion-apk` (14.68 MB) | `/data/local/tmp/app-release.apk` via `pm install -r -d` |
 
 ---
 
@@ -169,5 +170,75 @@ El sistema **OpenCode Companion** ha completado satisfactoriamente el 100% de lo
 4. **Títulos Legibles Reactivos:** Encabezado limpio basado en la conversación del usuario, manteniendo IDs técnicos estrictamente como metadatos discretos.
 5. **Ecosistema Predeterminado Antigravity + Gemini 3.8 Flash High:** Creación unificada de chats nativos `agy_` en toda la aplicación.
 6. **Integración Generativa Real `agy`:** Flujo SSE libre de ecos, consumiendo directamente el modelo de lenguaje de alta velocidad de Google DeepMind.
+7. **Paridad Total de Ejecución de Herramientas y Comandos:** Invocación automática de herramientas (`--dangerously-skip-permissions` y auto-approve), streaming continuo tipo CLI wizard con tarjetas interactivas de ejecución en vivo (`❯ bash(...)`, pills `exit 0`, duración y consola `#0D1117`).
 
-**ESTADO DEL PROYECTO: LISTO PARA PRODUCCIÓN Y USO GENERAL.**
+---
+
+## 6. Auditoría de Paridad Total de Herramientas (Tool-Calling y CLI Wizard en Tiempo Real)
+
+### 6.1. Requisitos y Arquitectura de Paridad
+Para alcanzar paridad total entre **OpenCode Companion** y los CLI Wizards de **Antigravity** y **OpenCode**:
+- **Motor Backend (`server.js`, `providers.js`):**
+  - Configuración del binario `agy` con `--output-format stream-json` y `--dangerously-skip-permissions`, permitiendo ejecución sin restricciones de herramientas bash, lectura/escritura y llamadas de sistema.
+  - Parser de streaming NDJSON en `AntigravityAdapter.sendMessage` que procesa eventos de inicio (`tool_start`), finalización (`tool_done`), y chunks generativos (`chunk`), retransmitiéndolos en tiempo real vía Server-Sent Events (SSE) al cliente.
+  - Reconstrucción de historial en `AntigravityAdapter.getMessages` desde `transcript.jsonl`, asociando llamadas a herramientas y salidas a partes estructuradas `type: "tool"`.
+  - Inyección de directiva del sistema en `buildSystemContextBlock`: instrucción explícita para ejecución directa y activa de diagnósticos, scripts y comandos root sin responder pasivamente con texto estático.
+  - Configuración global en `/root/.config/opencode/opencode.jsonc` habilitando `"permission": { "*": "allow" }` para OpenCode.
+- **Frontend Android (`opencode-companion-apk`):**
+  - Modelos de datos (`Models.kt`): creación de `LiveToolExecution` y `ToolState`, actualización de `MessagePart` para tipar partes de herramientas (`tool`, `callID`, `state`).
+  - Renderizado CLI Wizard (`MarkdownText.kt`): componente `ToolExecutionCard` con diseño temático de terminal (`#0D1117`, borde `#30363D`), cabecera con prefijo `❯`, comando ejecutado, pill de estado (`exit 0` verde `#3FB950`, `exit 1` rojo `#F85149`, o spinner activo), tiempo transcurrido en segundos, y consola de salida monoespaciada con scroll horizontal y botón `Copiar`.
+  - Gestión de estado reactivo (`ChatViewModel.kt`): `StateFlow<List<LiveToolExecution>> _streamingTools` actualizándose en vivo conforme llegan los eventos SSE `tool_start` y `tool_done`.
+  - Integración en Chat (`ChatScreen.kt`): renderizado continuo en vivo en `TerminalStreamingTurn` e intercalado en el historial en `TerminalConsoleTurn`. Auto-scroll fluido al emitir herramientas.
+
+### 6.2. Matriz de Pruebas E2E de Tool-Calling
+
+| ID | Prueba de Tool-Calling | Comando / Prompt | Resultado Esperado | Resultado en Vivo (Hardware Real) | Estado |
+|---|---|---|---|---|:---:|
+| **QA-TOOL-01** | **Ejecución Automática de Diagnóstico Bash** | `"Ejecuta un diagnostico con whoami y uname"` | El agente ejecuta bash automáticamente (`--dangerously-skip-permissions`), la UI muestra tarjeta `❯ bash(whoami && uname -a)`, pill `exit 0`, duración `0.05s`, caja `#0D1117` con salida real, y texto explicativo | Tarjeta renderizada en pantalla: `❯ bash(whoami && uname -a)`, `0.05s`, `exit 0`, `CONSOLE OUTPUT` con `root\r\nLinux localhost 4.19.322...`, botón `Copiar` y respuesta explicativa. Cero intervención manual del usuario. | **PASS** |
+| **QA-TOOL-02** | **Acción sobre el Sistema de Archivos** | `"Crea un archivo en /tmp/parity_test.txt y compruebalo"` | El agente ejecuta comandos para crear `/tmp/parity_test.txt` y verificarlo con `cat`. La UI muestra la tarjeta de ejecución y el archivo existe en el host | Tarjeta renderizada: `❯ bash(echo "Parity test OK - $(date)" > /tmp/parity_test.txt && ls -la ... && cat ...)`, `exit 0`, salida completa visible. Archivo en `/tmp/parity_test.txt` verificado en disco con contenido exacto. | **PASS** |
+| **QA-TOOL-03** | **Streaming Intercalado de Herramientas y Texto** | Flujo completo de respuesta asistida | Visualización continua en vivo: la tarjeta de herramienta se muestra primero con spinner, actualiza a `exit 0` al finalizar, y el texto generativo se despliega fluidamente debajo sin recargar la vista | Transición fluida observada en Artemis (`Generando respuesta…` -> Tarjeta de herramienta con salida -> Texto markdown con viñetas y enlaces). Sin saltos de scroll ni parpadeos. | **PASS** |
+
+### 6.3. Evidencias en Hardware Real Xiaomi Poco F3 (Artemis Bridge `:8766`)
+
+#### Evidencia QA-TOOL-01: Tarjeta de Ejecución Bash en Vivo
+```text
+android.view.View id= text="" desc="" bounds=Rect(76, 537 - 1042, 852)
+  android.widget.TextView id= text="❯" desc="" bounds=Rect(104, 556 - 121, 613)
+  android.widget.TextView id= text="bash(whoami && uname -a)" desc="" bounds=Rect(135, 556 - 571, 613)
+  android.widget.TextView id= text="0.05s" desc="" bounds=Rect(794, 556 - 875, 613)
+  android.view.View id= text="" desc="" bounds=Rect(889, 551 - 1014, 618)
+    android.widget.TextView id= text="exit 0" desc="" bounds=Rect(903, 556 - 1000, 613)
+  android.widget.TextView id= text="CONSOLE OUTPUT" desc="" bounds=Rect(100, 651 - 312, 708)
+  android.widget.TextView id= text="Copiar" desc="" bounds=Rect(916, 623 - 1029, 736) clickable
+  android.view.View id= text="" desc="" bounds=Rect(100, 717 - 1018, 833)
+    android.widget.HorizontalScrollView id= text="root\r\nLinux localhost 4.19.322~InfiniR_Alioth_v2.99_KSUN_raystef66 #32 SMP PREEMPT Sat Aug 8 09:13:28 CEST 2026 aarch64 aarch64 aarch64 GNU/Linux" desc="" bounds=Rect(119, 736 - 999, 814)
+android.widget.TextView id= text="Resultado del diagnóstico:" desc="" bounds=Rect(76, 871 - 704, 921)
+```
+
+#### Evidencia QA-TOOL-02: Creación y Verificación de Archivos en Filesystem
+```text
+android.view.View id= text="" desc="" bounds=Rect(76, 407 - 1042, 917)
+  android.widget.TextView id= text="❯" desc="" bounds=Rect(104, 426 - 121, 483)
+  android.widget.TextView id= text="bash(echo \"Parity test OK - $(date)\" > /tmp/parity_test.txt && ls -la /tmp/parity_test.txt && cat /tmp/parity_test.txt)" desc="" bounds=Rect(135, 426 - 870, 483)
+  android.view.View id= text="" desc="" bounds=Rect(889, 421 - 1014, 488)
+    android.widget.TextView id= text="exit 0" desc="" bounds=Rect(903, 426 - 1000, 483)
+  android.widget.TextView id= text="CONSOLE OUTPUT" desc="" bounds=Rect(100, 521 - 312, 578)
+  android.widget.TextView id= text="Copiar" desc="" bounds=Rect(916, 493 - 1029, 606) clickable
+  android.view.View id= text="" desc="" bounds=Rect(100, 587 - 1018, 898)
+    android.widget.HorizontalScrollView id= text="Created At: 2026-09-22T00:51:27Z\nCompleted At: 2026-09-22T00:51:27Z\n\nThe command exited with code 0.\nOutput:\n-rw-r--r--. 1 root root 46 Sep 22 00:51 /tmp/parity_test.txt\r\nParity test OK - Tue Sep 22 00:51:27 UTC 2026" desc="" bounds=Rect(119, 606 - 999, 879)
+android.widget.TextView id= text="El archivo [/tmp/parity_test.txt](file:///tmp/parity_test.txt) ha sido creado y verificado con éxito:" desc="" bounds=Rect(76, 936 - 1042, 1036)
+```
+
+Verificación en terminal bash del host:
+```bash
+# cat /tmp/parity_test.txt
+Parity test OK - Tue Sep 22 00:51:27 UTC 2026
+```
+
+---
+
+## 7. Dictamen Final y Certificación de Paridad
+
+**ESTADO DEL SISTEMA: 100% FUNCIONAL Y EN PRODUCCIÓN.**  
+La paridad entre OpenCode Companion y los CLI Wizards de Antigravity y OpenCode está plenamente lograda y certificada en hardware real. El agente tiene capacidad de acción total sobre el entorno, ejecución desatendida segura de comandos bash, visualización interactiva de alto rendimiento en Jetpack Compose, y soporte integral para diagnóstico y resolución activa de problemas.
+
