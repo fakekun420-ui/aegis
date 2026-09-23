@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0A0A0F"
+    android:fitsSystemWindows="false">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:title="Aegis"
+            app:subtitle="POCO F3 · crDroid 15 · ROOT"
+            style="@style/Widget.Material3.Toolbar.Surface" />
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <!-- Estado -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="14dp"
+                android:layout_marginBottom="12dp">
+                <LinearLayout android:orientation="vertical" android:padding="14dp"
+                    android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <TextView android:text="Estado" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                    <TextView android:id="@+id/txtStatus" android:text="Iniciando…" android:layout_marginTop="6dp"
+                        android:fontFamily="monospace" android:textSize="12sp"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                    <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp">
+                        <com.google.android.material.button.MaterialButton android:id="@+id/btnStartHub" android:text="Iniciar hub" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content"/>
+                        <com.google.android.material.button.MaterialButton android:id="@+id/btnEnableA11y" android:text="Activar accesibilidad" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <TextView android:text="Accesibilidad: Ajustes → Accesibilidad → Aegis → Activar. Sin esto no hay clicks por texto." android:textSize="11sp" android:alpha="0.7" android:layout_marginTop="6dp" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Web hub -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="14dp"
+                android:layout_marginBottom="12dp">
+                <LinearLayout android:orientation="vertical" android:padding="14dp"
+                    android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <TextView android:text="Hub web + voz" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                    <TextView android:id="@+id/txtHubUrl" android:text="http://127.0.0.1:8765" android:fontFamily="monospace" android:textSize="12sp" android:layout_marginTop="4dp" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                    <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp">
+                        <com.google.android.material.button.MaterialButton android:id="@+id/btnOpenHub" android:text="Abrir hub" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content"/>
+                        <com.google.android.material.button.MaterialButton android:id="@+id/btnCopyUrl" android:text="Copiar URL" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <TextView android:text="En Chrome del mismo POCO F3 abre 127.0.0.1:8765. Desde otro dispositivo usa la IP WiFi (ej. 192.168.1.x:8765). Micrófono en http LAN necesita https — usa el APK para STT nativo sin esa restricción." android:textSize="11sp" android:alpha="0.7" android:layout_marginTop="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Voz nativa -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="14dp"
+                android:layout_marginBottom="12dp">
+                <LinearLayout android:orientation="vertical" android:padding="14dp"
+                    android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <TextView android:text="Voz nativa (sin HTTPS)" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                    <TextView android:id="@+id/txtVoice" android:text="TTS: listo · STT: toca micrófono" android:textSize="12sp" android:layout_marginTop="6dp" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                    <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp">
+                        <com.google.android.material.button.MaterialButton android:id="@+id/btnMic" android:text="🎙 Hablar" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content"/>
+                        <com.google.android.material.button.MaterialButton android:id="@+id/btnStopTts" android:text="⏹ Parar voz" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp"/>
+                    </LinearLayout>
+                    <TextView android:id="@+id/txtSttResult" android:text="Di: 'abre Yape' o 'pon música' y la IA ejecutará vía hub." android:fontFamily="monospace" android:textSize="11sp" android:layout_marginTop="8dp" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- WebView fallback embebido -->
+            <TextView android:text="Vista embebida del hub (WebView):" android:textSize="12sp" android:alpha="0.7" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="6dp"/>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <FrameLayout
+        android:id="@+id/webviewContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <WebView android:id="@+id/webview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+        <!-- Overlay nativo: ERR_CONNECTION_REFUSED → Iniciar Sistema + ProgressBar -->
+        <FrameLayout android:id="@+id/nativeOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#0A0A0F"
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="24dp">
+                <TextView android:text="◉" android:textSize="28sp" android:textColor="#7C5CFF"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"/>
+                <TextView android:text="Sistema desconectado"
+                    android:textSize="18sp" android:textStyle="bold" android:textColor="#ECECF1"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"/>
+                <TextView android:id="@+id/nativeStatus"
+                    android:text="Hub 8765 no responde. Inicia el sistema con ROOT."
+                    android:textSize="13sp" android:textColor="#8E8EA0"
+                    android:gravity="center"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"/>
+                <ProgressBar android:id="@+id/nativeProgress"
+                    style="?android:attr/progressBarStyle"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    android:layout_marginBottom="16dp"/>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnNativeStart"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="Iniciar Sistema"
+                    style="@style/Widget.Material3.Button"
+                    app:cornerRadius="14dp"/>
+                <TextView android:text="Ejecuta su -c 'sh /sdcard/projects/opencode-companion/keepalive.sh' y hace polling cada 1s a http://127.0.0.1:8765/api/system/status hasta 200."
+                    android:textSize="11sp" android:textColor="#5A5A6E" android:gravity="center"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"/>
+            </LinearLayout>
+        </FrameLayout>
+    </FrameLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
