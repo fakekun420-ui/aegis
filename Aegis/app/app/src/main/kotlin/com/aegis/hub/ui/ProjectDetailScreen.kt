@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -58,8 +59,10 @@ fun ProjectDetailScreen(
     onUnlinkSession: (String) -> Unit = { _ -> },
     onDeleteSession: (String) -> Unit = { _ -> }
 ) {
-    var composerText by remember { mutableStateOf("") }
-    var tab by remember { mutableStateOf(0) } // 0: Chats, 1: Archivos e instrucciones
+    // UX-04/A-5: rememberSaveable — el borrador del composer y la pestaña activa
+    // sobreviven a rotación/muerte del proceso (antes: remember puro = se perdían).
+    var composerText by rememberSaveable { mutableStateOf("") }
+    var tab by rememberSaveable { mutableStateOf(0) } // 0: Chats, 1: Archivos e instrucciones
     var showSkillDialog by remember { mutableStateOf(false) }
     var showInstructionsDialog by remember { mutableStateOf(false) }
     var menuTarget by remember { mutableStateOf<SessionRef?>(null) }
@@ -326,7 +329,8 @@ fun ProjectDetailScreen(
                                             }
                                             IconButton(
                                                 onClick = { showInstructionsDialog = true },
-                                                modifier = Modifier.size(32.dp).semantics { contentDescription = "Editar instrucciones" }
+                                                // A-5: target táctil mínimo 48dp (antes 32dp)
+                                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).semantics { contentDescription = "Editar instrucciones" }
                                             ) {
                                                 Icon(
                                                     Icons.Outlined.Edit,
@@ -381,7 +385,11 @@ fun ProjectDetailScreen(
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
-                                    TextButton(onClick = { showSkillDialog = true }) {
+                                    TextButton(
+                                        onClick = { showSkillDialog = true },
+                                        // A-5: target táctil mínimo 48dp (antes ~34dp de alto)
+                                        modifier = Modifier.sizeIn(minHeight = 48.dp)
+                                    ) {
                                         Icon(Icons.Filled.Add, null, modifier = Modifier.size(16.dp))
                                         Spacer(Modifier.width(4.dp))
                                         Text("Añadir", fontWeight = FontWeight.Medium)

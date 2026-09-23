@@ -3,7 +3,23 @@ on:
   push:
     branches: [main, master]
 jobs:
+  backend-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: node --check (sintaxis de todos los .js)
+        # xargs -n1: fallo si ALGÚN .js no parsea (node --check sale != 0)
+        run: find backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check
+      - name: Contratos (node --test)
+        # glob sin comillas: lo expande el shell (portable Node 20+ y local)
+        run: node --test tests/*.test.js
+        working-directory: backend
   build:
+    needs: backend-checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,6 +32,11 @@ jobs:
         uses: android-actions/setup-android@v3
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          # A-6: Gradle fijado (AGP 8.7.3 -> Gradle 8.9). No hay gradle-wrapper
+          # en el repo (backlog), así que el pin se hace aquí para builds
+          # reproducibles en vez de gradle latest.
+          gradle-version: '8.9'
       - name: Build Debug APK
         run: gradle assembleDebug
         working-directory: app

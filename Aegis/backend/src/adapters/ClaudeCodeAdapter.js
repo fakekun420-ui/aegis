@@ -4,7 +4,12 @@
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { BaseProviderAdapter } from "./BaseProviderAdapter.js";
-import { normalizeMessage } from "../core/normalizer.js";
+// A-4 (BACKEND-BUG-06/07): dependencia fantasma eliminada — "../core/normalizer.js"
+// NO existe (el módulo nunca se extrajo; ver docs/AEGIS_MASTER_PROMPT.md Fase 2).
+// Como este adapter no tiene fallback, se corrige la referencia a la función que SÍ
+// existe: normalizeMessage (export de providers.js), idéntico a lo que ya hacen sus
+// hermanos OpenCodeAdapter/AntigravityAdapter — cero lógica duplicada.
+import { normalizeMessage } from "../../providers.js";
 
 export class ClaudeCodeAdapter extends BaseProviderAdapter {
   constructor(options = {}) {

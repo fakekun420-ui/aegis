@@ -21,7 +21,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -118,13 +119,23 @@ fun ChatScreen(
     }
 
     // Voice: STT push-to-talk + duplex toggle
-    var duplex by remember { mutableStateOf(false) }
+    // UX-04/A-5: rememberSaveable — el modo de conversación y el borrador del mensaje
+    // sobreviven a rotación/muerte del proceso (con remember puro se perdían al girar).
+    var duplex by rememberSaveable { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     var sttError by remember { mutableStateOf<String?>(null) }
-    var composerText by remember { mutableStateOf("") }
+    var composerText by rememberSaveable { mutableStateOf("") }
     var attachedFiles by remember { mutableStateOf<List<AttachedFile>>(emptyList()) }
     var duplexJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+
+    // BUG-15 (wake word): shouldWakeListen() de MainActivity lee duplexEnabledInSession, que
+    // SOLO se actualiza desde onVoiceModeChanged(). En el código nativo nadie la llamaba
+    // (solo la referenciaba el WebView histórico) y devolvía siempre false. Aquí se notifica
+    // el modo de voz real: al alternar Conversación/Texto y al salir de la pantalla (false
+    // detiene el listener de wake word).
+    LaunchedEffect(duplex) { resolveMainActivity(context)?.onVoiceModeChanged(duplex) }
+    DisposableEffect(Unit) { onDispose { resolveMainActivity(context)?.onVoiceModeChanged(false) } }
 
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
@@ -319,7 +330,8 @@ fun ChatScreen(
                             )
                             IconButton(
                                 onClick = { vm.clearError() },
-                                modifier = Modifier.size(24.dp)
+                                // A-5: target táctil mínimo 48dp (antes 24dp, imposible de tocar)
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                             ) {
                                 Icon(
                                     Icons.Filled.Close,
@@ -385,7 +397,11 @@ fun ChatScreen(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(messages, key = { it.info?.id ?: it.hashCode().toString() }) { msg ->
+                            // A-5: key basada en id del mensaje, nunca en hashCode() — dos
+                            // data classes con igual contenido colisionaban y crasheaban el
+                            // LazyColumn con "Key was already used". Fallback por índice
+                            // solo para mensajes aún sin id del servidor.
+                            itemsIndexed(messages, key = { index, msg -> msg.info?.id ?: "msg_$index" }) { _, msg ->
                                 TerminalConsoleTurn(msg, onRetry = {
                                     vm.retryMessage(msg, sessionId)
                                 })
@@ -853,7 +869,7 @@ private fun UnifiedFloatingComposer(
                             label = { Text("${f.name.take(18)} ${humanSize(f.size)}", maxLines = 1, style = MaterialTheme.typography.labelSmall) },
                             shape = RoundedCornerShape(10.dp),
                             trailingIcon = {
-                                IconButton(onClick = { onRemoveFile(idx) }, modifier = Modifier.size(18.dp)) {
+                                IconButton(onClick = { onRemoveFile(idx) }, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
                                     Icon(Icons.Filled.Close, contentDescription = "Quitar", modifier = Modifier.size(12.dp))
                                 }
                             }
@@ -902,7 +918,8 @@ private fun UnifiedFloatingComposer(
                     IconButton(
                         onClick = onAttach,
                         modifier = Modifier
-                            .size(36.dp)
+                            // A-5: target táctil mínimo 48dp (antes 36dp)
+                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                             .semantics { contentDescription = "Adjuntar archivo" }
                     ) {
                         Icon(
@@ -923,7 +940,8 @@ private fun UnifiedFloatingComposer(
                         shape = CircleShape,
                         color = buttonBg,
                         modifier = Modifier
-                            .size(32.dp)
+                            // A-5: target táctil mínimo 48dp (antes 32dp)
+                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                             .semantics { contentDescription = modeDesc }
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -946,7 +964,11 @@ private fun UnifiedFloatingComposer(
                         modifier = Modifier.semantics { contentDescription = "Seleccionar modelo" }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            // A-5: alto mínimo 48dp para que el target táctil cumpla el mínimo
+                            // manteniendo el contenido centrado (layout vertical intacto).
+                            modifier = Modifier
+                                .sizeIn(minHeight = 48.dp)
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
@@ -959,7 +981,11 @@ private fun UnifiedFloatingComposer(
                             Text(
                                 selectedModelName,
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                // A-5: al crecer los targets vecinos, el nombre del modelo se
+                                // trunca con elipsis en vez de romper la fila del compositor.
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Icon(
                                 Icons.Filled.KeyboardArrowDown,
@@ -978,7 +1004,8 @@ private fun UnifiedFloatingComposer(
                     IconButton(
                         onClick = onVoice,
                         modifier = Modifier
-                            .size(36.dp)
+                            // A-5: target táctil mínimo 48dp (antes 36dp)
+                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                             .semantics { contentDescription = "Modo voz" }
                     ) {
                         Icon(
@@ -994,7 +1021,8 @@ private fun UnifiedFloatingComposer(
                         IconButton(
                             onClick = onSend,
                             modifier = Modifier
-                                .size(36.dp)
+                                // A-5: target táctil mínimo 48dp (antes 36dp)
+                                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                                 .background(MaterialTheme.colorScheme.primary, CircleShape)
                                 .semantics { contentDescription = "Enviar mensaje" }
                         ) {
@@ -1019,7 +1047,8 @@ private fun UnifiedFloatingComposer(
                         IconButton(
                             onClick = onMic,
                             modifier = Modifier
-                                .size(36.dp)
+                                // A-5: target táctil mínimo 48dp (antes 36dp)
+                                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                                 .graphicsLayer { scaleX = scale; scaleY = scale }
                                 .background(MaterialTheme.colorScheme.error, CircleShape)
                                 .semantics { contentDescription = "Dejar de escuchar" }
@@ -1035,7 +1064,8 @@ private fun UnifiedFloatingComposer(
                         IconButton(
                             onClick = onMic,
                             modifier = Modifier
-                                .size(36.dp)
+                                // A-5: target táctil mínimo 48dp (antes 36dp)
+                                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
                                 .semantics { contentDescription = "Hablar" }
                         ) {
@@ -1166,4 +1196,17 @@ private fun isTechnicalSessionId(t: String?): Boolean {
     if (s.startsWith("ses_") || s.startsWith("agy_") || s.startsWith("companion:") || s.startsWith("local_")) return true
     if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
     return false
+}
+
+/**
+ * A-5 (BUG-15): resuelve la MainActivity anfitriona atravesando los ContextWrapper,
+ * para notificarle el cambio de modo de voz (onVoiceModeChanged) desde Compose.
+ */
+private fun resolveMainActivity(context: android.content.Context): com.aegis.hub.MainActivity? {
+    var ctx: android.content.Context? = context
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is com.aegis.hub.MainActivity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

@@ -1,9 +1,10 @@
 # FRONTEND CONTRACT: OpenCode & Antigravity Companion
 
-**Version:** 1.2.0  
-**Target Clients:** Android App (`com.opencode.companion`, Jetpack Compose Material 3), Web Clients  
+**Version:** 1.3.0  
+**Target Clients:** Android App (`com.aegis.hub`, Jetpack Compose Material 3), Web Clients  
 **Target Backends:** Local Hub (`server.js`, port 8765), OpenCode Daemon (port 4096), Antigravity CLI (`agy`)  
 **Status:** Canonical & Strictly Typed  
+**Changelog 1.3.0 (A-3):** standard envelope + health/skills contracts + 404 JSON — see §7.  
 
 ---
 
@@ -143,7 +144,7 @@ Every request originating from the frontend MUST support or include the followin
 
 ## 4. Strict Type Definitions (Kotlin & TypeScript)
 
-### 4.1. Kotlin Models (`com.opencode.companion.data.Models.kt`)
+### 4.1. Kotlin Models (`com.aegis.hub.data.Models.kt`)
 
 ```kotlin
 enum class MessageDeliveryStatus {
@@ -265,3 +266,98 @@ User Hits Send
    - `MainNavScreen` uses outer top bar; `ChatScreen` receives `showTopBar = false` when embedded in draft view.
 6. **Internal Context Collapsibility:**
    - Any `<memory_context>` block received from backend is rendered as a clean collapsible dropdown so internal prompt injection context does not clutter the user conversation.
+
+---
+
+## 7. Hub API Contract (A-3 — repaired app ↔ backend contracts)
+
+Source of truth for every `/api/*` route: `Models.kt` shapes. Verified with `node --check` + live curl against a test hub on `HUB_PORT=18767`.
+
+### 7.1. Standard envelope (single point of normalization)
+
+All JSON emitted through `json()` in `server.js` (the helper also used by the 4 mounted routers: skills/project/job/agent/workflow/content) is normalized by `normalizeEnvelope()`:
+
+- **Success (2xx):** `{ "ok": true, "data": <payload> }`
+- **Error (4xx/5xx):** `{ "ok": false, "error": { "code": "NOT_FOUND" | "FORBIDDEN" | "BAD_REQUEST" | ..., "message": "..." } }`
+  - Legacy `fail()` / handlers that send `error` as a **string** are converted automatically (`code` derived from status, or the explicit `code` field if present).
+  - `Envelope.error: String?` in `Models.kt` is only parsed on 2xx responses, where `ok:false` never travels → the object form does **not** break the app (checked against Main/Chat/ProjectDetail viewmodels).
+- **Auth (A-1):** every `/api/*` except `GET /api/health` requires `X-Aegis-Token`; missing/invalid → `403 {"ok":false,"error":{"code":"FORBIDDEN","message":"missing or invalid token"}}` (JSON, never HTML).
+- **Unknown `/api/*` route:** `404 {"ok":false,"error":{"code":"NOT_FOUND","message":"unknown api route","path":"/api/..."}}` — never the SPA fallback.
+
+**Documented exceptions (2xx NOT wrapped):**
+
+| Route | Why |
+|---|---|
+| `GET /api/system/status` | Raw `SystemStatus{ready,sessionOwnership,...}` — overlay gate in `MainActivity` parses the raw body. |
+| `/opencode/*` proxy (SSE streams) | Event/message streams, not JSON envelopes. |
+| `GET /api/device/screenshot?raw=1` | Explicit raw mode: `text/plain` base64 body. |
+| `POST /api/device/a11y` forward | Passthrough of the Companion APK (:8766) body/status as-is. |
+
+### 7.2. Health contracts
+
+| Route | Token | Shape | Consumer |
+|---|---|---|---|
+| `GET /api/health` | **exempt** (light probe) | `HealthResponse{ok, data: HealthData}` **field-by-field** = `Models.kt:243` (`server,port,uptime,memory,workspace,projects,agents,jobs,skills,adapters`) — no secrets, no `df`/`su`/child shells (audit API-05) | `keepalive.sh` probe |
+| `GET /api/system/health` | required | `{ok, data: HealthData + legacy diagnostics (status,timestamp,runtime,a11ySocket,agy,permissions,opencode,sessionOwnership,activeProject,lastVoice)}` | `ControlCenterViewModel` (`StatusCard` accepts `running\|healthy\|ok` → ONLINE) |
+
+`skills.installed` in health = ids really present on disk (`SkillManager.listInstalled()`); `adapters.opencode` = `healthy|down` from a 2s HTTP probe; `adapters.antigravity` = `ok|missing` (binary presence).
+
+### 7.3. Skills contracts
+
+| Route | Response shape (`Models.kt`) |
+|---|---|
+| `GET /api/skills` (no query) | `SkillsResponse{ok, data:{installed:[SkillItem], available:[SkillItem]}}` — `installed` from disk; each `SkillItem = {id,name,version,description,installed,enabled}` |
+| `GET /api/skills?projectId=…` (or `?project=`) | delegated to `server.js` → `Envelope<SkillListResponse{skills,projectId,counts}>` (same path, two shapes by query) |
+| `GET /api/skills?scope=…` | delegated → `{ok, data:[…]}` plain array (legacy shape, **no app consumer**) |
+| `POST /api/skills/install` | **202** `TaskResponse{ok,data:{taskId,message}}` — asynchronous JSON (was SSE; Retrofit only parses JSON) |
+| `DELETE /api/skills/:id` | `{ok, data:{removed}}` |
+| `GET/PATCH /api/skills/:id/config` | `SkillConfigResponse` / `{ok,data:{…}}` |
+| `POST /api/skills`, `PATCH|DELETE /api/skills/:scope/:name` | `Envelope<Skill>` etc. |
+
+**Honest gaps (documented, not invented):**
+
+- `SkillsData.available` is **always `[]`** — the hub has no installable-skills catalog.
+- `SkillItem.version/description` are `null` unless the skill's config JSON (`/root/.config/opencode/skills/<id>.json`) provides them (no manifest exists).
+- `SkillItem.enabled` = `enabled` flag from that config JSON if boolean, otherwise `true` (there is no real on/off state).
+- `DELETE /api/skills/:id` runs `npm uninstall -g`, which does **not** remove entries from the dir `listInstalled()` scans → the item may still appear until the config file is removed manually (known mismatch, pending).
+
+### 7.4. Endpoint matrix (`ApiService.kt` → backend)
+
+| ApiService | Backend route | Response (`Models.kt`) | State |
+|---|---|---|---|
+| `getProjects/create/patch/delete` | `/api/projects*` | `Envelope<Project>` | ok |
+| `getOpencodeSessions/rename/delete` | `/api/opencode/sessions*` | `Envelope<…>` | ok |
+| `linkSession/unlink/getProjectSessions` | `/api/projects/{id}/sessions*` | `Envelope<…>` | ok |
+| `getSkills(projectId)` | `GET /api/skills?projectId=` | `Envelope<SkillListResponse>` | ok |
+| `getSystemSkills` | `GET /api/skills` | `SkillsResponse` | ok (A-3) |
+| `installSkill` | `POST /api/skills/install` | `TaskResponse` (202 async) | ok (A-3, was SSE) |
+| `uninstallSkill/getSkillConfig/updateSkillConfig` | `/api/skills/:id…` | `BaseResponse`/`SkillConfigResponse` | ok |
+| `createSkill/updateSkill/deleteSkill` | `/api/skills…` | `Envelope<Skill>` | ok |
+| `getMessages` | `GET /api/opencode/sessions/{id}/messages` | `Envelope<List<Message>>` | ok |
+| `sendMessage` | `POST /opencode/session/{id}/message` | raw `Message` | ok — **not under `/api/*`, so A-1 token does not apply** (exception by design, pending A-1 review) |
+| `systemStatus` | `GET /api/system/status` | raw `SystemStatus` | ok (documented exception) |
+| `getModels` | `GET /api/opencode/models` | `Envelope<List<ModelOption>>` | ok |
+| `getSystemHealth` | `GET /api/system/health` | `HealthResponse` | ok (A-3) |
+| `getSystemLogs` / `getSystemMemory` | `GET /api/system/logs` / `/memory` | `LogsResponse` / `MemoryResponse` | ok (A-3, routes added) |
+| `getWorkspaceProjects` | `GET /api/workspace/projects` | `ProjectsResponse` (`ProjectItem.name` **required** + `lastCommit`) | ok (A-3 — `name` was missing → NPE in `WorkspaceScreen`) |
+| `initProject` | `POST …/init` | `BaseResponse` | ok (A-3 wrapped) |
+| `getProjectState` | `GET …/state` | `ProjectStateResponse` | ok |
+| `indexProject` | `POST …/index` | `TaskResponse` (202 async) | ok (A-3, was SSE) |
+| `getAgents/dispatch/getAgentStatus` | `/api/agents*` | `AgentsResponse`/`TaskResponse`/`AgentStatusResponse` | ok |
+| *(none)* | `DELETE /api/agents/{projectId}` | `{ok,data:{projectId,message}}` | ok (A-3 wrapped; **no app consumer**) |
+| `getWorkflows/runWorkflow/getWorkflowStatus` | `/api/workflows/*` | `WorkflowsResponse`/`TaskResponse`/`WorkflowStatusResponse` | ok |
+| `getJobs/runJob` | `/api/jobs*` | `JobsResponse`/`BaseResponse` | ok |
+| *(none)* | `GET /api/status`, `/api/device/*`, `/api/assistant/*`, `/api/voice/*`, `/api/content/status` | `{ok,data:…}` (A-3 wrapped) | consumed by scripts/voice UI, not by Retrofit |
+
+**Honest gaps (2xx payloads):**
+
+- `JobsSummary.lastRun` / `JobItem.lastRun` are `null` until the first run.
+- `ProjectItem.lastCommit` is `null` when the folder is not a git repo or `git` is unavailable (1.5s timeout, `execFile`, never faked).
+- `AgentItem.status` from `GET /api/agents` is always `"registered"` (pool registry); live run state only via `GET /api/agents/status/{projectId}`.
+- Assistant disambiguation replies `200 {ok:true,data:{type:"disambiguation",…}}`; failures `4xx {ok:false,error:{…}}`.
+
+### 7.5. keepalive.sh contract
+
+- Probe = `curl -m 2 -s -f http://127.0.0.1:$HUB_PORT/api/health | grep -q '"server":"running"'` (token-exempt, light). The old probe hit `/api/status` **without** token → 403 forever → the loop killed/relaunched the hub every 10s.
+- Hub pid pattern = `node.*Aegis/backend/server.js` (the old `opencode-companion/server.js` pattern matched nothing).
+- Package guard = `com.aegis.hub` (real `applicationId`).

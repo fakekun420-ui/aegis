@@ -9,7 +9,7 @@
 
 ## 1. Resumen Ejecutivo y Topología del Sistema
 
-El **Companion Hub** actúa como el núcleo de orquestación local y proxy inteligente entre los clientes frontend (Aplicación Android Jetpack Compose `com.opencode.companion` y clientes web) y los motores de IA para desarrollo de software: **OpenCode** (daemon HTTP en puerto 4096) y **Google Antigravity CLI** (`/root/.local/bin/agy`).
+El **Companion Hub** actúa como el núcleo de orquestación local y proxy inteligente entre los clientes frontend (Aplicación Android Jetpack Compose `com.aegis.hub` y clientes web) y los motores de IA para desarrollo de software: **OpenCode** (daemon HTTP en puerto 4096) y **Google Antigravity CLI** (`/root/.local/bin/agy`).
 
 ### 1.1 Diagrama de Arquitectura de Alto Nivel
 

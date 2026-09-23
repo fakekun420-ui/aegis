@@ -49,7 +49,7 @@ cat /sdcard/projects/Aegis/app/build.gradle.kts 2>/dev/null || true
 ```
 
 Reporta:
-- Nombre del package actual (ej. `com.opencode.companion` o similar)
+- Nombre del package actual (ej. `com.aegis.hub` o similar)
 - Versión de Compose BOM
 - Estructura de carpetas de screens y viewmodels existentes
 - Cómo está configurada la navegación actualmente

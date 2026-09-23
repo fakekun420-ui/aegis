@@ -58,35 +58,36 @@ class CompanionVoiceSession(private val service: VoiceInteractionSessionService)
                     Thread {
                         try {
                             val payload = org.json.JSONObject().put("text", text).toString()
-                            val intentUrl = java.net.URL("http://127.0.0.1:8765/api/assistant/intent")
-                            val ic = intentUrl.openConnection() as java.net.HttpURLConnection
-                            ic.requestMethod = "POST"; ic.doOutput = true
-                            ic.setRequestProperty("Content-Type", "application/json")
-                            ic.outputStream.write(payload.toByteArray())
-                            val intentResp = ic.inputStream.bufferedReader().readText()
-                            val intentJson = org.json.JSONObject(intentResp)
-                            val action = intentJson.optString("action", "")
+                            // A-3: /api/* exige X-Aegis-Token (A-1) — antes los 3 requests iban
+                            // sin header y devolvían 403 ("Error: ..."). TokenProvider reintenta 1 vez.
+                            val tokenProvider = com.aegis.hub.data.TokenProvider
+                            val intentResp = tokenProvider.request(
+                                "http://127.0.0.1:8765/api/assistant/intent", "POST",
+                                payload.toByteArray(), connectTimeoutMs = 3000, readTimeoutMs = 60_000
+                            )
+                            if (intentResp.code !in 200..299) throw java.io.IOException("intent http:${intentResp.code}")
+                            val intentJson = org.json.JSONObject(intentResp.body)
+                            // Envelope estándar: la acción viaja en data (fallback al shape plano legado)
+                            val intentData = intentJson.optJSONObject("data") ?: intentJson
+                            val action = intentData.optString("action", "")
                             if (action.isNotEmpty() && action != "llm_classify") {
                                 speak("Ejecutando $action")
-                                val execUrl = java.net.URL("http://127.0.0.1:8765/api/assistant/execute")
-                                val ec = execUrl.openConnection() as java.net.HttpURLConnection
-                                ec.requestMethod = "POST"; ec.doOutput = true
-                                ec.setRequestProperty("Content-Type", "application/json")
-                                val execPayload = org.json.JSONObject().put("action", action).put("slots", intentJson.optJSONObject("slots") ?: org.json.JSONObject()).toString()
-                                ec.outputStream.write(execPayload.toByteArray())
-                                ec.inputStream.bufferedReader().readText()
+                                val execPayload = org.json.JSONObject().put("action", action).put("slots", intentData.optJSONObject("slots") ?: org.json.JSONObject()).toString()
+                                tokenProvider.request(
+                                    "http://127.0.0.1:8765/api/assistant/execute", "POST",
+                                    execPayload.toByteArray(), connectTimeoutMs = 3000, readTimeoutMs = 60_000
+                                )
                                 speak("Hecho: $action")
                             } else {
                                 service.startActivity(Intent(service, MainActivity::class.java).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
                                 speak("Abriendo hub")
                             }
                             try {
-                                val logUrl = java.net.URL("http://127.0.0.1:8765/api/voice/log")
-                                val lc = logUrl.openConnection() as java.net.HttpURLConnection
-                                lc.requestMethod = "POST"; lc.doOutput = true
-                                lc.setRequestProperty("Content-Type", "application/json")
-                                lc.outputStream.write(org.json.JSONObject().put("recognizedText", text).put("matchedCommand", action.ifEmpty { "none" }).put("result", "via assist").toString().toByteArray())
-                                lc.inputStream.close()
+                                val logPayload = org.json.JSONObject().put("recognizedText", text).put("matchedCommand", action.ifEmpty { "none" }).put("result", "via assist").toString()
+                                tokenProvider.request(
+                                    "http://127.0.0.1:8765/api/voice/log", "POST",
+                                    logPayload.toByteArray(), connectTimeoutMs = 3000, readTimeoutMs = 15_000
+                                )
                             } catch (_:Exception) {}
                         } catch (e: Exception) { speak("Error: ${e.message}") }
                         finish()

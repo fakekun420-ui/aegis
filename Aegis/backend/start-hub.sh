@@ -9,13 +9,13 @@ for i in 1 2 3 4 5 6; do case "$1" in --port) HUB_PORT="$2"; shift 2;; --opencod
 
 # mata previos si existen
 pkill -f "opencode serve.*$OC_PORT" 2>/dev/null || true
-pkill -f "opencode-companion/server.js" 2>/dev/null || true
+pkill -f "Aegis/backend/server.js" 2>/dev/null || true
 sleep 1
 
 echo "[hub] iniciando opencode serve :$OC_PORT ..."
 nohup opencode serve --port "$OC_PORT" --hostname 0.0.0.0 > "$HUB_DIR/opencode.log" 2>&1 &
 sleep 3
-if ! curl -s "http://127.0.0.1:$OC_PORT/global/health" | grep -q healthy; then
+if ! curl -s "http://127.0.0.1:$OC_PORT/" | grep -qi opencode; then
   echo "[hub] WARN opencode no responde aún, continuo de todos modos"
   cat "$HUB_DIR/opencode.log" | tail -n 20 || true
 else

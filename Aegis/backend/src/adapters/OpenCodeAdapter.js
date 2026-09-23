@@ -40,7 +40,8 @@ export class OpencodeAdapter extends BaseProviderAdapter {
               const j = JSON.parse(d);
               resolve({ up: true, healthy: !!j.healthy, version: j.version || null });
             } catch {
-              resolve({ up: res.statusCode === 200, healthy: false, version: null });
+              const isV2 = res.statusCode === 200 && (d.includes("<title>OpenCode</title>") || d.toLowerCase().includes("opencode"));
+              resolve({ up: res.statusCode === 200, healthy: isV2, version: isV2 ? "v2" : null });
             }
           });
           res.on("error", (e) => {

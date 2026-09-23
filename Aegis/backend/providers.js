@@ -6,6 +6,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 // ==========================================
 // Atomic Storage & Concurrency Utilities
@@ -64,6 +65,30 @@ export function atomicWriteFileSync(filePath, data) {
     fs.closeSync(fd);
   }
   fs.renameSync(tmpFile, filePath);
+}
+
+// ==========================================
+// A-4 (ARQ-01): projectsStore local — dependencia fantasma eliminada
+// ==========================================
+// AntigravityAdapter.deleteSession llamaba a loadProjectsStore(), función que sólo
+// existía en server.js: aquí era un ReferenceError que el catch(_) del llamador
+// silenciaba, de modo que la purga de brainDir por agyConversationId (sacado de
+// projects.json) NUNCA se ejecutaba y quedaban conversaciones huérfano en disco.
+// Se reutiliza el MISMO lector atómico y el MISMO projects.json que server.js
+// (mismo archivo en disco — providers.js y server.js están en backend/), sin
+// duplicar la lógica de seeds de sessionTitles (aquí sólo se necesita .projects).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECTS_STORE_FILE = path.join(__dirname, "projects.json");
+function loadProjectsStore() {
+  const raw = atomicReadFileSync(PROJECTS_STORE_FILE, { projects: [], sessionTitles: {} });
+  if (Array.isArray(raw)) return { projects: raw, sessionTitles: {} }; // legado: sólo [...]
+  if (raw && Array.isArray(raw.projects)) {
+    return {
+      projects: raw.projects,
+      sessionTitles: (raw.sessionTitles && typeof raw.sessionTitles === "object") ? raw.sessionTitles : {}
+    };
+  }
+  return { projects: [], sessionTitles: {} };
 }
 
 // ==========================================
@@ -239,7 +264,8 @@ export class OpencodeAdapter extends BaseProviderAdapter {
               const j = JSON.parse(d);
               resolve({ up: true, healthy: !!j.healthy, version: j.version || null });
             } catch {
-              resolve({ up: res.statusCode === 200, healthy: false, version: null });
+              const isV2 = res.statusCode === 200 && (d.includes("<title>OpenCode</title>") || d.toLowerCase().includes("opencode"));
+              resolve({ up: res.statusCode === 200, healthy: isV2, version: isV2 ? "v2" : null });
             }
           });
           res.on("error", (e) => {

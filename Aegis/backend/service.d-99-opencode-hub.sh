@@ -10,8 +10,8 @@ for i in 1 2 3 4 5 6; do
 done
 
 # Doze whitelist temprano (evita que system mate companion al boot)
-dumpsys deviceidle whitelist +com.opencode.companion 2>/dev/null || true
-cmd deviceidle whitelist +com.opencode.companion 2>/dev/null || true
+dumpsys deviceidle whitelist +com.aegis.hub 2>/dev/null || true
+cmd deviceidle whitelist +com.aegis.hub 2>/dev/null || true
 
 # Lanza keepalive (system init 4359 no ve /usr/bin/node — host 5294/5522 sí).
 # service.d corre en init 4359, así que busca host pid con node visible y nsenter ahí.

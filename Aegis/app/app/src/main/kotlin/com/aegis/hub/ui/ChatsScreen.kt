@@ -5,7 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -166,7 +166,10 @@ fun ChatsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             contentPadding = PaddingValues(bottom = 72.dp)
                         ) {
-                            items(filtered, key = { it.resolvedId.ifBlank { it.hashCode().toString() } }) { sess ->
+                            // A-5: key sin hashCode() — las colisiones de hashCode entre
+                            // sesiones distintas provocaban "Key was already used" (crash).
+                            // Fallback por índice solo cuando la sesión no tiene ningún id.
+                            itemsIndexed(filtered, key = { index, sess -> sess.resolvedId.ifBlank { "sess_$index" } }) { _, sess ->
                                 val projName = sessionToProject[sess.resolvedId]
 
                                 Box {

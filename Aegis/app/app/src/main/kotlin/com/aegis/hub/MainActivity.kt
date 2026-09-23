@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import com.aegis.hub.ui.AppNavHost
+import com.aegis.hub.ui.NavRoutes
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
@@ -39,6 +40,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var systemReady by mutableStateOf(false)
     private var systemOwnership by mutableStateOf("unknown")
     private var isStartingSystem by mutableStateOf(false)
+    // F1: ruta de arranque decidida al arrancar (null = pendiente de decidir).
+    // null → AppNavHost aún no se compone; el overlay "Sistema desconectado" lo tapa.
+    private var initialRoute by mutableStateOf<String?>(null)
 
     private val reqMic = registerForActivityResult(ActivityResultContracts.RequestPermission()){ ok ->
         if(ok) toast("Micrófono concedido") else toast("Micrófono denegado — STT no funcionará")
@@ -62,7 +66,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         setContent {
             com.aegis.hub.ui.theme.OpenCodeCompanionTheme {
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    AppNavHost()
+                    // F1: sólo se monta cuando checkHubOnStart ha decidido la ruta inicial
+                    // (SETUP si el bootstrap no terminó; DRAFT_CHAT = comportamiento actual).
+                    // F2 (ambigüedad #7): key(start) → si "Iniciar Sistema" levanta el hub con
+                    // bootstrap pendiente, initialRoute pasa DRAFT_CHAT→SETUP y el NavHost se
+                    // recrea arrancando en el wizard (mismo efecto que un navigate de arranque).
+                    initialRoute?.let { start ->
+                        key(start) { AppNavHost(startDestination = start) }
+                    }
                     if (!systemReady) {
                         NativeOfflineOverlay(
                             ownership = systemOwnership,
@@ -122,13 +133,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private suspend fun checkSystemReady(): Pair<Boolean,String> = withContext(Dispatchers.IO) {
         try {
-            val url = java.net.URL("http://127.0.0.1:8765/api/system/status")
-            val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
-                connectTimeout = 3000; readTimeout = 3000; requestMethod = "GET"
-            }
-            val code = conn.responseCode
-            if (code != 200) return@withContext Pair(false, "http:$code")
-            val body = conn.inputStream.bufferedReader().readText()
+            // A-3: /api/system/status exige X-Aegis-Token desde A-1 — sin él respondía 403
+            // y el overlay "Sistema desconectado" salía SIEMPRE. TokenProvider reintenta 1 vez.
+            val resp = com.aegis.hub.data.TokenProvider.request(
+                "http://127.0.0.1:8765/api/system/status", "GET",
+                connectTimeoutMs = 3000, readTimeoutMs = 3000
+            )
+            if (resp.code != 200) return@withContext Pair(false, "http:${resp.code}")
+            val body = resp.body
             val ready = body.contains("\"ready\":true")
             val ownership = when {
                 body.contains("\"sessionOwnership\":\"termux-native\"") -> "termux-native"
@@ -146,11 +158,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private suspend fun isHubReady(): Boolean = withContext(Dispatchers.IO) {
         try {
-            val url = java.net.URL("http://127.0.0.1:8765/api/system/status")
-            (url.openConnection() as java.net.HttpURLConnection).run {
-                connectTimeout = 1500; readTimeout = 1500; requestMethod = "GET"
-                responseCode == 200
-            }
+            // A-3: con token (403 sin él) — reintento único incluido en TokenProvider
+            com.aegis.hub.data.TokenProvider.request(
+                "http://127.0.0.1:8765/api/system/status", "GET",
+                connectTimeoutMs = 1500, readTimeoutMs = 1500
+            ).code == 200
         } catch (_: Exception) { false }
     }
 
@@ -196,6 +208,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             withContext(Dispatchers.Main) {
                 isStartingSystem = false
                 if (ready) {
+                    // F2 (ambigüedad #7): hub recién levantado desde el overlay → una única
+                    // consulta de bootstrap; phase != "done" → initialRoute = SETUP (wizard).
+                    // Timeout/error → false: se conserva la ruta ya decidida (DRAFT_CHAT).
+                    if (withTimeoutOrNull(2500L) { isBootstrapPending() } == true) {
+                        initialRoute = NavRoutes.SETUP
+                    }
                     systemReady = true
                     systemOwnership = "ready"
                     lastBootError = null
@@ -218,14 +236,46 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         lifecycleScope.launch {
             val result = withTimeoutOrNull(3000L) { checkSystemReady() }
             val (ready, info) = result ?: Pair(false, "timeout:3s")
-            systemReady = ready
             systemOwnership = info
             if (ready) {
-                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=true ($info) — Compose ready")
+                // F1: hub arriba → consulta /api/bootstrap/state; sólo una respuesta 200 con
+                // phase != "done" redirige al wizard. Timeout/error/ruta ausente → ruta actual.
+                val pending = withTimeoutOrNull(2500L) { isBootstrapPending() } ?: false
+                initialRoute = if (pending) NavRoutes.SETUP else NavRoutes.DRAFT_CHAT
+                systemReady = true
+                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=true ($info) — Compose ready setupPending=$pending")
             } else {
+                // Sin hub: ruta actual intacta (no bloquear) — el overlay gestiona la recuperación
+                initialRoute = NavRoutes.DRAFT_CHAT
+                systemReady = false
                 android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=false ($info) — overlay")
                 if (result == null) android.util.Log.w("OpenCodeBoot", "checkHubOnStart timed out after 3s")
             }
+        }
+    }
+
+    /**
+     * F1: true sólo si el hub contesta 200 en /api/bootstrap/state con phase != "done".
+     * Cualquier otra cosa (404 ruta ausente, 403, 5xx, JSON ilegible, timeout) → false,
+     * para no bloquear el arranque actual.
+     */
+    private suspend fun isBootstrapPending(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // Mismo patrón que checkSystemReady/isHubReady: TokenProvider adjunta
+            // X-Aegis-Token y reintenta una vez ante 403.
+            val resp = com.aegis.hub.data.TokenProvider.request(
+                "http://127.0.0.1:8765/api/bootstrap/state", "GET",
+                connectTimeoutMs = 1500, readTimeoutMs = 1500
+            )
+            if (resp.code != 200) return@withContext false
+            val phase = org.json.JSONObject(resp.body)
+                .optJSONObject("data")
+                ?.optString("phase", "")
+                ?: ""
+            phase.isNotEmpty() && phase != "done"
+        } catch (e: Exception) {
+            android.util.Log.w("OpenCodeBoot", "isBootstrapPending fail: ${e.message}")
+            false
         }
     }
 

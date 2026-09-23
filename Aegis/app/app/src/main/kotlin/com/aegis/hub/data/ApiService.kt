@@ -135,4 +135,17 @@ interface ApiService {
 
     @POST("api/jobs/{id}/run")
     suspend fun runJob(@Path("id") jobId: String): Response<BaseResponse>
+
+    // F1 — Bootstrap / asistente de configuración inicial (contrato /api/bootstrap/*)
+    @GET("api/bootstrap/state")
+    suspend fun getBootstrapState(): Response<BootstrapResponse>
+
+    @POST("api/bootstrap/run")
+    suspend fun runBootstrap(@Body body: BootstrapRunRequest): Response<BootstrapActionResponse>
+
+    @POST("api/bootstrap/step/{id}/retry")
+    suspend fun retryBootstrapStep(@Path("id") id: String): Response<BootstrapActionResponse>
+
+    @POST("api/bootstrap/cancel")
+    suspend fun cancelBootstrap(): Response<BootstrapActionResponse>
 }

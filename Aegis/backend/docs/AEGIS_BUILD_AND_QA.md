@@ -163,10 +163,9 @@ adb shell getprop ro.build.version.release
 ### 5.2 — Desinstalar versión anterior si existe
 
 ```bash
-# Desinstalar Open Code Companion si aún está instalado
-adb uninstall com.opencode.companion 2>/dev/null || echo "com.opencode.companion not installed"
-
 # Desinstalar versión anterior de Aegis si existe
+# (los builds históricos usaban un applicationId legado distinto; si persistiera
+#  una copia antigua, desinstálala a mano desde Ajustes > Apps)
 adb uninstall com.aegis.hub 2>/dev/null || echo "com.aegis.hub not installed - first install"
 ```
 

@@ -8,7 +8,7 @@ OC_PORT="4096"
 OC_HOST="127.0.0.1"
 INTERVAL=10
 LOG="$HUB_DIR/keepalive.log"
-# NODE_BIN override: app mount ns (com.opencode.companion) cannot see /usr/bin/node
+# NODE_BIN override: app mount ns (com.aegis.hub) cannot see /usr/bin/node
 # (private ns 4026535508, node lives only in termux ns 4026535555 and is NOT
 # bind-shared). su shell DOES see node, so MainActivity now passes the resolved
 # absolute path it verified (NODE_BIN="$NODE_BIN" ./keepalive.sh keeps working
@@ -35,7 +35,15 @@ if [ ! -x "$OPENCODE_BIN" ]; then
   fi
 fi
 
-# doble instancia guard (usa /sdcard/projects/Aegis/backend/keepalive.lock compartido host+system
+# backgroundiza si no está en bg
+case "$1" in --no-daemon) shift;; *)
+  nohup sh "$0" --no-daemon "$@" >> "$LOG" 2>&1 &
+  echo "[keepalive] lanzado pid $! log $LOG — hub http://127.0.0.1:$HUB_PORT proxy $OC_HOST:$OC_PORT"
+  exit 0
+  ;;
+esac
+
+# doble instancia guard (usa /sdcard/projects/Aegis/backend/keepalive.lock compartido host+system)
 LOCK="/sdcard/projects/Aegis/backend/keepalive.lock"
 if [ -f "$LOCK" ]; then
   OLDPID="$(cat "$LOCK" 2>/dev/null)"
@@ -49,27 +57,24 @@ if [ -f "$LOCK" ]; then
 fi
 echo $$ > "$LOCK"
 
-# backgroundiza si no está en bg
-case "$1" in --no-daemon) shift;; *)
-  nohup sh "$0" --no-daemon "$@" > "$LOG" 2>&1 &
-  echo "[keepalive] lanzado pid $! log $LOG — hub http://127.0.0.1:$HUB_PORT proxy $OC_HOST:$OC_PORT"
-  exit 0
-  ;;
-esac
-
 echo "[keepalive] loop iniciado $(date) pid $$ — intervalo ${INTERVAL}s" | tee -a "$HUB_DIR/keepalive.log"
+trap '' HUP
 trap 'echo "[keepalive] trap exit" >> "$LOG"; rm -f "$LOCK"; exit 0' TERM INT
 
 is_up() {
   if command -v curl >/dev/null 2>&1; then
-    curl -m 2 -s "http://$OC_HOST:$1/global/health" 2>/dev/null | grep -q healthy
+    curl -m 2 -s "http://$OC_HOST:$1/" 2>/dev/null | grep -qi "opencode"
     return $?
   fi
   (echo > "/dev/tcp/$OC_HOST/$1") 2>/dev/null && return 0 || return 1
 }
 hub_up() {
+  # A-3: sonda = GET /api/health (EXENTO de X-Aegis-Token y ligero, ver buildHealthData).
+  # Antes usaba /api/status SIN token -> el middleware A-1 devolvía 403 -> el loop veía
+  # "hub caído" cada 10s y mataba/relanzaba el hub en bucle. -f hace fallar la sonda
+  # en 4xx/5xx; el grepeo de "server":"running" confirma el shape del contrato.
   if command -v curl >/dev/null 2>&1; then
-    curl -m 2 -s "http://127.0.0.1:$HUB_PORT/api/status" 2>/dev/null | grep -q '"hub":"ok"'
+    curl -m 2 -s -f "http://127.0.0.1:$HUB_PORT/api/health" 2>/dev/null | grep -q '"server":"running"'
     return $?
   fi
   (echo > "/dev/tcp/127.0.0.1/$HUB_PORT") 2>/dev/null && return 0 || return 1
@@ -84,10 +89,12 @@ while true; do
     # con pgrep "opencode.*serve" coincidía por substring "serve" dentro de "server.js". Ahora filtramos estricto.
     # Condición 2: /proc/$pid/stat campo 7 (tty_nr): 0='?' (nohup/daemon)=serve; !=0=pts/N=TUI manual → skip
     # Condición 3: hub node detectado por cmdline que contiene "server.js" → nunca matar como serve
+    # Condición 4: ignorar daemons internos del TUI/CLI con argumento --service
     for _ocpid in $(timeout 5 pgrep -f "opencode.*serve" 2>/dev/null || true); do
-      # Filtro estricto: solo opencode serve real, no node server.js del hub
+      # Filtro estricto: solo opencode serve real, no node server.js del hub ni TUI service daemon
       _cmd=$(tr '\0' ' ' < "/proc/$_ocpid/cmdline" 2>/dev/null)
       case "$_cmd" in *server.js*) echo "  skip hub pid $_ocpid (server.js) — no es opencode serve" >> "$LOG"; continue;; esac
+      case "$_cmd" in *--service*) echo "  skip TUI daemon pid $_ocpid (--service) — no matar" >> "$LOG"; continue;; esac
       # Parse argv: debe tener argv[1]=="serve" literal, no solo contener "serve" en path
       if ! tr '\0' '\n' < "/proc/$_ocpid/cmdline" 2>/dev/null | head -n 2 | tail -n 1 | grep -qx "serve"; then
         # fallback para casos node-wrapped opencode: verificar " serve " con espacios
@@ -115,12 +122,29 @@ while true; do
     echo "  opencode pid $! lanzado ($OPENCODE_BIN)" >> "$LOG"
     sleep 4
   fi
+  # A-7: reintento/backoff ANTES de reiniciar — si la sonda (curl -f | grep '"server":"running"')
+  # falla una vez, se espera 4s y se reintenta; sólo 2 fallos seguidos = reinicio real.
+  # Evita matar/relanzar el hub por un blip (GC, carga, latencia de 1 ciclo del loop).
+  _hub_restart=""
   if ! hub_up; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] hub 127.0.0.1:$HUB_PORT sonda KO (1/2) — backoff 4s antes de decidir reinicio" >> "$LOG"
+    sleep 4
+    if hub_up; then
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] hub 127.0.0.1:$HUB_PORT OK tras backoff — blip descartado, SIN reiniciar" >> "$LOG"
+    else
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] hub 127.0.0.1:$HUB_PORT sonda KO (2/2 seguidas) — reinicio confirmado" >> "$LOG"
+      _hub_restart=1
+    fi
+  fi
+  if [ -n "$_hub_restart" ]; then
     echo "[$(date +%H:%M:%S)] hub 127.0.0.1:$HUB_PORT caído — relanzando (log tail abajo)" >> "$LOG"
     # FIX pkill hang: pkill -f escanea /proc/*/cmdline y se cuelga 120s por simple_lmk en Android
-    # Reemplazo: kill $(timeout 5 pgrep -f "node server.js") — pgrep ligero + guard 5s evita bloqueo
+    # Reemplazo: kill $(timeout 5 pgrep -f "node .../Aegis/backend/server.js") — pgrep ligero + guard 5s evita bloqueo
     # Condición: timeout 5 asegura que si /proc está lento, no cuelga el loop; pgrep -f matchea cmdline completa
-    _hubpids=$(timeout 5 pgrep -f "node.*opencode-companion/server.js" 2>/dev/null || timeout 5 pgrep -f "node server.js" 2>/dev/null || true)
+    # A-3: el hub vive en /sdcard/projects/Aegis/backend/server.js (el patrón viejo
+    # "node.*opencode-companion/server.js" ya no matchea NADA -> pgrep devolvía vacío
+    # y el hub stale jamás se mataba). Fallback genérico por si el path cambia.
+    _hubpids=$(timeout 5 pgrep -f "node.*Aegis/backend/server.js" 2>/dev/null || timeout 5 pgrep -f "node.*backend/server.js" 2>/dev/null || true)
     if [ -n "$_hubpids" ]; then
       echo "  matando hub stale pids: $_hubpids (timeout 5 pgrep guard)" >> "$LOG"
       kill $_hubpids 2>/dev/null || true
@@ -140,7 +164,9 @@ while true; do
       tail -n 30 "$HUB_DIR/hub.log" 2>/dev/null >> "$LOG" || true
     fi
   fi
-  if [ -f "/data/data/com.opencode.companion/files" ] || pm list packages 2>/dev/null | grep -q com.opencode.companion; then
+  # A-3: applicationId real = com.aegis.hub (build.gradle.kts) — el chequeo viejo
+  # con el applicationId legado nunca matcheaba. El bloque no hace nada (guard neutro).
+  if [ -f "/data/data/com.aegis.hub/files" ] || pm list packages 2>/dev/null | grep -q com.aegis.hub; then
     :
   fi
   sleep "$INTERVAL"

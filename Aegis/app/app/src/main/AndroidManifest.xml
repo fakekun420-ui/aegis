@@ -15,6 +15,18 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission"/>
     <!-- ROOT vía su, no necesita permiso declarado -->
 
+    <!-- A-6 (seguridad / red profunda):
+         android:usesCleartextTraffic se mantiene en `true` DE FORMA DELIBERADA.
+         La app solo se comunica con el hub local http://127.0.0.1:8765 (sin
+         hosts http externos); ponerlo en `false` bloquearía también el cleartext
+         hacia loopback y rompería el hub (la app quedaría siempre OFFLINE).
+         Backlog: sustituirlo por un android:networkSecurityConfig que permita
+         cleartext ÚNICAMENTE a 127.0.0.1/localhost.
+
+         Deep link: no existe ninguno (solo MAIN/LAUNCHER; sin scheme, sin
+         BROWSABLE, sin autoVerify). No se declara `aegis://` porque no hay
+         assetlinks.json ni pantalla que lo reciba: añadirlo sin verificación
+         abriría la app desde cualquier origen. -->
     <application
         android:allowBackup="true"
         android:icon="@android:mipmap/sym_def_app_icon"

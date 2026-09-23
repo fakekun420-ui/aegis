@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // opencode-companion hub — proxy opencode + device bridge + TTS/STT host
 // Node 18+ only builtins. No npm deps.
-// Listens 0.0.0.0:8765 -> serves public/ + /opencode/* proxy + /api/device/*
+// Listens 127.0.0.1:8765 (loopback only, exige X-Aegis-Token en /api/*) -> serves public/ + /opencode/* proxy + /api/device/*
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { exec, spawn } from "node:child_process";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   OpencodeAdapter,
@@ -18,7 +19,29 @@ import {
 } from "./providers.js";
 
 import { handleSkillsRoute } from "./src/api/skillsRoutes.js";
+// A-7 (A-4 backlog #1): adapter claudecode — taskClassifier recomienda "claudecode" y la rama
+// existía sin adapter registrado (modelRouter caía siempre al fallback antigravity).
+import { ClaudeCodeAdapter } from "./src/adapters/ClaudeCodeAdapter.js";
 import { handleProjectRoutes } from "./src/api/projectRoutes.js";
+// A-2: routers antes huérfanos (jobs/agents/workflows/content) + subsistemas del motor
+import { handleJobRoutes } from "./src/api/jobRoutes.js";
+import { handleAgentRoutes } from "./src/api/agentRoutes.js";
+import { handleWorkflowRoutes } from "./src/api/workflowRoutes.js";
+import { handleContentRoutes } from "./src/api/contentRoutes.js";
+// F1: dominio bootstrap del wizard (estado idempotente + orquestador reanudable)
+import { handleBootstrapRoute } from "./src/api/bootstrapRoutes.js";
+import { jobScheduler } from "./src/core/jobScheduler.js";
+import { agentPool } from "./src/core/agentPool.js";
+import { eventBus, EVENTS } from "./src/core/eventBus.js";
+import { createLogger } from "./src/core/logger.js";
+// A-3: fuente honesta de skills para el contrato HealthData/SkillsResponse (disco real)
+import { SkillManager } from "./src/skills/SkillManager.js";
+
+// A-7: logger del hub (createLogger ya se usaba en A-2 para el eventBus). Niveles
+// info/warn/error/debug con prefijo [ISO][NIVEL][módulo]. Sin escritura a fichero propia
+// (logger.js NO la tiene y no se inventa): el stdout del hub lo redirige keepalive.sh a
+// hub.log, así que el log persistente sale igual, ahora con nivel y módulo.
+const log = createLogger("hub");
 
 // Helper: send ok envelope consistently
 function ok(data) { return { ok: true, data }; }
@@ -26,12 +49,69 @@ function fail(error, code) { return { ok: false, error: String(error).slice(0, 8
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// ---- Auth: token de acceso del hub (raíz total CON token; cero acceso SIN token) ----
+const TOKEN_FILE = path.join(__dirname, ".aegis_token");
+function loadOrCreateToken() {
+  try {
+    if (fs.existsSync(TOKEN_FILE)) {
+      const existing = fs.readFileSync(TOKEN_FILE, "utf8").trim();
+      if (existing) return existing;
+    }
+    fs.writeFileSync(TOKEN_FILE, crypto.randomBytes(32).toString("hex"), { mode: 0o600 });
+    log.info("[hub] token file created"); // nunca imprimir el token
+    return fs.readFileSync(TOKEN_FILE, "utf8").trim();
+  } catch (e) {
+    log.error("[hub] token file error", { err: e.message });
+    return "";
+  }
+}
+const AEGIS_TOKEN = loadOrCreateToken();
+
+// Comparación timing-safe (timingSafeEqual exige buffers de igual longitud)
+function tokenMatches(provided) {
+  if (!AEGIS_TOKEN) return false;
+  const a = Buffer.from(typeof provided === "string" ? provided : "", "utf8");
+  const b = Buffer.from(AEGIS_TOKEN, "utf8");
+  if (a.length === 0 || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+// CORS: allowlist — solo se refleja el origin si está en la lista (nunca "*")
+const CORS_ALLOWLIST = ["http://localhost:8765", "app://aegis"];
+const CORS_ALLOW_HEADERS = "X-Aegis-Token, Content-Type";
+function withCors(res, headers = {}) {
+  const h = { ...headers };
+  // elimina cualquier ACAO heredado (upstream lo manda en minúsculas como header de Node)
+  delete h["Access-Control-Allow-Origin"];
+  delete h["access-control-allow-origin"];
+  const origin = res && res._corsOrigin;
+  if (origin && CORS_ALLOWLIST.includes(origin)) {
+    h["Access-Control-Allow-Origin"] = origin;
+    h["Vary"] = h["Vary"] ? `${h["Vary"]}, Origin` : "Origin";
+  }
+  return h;
+}
+
+// Anti path-traversal: el id debe resolver DENTRO de basePath (previo a cualquier fs.rmSync/rmdir)
+function resolvesInside(basePath, id) {
+  const base = path.resolve(basePath);
+  const target = path.resolve(base, String(id ?? ""));
+  return target !== base && target.startsWith(base + path.sep);
+}
+
+// Metacaracteres de shell prohibidos en parámetros interpolados en comandos
+const SHELL_META_RE = /[;|`]|&&|\n|\$\(/;
+function hasShellMeta(v) { return typeof v === "string" && SHELL_META_RE.test(v); }
+function badParam(res, name) {
+  return json(res, 400, { ok: false, error: `invalid characters in "${name}" (; | \` && newline $())`, code: "BAD_REQUEST" });
+}
+
 // resiliencia: no morir por crash del proxy, pero sí permitir reinicio limpio por keepalive (pkill -f) o por kill -15
-process.on('uncaughtException', e => console.error('[hub] uncaughtException', e?.stack || e));
-process.on('unhandledRejection', e => console.error('[hub] unhandledRejection', e?.stack || e));
-process.on('SIGTERM', () => { console.log('[hub] SIGTERM — cierre limpio (keepalive relanza)'); try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
-process.on('SIGINT',  () => { console.log('[hub] SIGINT — cierre');  try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
-process.on('SIGPIPE', () => console.log('[hub] SIGPIPE ignorado'));
+process.on('uncaughtException', e => log.error('[hub] uncaughtException', { err: e?.stack || String(e) }));
+process.on('unhandledRejection', e => log.error('[hub] unhandledRejection', { err: e?.stack || String(e) }));
+process.on('SIGTERM', () => { log.info('[hub] SIGTERM — cierre limpio (keepalive relanza)'); try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
+process.on('SIGINT',  () => { log.info('[hub] SIGINT — cierre');  try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
+process.on('SIGPIPE', () => log.info('[hub] SIGPIPE ignorado'));
 
 function argVal(name, fallback){
   const i = process.argv.indexOf(name);
@@ -54,7 +134,9 @@ const UI_STATE = (() => {
   } catch { return base; }
 })();
 function saveUiState() {
-  try { fs.writeFileSync(UI_STATE_FILE, JSON.stringify({ ...UI_STATE, updatedAt: Date.now() }, null, 2)); } catch (e) { console.error("[ui-state] save err", e.message); }
+  // A-4 (BACKEND-BUG-02/04): escritura atómica (tmp+fsync+rename) — un crash a
+  // medio escribir ui-state.json dejaba JSON corrupto y el hub perdía proyecto/sesión activos.
+  try { atomicWriteFileSync(UI_STATE_FILE, { ...UI_STATE, updatedAt: Date.now() }); } catch (e) { log.error("[ui-state] save err", { err: e.message }); }
 }
 
 // ---- Companion Project Management — persistent store projects.json ----
@@ -83,7 +165,7 @@ function loadProjectsStore() {
       }
     }
     return store;
-  } catch (e) { console.error("[projects] load err", e.message); return { projects: [], sessionTitles: {} }; }
+  } catch (e) { log.error("[projects] load err", { err: e.message }); return { projects: [], sessionTitles: {} }; }
 }
 
 function resolveExistingSessionTitle(store, sessionId, fallbackTitle = null) {
@@ -107,7 +189,7 @@ function resolveExistingSessionTitle(store, sessionId, fallbackTitle = null) {
 function saveProjectsStore(store) {
   try {
     atomicWriteFileSync(PROJECTS_STORE_FILE, store);
-  } catch (e) { console.error("[projects] save err", e.message); }
+  } catch (e) { log.error("[projects] save err", { err: e.message }); }
 }
 // Generate stable id: timestamp + random suffix, lowercase alphanumeric + hyphen
 function genProjectId() {
@@ -204,7 +286,8 @@ function listAllSkillsMerged(projectId) {
 function writeSkill(scope, name, content) {
   const p = skillPath(scope, name);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, String(content || ""), "utf8");
+  // A-4: atómico — un crash a medio escribir deja el skill anterior intacto, nunca un .md truncado.
+  atomicWriteFileSync(p, String(content || ""));
   return { scope, name, content: String(content || ""), path: p };
 }
 function deleteSkill(scope, name) {
@@ -224,7 +307,8 @@ function writeSummary(projectId, summary) {
   fs.mkdirSync(SUMMARIES_DIR, { recursive: true });
   const p = path.join(SUMMARIES_DIR, `${projectId}.summary.json`);
   const obj = { projectId, summary: String(summary || "").trim(), updatedAt: nowIso() };
-  fs.writeFileSync(p, JSON.stringify(obj, null, 2));
+  // A-4 (BACKEND-BUG-02/04): atómico — summaries/*.summary.json es estado compartido leído por buildCrossProjectContext.
+  atomicWriteFileSync(p, obj);
   return obj;
 }
 function buildCrossProjectContext(projectId) {
@@ -262,7 +346,7 @@ function loadPonyTailContext(projectId) {
       const globalContent = fs.readFileSync(globalFile, "utf8");
       blocks.push(globalContent.trim());
     } catch (e) {
-      console.warn("[ponytail] failed reading pony-tail-global.md:", e.message);
+      log.warn("[ponytail] failed reading pony-tail-global.md", { err: e.message });
     }
   }
 
@@ -279,7 +363,7 @@ function loadPonyTailContext(projectId) {
         }
       }
     } catch (e) {
-      console.warn("[ponytail] failed reading project .ponytail.md:", e.message);
+      log.warn("[ponytail] failed reading project .ponytail.md", { err: e.message });
     }
   }
 
@@ -335,6 +419,10 @@ const antigravityAdapter = new AntigravityAdapter({
 });
 providerManager.register(opencodeAdapter);
 providerManager.register(antigravityAdapter);
+// A-7 (A-4 backlog #1): registro del adapter claudecode junto a los demás (id "claudecode").
+// Bajo riesgo: listSessions()/getMessages() devuelven [], NUNCA es el provider por defecto
+// (defaultProvider = antigravity) y la app no consume GET /api/providers.
+providerManager.register(new ClaudeCodeAdapter());
 
 // ---- Non-destructive session ownership discovery (hub must never kill TUI) ----
 // COMPANION_SESSION_FILE persists the PID we launched as companion-owned across restarts.
@@ -356,7 +444,10 @@ function probeOpencodeHealth() {
     http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path: "/global/health", timeout: 2000 }, r => {
       let d = ""; r.on("data", c => d += c); r.on("end", () => {
         try { const j = JSON.parse(d); resolve({ up: !!j.healthy || r.statusCode === 200, healthy: !!j.healthy, version: j.version || null, raw: j }); }
-        catch { resolve({ up: r.statusCode === 200, healthy: false, version: null, raw: d }); }
+        catch {
+          const isV2 = r.statusCode === 200 && (d.includes("<title>OpenCode</title>") || d.toLowerCase().includes("opencode"));
+          resolve({ up: r.statusCode === 200, healthy: isV2, version: isV2 ? "v2" : null, raw: d });
+        }
       });
     }).on("error", () => resolve({ up: false, healthy: false, version: null })).end();
   });
@@ -376,6 +467,7 @@ function scanServePids() {
         const cmd = fs.readFileSync(`/proc/${e}/cmdline`, "utf8");
         // Parse into argv parts split on \0 (null) — this is how kernel stores cmdline
         const parts = cmd.split("\x00").filter(Boolean);
+        if (parts.includes("--service")) continue; // ignore internal TUI service daemon
         let isServe = false;
         for (let i = 0; i < parts.length; i++) {
           const base = parts[i].split("/").pop();
@@ -456,15 +548,17 @@ function classifyOwnership(health, servePids) {
 function persistCompanionSession(pid) {
   try {
     companionMeta = { pid, port: OPENCODE_PORT, host: OPENCODE_HOST, startedAt: Date.now() };
-    fs.writeFileSync(COMPANION_SESSION_FILE, JSON.stringify(companionMeta, null, 2));
-    console.log(`[session] persisted companion-owned pid ${pid} port ${OPENCODE_PORT}`);
-  } catch (e) { console.error("[session] persist err", e.message); }
+    // A-4 (BACKEND-BUG-02/04): atómico — .companion-session.json decide la propiedad
+    // de la sesión (classifyOwnership); JSON corrupto => reclasificación errónea al arrancar.
+    atomicWriteFileSync(COMPANION_SESSION_FILE, companionMeta);
+    log.info(`[session] persisted companion-owned pid ${pid} port ${OPENCODE_PORT}`);
+  } catch (e) { log.error("[session] persist err", { err: e.message }); }
 }
 
 // Clear stale companion meta if pid dead — prevents misclassifying termux-native as companion-owned.
 function clearStaleCompanionMetaIfNeeded() {
   if (companionMeta && companionMeta.pid && !isCompanionPidAlive(companionMeta.pid)) {
-    console.log(`[session] clearing stale companion meta pid ${companionMeta.pid} (dead)`);
+    log.info(`[session] clearing stale companion meta pid ${companionMeta.pid} (dead)`);
     companionMeta = null;
     try { fs.unlinkSync(COMPANION_SESSION_FILE); } catch {}
   }
@@ -478,10 +572,45 @@ const MIME = {
 };
 
 function send(res, code, body, headers={}){
-  res.writeHead(code, { "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"*", "Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS", ...headers });
+  res.writeHead(code, withCors(res, { "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS, "Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS", ...headers }));
   res.end(body);
+  // A-2: contrato del dispatcher — truthy = "respuesta ya enviada". Sin este return,
+  // `if (handleXRoute(...)) return;` nunca cortaba y el flujo caía en un handler
+  // central que re-enviaba headers (ERR_HTTP_HEADERS_SENT: doble manejo de respuesta).
+  return true;
 }
-function json(res, code, obj){ send(res, code, JSON.stringify(obj), {"Content-Type":"application/json; charset=utf-8"}); }
+// ---- Envelope estándar de TODAS las respuestas JSON /api/* (routers incluidos: pasan por json()) ----
+// éxito: { ok:true, data:... }   error: { ok:false, error:{ code, message } }
+// Se normaliza AQUÍ (punto único por el que pasan server.js y los 4 routers montados en A-2)
+// para garantizar el contrato sin reescribir cada handler. Models.kt (Envelope.error: String?)
+// sólo se parsea en 2xx, donde ok:false nunca viaja => convertir error a objeto NO rompe la app.
+function errorCodeForStatus(code) {
+  const MAP = {
+    400: "BAD_REQUEST", 401: "UNAUTHORIZED", 403: "FORBIDDEN", 404: "NOT_FOUND",
+    405: "METHOD_NOT_ALLOWED", 409: "CONFLICT", 422: "UNPROCESSABLE_ENTITY",
+    500: "INTERNAL_ERROR", 501: "NOT_IMPLEMENTED", 502: "BAD_GATEWAY",
+    503: "SERVICE_UNAVAILABLE", 504: "GATEWAY_TIMEOUT"
+  };
+  return MAP[code] || (code >= 500 ? "SERVER_ERROR" : code >= 400 ? "HTTP_ERROR" : "ERROR");
+}
+function normalizeEnvelope(code, obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
+  // error en string (fail(), handlers legacy, routers) -> error:{code,message}
+  if (obj.error != null && typeof obj.error !== "object" && (code >= 400 || obj.ok === false)) {
+    const clone = { ...obj };
+    const errCode = typeof obj.code === "string" ? obj.code : errorCodeForStatus(code);
+    delete clone.code;
+    clone.ok = false;
+    clone.error = { code: errCode, message: String(obj.error).slice(0, 800) };
+    return clone;
+  }
+  // 4xx/5xx sin error explícito -> error genérico con el motivo HTTP (nunca HTML ni cuerpo liso)
+  if (code >= 400 && (obj.ok === undefined || obj.ok === false) && obj.error == null) {
+    return { ...obj, ok: false, error: { code: errorCodeForStatus(code), message: http.STATUS_CODES[code] || "request failed" } };
+  }
+  return obj;
+}
+function json(res, code, obj){ return send(res, code, JSON.stringify(normalizeEnvelope(code, obj)), {"Content-Type":"application/json; charset=utf-8"}); }
 
 async function proxyWithInjection(req, resRaw, originalBodyBuf) {
   // For opencode message routes (/session/:id/message, /session/:id/prompt etc.), prepend system context block if project has skills.
@@ -548,7 +677,7 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
   const approxPayloadLen = originalBodyBuf.length + block.length + 256;
   if (approxPayloadLen > 512 * 1024) {
     // Skip injection rather than risk 400 from oversized body
-    console.log(`[proxy] skip injection: payload would exceed 512KB cap (${approxPayloadLen} bytes) for project ${projectId}`);
+    log.warn(`[proxy] skip injection: payload would exceed 512KB cap (${approxPayloadLen} bytes) for project ${projectId}`);
     return null;
   }
   // Pass system context silently in background via dedicated 'system' field — NEVER into user parts
@@ -570,9 +699,9 @@ function proxyToOpencode(req, res){
   delete opts.headers["accept-encoding"];
   const contentLength = req.headers["content-length"] ? parseInt(req.headers["content-length"]) : null;
   if(contentLength && contentLength > 0){
-    console.log(`[proxy] ${req.method} ${targetPath} streaming ${Math.round(contentLength/1024)}KB via chunks`);
+    log.debug(`[proxy] ${req.method} ${targetPath} streaming ${Math.round(contentLength/1024)}KB via chunks`);
   } else if(req.method==="POST" || req.method==="PUT" || req.method==="PATCH"){
-    console.log(`[proxy] ${req.method} ${targetPath} streaming chunked (sin Content-Length)`);
+    log.debug(`[proxy] ${req.method} ${targetPath} streaming chunked (sin Content-Length)`);
   }
   // Early intercept for message routes that need skill injection — buffer and create request lazily
   // to avoid creating an initial pr whose 8s guard would race with the injected pr2.
@@ -592,30 +721,30 @@ function proxyToOpencode(req, res){
         const buf = Buffer.concat(chunks);
         const injected = await proxyWithInjection(req, res, buf);
         const outBuf = injected || buf;
-        if (injected) console.log(`[proxy] injected system context for project ${_projectHint(injected)} (${injected.length} bytes) sanitized+capped`);
+        if (injected) log.info(`[proxy] injected system context for project ${_projectHint(injected)} (${injected.length} bytes) sanitized+capped`);
         const injOpts = { ...opts, headers: { ...opts.headers, "content-length": String(outBuf.length), "Content-Length": String(outBuf.length) } };
         delete injOpts.headers["transfer-encoding"];
         delete injOpts.headers["Transfer-Encoding"];
         const pr2 = http.request(injOpts, (prRes2)=>{
           clearTimeout(guard);
-          const h = { ...prRes2.headers, "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"*", "Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS" };
+          const h = withCors(res, { ...prRes2.headers, "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS, "Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS" });
           if (!res.headersSent) res.writeHead(prRes2.statusCode, h);
-          prRes2.on('error', e => { console.error('[proxy inj] prRes error', e.message); try { res.destroy(); } catch (_) {} });
+          prRes2.on('error', e => { log.error('[proxy inj] prRes error', { err: e.message }); try { res.destroy(); } catch (_) {} });
           prRes2.pipe(res);
         });
         pr2.on("error", e=> {
           clearTimeout(guard);
-          console.error('[proxy inj] error', e.message);
+          log.error('[proxy inj] error', { err: e.message });
           if(!res.headersSent) try { json(res, 502, { error:"opencode unreachable (injected)", detail:String(e) }); } catch(_){}
           else try{ res.end(); }catch(_){}
         });
-        pr2.setTimeout(120000, ()=> { clearTimeout(guard); console.error('[proxy inj] timeout 120s'); try{ pr2.destroy(); }catch(_){} });
+        pr2.setTimeout(120000, ()=> { clearTimeout(guard); log.error('[proxy inj] timeout 120s'); try{ pr2.destroy(); }catch(_){} });
         res.setTimeout(130000, () => { clearTimeout(guard); try { res.destroy(); } catch (_) {} });
         pr2.write(outBuf);
         pr2.end();
       } catch (e) {
         clearTimeout(guard);
-        console.error(`[proxy] injection path error ${e.message}`);
+        log.error(`[proxy] injection path error ${e.message}`);
         if(!res.headersSent) try { json(res, 502, { error:"injection error", detail:String(e) }); } catch(_){}
       }
       function _projectHint(buf) {
@@ -633,24 +762,24 @@ function proxyToOpencode(req, res){
   }, 8000);
   const pr = http.request(opts, (prRes)=>{
     clearTimeout(guard);
-    const h = { ...prRes.headers, "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"*", "Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS" };
+    const h = withCors(res, { ...prRes.headers, "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS, "Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS" });
     if (!res.headersSent) res.writeHead(prRes.statusCode, h);
-    prRes.on('error', e => { console.error('[proxy] prRes error', e.message); try { res.destroy(); } catch (_) {} });
-    res.on('error', e => { console.error('[proxy] res error', e.message); try { pr.destroy(); } catch (_) {} });
+    prRes.on('error', e => { log.error('[proxy] prRes error', { err: e.message }); try { res.destroy(); } catch (_) {} });
+    res.on('error', e => { log.error('[proxy] res error', { err: e.message }); try { pr.destroy(); } catch (_) {} });
     req.on('aborted', () => { try { pr.destroy(); } catch (_) {} });
     prRes.pipe(res);
   });
   pr.on("error", e=> {
     clearTimeout(guard);
-    console.error('[proxy] error', e.message);
+    log.error('[proxy] error', { err: e.message });
     if(!res.headersSent) {
       try { json(res, 502, { error:"opencode unreachable", detail:String(e), hint:`opencode serve debe estar corriendo en ${OPENCODE_HOST}:${OPENCODE_PORT}. Ejecuta: opencode serve --port ${OPENCODE_PORT} --hostname 0.0.0.0  ó  opencode web --port ${OPENCODE_PORT} --hostname 0.0.0.0` }); } catch(_){}
     } else try{ res.end(); }catch(_){}
   });
-  req.on('error', e => { clearTimeout(guard); console.error('[proxy] req error', e.message); try { pr.destroy(); } catch (_) {} });
-  try { req.pipe(pr); } catch (e) { clearTimeout(guard); console.error('[proxy] pipe err', e.message); }
-  pr.setTimeout(120000, ()=> { clearTimeout(guard); console.error('[proxy] timeout 120s (payload grande)'); try{ pr.destroy(); }catch(_){} });
-  res.setTimeout(130000, () => { clearTimeout(guard); console.error('[proxy] res timeout 130s'); try { res.destroy(); } catch (_) {} });
+  req.on('error', e => { clearTimeout(guard); log.error('[proxy] req error', { err: e.message }); try { pr.destroy(); } catch (_) {} });
+  try { req.pipe(pr); } catch (e) { clearTimeout(guard); log.error('[proxy] pipe err', { err: e.message }); }
+  pr.setTimeout(120000, ()=> { clearTimeout(guard); log.error('[proxy] timeout 120s (payload grande)'); try{ pr.destroy(); }catch(_){} });
+  res.setTimeout(130000, () => { clearTimeout(guard); log.error('[proxy] res timeout 130s'); try { res.destroy(); } catch (_) {} });
 }
 
 // device helpers — portable + Android namespace aware
@@ -715,20 +844,144 @@ async function listProjects(){
   }catch{ return []; }
 }
 
-const server = http.createServer(async (req, res)=>{
+// ---- Contrato HealthData (app: Models.kt HealthData L243-254) — fuente única ----
+// Alimenta GET /api/health (EXENTO de token: sonda ligera de keepalive.sh) y
+// GET /api/system/health (Control Center, con token). Ligero a propósito: memoria,
+// readdir y un solo probe HTTP corto a opencode — SIN su/nsenter/df ni procesos hijos
+// (auditoría API-05: antes el healthcheck spawneaba root shells cada 10s).
+function formatMb(bytes) { return `${(bytes / (1024 * 1024)).toFixed(1)}MB`; }
+// Disponibilidad honesta de un binario (ruta absoluta o nombre en PATH estándar)
+function binAvailable(binPath) {
+  if (!binPath) return false;
+  if (binPath.includes("/")) return fs.existsSync(binPath);
+  for (const dir of ["/root/.local/bin", "/usr/local/bin", "/usr/bin", "/bin"]) {
+    try { if (fs.existsSync(path.join(dir, binPath))) return true; } catch {}
+  }
+  return false;
+}
+async function buildHealthData(opts = {}) {
+  const mem = process.memoryUsage();
+  // workspace: nº de carpetas de proyecto reales en PROJECTS_ROOT (frente a `workspace`: la ruta)
+  let workspaceProjects = 0;
+  try { workspaceProjects = (await listProjects()).length; } catch (_) {}
+  // skills.installed: lo que SkillManager realmente tiene en disco (nada inventado)
+  let skillsInstalled = [];
+  try { skillsInstalled = new SkillManager().listInstalled() || []; } catch (_) {}
+  // agents: registrados en el pool vs ejecutando ahora mismo
+  let agentsRegistered = 0;
+  let agentsActive = 0;
+  try {
+    agentsRegistered = Object.keys(agentPool.registry || {}).length;
+    for (const list of (agentPool.active || new Map()).values()) agentsActive += (list || []).length;
+  } catch (_) {}
+  // jobs: habilitados y con intervalo realmente lanzado + último run (ISO)
+  let jobsActive = 0;
+  let jobsLastRun = null;
+  try {
+    for (const [id, job] of jobScheduler.jobs) {
+      if (!job || job.enabled === false) continue;
+      if (jobScheduler.intervals.has(id)) jobsActive++;
+      if (job.lastRun && (!jobsLastRun || job.lastRun > jobsLastRun)) jobsLastRun = job.lastRun;
+    }
+  } catch (_) {}
+  // adapters: opencode sano vía probe HTTP; antigravity = binario agy presente; resto = registrado
+  const adapters = {};
+  try {
+    const oc = opts.ocHealth || await probeOpencodeHealth();
+    for (const p of providerManager.listProviders()) {
+      if (p.id === "opencode") adapters[p.id] = oc && oc.healthy ? "healthy" : "down";
+      else if (p.id === "antigravity") adapters[p.id] = binAvailable(antigravityAdapter.binPath) ? "ok" : "missing";
+      else adapters[p.id] = "registered";
+    }
+  } catch (_) {}
+  return {
+    server: "running",           // Control Center: ONLINE si server ∈ {running, healthy, ok}
+    port: HUB_PORT,
+    uptime: Math.floor(process.uptime()),   // segundos del hub (no del serve opencode)
+    memory: { heapUsed: formatMb(mem.heapUsed), heapTotal: formatMb(mem.heapTotal) },
+    workspace: PROJECTS_ROOT,
+    projects: workspaceProjects,
+    agents: { active: agentsActive, registered: agentsRegistered },
+    jobs: { active: jobsActive, lastRun: jobsLastRun },
+    skills: { installed: skillsInstalled },
+    adapters
+    // Sin secretos: jamás AEGIS_TOKEN ni rutas/token file en esta respuesta (queda en claro).
+  };
+}
+
+// A-4 (BACKEND-BUG-01/09-12): invocación segura de los routers montados.
+// - await: los routers devuelven PROMESAS en rutas asíncronas; sin await una
+//   rechazada era unhandledRejection con la petición colgada (res sin end).
+// - try/catch: excepción síncrona dentro de un router (p.ej. getProjectAbsPath()
+//   lanzando por projectId inválido) también cierra la respuesta.
+// Contrato: literal `false` (o null/undefined sin headers) = "no es mi ruta";
+// cualquier otra cosa = manejado. res.headersSent manda: si el handler ya
+// escribió headers NUNCA se devuelve "no manejado" (evita doble writeHead).
+async function dispatchRoute(handler, req, res, pathname) {
+  try {
+    const handled = await handler(req, res, pathname, json, readJsonBody);
+    if (handled === false || handled == null) return !!res.headersSent;
+    return true;
+  } catch (e) {
+    log.error(`[hub] handler error ${req.method} ${pathname}`, { err: (e && e.stack) || String(e) });
+    const msg = String((e && e.message) || e).slice(0, 800);
+    if (!res.headersSent) {
+      try { json(res, 500, { ok: false, error: { code: "INTERNAL_ERROR", message: msg } }); } catch (_) {}
+    } else if (!res.writableEnded) {
+      try { res.end(); } catch (_) {}
+    }
+    return true; // quedó manejada (cerrada): no seguir hacia el fallback central
+  }
+}
+
+// A-4 (BACKEND-BUG-01/09-12): el dispatcher es ahora una función nombrada envuelta
+// abajo por http.createServer(...).catch(...). Antes, cualquier excepción no
+// capturada dentro de este callback async (síncrona o promesa RECHAZADA, p.ej.
+// scanWorkspace()/getProjectAbsPath() lanzando en las rutas de projectRoutes o
+// listModels() rechazando en GET /api/opencode/models) caía en
+// process.on('unhandledRejection') y la petición quedaba COLGADA: sin headers y
+// sin res.end() — el cliente sufría timeout con respuesta vacía.
+async function handleRequest(req, res){
   // timeouts largos para payloads multimodales grandes (video/audio/docs en Base64)
-  req.setTimeout(125000, () => { console.error('[hub] req timeout 125s (multimodal)', req.url?.slice(0,140)); try { res.destroy(); } catch (_) {} });
+  req.setTimeout(125000, () => { log.error(`[hub] req timeout 125s (multimodal) ${req.url?.slice(0,140)}`); try { res.destroy(); } catch (_) {} });
   res.on('close', () => { /* cleanup */ });
+  // CORS: el origin solo se refleja si está en la allowlist (withCors lo lee de res._corsOrigin)
+  res._corsOrigin = req.headers.origin || null;
+  // Preflight: 204 con Allow-Headers/Methods (el preflight no lleva headers custom, no exige token)
   if(req.method==="OPTIONS"){ return send(res, 204, ""); }
   let url;
   try { url = new URL(req.url, `http://${req.headers.host}`); } catch (e) { return json(res, 400, { error: 'bad url', detail: String(e) }); }
   const pathname = url.pathname;
 
+  // ---- Auth de TODAS las rutas /api/*: exige X-Aegis-Token (única excepción sin token: GET /api/health) ----
+  const isApi = pathname === "/api" || pathname.startsWith("/api/");
+  const isPublicHealth = pathname === "/api/health" && req.method === "GET";
+  if (isApi && !isPublicHealth && !tokenMatches(req.headers["x-aegis-token"])) {
+    return json(res, 403, { ok: false, error: { code: "FORBIDDEN", message: "missing or invalid token" } });
+  }
+
   // 0) Provider API routes
   
   // Phase 3.5 & 4: Route Handlers for skills and projects
-  if (handleSkillsRoute(req, res, pathname, json, readJsonBody)) return;
-  if (handleProjectRoutes(req, res, pathname, json, readJsonBody)) return;
+  // A-4 (BACKEND-BUG-01/09-12): invocación BLINDADA vía dispatchRoute — await +
+  // try/catch + garantía de cierre de respuesta. Contrato único y robusto:
+  //   false  = "no es mi ruta" (sigue la siguiente regla)
+  //   true / promesa resuelta = "ya respondí" (return del dispatcher)
+  //   throw / promesa rechazada = 500 envelope (o res.end() si ya había headers)
+  // Si un handler escribió headers pero devolvió undefined/false, dispatchRoute lo
+  // trata como manejado => nunca una segunda regla re-envía la respuesta.
+  if (await dispatchRoute(handleSkillsRoute, req, res, pathname)) return;
+  if (await dispatchRoute(handleProjectRoutes, req, res, pathname)) return;
+  // A-2: motores antes huérfanos montados con el mismo contrato (truthy = respuesta ya
+  // enviada). Todas sus respuestas pasan por json()/send() => withCors + envelope {ok,error},
+  // y van ANTES del fallback 404 JSON central (nunca llegan al SPA text/html).
+  if (await dispatchRoute(handleJobRoutes, req, res, pathname)) return;
+  if (await dispatchRoute(handleAgentRoutes, req, res, pathname)) return;
+  if (await dispatchRoute(handleWorkflowRoutes, req, res, pathname)) return;
+  if (await dispatchRoute(handleContentRoutes, req, res, pathname)) return;
+  // F1: wizard de bootstrap — mismas reglas que los demás routers (truthy = ya
+  // respondí) y ANTES del fallback 404 central (nunca llega al SPA text/html).
+  if (await dispatchRoute(handleBootstrapRoute, req, res, pathname)) return;
 
   if(pathname==="/api/providers" && req.method==="GET"){
     return json(res, 200, { ok: true, data: { defaultProvider: providerManager.defaultProvider, providers: providerManager.listProviders() } });
@@ -741,13 +994,22 @@ const server = http.createServer(async (req, res)=>{
       if (!id || !providerManager.adapters.has(id)) {
         return json(res, 400, { ok: false, error: `invalid provider: ${id}` });
       }
+      const prevDefault = providerManager.defaultProvider;
       providerManager.defaultProvider = id;
       try {
-        fs.writeFileSync(path.join(__dirname, "providers.json"), JSON.stringify({
+        // A-4 (BACKEND-BUG-02/04): antes fs.writeFileSync directo — a medio escribir,
+        // providers.json quedaba corrupto y el hub re-arrancaba con config inválida.
+        // Misma salida byte a byte (JSON.stringify(obj,null,2)) vía el helper existente.
+        atomicWriteFileSync(path.join(__dirname, "providers.json"), {
           defaultProvider: id,
           providers: providerManager.listProviders()
-        }, null, 2));
-      } catch (_) {}
+        });
+      } catch (e2) {
+        // A-7 (A-4 backlog #4): antes catch silencioso => 200 con la escritura FALLIDA.
+        // Se revierte el estado en memoria y se responde 500 envelope (nunca 200 mentiroso).
+        providerManager.defaultProvider = prevDefault;
+        return json(res, 500, { ok: false, error: `persist providers.json failed: ${e2.message}` });
+      }
       return json(res, 200, { ok: true, data: { defaultProvider: id } });
     } catch (e) {
       return json(res, 500, { ok: false, error: String(e) });
@@ -781,7 +1043,7 @@ const server = http.createServer(async (req, res)=>{
       if (!provId) provId = "antigravity";
 
       const adapter = providerManager.resolveProvider(null, provId, store);
-      console.log(`[hub] creating session via ${adapter.id} (title: ${body.title || "untitled"}, project: ${projectId || "none"})`);
+      log.info(`[hub] creating session via ${adapter.id} (title: ${body.title || "untitled"}, project: ${projectId || "none"})`);
 
       const created = await adapter.createSession({
         title: body.title,
@@ -819,7 +1081,7 @@ const server = http.createServer(async (req, res)=>{
         ...(created.raw || {})
       });
     } catch (e) {
-      console.error("[hub] createSession error:", e.message);
+      log.error("[hub] createSession error", { err: e.message });
       return json(res, 500, { ok: false, error: `createSession failed: ${e.message}` });
     }
   }
@@ -828,6 +1090,11 @@ const server = http.createServer(async (req, res)=>{
   const deleteSessionIntercept = pathname.match(/^\/(?:api\/opencode|opencode|api)\/session(?:s)?\/([^\/]+)$/);
   if (deleteSessionIntercept && req.method === "DELETE") {
     const sid = sanitizeProjectId(decodeURIComponent(deleteSessionIntercept[1]));
+    // Anti path-traversal: id debe resolver dentro de basePath (brainDir) — este sid llega a
+    // fs.rmSync(recursive) en AntigravityAdapter.deleteSession (providers.js) vía path.join(brainDir, sid)
+    if (!resolvesInside(antigravityAdapter.brainDir, sid)) {
+      return json(res, 400, { ok: false, error: `invalid session id (path traversal): ${sid}`, code: "BAD_REQUEST" });
+    }
     try {
       // 1. Remove atomically from all projects and purge from sessionTitles in projects.json
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
@@ -865,7 +1132,7 @@ const server = http.createServer(async (req, res)=>{
         try {
           await antigravityAdapter.deleteSession(sid);
         } catch (e) {
-          console.warn(`[hub] antigravityAdapter.deleteSession warning:`, e.message);
+          log.warn(`[hub] antigravityAdapter.deleteSession warning: ${e.message}`);
         }
         return json(res, 200, { ok: true, data: { removed: sid, storagePurged: true }, removed: sid });
       } else {
@@ -875,12 +1142,12 @@ const server = http.createServer(async (req, res)=>{
             await opencodeAdapter.deleteSession(sid);
           }
         } catch (e) {
-          console.warn(`[hub] opencodeAdapter.deleteSession warning:`, e.message);
+          log.warn(`[hub] opencodeAdapter.deleteSession warning: ${e.message}`);
         }
         return json(res, 200, { ok: true, data: { removed: sid, storagePurged: true }, removed: sid });
       }
     } catch (e) {
-      console.error(`[hub] DELETE session error for ${sid}:`, e.message);
+      log.error(`[hub] DELETE session error for ${sid}`, { err: e.message });
       return json(res, 500, fail(`delete session failed: ${e.message}`));
     }
   }
@@ -1011,17 +1278,16 @@ const server = http.createServer(async (req, res)=>{
       }
 
       if (isStream) {
-        res.writeHead(200, {
+        res.writeHead(200, withCors(res, {
           "Content-Type": "text/event-stream; charset=utf-8",
           "Cache-Control": "no-cache, no-transform",
           "Connection": "keep-alive",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "*",
+          "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS,
           "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-        });
+        }));
       }
 
-      console.log(`[hub] routing message for session ${sid} to provider ${adapter.id} (project: ${pId || "none"}, mode: ${agentMode}, streaming: ${isStream})`);
+      log.info(`[hub] routing message for session ${sid} to provider ${adapter.id} (project: ${pId || "none"}, mode: ${agentMode}, streaming: ${isStream})`);
       const msgResult = await adapter.sendMessage(sid, body, {
         signal: abortCtrl.signal,
         projectId: pId,
@@ -1072,7 +1338,7 @@ const server = http.createServer(async (req, res)=>{
         ...normalized
       });
     } catch (e) {
-      console.error(`[hub] sendMessage error for ${sid}:`, e.message);
+      log.error(`[hub] sendMessage error for ${sid}`, { err: e.message });
       if (isStream && res.headersSent) {
         try {
           res.write(`data: ${JSON.stringify({ type: "error", error: e.message || "Message send failed" })}\n\n`);
@@ -1115,7 +1381,7 @@ const server = http.createServer(async (req, res)=>{
       // 1. Accessibility socket probe (localhost:8766)
       const a11ySocket = await new Promise((resolve) => {
         const r = http.get(
-          { hostname: "127.0.0.1", port: 8766, path: "/status", timeout: 2000 },
+          { hostname: "127.0.0.1", port: 8766, path: "/status", timeout: 2000, headers: { "X-Aegis-Token": AEGIS_TOKEN } },
           (resp) => {
             let d = "";
             resp.on("data", (c) => (d += c));
@@ -1187,20 +1453,66 @@ const server = http.createServer(async (req, res)=>{
 
       const isHealthy = runtime.status === "ok" && canWriteProjects && agyCheck.installed;
 
+      // A-3: data = HealthData (Models.kt) + diagnóstico legacy. La app (Control Center)
+      // lee server/port/uptime/memory/workspace/projects/agents/jobs/skills/adapters;
+      // sin `server:"running"` la UI marcaba siempre OFFLINE. El resto (runtime, a11ySocket,
+      // agy, permissions, opencode) se conserva como superconjunto para QA/docs (curl).
+      // Diagnóstico barato heredado de GET /api/health (sin `df`/su: audits API-05;
+      // disk ya no se calcula en ningún health — sólo hooks de QA lo miraban).
+      clearStaleCompanionMetaIfNeeded();
+      const healthOwnership = classifyOwnership(ocHealth, scanServePids());
+      let activeProject = null;
+      try {
+        const st = loadProjectsStore();
+        if (UI_STATE.projectId) {
+          const pr = findProject(st, UI_STATE.projectId);
+          if (pr) activeProject = { id: pr.id, name: pr.name, sessionsCount: (pr.sessions || []).length };
+          else activeProject = { id: UI_STATE.projectId, name: UI_STATE.project || null, note: "projectId not found in store" };
+        } else if (UI_STATE.project) {
+          activeProject = { id: null, name: UI_STATE.project, note: "legacy folder name, no projectId" };
+        }
+      } catch (_) {}
+      const healthData = await buildHealthData({ ocHealth: ocHealth });
+
       return json(res, 200, {
         ok: true,
         data: {
+          ...healthData,
           status: isHealthy ? "healthy" : "degraded",
           timestamp: nowIso(),
           runtime,
           a11ySocket,
           agy: agyCheck,
           permissions,
-          opencode: ocHealth
+          opencode: ocHealth,
+          sessionOwnership: healthOwnership,
+          activeProject,
+          lastVoice: VOICE_LOG[0] || null
         }
       });
     } catch (e) {
       return json(res, 500, { ok: false, error: `Health check failed: ${e.message}` });
+    }
+  }
+
+  // 2b) Memory (Models.kt MemoryData — heapUsed/heapTotal en texto legible)
+  if (pathname === "/api/system/memory" && req.method === "GET") {
+    const m = process.memoryUsage();
+    return json(res, 200, { ok: true, data: { heapUsed: formatMb(m.heapUsed), heapTotal: formatMb(m.heapTotal) } });
+  }
+
+  // 2c) Logs (Models.kt LogsResponse — últimas líneas del log REAL del hub, nunca inventadas)
+  if (pathname === "/api/system/logs" && req.method === "GET") {
+    const limit = Math.max(1, Math.min(1000, parseInt(url.searchParams.get("limit") || "100", 10) || 100));
+    try {
+      const logFile = path.join(__dirname, "hub.log");
+      let lines = [];
+      if (fs.existsSync(logFile)) {
+        lines = fs.readFileSync(logFile, "utf8").split("\n").filter(l => l.trim()).slice(-limit);
+      }
+      return json(res, 200, { ok: true, data: lines });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: `log read failed: ${e.message}` });
     }
   }
 
@@ -1217,7 +1529,7 @@ const server = http.createServer(async (req, res)=>{
     // Classify ownership — spec (2)
     const sessionOwnership = classifyOwnership(ocHealth, servePids);
     const bridgeHealth = await new Promise(resolve=>{
-      http.get({ hostname:"127.0.0.1", port:8766, path:"/status", timeout:1500 }, r=>{
+      http.get({ hostname:"127.0.0.1", port:8766, path:"/status", timeout:1500, headers:{ "X-Aegis-Token": AEGIS_TOKEN } }, r=>{
         let d=""; r.on("data",c=>d+=c); r.on("end", async ()=>{
           let h;
           try {
@@ -1229,7 +1541,7 @@ const server = http.createServer(async (req, res)=>{
             // Reactive repair (needsA11yRepair flag) covers in-flight clearing.
             try {
               const cur = (await runShell("settings get secure enabled_accessibility_services")).stdout.trim();
-              const me = "com.opencode.companion/com.opencode.companion.OpencodeAccessibilityService";
+              const me = "com.aegis.hub/com.aegis.hub.OpencodeAccessibilityService";
               const parts = cur.split(":").map(x=>x.trim()).filter(x=>x && x!==me);
               if (!cur.split(":").map(x=>x.trim()).includes(me)) {
                 parts.push(me);
@@ -1274,7 +1586,7 @@ const server = http.createServer(async (req, res)=>{
     if (ownership === "companion-owned" && companionMeta && companionMeta.pid) pid = companionMeta.pid;
     else if (servePids.length) pid = servePids[0];
     const uptime = pid ? getProcessUptime(pid) : null;
-    return json(res, 200, {
+    return json(res, 200, { ok: true, data: {
       // PID of the detected serve process (null if none)
       pid,
       // Ownership classification — see classifyOwnership logic
@@ -1290,7 +1602,7 @@ const server = http.createServer(async (req, res)=>{
       companionMeta,
       health,
       hint: ownership === "none" ? "no serve running — safe to launch via POST /api/system/start" : `${ownership} session pid ${pid} uptime ${uptime !== null ? uptime + 's' : 'unknown'}`
-    });
+    }});
   }
   // Non-destructive launch gate — spec (3): only launch when sessionOwnership is "none", never when "termux-native"
   if(pathname==="/api/system/start" && req.method==="POST"){
@@ -1302,8 +1614,8 @@ const server = http.createServer(async (req, res)=>{
     const preOwnership = classifyOwnership(preHealth, preServePids);
     // Spec (3): if already healthy with any ownership except "none", do not launch via keepalive
     if (preHealth.healthy && preOwnership !== "none") {
-      console.log(`[system] POST /api/system/start — skipped launch: existing ${preOwnership} session pid ${preServePids[0] || preHealth.version || ''} already healthy (non-destructive)`);
-      return json(res, 200, {
+      log.info(`[system] POST /api/system/start — skipped launch: existing ${preOwnership} session pid ${preServePids[0] || preHealth.version || ''} already healthy (non-destructive)`);
+      return json(res, 200, { ok: true, data: {
         started: false,
         skipped: true,
         reason: `Existing ${preOwnership} session already running — not launching (non-destructive policy)`,
@@ -1313,9 +1625,9 @@ const server = http.createServer(async (req, res)=>{
         steps: [`skip: existing ${preOwnership} healthy, pid ${preServePids[0] || 'unknown'}`],
         alreadyHealthy: true,
         next:"Use GET /api/system/session-info for PID/uptime details"
-      });
+      }});
     }
-    console.log('[system] POST /api/system/start — sessionOwnership none, invoking keepalive + opencode ensure (host namespace)');
+    log.info('[system] POST /api/system/start — sessionOwnership none, invoking keepalive + opencode ensure (host namespace)');
     const steps = [];
     async function ensureOpencode(){
       const health = await probeOpencodeHealth();
@@ -1337,7 +1649,7 @@ const server = http.createServer(async (req, res)=>{
         persistCompanionSession(newPid);
         steps.push(`persisted companion-owned pid ${newPid}`);
       }
-      await runShell(`dumpsys deviceidle whitelist +com.opencode.companion 2>&1 | head -n 3; cmd deviceidle whitelist +com.opencode.companion 2>&1 | head -n 3; am set-standby-bucket com.opencode.companion active 2>&1 | head -n 3`).then(r=> steps.push(`whitelist: ${r.stdout.trim().slice(0,200)}`)).catch(()=>{});
+      await runShell(`dumpsys deviceidle whitelist +com.aegis.hub 2>&1 | head -n 3; cmd deviceidle whitelist +com.aegis.hub 2>&1 | head -n 3; am set-standby-bucket com.aegis.hub active 2>&1 | head -n 3`).then(r=> steps.push(`whitelist: ${r.stdout.trim().slice(0,200)}`)).catch(()=>{});
       return { already:false };
     }
     const ens = await ensureOpencode();
@@ -1353,10 +1665,10 @@ const server = http.createServer(async (req, res)=>{
     const postHealth = await probeOpencodeHealth();
     const postPids = scanServePids();
     const postOwnership = classifyOwnership(postHealth, postPids);
-    return json(res, healthy ? 200 : 202, { started: !ens.already && healthy, healthy, sessionOwnership: postOwnership, opencode:`http://${OPENCODE_HOST}:${OPENCODE_PORT}`, steps, alreadyHealthy: ens.already, next:"Poll GET /api/system/status until {ready:true} or GET /api/system/session-info for details" });
+    return json(res, healthy ? 200 : 202, { ok: true, data: { started: !ens.already && healthy, healthy, sessionOwnership: postOwnership, opencode:`http://${OPENCODE_HOST}:${OPENCODE_PORT}`, steps, alreadyHealthy: ens.already, next:"Poll GET /api/system/status until {ready:true} or GET /api/system/session-info for details" } });
   }
   if(pathname==="/api/ui/state" && req.method==="GET"){
-    return json(res, 200, { ...UI_STATE });
+    return json(res, 200, { ok: true, data: { ...UI_STATE } });
   }
   if(pathname==="/api/ui/state" && req.method==="PATCH"){
     try {
@@ -1368,7 +1680,7 @@ const server = http.createServer(async (req, res)=>{
       if ("projectId" in body) UI_STATE.projectId = body.projectId || null;
       if ("sessionId" in body) UI_STATE.sessionId = body.sessionId || null;
       saveUiState();
-      return json(res, 200, { ...UI_STATE });
+      return json(res, 200, { ok: true, data: { ...UI_STATE } });
     } catch (e) { return json(res, 400, { error: String(e).slice(0,400) }); }
   }
 
@@ -1468,7 +1780,7 @@ const server = http.createServer(async (req, res)=>{
           );
         }
       } catch (err) {
-        console.warn(`[hub] failed to initialize project directory on disk:`, err.message);
+        log.warn(`[hub] failed to initialize project directory on disk: ${err.message}`);
       }
 
       return json(res, 201, { ok: true, data: createdProj });
@@ -1587,21 +1899,35 @@ const server = http.createServer(async (req, res)=>{
       const headerProv = req.headers["x-provider"] ? String(req.headers["x-provider"]).toLowerCase().trim() : null;
 
       let createdEntry = null;
+
+      // A-4 (BACKEND-BUG-11): la E/S del proveedor (adapter.createSession — HTTP a
+      // opencode con timeout de 8s, o I/O de fs) SALE de la sección crítica del lock.
+      // Antes ocurría DENTRO de fileMutex.runExclusive(PROJECTS_STORE_FILE) y, como
+      // projects.json es la tabla maestra de sesiones, UNA creación lenta retenía el
+      // lock y serializaba detrás deletes/renames/messages/creates de todo el hub.
+      // Fase 1 (FUERA del lock): validar + crear la sesión en el proveedor.
+      if (!sessionId) {
+        const preStore = loadProjectsStore();
+        const preProj = findProject(preStore, id);
+        if (!preProj) throw new Error(`NOT_FOUND: project ${id} not found`);
+        if (preProj.archivedAt) throw new Error(`ARCHIVED: project ${id} is archived`);
+        const provId = body.provider || headerProv || preProj.provider || "antigravity";
+        const adapter = providerManager.resolveProvider(null, provId, preStore);
+        const autoTitle = body.title || "Nuevo chat";
+        const created = await adapter.createSession({ title: autoTitle, projectId: id }); // I/O: fuera del lock
+        sessionId = created.id;
+        body.title = created.title || autoTitle;
+        body.createdAt = created.createdAt || nowIso();
+      }
+
+      // Fase 2 (DENTRO del lock): sólo mutación de la estructura en memoria + save.
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
         const store = loadProjectsStore();
         const proj = findProject(store, id);
+        // Re-validación tras re-adquirir el lock: el proyecto pudo archivarse o
+        // borrarse mientras creábamos la sesión fuera (mismos códigos de error que antes).
         if (!proj) throw new Error(`NOT_FOUND: project ${id} not found`);
         if (proj.archivedAt) throw new Error(`ARCHIVED: project ${id} is archived`);
-
-        if (!sessionId) {
-          const provId = body.provider || headerProv || proj.provider || "antigravity";
-          const adapter = providerManager.resolveProvider(null, provId, store);
-          const autoTitle = body.title || "Nuevo chat";
-          const created = await adapter.createSession({ title: autoTitle, projectId: id });
-          sessionId = created.id;
-          body.title = created.title || autoTitle;
-          body.createdAt = created.createdAt || nowIso();
-        }
 
         let existingTitle = null;
         for (const p of store.projects) {
@@ -1860,7 +2186,7 @@ const server = http.createServer(async (req, res)=>{
           await adapter.renameSession(sid, newTitle);
         }
       } catch (adapterErr) {
-        console.warn(`[hub] adapter.renameSession failed for ${sid}:`, adapterErr.message);
+        log.warn(`[hub] adapter.renameSession failed for ${sid}: ${adapterErr.message}`);
       }
 
       return json(res, 200, ok({ id: sid, sessionId: sid, title: newTitle }));
@@ -1873,6 +2199,10 @@ const server = http.createServer(async (req, res)=>{
   const deleteSessionMatch = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)$/);
   if (deleteSessionMatch && req.method === "DELETE") {
     const sid = sanitizeProjectId(decodeURIComponent(deleteSessionMatch[1]));
+    // Anti path-traversal: mismo criterio que GET/POST — path.resolve(basePath, id) debe quedar dentro de basePath
+    if (!resolvesInside(antigravityAdapter.brainDir, sid)) {
+      return json(res, 400, { ok: false, error: `invalid session id (path traversal): ${sid}`, code: "BAD_REQUEST" });
+    }
     try {
       // Remove from any project in projects.json and clean sessionTitles
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
@@ -1897,7 +2227,7 @@ const server = http.createServer(async (req, res)=>{
           await adapter.deleteSession(sid);
         }
       } catch (adapterErr) {
-        console.warn(`[hub] adapter.deleteSession failed for ${sid}:`, adapterErr.message);
+        log.warn(`[hub] adapter.deleteSession failed for ${sid}: ${adapterErr.message}`);
       }
 
       return json(res, 200, ok({ removed: sid }));
@@ -1973,7 +2303,7 @@ const server = http.createServer(async (req, res)=>{
 
       return json(res, 200, { ok: true, data: normalizedList });
     } catch (e) {
-      console.error(`[hub] getMessages error for ${sid}:`, e.message);
+      log.error(`[hub] getMessages error for ${sid}`, { err: e.message });
       return json(res, 502, { ok: false, error: `get messages failed: ${String(e.message || e).slice(0,400)}` });
     }
   }
@@ -2031,65 +2361,13 @@ const server = http.createServer(async (req, res)=>{
     return json(res, 200, ok(VOICE_LOG));
   }
 
-  // GET /api/health — full diagnostic (opencode, bridge, disk, uptime, sessionOwnership, active project, last voice)
+  // GET /api/health — EXENTO de token (A-1) y con shape EXACTO de Models.kt HealthData:
+  //   { ok:true, data:{ server, port, uptime, memory, workspace, projects, agents, jobs, skills, adapters } }
+  // Es la sonda ligera de keepalive.sh (sin shells root ni df) y la fuente de verdad del
+  // contrato app <-> backend. El diagnóstico rico (disk/bridge/ownership/activeProject) vive
+  // en GET /api/system/health (con token), que incluye este mismo HealthData más el legacy.
   if(pathname==="/api/health" && req.method==="GET"){
-    const healthProbe = await probeOpencodeHealth();
-    clearStaleCompanionMetaIfNeeded();
-    const servePids = scanServePids();
-    const ownership = classifyOwnership(healthProbe, servePids);
-    const uptimePid = servePids[0] || (companionMeta && companionMeta.pid) || null;
-    const uptime = uptimePid ? getProcessUptime(uptimePid) : null;
-
-    // Bridge reachable (port 8766)
-    const bridgeProbe = await new Promise(resolve=>{
-      http.get({ hostname:"127.0.0.1", port:8766, path:"/status", timeout:1500 }, r=>{
-        let d=""; r.on("data",c=>d+=c); r.on("end",()=>{ try{ const j=JSON.parse(d); resolve({ reachable:true, a11y: !!j.a11y, raw:j }); }catch{ resolve({ reachable:true, a11y:false, raw:d }); } });
-      }).on("error", e=> resolve({ reachable:false, error:String(e.message || e).slice(0,300) })).end();
-    });
-
-    // Disk space /sdcard (df)
-    let disk = null;
-    try {
-      const out = await shellExecRaw("df -h /sdcard 2>&1 | tail -n1", 4000, 4096);
-      const line = (out.stdout || "").trim().split("\n").pop() || "";
-      const parts = line.trim().split(/\s+/);
-      // Expected: /dev/... size used avail use% mount
-      disk = { raw: line, filesystem: parts[0]||null, size: parts[1]||null, used: parts[2]||null, avail: parts[3]||null, usePct: parts[4]||null, mount: parts[5]||"/sdcard" };
-    } catch (e) { disk = { error: String(e).slice(0,300) }; }
-
-    // Hub uptime (process.uptime)
-    const hubUptime = Math.floor(process.uptime());
-
-    // Active project from UI_STATE (projectId + project name)
-    let activeProject = null;
-    try {
-      const s = loadProjectsStore();
-      if (UI_STATE.projectId) {
-        const p = findProject(s, UI_STATE.projectId);
-        if (p) activeProject = { id: p.id, name: p.name, description: p.description || "", updatedAt: p.updatedAt || p.createdAt || null, sessionsCount: (p.sessions||[]).length };
-        else activeProject = { id: UI_STATE.projectId, name: UI_STATE.project || null, note: "projectId not found in store" };
-      } else if (UI_STATE.project) {
-        activeProject = { id: null, name: UI_STATE.project, note: "legacy folder name, no projectId" };
-      }
-    } catch (e) { activeProject = { error: String(e).slice(0,300) }; }
-
-    // Last voice command (most recent VOICE_LOG entry)
-    const lastVoice = VOICE_LOG[0] || null;
-
-    const opencodeReachable = !!(healthProbe && healthProbe.up && healthProbe.healthy);
-    const bridgeReachable = !!bridgeProbe.reachable;
-
-    return json(res, 200, ok({
-      ok: opencodeReachable && bridgeReachable,
-      opencode: { reachable: opencodeReachable, healthy: !!healthProbe.healthy, version: healthProbe.version || null, pid: servePids[0] || null, allPids: servePids, ownership },
-      bridge: bridgeReachable ? { reachable: true, a11y: !!bridgeProbe.a11y } : { reachable: false, error: bridgeProbe.error || "bridge not reachable" },
-      disk,
-      uptime: { hub: hubUptime, opencode: uptime },
-      sessionOwnership: ownership,
-      activeProject,
-      lastVoice,
-      now: nowIso()
-    }));
+    return json(res, 200, { ok: true, data: await buildHealthData() });
   }
 
   if(pathname==="/api/status" && req.method==="GET"){
@@ -2100,41 +2378,45 @@ const server = http.createServer(async (req, res)=>{
         let d=""; r.on("data",c=>d+=c); r.on("end",()=>{ try{ resolve(JSON.parse(d)); }catch{ resolve({ raw:d, status:r.statusCode })} });
       }).on("error", e=> resolve({ error:String(e), reachable:false })).end();
     });
-    return json(res, 200, { hub:"ok", hub_port: HUB_PORT, opencode: health, projects_root: PROJECTS_ROOT, projects: await listProjects(), root: rootCheck.stdout.slice(0,1200) });
+    // A-3: envuelto. La sonda de keepalive.sh ya NO usa esta ruta (pesada + exige token):
+    // usa GET /api/health (exento). install-su.sh sólo hace `head -c 300` de diagnóstico.
+    return json(res, 200, { ok: true, data: { hub:"ok", hub_port: HUB_PORT, opencode: health, projects_root: PROJECTS_ROOT, projects: await listProjects(), root: rootCheck.stdout.slice(0,1200) } });
   }
   if(pathname==="/api/device/shell" && req.method==="POST"){
     try{
       const raw = await readJsonBody(req, MAX_JSON_BODY);
       const { cmd, timeout, maxBuffer } = JSON.parse(raw||"{}");
       if(!cmd) return json(res, 400, { error:"cmd requerido" });
-      console.log(`[shell] ${cmd.slice(0,400)} (maxBuffer ${((maxBuffer||MAX_BUFFER)/1024/1024).toFixed(1)}MB)`);
+      if (hasShellMeta(cmd)) return badParam(res, "cmd");
+      log.info(`[shell] ${cmd.slice(0,400)} (maxBuffer ${((maxBuffer||MAX_BUFFER)/1024/1024).toFixed(1)}MB)`);
       const out = await runShell(cmd, timeout || 20000, maxBuffer || MAX_BUFFER);
-      json(res, 200, out);
+      json(res, 200, { ok: true, data: out });
     }catch(e){ json(res, 500, { error:String(e), truncated: String(e).includes("maxBuffer") }); }
     return;
   }
   if(pathname==="/api/device/launch" && req.method==="POST"){
-    try{ const raw=await readJsonBody(req); const { pkg, activity } = JSON.parse(raw||"{}"); if(!pkg) return json(res, 400, { error:"pkg requerido ej: com.bcp.bo.wallet" }); const cmd = activity ? `am start -n ${pkg}/${activity}` : `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p ${pkg} 2>&1 || monkey -p ${pkg} -c android.intent.category.LAUNCHER 1 2>&1 || cmd package resolve-activity --brief -c android.intent.category.LAUNCHER ${pkg} 2>&1`; const out = await runShell(cmd); json(res, 200, { cmd, ...out }); }catch(e){ json(res,500,{error:String(e)}); }
+    try{ const raw=await readJsonBody(req); const { pkg, activity } = JSON.parse(raw||"{}"); if(!pkg) return json(res, 400, { error:"pkg requerido ej: com.bcp.bo.wallet" }); if (hasShellMeta(String(pkg)) || (activity && hasShellMeta(String(activity)))) return badParam(res, "pkg/activity"); const cmd = activity ? `am start -n ${pkg}/${activity}` : `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p ${pkg} 2>&1 || monkey -p ${pkg} -c android.intent.category.LAUNCHER 1 2>&1 || cmd package resolve-activity --brief -c android.intent.category.LAUNCHER ${pkg} 2>&1`; const out = await runShell(cmd); json(res, 200, { ok: true, data: { cmd, ...out } }); }catch(e){ json(res,500,{error:String(e)}); }
     return;
   }
   if(pathname==="/api/device/tap" && req.method==="POST"){
-    try{ const raw=await readJsonBody(req); const { x, y } = JSON.parse(raw||"{}"); const out = await runShell(`input tap ${parseInt(x)} ${parseInt(y)}`); json(res, 200, out); }catch(e){ json(res,500,{error:String(e)}); }
+    try{ const raw=await readJsonBody(req); const { x, y } = JSON.parse(raw||"{}"); const out = await runShell(`input tap ${parseInt(x)} ${parseInt(y)}`); json(res, 200, { ok: true, data: out }); }catch(e){ json(res,500,{error:String(e)}); }
     return;
   }
   if(pathname==="/api/device/input" && req.method==="POST"){
-    try{ const raw=await readJsonBody(req); const { text } = JSON.parse(raw||"{}"); const esc = String(text||"").replace(/ /g,"%s").replace(/&/g,"\\&"); const out = await runShell(`input text ${esc}`); json(res,200,out); }catch(e){ json(res,500,{error:String(e)}); }
+    try{ const raw=await readJsonBody(req); const { text } = JSON.parse(raw||"{}"); if (text != null && hasShellMeta(String(text))) return badParam(res, "text"); const esc = String(text||"").replace(/ /g,"%s").replace(/&/g,"\\&"); const out = await runShell(`input text ${esc}`); json(res,200,{ ok: true, data: out }); }catch(e){ json(res,500,{error:String(e)}); }
     return;
   }
   if(pathname==="/api/device/key" && req.method==="POST"){
-    try{ const raw=await readJsonBody(req); const { code } = JSON.parse(raw||"{}"); const out = await runShell(`input keyevent ${parseInt(code)}`); json(res,200,out); }catch(e){ json(res,500,{error:String(e)}); }
+    try{ const raw=await readJsonBody(req); const { code } = JSON.parse(raw||"{}"); const out = await runShell(`input keyevent ${parseInt(code)}`); json(res,200,{ ok: true, data: out }); }catch(e){ json(res,500,{error:String(e)}); }
     return;
   }
   if(pathname==="/api/device/apps" && req.method==="GET"){
     const q = url.searchParams.get("q") || "";
+    if (hasShellMeta(q)) return badParam(res, "q");
     const out = await runShell(`pm list packages ${q ? `-3 | grep -i ${JSON.stringify(q)}` : ""} 2>&1 | head -n 200; pm list packages -3 2>&1 | head -n 200`);
     // parse
     const pkgs = out.stdout.split("\n").filter(l=>l.includes("package:")).map(l=>l.replace("package:","").trim()).slice(0,200);
-    return json(res, 200, { pkgs, raw: out.stdout.slice(0,4000) });
+    return json(res, 200, { ok: true, data: { pkgs, raw: out.stdout.slice(0,4000) } });
   }
   // a11y + streaming-friendly (reenvía Base64 grande sin truncar)
   if(pathname==="/api/device/a11y" && req.method==="POST"){
@@ -2144,16 +2426,18 @@ const server = http.createServer(async (req, res)=>{
       // forwarding con buffer grande: usa bytes completos
       const bodyBytes = Buffer.from(raw, "utf8");
       const fwd = await new Promise(resolve=>{
-        const pr = http.request({ hostname:"127.0.0.1", port:8766, path:"/a11y", method:"POST", headers:{"Content-Type":"application/json", "Content-Length": bodyBytes.length } }, r=>{
+        const pr = http.request({ hostname:"127.0.0.1", port:8766, path:"/a11y", method:"POST", headers:{"Content-Type":"application/json", "Content-Length": bodyBytes.length, "X-Aegis-Token": AEGIS_TOKEN } }, r=>{
           const chunks=[]; r.on("data",c=>chunks.push(c)); r.on("end",()=> resolve({ ok:true, status:r.statusCode, body: Buffer.concat(chunks).toString("utf8") }));
         });
         pr.on("error", e=> resolve({ ok:false, error:String(e) }));
         pr.write(bodyBytes); pr.end();
       });
+      // Excepción documentada: reenvío passthrough del cuerpo JSON del Companion :8766
+      // (status y body originales, sin envolver) — sólo existe el APK que lo genera.
       if(fwd.ok) return send(res, fwd.status, fwd.body, {"Content-Type":"application/json"});
       if(body.action==="dump"){
         const out = await runShell(`uiautomator dump /sdcard/window_dump.xml && cat /sdcard/window_dump.xml 2>&1 | head -n 800`, 15000, MAX_BUFFER);
-        return json(res, 200, { fallback:"uiautomator", ...out, note:"Para clicks por texto/id instala el APK Companion con AccessibilityService" });
+        return json(res, 200, { ok: true, data: { fallback:"uiautomator", ...out, note:"Para clicks por texto/id instala el APK Companion con AccessibilityService" } });
       }
       return json(res, 501, { error:"APK Companion no conectado (puerto 8766). Instala el APK para control por AccessibilityService.", requested: body, forwardError: fwd.error });
     }catch(e){ json(res,500,{error:String(e)}); }
@@ -2171,7 +2455,7 @@ const server = http.createServer(async (req, res)=>{
       return json(res, 500, { error:"screenshot vacío", stdout: out.stdout.slice(0,800), stderr: out.stderr.slice(0,800), code: out.code });
     }
     if(url.searchParams.get("raw")==="1") return send(res, 200, b64, {"Content-Type":"text/plain", "Content-Length": String(Buffer.byteLength(b64))});
-    return json(res, 200, { b64, len: b64.length, approx_bytes: Math.floor(b64.length*0.75), quality, scale, note: "b64 completo sin truncar (MAX_BUFFER 50MB). Para ahorrar tokens pasa ?quality=25&scale=0.4 y recorta cliente-side." });
+    return json(res, 200, { ok: true, data: { b64, len: b64.length, approx_bytes: Math.floor(b64.length*0.75), quality, scale, note: "b64 completo sin truncar (MAX_BUFFER 50MB). Para ahorrar tokens pasa ?quality=25&scale=0.4 y recorta cliente-side." } });
   }
   if(pathname==="/api/device/screenshot" && req.method==="POST"){
     try{
@@ -2179,7 +2463,7 @@ const server = http.createServer(async (req, res)=>{
       const opts = JSON.parse(raw||"{}");
       const out = await runShell(`nsenter -t 1 -m -- sh -c 'screencap -p 2>/dev/null | base64 -w 0 2>/dev/null || screencap -p 2>/dev/null | base64 2>/dev/null'`, 25000, MAX_BUFFER);
       const b64 = out.stdout.trim().replace(/\s/g,"");
-      return json(res, 200, { b64, len: b64.length, opts });
+      return json(res, 200, { ok: true, data: { b64, len: b64.length, opts } });
     }catch(e){ json(res,500,{error:String(e)}); }
     return;
   }
@@ -2385,7 +2669,7 @@ const server = http.createServer(async (req, res)=>{
           for (let attempt = 1; attempt <= 5; attempt++) {
             await new Promise(r2=> setTimeout(r2, 600));
             const fwd = await new Promise(resolve=>{
-              const pr = http.request({ hostname:"127.0.0.1", port:8766, path:"/a11y", method:"POST", headers:{"Content-Type":"application/json"} }, rr=>{
+              const pr = http.request({ hostname:"127.0.0.1", port:8766, path:"/a11y", method:"POST", headers:{"Content-Type":"application/json", "X-Aegis-Token": AEGIS_TOKEN} }, rr=>{
                 const c=[]; rr.on("data",x=> c.push(x)); rr.on("end",()=> resolve({ ok:true, status: rr.statusCode, body: Buffer.concat(c).toString("utf8") }));
               });
               pr.on("error", e=> resolve({ ok:false, error:String(e) }));
@@ -2453,19 +2737,19 @@ const server = http.createServer(async (req, res)=>{
         if(direct.action==="whatsapp_send_prompt" || (direct.action==="whatsapp_send" && !direct.slots.text)){
           // responde disambiguation inmediata sin llamar execute
           const execRes = await executeAssistantAction(direct.action, direct.slots);
-          if(execRes.type==="disambiguation") return json(res, 200, execRes);
-          return json(res, 200, direct);
+          if(execRes.type==="disambiguation") return json(res, 200, { ok: true, data: execRes });
+          return json(res, 200, { ok: true, data: direct });
         }
         // si launch tiene app muy genérica, verificar si necesita disambiguation
         if(direct.action==="launch"){
           const check = await executeAssistantAction(direct.action, direct.slots);
-          if(check.type==="disambiguation" && (check.options||[]).length>0) return json(res, 200, check);
-          return json(res, 200, { ...direct, resolved: check });
+          if(check.type==="disambiguation" && (check.options||[]).length>0) return json(res, 200, { ok: true, data: check });
+          return json(res, 200, { ok: true, data: { ...direct, resolved: check } });
         }
-        return json(res, 200, direct);
+        return json(res, 200, { ok: true, data: direct });
       }
       // ambiguo: pide al LLM que clasifique (si opencode está sano, no gastamos tokens aquí — devolvemos estructura para que frontend llame a LLM)
-      return json(res, 200, { action:"llm_classify", slots:{ text: String(text).slice(0,600) }, hint: "Texto ambiguo — envíalo a opencode como mensaje con contexto assistant_mode. Si el LLM devuelve JSON {action, slots}, reenvía a /api/assistant/execute.", raw: text, lang: lang||"es" });
+      return json(res, 200, { ok: true, data: { action:"llm_classify", slots:{ text: String(text).slice(0,600) }, hint: "Texto ambiguo — envíalo a opencode como mensaje con contexto assistant_mode. Si el LLM devuelve JSON {action, slots}, reenvía a /api/assistant/execute.", raw: text, lang: lang||"es" } });
     }catch(e){ return json(res, 500, { error:String(e).slice(0,600) }); }
   }
   if(pathname==="/api/assistant/execute" && req.method==="POST"){
@@ -2474,13 +2758,21 @@ const server = http.createServer(async (req, res)=>{
       const { action, slots, options, selectedIndex, forcePhone } = JSON.parse(raw||"{}");
       if(!action) return json(res, 400, { error:"action requerido" });
       // chip en progreso: log + header para que pill lo detecte
-      console.log(`[assistant] execute ${action} ${JSON.stringify(slots||{}).slice(0,300)}`);
+      log.info(`[assistant] execute ${action} ${JSON.stringify(slots||{}).slice(0,300)}`);
       res.setHeader("X-Assistant-Action", action);
       const r = await executeAssistantAction(action, slots||{}, { selectedIndex: selectedIndex ?? options?.selectedIndex, forcePhone: forcePhone ?? !!slots?.phone });
       // si es disambiguation, responde 200 con type para que frontend renderice tarjetas
       const code = r.ok===false && r.type==="disambiguation" ? 200 : (r.ok ? 200 : 400);
-      return json(res, code, r);
+      // A-3: 2xx SIEMPRE {ok:true,data:r} (aunque r traiga ok:false en disambiguation);
+      // 4xx deja pasar r con ok:false y normalizeEnvelope convierte error -> {code,message}.
+      if (code >= 400) return json(res, code, r);
+      return json(res, 200, { ok: true, data: r });
     }catch(e){ return json(res, 500, { error:String(e).slice(0,800) }); }
+  }
+
+  // /api/* sin ruta conocida -> 404 JSON (nunca el fallback SPA 200 text/html)
+  if (isApi) {
+    return json(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "unknown api route", path: pathname } });
   }
 
   // 3) static
@@ -2496,32 +2788,95 @@ const server = http.createServer(async (req, res)=>{
   const ext = path.extname(fp).toLowerCase();
   const mime = MIME[ext] || "application/octet-stream";
   // simple etag/cache disable for dev
-  res.writeHead(200, {"Content-Type": mime, "Access-Control-Allow-Origin":"*", "Cache-Control":"no-cache"});
-  fs.createReadStream(fp).pipe(res);
+  res.writeHead(200, withCors(res, {"Content-Type": mime, "Cache-Control":"no-cache"}));
+  // A-4: read stream sin manejador de 'error' => uncaughtException + petición
+  // colgada si el fichero desaparece/falla entre statSync y la lectura.
+  const staticStream = fs.createReadStream(fp);
+  staticStream.on("error", (e) => {
+    log.error(`[hub] static read err ${fp}`, { err: e.message });
+    if (!res.writableEnded) { try { res.end(); } catch (_) {} }
+  });
+  staticStream.pipe(res);
+}
+
+// A-4 (BACKEND-BUG-09/10): red de seguridad FINAL del dispatcher. Cualquier rama
+// que escape a su try/catch interno termina aquí y SIEMPRE cierra la respuesta:
+// 500 envelope si aún no se enviaron headers; si ya se enviaron, fin de stream
+// (nunca doble writeHead -> ERR_HTTP_HEADERS_SENT, nunca petición colgada).
+function respondUnhandledRequestError(req, res, e) {
+  const msg = String((e && (e.message || e.stack)) || e).slice(0, 800);
+  log.error(`[hub] unhandled request error ${req && req.method} ${((req && req.url) || "").slice(0, 140)}`, { err: (e && e.stack) || String(e) });
+  if (res.headersSent) {
+    if (!res.writableEnded) { try { res.end(); } catch (_) {} }
+    return;
+  }
+  try {
+    json(res, 500, { ok: false, error: { code: "INTERNAL_ERROR", message: msg } });
+  } catch (_) {
+    try {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(`{"ok":false,"error":{"code":"INTERNAL_ERROR","message":${JSON.stringify(msg)}}}`);
+    } catch (__) {}
+  }
+}
+
+const server = http.createServer((req, res) => {
+  handleRequest(req, res).catch((err) => respondUnhandledRequestError(req, res, err));
 });
 
 server.on('error', e => {
   if (String(e.code) === 'EADDRINUSE') {
-    console.error(`[hub] puerto ${HUB_PORT} ocupado — deja el existente y salgo con 0`);
+    log.error(`[hub] puerto ${HUB_PORT} ocupado — deja el existente y salgo con 0`);
     process.exit(0);
   }
-  console.error('[hub] server error', e);
+  log.error('[hub] server error', { err: (e && e.stack) || String(e) });
 });
 server.on('clientError', (err, socket) => {
-  console.error('[hub] clientError', String(err).slice(0,300));
+  log.warn('[hub] clientError', { err: String(err).slice(0,300) });
   try { socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'); } catch (_) {}
 });
 server.keepAliveTimeout = 125000;
 server.headersTimeout = 130000;
 server.requestTimeout = 135000;
 server.maxHeadersCount = 100;
-server.listen(HUB_PORT, "0.0.0.0", async ()=>{
-  console.log(`\n[opencode-companion] hub listening http://0.0.0.0:${HUB_PORT}`);
-  console.log(`  local  : http://127.0.0.1:${HUB_PORT}`);
-  console.log(`  proxy  : /opencode/* -> http://${OPENCODE_HOST}:${OPENCODE_PORT}`);
-  console.log(`  api    : /api/status  /api/device/*`);
-  console.log(`  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)`);
-  console.log(`  pid    : ${process.pid}  node ${process.version}  keepAlive 125s (multimodal streaming)`);
+server.listen(HUB_PORT, "127.0.0.1", async ()=>{
+  log.info(`[hub] listening http://127.0.0.1:${HUB_PORT} (loopback only)`);
+  log.info(`  local  : http://127.0.0.1:${HUB_PORT}`);
+  log.info(`  proxy  : /opencode/* -> http://${OPENCODE_HOST}:${OPENCODE_PORT}`);
+  log.info(`  api    : /api/status  /api/device/*`);
+  log.info(`  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)`);
+  log.info(`  pid    : ${process.pid}  node ${process.version}  keepAlive 125s (multimodal streaming)`);
+  // A-2: arranque del MOTOR (jobScheduler + eventBus) — con try/catch para que
+  // un fallo del motor NUNCA impida el arranque del hub.
+  try {
+    // eventBus: logger real como primer suscriptor (publish difunde también el
+    // nombre base del evento => recibe eventos de todos los proyectos).
+    const motorLog = createLogger("motor");
+    for (const evt of Object.values(EVENTS)) {
+      eventBus.on(evt, (data) => {
+        try { motorLog.info(`event ${evt}`, (data && typeof data === "object") ? data : { data }); } catch (_) {}
+      });
+    }
+    // jobScheduler: job de mantenimiento real (barre meta obsoleto de companion)
+    // y arranque del scheduler. Sin esto /api/jobs y start() no tendrían efecto.
+    if (typeof jobScheduler.registerJob === "function" && !jobScheduler.jobs.has("companion-meta-sweep")) {
+      jobScheduler.registerJob("companion-meta-sweep", 60000, () => { clearStaleCompanionMetaIfNeeded(); });
+    }
+    if (typeof jobScheduler.start === "function") jobScheduler.start();
+    log.info(`  motor  : jobScheduler started (${jobScheduler.jobs.size} jobs) + eventBus logger suscrito a ${Object.values(EVENTS).length} eventos`);
+  } catch (e) {
+    log.error(`[hub] motor startup error: ${e.message}`);
+  }
+  // A-7: arranque estructurado en UNA sola línea (puerto, bind, routers montados, jobs activos)
+  log.info("hub startup", {
+    port: HUB_PORT,
+    bind: "127.0.0.1",
+    routers: ["skills", "projects", "jobs", "agents", "workflows", "content"],
+    jobs: [...jobScheduler.jobs.keys()],
+    proxy: `${OPENCODE_HOST}:${OPENCODE_PORT}`,
+    pid: process.pid,
+    node: process.version
+  });
   // Non-destructive startup probe — spec (1): detect existing serve on startup without launching
   // If health already true, we adopt it as termux-native (or companion-owned if prior meta exists) and do NOT auto-launch.
   try {
@@ -2530,20 +2885,19 @@ server.listen(HUB_PORT, "0.0.0.0", async ()=>{
     const pids = scanServePids();
     const ownership = classifyOwnership(h, pids);
     if (h.healthy) {
-      console.log(`  opencode: existing ${ownership} session detected — health OK ${JSON.stringify(h).slice(0,120)} pids=${pids.join(",")||"unknown"} — not launching (non-destructive)`);
+      log.info(`  opencode: existing ${ownership} session detected — health OK ${JSON.stringify(h).slice(0,120)} pids=${pids.join(",")||"unknown"} — not launching (non-destructive)`);
     } else {
-      console.log(`  opencode: no session (ownership none) — not auto-launching on startup; use POST /api/system/start when none`);
+      log.info(`  opencode: no session (ownership none) — not auto-launching on startup; use POST /api/system/start when none`);
     }
-    console.log(`  sessionOwnership: ${ownership} (hub startup)`);
+    log.info(`  sessionOwnership: ${ownership} (hub startup)`);
   } catch (e) {
-    console.log(`  opencode: startup probe error ${e.message}`);
+    log.error(`  opencode: startup probe error ${e.message}`);
   }
 
   // print LAN IPs via shell (nsenter-aware)
   runShell(`nsenter -t 1 -m -- ip addr 2>&1 | grep -oE '192\\.168\\.[0-9]+\\.[0-9]+' | head -5; nsenter -t 1 -m -- getprop 2>&1 | grep -oE '192\\.168\\.[0-9]+\\.[0-9]+' | head -5; ip addr 2>&1 | grep -oE '192\\.168\\.[0-9]+\\.[0-9]+' | head -5; getprop 2>&1 | grep -oE '192\\.168\\.[0-9]+\\.[0-9]+' | head -5`).then(o=>{
     const ips = [...new Set((o.stdout.match(/192\.168\.\d+\.\d+/g) || []))];
-    if(ips.length) console.log(`  LAN    : ${ips.map(ip=>`http://${ip}:${HUB_PORT}`).join("  |  ")}`);
-    else console.log(`  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)`);
-    console.log("");
+    if(ips.length) log.info(`  LAN    : inaccesible — el hub solo escucha en 127.0.0.1 (IPs detectadas: ${ips.join(", ")})`);
+    else log.info(`  LAN    : inaccesible — el hub solo escucha en 127.0.0.1`);
   });
 });

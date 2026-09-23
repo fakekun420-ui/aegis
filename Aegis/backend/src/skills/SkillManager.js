@@ -6,6 +6,19 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { atomicWriteFileSync, atomicReadFileSync } from "../core/storage.js";
 
+// Valida el skillId ANTES de interpolarlo en sh (npm install|uninstall -g <id>)
+// Evita metacaracteres de shell, espacios, path traversal ("..") y longitudes abusivas.
+const SKILL_ID_RE = /^[a-z0-9@][a-z0-9@/._-]*$/;
+function assertValidSkillId(skillId) {
+  const id = String(skillId ?? "");
+  if (!id || id.length > 128 || id.includes("..") || !SKILL_ID_RE.test(id)) {
+    throw new Error(
+      `invalid skillId "${id.slice(0, 80)}" — must match ^[a-z0-9@][a-z0-9@/._-]*$, max 128 chars, no ".."`
+    );
+  }
+  return id;
+}
+
 export class SkillManager {
   listInstalled() {
     const skills = [];
@@ -29,8 +42,28 @@ export class SkillManager {
     return skills;
   }
 
+  // A-3: lectura honesta de disco para el contrato SkillItem (Models.kt).
+  // id/name desde lo REALMENTE instalado; version/description/enabled desde el
+  // config JSON del skill si existe. `enabled` default true cuando el config no
+  // trae el flag (documentado en FRONTEND_CONTRACT.md — no hay estado real de "on/off").
+  listInstalledDetailed() {
+    return this.listInstalled().map(id => {
+      let cfg = {};
+      try { cfg = this.getConfig(id) || {}; } catch (_) {}
+      return {
+        id,
+        name: typeof cfg.name === "string" && cfg.name ? cfg.name : id,
+        version: typeof cfg.version === "string" ? cfg.version : null,
+        description: typeof cfg.description === "string" && cfg.description ? cfg.description : null,
+        installed: true,
+        enabled: typeof cfg.enabled === "boolean" ? cfg.enabled : true
+      };
+    });
+  }
+
   install(skillId) {
-    const cmd = `npm install -g ${skillId}`;
+    const id = assertValidSkillId(skillId);
+    const cmd = `npm install -g ${id}`;
     const p = spawn("sh", ["-c", cmd], { env: { ...process.env, HOME: "/root" } });
     
     return {
@@ -46,7 +79,10 @@ export class SkillManager {
   }
 
   uninstall(skillId) {
-    const cmd = `npm uninstall -g ${skillId}`;
+    // Devuelve (no lanza) la promesa rechazada: skillsRoutes.js sólo captura errores dentro de .catch()
+    let id;
+    try { id = assertValidSkillId(skillId); } catch (e) { return Promise.reject(e); }
+    const cmd = `npm uninstall -g ${id}`;
     return new Promise((resolve, reject) => {
       const p = spawn("sh", ["-c", cmd], { env: { ...process.env, HOME: "/root" } });
       p.on("close", code => {

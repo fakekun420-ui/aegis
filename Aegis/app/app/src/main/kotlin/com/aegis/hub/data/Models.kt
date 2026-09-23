@@ -302,3 +302,51 @@ data class JobsResponse(val ok: Boolean, val data: List<JobItem>?)
 data class LogsResponse(val ok: Boolean, val data: List<String>?)
 data class MemoryResponse(val ok: Boolean, val data: MemoryData?)
 data class SkillConfigResponse(val ok: Boolean, val data: Map<String, Any>?)
+
+// ---- F1: Bootstrap / asistente de configuración inicial (/api/bootstrap/*) ----
+// Parser: Gson (ApiClient) — case-sensitive. Los nombres de las constantes coinciden
+// EXACTO con los strings del contrato ("idle", "pending", "none", ...); NO se usa
+// @Json (Moshi/kotlinx) porque el proyecto es Gson + @SerializedName.
+// Campos que el contrato envía como null (error, currentStepId, startedAt) van
+// nullable para que el parseo no rompa; los helpers cubren valores inesperados
+// sin NPE (mismo precedente que MessageInfo.deliveryStatus).
+enum class BootstrapPhase { idle, running, paused, failed, done }
+enum class BootstrapStepStatus { pending, running, done, failed, skipped }
+enum class BootstrapRollback { none, pending, done, failed }
+
+data class BootstrapStep(
+    val id: String,
+    val title: String,
+    val status: BootstrapStepStatus? = null,
+    val rollback: BootstrapRollback? = null,
+    val progress: Int? = null,
+    val detail: String? = null,
+    val error: String? = null
+) {
+    // Status desconocido/null del backend → asumido pendiente (nunca crashea)
+    val statusOrPending: BootstrapStepStatus get() = status ?: BootstrapStepStatus.pending
+}
+
+data class BootstrapState(
+    val phase: BootstrapPhase? = null,
+    val currentStepId: String? = null,
+    val startedAt: String? = null,
+    val updatedAt: String? = null,
+    val lastError: String? = null,
+    val steps: List<BootstrapStep>? = null
+) {
+    val phaseOrIdle: BootstrapPhase get() = phase ?: BootstrapPhase.idle
+    val stepList: List<BootstrapStep> get() = steps ?: emptyList()
+}
+
+// Envelope de error del hub: {ok:false, error:{code,message}} (server.js)
+data class BootstrapError(val code: String? = null, val message: String? = null)
+
+// GET /api/bootstrap/state → {ok, data:{phase,currentStepId,...,steps:[...]}}
+data class BootstrapResponse(val ok: Boolean, val data: BootstrapState?, val error: BootstrapError? = null)
+
+// POST /api/bootstrap/run | /step/{id}/retry | /cancel → 200/202 {ok, data:{phase}}
+data class BootstrapActionData(val phase: BootstrapPhase? = null)
+data class BootstrapActionResponse(val ok: Boolean, val data: BootstrapActionData?, val error: BootstrapError? = null)
+
+data class BootstrapRunRequest(val resume: Boolean)

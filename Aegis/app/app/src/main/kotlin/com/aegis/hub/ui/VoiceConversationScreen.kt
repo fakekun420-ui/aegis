@@ -45,6 +45,13 @@ fun VoiceConversationScreen(
 
     LaunchedEffect(sessionId) { vm.load(sessionId) }
 
+    // BUG-15 (wake word): esta pantalla ES modo conversación (duplex). Se informa a la
+    // MainActivity al entrar para que shouldWakeListen() tenga un origen real (antes
+    // nadie llamaba a onVoiceModeChanged() en código nativo y devolvía siempre false),
+    // y al salir se notifica false para detener el listener de wake word.
+    LaunchedEffect(Unit) { resolveMainActivity(context)?.onVoiceModeChanged(true) }
+    DisposableEffect(Unit) { onDispose { resolveMainActivity(context)?.onVoiceModeChanged(false) } }
+
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     var ttsQueue by remember { mutableStateOf<List<String>>(emptyList()) }
     var speaking by remember { mutableStateOf(false) }
@@ -239,4 +246,17 @@ fun VoiceConversationScreen(
             }
         }
     }
+}
+
+/**
+ * A-5 (BUG-15): resuelve la MainActivity anfitriona atravesando los ContextWrapper,
+ * para notificarle el cambio de modo de voz (onVoiceModeChanged) desde Compose.
+ */
+private fun resolveMainActivity(context: android.content.Context): com.aegis.hub.MainActivity? {
+    var ctx: android.content.Context? = context
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is com.aegis.hub.MainActivity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

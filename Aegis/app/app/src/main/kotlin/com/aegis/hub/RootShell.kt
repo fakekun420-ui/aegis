@@ -6,6 +6,13 @@ import java.io.InputStreamReader
 object RootShell {
     data class Result(val code:Int, val stdout:String, val stderr:String)
 
+    /**
+     * Escapa un argumento para sh con comillas simples: dentro de '...' todo es literal,
+     * por lo que neutraliza `;`, `|`, `&`, `<`, `>`, backticks, `$`, `\n` y `\`.
+     * El único carácter especial es la comilla simple, que se cierra y reabre con '\''.
+     */
+    fun shQuote(arg: String): String = "'" + arg.replace("'", "'\\''") + "'"
+
     fun exec(cmd: String, timeoutMs: Long = 15000): Result {
         // intenta su -c, si falla sh -c
         val shells = listOf(arrayOf("su","-c", cmd), arrayOf("sh","-c", cmd))
@@ -38,7 +45,9 @@ object RootShell {
     fun tap(x:Int, y:Int): Result = exec("input tap $x $y")
     fun keyEvent(code:Int): Result = exec("input keyevent $code")
     fun inputText(text:String): Result {
-        val esc = text.replace(" ", "%s").replace("&","\\&").replace("\"","\\\"")
-        return exec("input text \"$esc\"")
+        // %s = espacio para `input text`; shQuote (comillas simples) hace literal cualquier
+        // metacarácter: `;`, `|`, `&`, `<`, `>`, backticks, `$`, salto de línea y `\`.
+        val esc = text.replace(" ", "%s")
+        return exec("input text " + shQuote(esc))
     }
 }

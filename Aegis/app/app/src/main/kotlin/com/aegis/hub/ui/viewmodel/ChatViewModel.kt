@@ -62,6 +62,13 @@ class ChatViewModel : ViewModel() {
 
     private var pollingJob: Job? = null
 
+    // FASE A-5 (anti doble envío): clave del envío actualmente en vuelo
+    // ("proveedor|sesión|texto|nº archivos"). Si llega un segundo click o una
+    // reentrada con el MISMO contenido antes de que termine el envío actual,
+    // se ignora para no reenviar el mensaje final dos veces. Se limpia en el
+    // finally del envío y en el retorno temprano de error.
+    private var inFlightSendKey: String? = null
+
     fun setSessionTitle(title: String?) {
         if (!title.isNullOrBlank() && !isTechnicalTitle(title)) {
             _sessionTitle.value = title
@@ -203,6 +210,12 @@ class ChatViewModel : ViewModel() {
         val provider = (explicitProvider ?: _selectedProvider.value).lowercase().trim().ifBlank { "antigravity" }
         val tempMsgId = "local_${System.currentTimeMillis()}"
 
+        // FASE A-5: guarda anti doble envío — un segundo click/reentrada con el mismo
+        // mensaje mientras sigue en vuelo no debe reenviarlo (ver inFlightSendKey).
+        val sendKey = "$provider|${sessionId.trim()}|${text.trim()}|${files.size}"
+        if (sendKey == inFlightSendKey) return
+        inFlightSendKey = sendKey
+
         if (text.isNotBlank() && (_sessionTitle.value.isNullOrBlank() || isTechnicalTitle(_sessionTitle.value))) {
             val clean = text.replace("\n", " ").trim()
             _sessionTitle.value = if (clean.length > 30) clean.take(30).trim() + "…" else clean
@@ -238,6 +251,7 @@ class ChatViewModel : ViewModel() {
                     if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
                 }
                 _loading.value = false
+                inFlightSendKey = null // A-5: libera la guarda anti doble envío en el retorno temprano
                 return@launch
             }
             _currentSessionId.value = targetSessionId
@@ -296,6 +310,11 @@ class ChatViewModel : ViewModel() {
                 val bodyJson = com.google.gson.Gson().toJson(sendReq)
 
                 var sseSuccess = false
+                // FASE A-5: true cuando el POST del streaming ya obtuvo respuesta HTTP del
+                // servidor. En ese caso la vía clásica de respaldo NO debe reenviar el
+                // mensaje final (antes: una excepción en L402 reenviaba en L410 = doble envío).
+                var sseRequestAccepted = false
+                var sseResp: okhttp3.Response? = null
                 _streamingText.value = ""
                 _streamingTools.value = emptyList()
 
@@ -310,9 +329,11 @@ class ChatViewModel : ViewModel() {
                         .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
                         .build()
 
-                    val sseResp = withContext(Dispatchers.IO) { ApiClient.rawOkHttp.newCall(streamReq).execute() }
-                    if (sseResp.isSuccessful && sseResp.body != null) {
-                        val reader = sseResp.body!!.charStream().buffered()
+                    sseResp = withContext(Dispatchers.IO) { ApiClient.rawOkHttp.newCall(streamReq).execute() }
+                    val resp = sseResp
+                    sseRequestAccepted = resp?.isSuccessful == true
+                    if (resp != null && resp.isSuccessful && resp.body != null) {
+                        val reader = resp.body!!.charStream().buffered()
                         val sb = java.lang.StringBuilder()
                         var line: String? = null
                         while (withContext(Dispatchers.IO) { reader.readLine() }.also { line = it } != null) {
@@ -402,11 +423,18 @@ class ChatViewModel : ViewModel() {
                 } catch (_: Exception) {
                     sseSuccess = false
                 } finally {
+                    // FASE A-5: cerrar SIEMPRE la respuesta SSE. Sin esto, el ResponseBody
+                    // (y su socket/file descriptor de OkHttp) queda abierto y se fuga en
+                    // cada envío con streaming.
+                    try { sseResp?.close() } catch (_: Exception) {}
                     _streamingText.value = null
                     _streamingTools.value = emptyList()
                 }
 
-                if (!sseSuccess && !messageDelivered) {
+                // A-5: solo se reenvía por la vía clásica si el streaming NUNCA llegó a
+                // entregar la petición al servidor (2xx) y además no hay mensaje final.
+                // Si el POST del streaming ya fue aceptado, reenviar duplicaba el mensaje.
+                if (!sseSuccess && !messageDelivered && !sseRequestAccepted) {
                     val responseMsg = api.sendMessage(
                         sessionId = targetSessionId,
                         body = sendReq,
@@ -464,6 +492,7 @@ class ChatViewModel : ViewModel() {
                 _streamingText.value = null
                 _loading.value = false
                 pollingJob?.cancel()
+                inFlightSendKey = null // A-5: libera la guarda anti doble envío al terminar
             }
         }
     }

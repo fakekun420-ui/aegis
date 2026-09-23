@@ -10,6 +10,9 @@ class AegisEventBus extends EventEmitter {
     const topic = projectId ? `${projectId}:${event}` : event;
     console.log(`[EventBus] ${new Date().toISOString()} | ${topic}`);
     this.emit(topic, data);
+    // A-2: difusión global — emite también el nombre base del evento para que los
+    // suscriptores globales (logger del hub) reciban eventos de TODOS los proyectos.
+    if (topic !== event) this.emit(event, data);
   }
   
   subscribe(projectId, event, handler) {

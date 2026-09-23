@@ -1,7 +1,7 @@
 # FRONTEND CONTRACT: OpenCode & Antigravity Companion
 
 **Version:** 1.2.0  
-**Target Clients:** Android App (`com.opencode.companion`, Jetpack Compose Material 3), Web Clients  
+**Target Clients:** Android App (`com.aegis.hub`, Jetpack Compose Material 3), Web Clients  
 **Target Backends:** Local Hub (`server.js`, port 8765), OpenCode Daemon (port 4096), Antigravity CLI (`agy`)  
 **Status:** Canonical & Strictly Typed  
 
@@ -143,7 +143,7 @@ Every request originating from the frontend MUST support or include the followin
 
 ## 4. Strict Type Definitions (Kotlin & TypeScript)
 
-### 4.1. Kotlin Models (`com.opencode.companion.data.Models.kt`)
+### 4.1. Kotlin Models (`com.aegis.hub.data.Models.kt`)
 
 ```kotlin
 enum class MessageDeliveryStatus {

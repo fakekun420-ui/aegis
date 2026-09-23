@@ -1,11 +1,12 @@
 {
-  "name": "opencode-companion",
+  "name": "aegis-hub",
   "version": "1.0.0",
   "description": "Hub web + voz + bridge ROOT para opencode en POCO F3 / crDroid 15. Base para APK Companion.",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js --port 8765 --opencode-port 4096"
+    "dev": "node server.js --port 8765 --opencode-port 4096",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {}
 }
