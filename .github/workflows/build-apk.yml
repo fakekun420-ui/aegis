@@ -2,8 +2,8 @@ name: Build Companion APK
 on:
   push:
     paths:
-      - 'opencode-companion-apk/**'
-      - 'opencode-companion/server.js'
+      - 'Aegis/app/**'
+      - 'Aegis/backend/server.js'
       - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: opencode-companion-apk
+        working-directory: Aegis/app
     steps:
       - uses: actions/checkout@v4
 
@@ -62,9 +62,9 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: opencode-companion-apk
+          name: aegis-apk
           path: |
-            opencode-companion-apk/app/build/outputs/apk/release/*.apk
+            Aegis/app/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
   smoke-test:
@@ -73,7 +73,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: opencode-companion-apk
+          name: aegis-apk
           path: /tmp/apk
 
       - name: Smoke test — size 3MB–15MB & cert SHA verification
