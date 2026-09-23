@@ -166,19 +166,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 // unique root marker (/proc/PID/root/lib/ld-linux-aarch64.so.1 = ubuntu
                 // chroot with node+loader). Launch keepalive INSIDE the chroot so node,
                 // loader, server.js and ports all resolve in one namespace. No nsenter.
-                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /sdcard/projects/Aegis/backend/find-ubuntu.sh"))
-                val stageErr = try { stage.errorStream.bufferedReader().readText() } catch (e: Exception) { "err: " + e.message }
-                android.util.Log.e("OpenCodeBoot", "find-ubuntu err: $stageErr")
-                val ubuntuPid = try { stage.inputStream.bufferedReader().readText().trim().lines().firstOrNull { it.isNotBlank() }?.trim() } catch (_: Exception) { null }
+                val stageResult = RootShell.exec("sh /sdcard/projects/Aegis/backend/find-ubuntu.sh")
+                android.util.Log.i("OpenCodeBoot", "find-ubuntu exit=${stageResult.code} out=${stageResult.stdout} err=${stageResult.stderr}")
+                val ubuntuPid = stageResult.stdout.trim().lines().firstOrNull { it.isNotBlank() }?.trim()
                 android.util.Log.i("OpenCodeBoot", "keepalive ubuntuPid=$ubuntuPid")
-                val direct = if (!ubuntuPid.isNullOrBlank()) arrayOf("su", "-c", "chroot /proc/" + ubuntuPid + "/root /bin/sh -c '/usr/bin/nohup /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'") else null
-                if (direct == null) { execExit = 97; android.util.Log.e("OpenCodeBoot", "keepalive: no ubuntu chroot anchor found") } else {
-                val proc = Runtime.getRuntime().exec(direct)
-                execExit = proc.waitFor()
-                val outText = try { proc.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
-                val errText = try { proc.errorStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
-                android.util.Log.i("OpenCodeBoot", "keepalive exec exit=$execExit out=${outText.take(120)} err=${errText.take(300)}")
-                if (!outText.contains("launched")) execExit = 98
+                if (ubuntuPid.isNullOrBlank()) { 
+                    execExit = 97
+                    android.util.Log.e("OpenCodeBoot", "keepalive: no ubuntu chroot anchor found") 
+                } else {
+                    val directCmd = "chroot /proc/$ubuntuPid/root /bin/sh -c '/usr/bin/nohup /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'"
+                    val result = RootShell.exec(directCmd)
+                    execExit = result.code
+                    android.util.Log.i("OpenCodeBoot", "keepalive exec exit=$execExit out=${result.stdout.take(120)} err=${result.stderr.take(300)}")
+                    if (!result.stdout.contains("launched")) execExit = 98
                 }
             } catch (e: Exception) {
                 android.util.Log.e("OpenCodeBoot", "keepalive exec exception", e)
