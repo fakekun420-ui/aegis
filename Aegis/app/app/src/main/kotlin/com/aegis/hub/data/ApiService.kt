@@ -148,4 +148,16 @@ interface ApiService {
 
     @POST("api/bootstrap/cancel")
     suspend fun cancelBootstrap(): Response<BootstrapActionResponse>
+
+    // F3 — Verificación final, smoke test de la IA y guía de auth (contrato /api/setup/*)
+    // Los POST sin body siguen el patrón de retryBootstrapStep()/cancelBootstrap()
+    // (Retrofit no exige @Body cuando el hub no lo recibe).
+    @GET("api/setup/final-check")
+    suspend fun getFinalCheck(): Response<FinalCheckResponse>
+
+    @POST("api/setup/smoke-test")
+    suspend fun runSmokeTest(): Response<SmokeTestResponse>
+
+    @POST("api/setup/auth/antigravity")
+    suspend fun runAuthGuide(): Response<AuthGuideResponse>
 }

@@ -3,11 +3,14 @@ package com.aegis.hub.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.ApiClient
+import com.aegis.hub.data.AuthGuideResponse
 import com.aegis.hub.data.BootstrapActionResponse
 import com.aegis.hub.data.BootstrapError
 import com.aegis.hub.data.BootstrapPhase
 import com.aegis.hub.data.BootstrapRunRequest
 import com.aegis.hub.data.BootstrapState
+import com.aegis.hub.data.FinalCheckResponse
+import com.aegis.hub.data.SetupCheckStatus
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -24,7 +27,17 @@ data class BootstrapUiState(
     val state: BootstrapState? = null,
     val loading: Boolean = false,
     val actionError: String? = null,
-    val hubReachable: Boolean = true
+    val hubReachable: Boolean = true,
+    // ---- F3: verificación final + smoke test + guía de auth (/api/setup/*) ----
+    val finalCheck: FinalCheckResponse? = null,
+    val finalCheckLoading: Boolean = false,
+    val smokeReply: String? = null,
+    val smokeLoading: Boolean = false,
+    // Adición F3: error propio del smoke test (se muestra en la tarjeta, no en la cabecera)
+    val smokeError: String? = null,
+    val authGuide: AuthGuideResponse? = null,
+    // Adición F3: texto "Obteniendo el comando…" mientras carga guideAuth()
+    val authGuideLoading: Boolean = false
 )
 
 /**
@@ -37,6 +50,10 @@ data class BootstrapUiState(
  * F2: friendlyError() (top-level, al final de este archivo) traduce los códigos
  * crudos del motor de instalación a mensajes guía; el raw sigue visible en
  * SetupWizardScreen (cabecera y card del paso).
+ * F3: runFinalCheck()/runSmokeTest()/guideAuth() contra /api/setup/*. Sus fallos
+ * quedan LOCALES (actionError o smokeError) sin alternar hubReachable, para que
+ * la tarjeta "Verificación final" siga visible con su error; el bloqueo
+ * "Esperando el hub…" queda reservado al polling de estado (fetchState).
  */
 class BootstrapViewModel : ViewModel() {
 
@@ -46,6 +63,10 @@ class BootstrapViewModel : ViewModel() {
     private val gson = Gson()
     private var pollJob: Job? = null
     private var hubRetryJob: Job? = null
+    // F3: cargas de la verificación final / smoke test / guía de auth
+    private var finalCheckJob: Job? = null
+    private var smokeJob: Job? = null
+    private var authGuideJob: Job? = null
 
     /** true → actionError procede de una acción del usuario: una carga exitosa no lo limpia. */
     private var pendingActionError = false
@@ -54,10 +75,13 @@ class BootstrapViewModel : ViewModel() {
         refresh()
     }
 
-    // Se detiene el polling y el reintento suave al destruir el ViewModel
+    // Se detiene el polling, el reintento suave y las cargas F3 al destruir el ViewModel
     override fun onCleared() {
         pollJob?.cancel()
         hubRetryJob?.cancel()
+        finalCheckJob?.cancel()
+        smokeJob?.cancel()
+        authGuideJob?.cancel()
         super.onCleared()
     }
 
@@ -175,11 +199,161 @@ class BootstrapViewModel : ViewModel() {
         }
     }
 
+    // ---- F3: verificación final, smoke test y guía de auth (/api/setup/*) ----
+
+    /**
+     * F3 — GET /api/setup/final-check → comprobaciones de la verificación final.
+     * Éxito → finalCheck (ready + checks); si el check "antigravity" queda en
+     * fail/manual se carga además la guía de comandos (guideAuth()). Cualquier
+     * error queda LOCAL en actionError con la guía friendlyError() sin perder el
+     * raw (hubReachable NO se alterna: la tarjeta permanece visible).
+     */
+    fun runFinalCheck() {
+        finalCheckJob?.cancel()
+        finalCheckJob = viewModelScope.launch {
+            pendingActionError = false
+            _ui.value = _ui.value.copy(finalCheckLoading = true, actionError = null)
+            try {
+                val resp = ApiClient.service.getFinalCheck()
+                val body = resp.body()
+                val data = body?.data
+                when {
+                    resp.isSuccessful && body != null && data != null -> {
+                        _ui.value = _ui.value.copy(finalCheck = body, finalCheckLoading = false)
+                        val agy = data.checkList.firstOrNull { it.id == "antigravity" }
+                        if (agy != null && agy.statusOrManual != SetupCheckStatus.ok) guideAuth()
+                    }
+                    resp.isSuccessful -> {
+                        pendingActionError = true
+                        _ui.value = _ui.value.copy(
+                            finalCheckLoading = false,
+                            actionError = "El hub no devolvió la verificación (respuesta vacía)"
+                        )
+                    }
+                    else -> {
+                        val err = parseErrorBody(resp)
+                        pendingActionError = true
+                        _ui.value = _ui.value.copy(
+                            finalCheckLoading = false,
+                            actionError = setupErrorMessage(err, resp.code())
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                pendingActionError = true
+                _ui.value = _ui.value.copy(
+                    finalCheckLoading = false,
+                    actionError = "Sin conexión con el hub (127.0.0.1:8765): ${e.message ?: "error de red"}"
+                )
+            }
+        }
+    }
+
+    /**
+     * F3 — POST /api/setup/smoke-test (sin body, patrón de cancelBootstrap()).
+     * Éxito → smokeReply (la UI muestra «La IA responde: …»); SMOKE_FAILED u otro
+     * error del hub → smokeError con guía en español + raw conservado; fallo de
+     * red → smokeError en español. Cada ejecución limpia la respuesta anterior.
+     */
+    fun runSmokeTest() {
+        smokeJob?.cancel()
+        smokeJob = viewModelScope.launch {
+            _ui.value = _ui.value.copy(smokeLoading = true, smokeReply = null, smokeError = null)
+            try {
+                val resp = ApiClient.service.runSmokeTest()
+                val body = resp.body()
+                val data = body?.data
+                val envErr = body?.error
+                when {
+                    resp.isSuccessful && body != null && body.ok && data != null ->
+                        _ui.value = _ui.value.copy(
+                            smokeLoading = false,
+                            smokeReply = data.reply ?: "(sin contenido)"
+                        )
+                    resp.isSuccessful && envErr != null ->
+                        _ui.value = _ui.value.copy(
+                            smokeLoading = false,
+                            smokeError = smokeErrorMessage(envErr, resp.code())
+                        )
+                    resp.isSuccessful ->
+                        _ui.value = _ui.value.copy(
+                            smokeLoading = false,
+                            smokeError = "El hub no confirmó el mensaje de prueba (respuesta vacía)"
+                        )
+                    else -> {
+                        val err = parseErrorBody(resp)
+                        _ui.value = _ui.value.copy(
+                            smokeLoading = false,
+                            smokeError = smokeErrorMessage(err, resp.code())
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _ui.value = _ui.value.copy(
+                    smokeLoading = false,
+                    smokeError = "Sin conexión con el hub (127.0.0.1:8765): ${e.message ?: "error de red"}"
+                )
+            }
+        }
+    }
+
+    /**
+     * F3 — POST /api/setup/auth/antigravity (sin body) → comando de autorización
+     * manual de Antigravity/Artemis. Éxito → authGuide (mode/command/status);
+     * error → actionError en español con el raw conservado. Se dispara desde
+     * runFinalCheck() (check antigravity en fail/manual) y desde la screen al
+     * entrar en phase done si el chequeo ya lo requiere.
+     */
+    fun guideAuth() {
+        authGuideJob?.cancel()
+        authGuideJob = viewModelScope.launch {
+            pendingActionError = false
+            _ui.value = _ui.value.copy(authGuideLoading = true, actionError = null)
+            try {
+                val resp = ApiClient.service.runAuthGuide()
+                val body = resp.body()
+                when {
+                    resp.isSuccessful && body != null && body.data != null ->
+                        _ui.value = _ui.value.copy(authGuide = body, authGuideLoading = false)
+                    resp.isSuccessful -> {
+                        pendingActionError = true
+                        _ui.value = _ui.value.copy(
+                            authGuideLoading = false,
+                            actionError = "El hub no devolvió el comando de autorización"
+                        )
+                    }
+                    else -> {
+                        val err = parseErrorBody(resp)
+                        pendingActionError = true
+                        _ui.value = _ui.value.copy(
+                            authGuideLoading = false,
+                            actionError = setupErrorMessage(err, resp.code())
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                pendingActionError = true
+                _ui.value = _ui.value.copy(
+                    authGuideLoading = false,
+                    actionError = "Sin conexión con el hub (127.0.0.1:8765): ${e.message ?: "error de red"}"
+                )
+            }
+        }
+    }
+
     /**
      * Retrofit NO convierte los errorBody (4xx/5xx): el envelope {ok,error:{code,message}}
-     * se parsea a mano. Cualquier cuerpo inesperado → null (sin excepción).
+     * se parsea a mano. F1 y F3 comparten el MISMO shape de envelope de error, por lo
+     * que se reutiliza el mismo parser para /api/bootstrap/* y /api/setup/*.
+     * Cualquier cuerpo inesperado → null (sin excepción).
      */
-    private fun parseErrorBody(resp: Response<BootstrapActionResponse>): BootstrapError? = try {
+    private fun parseErrorBody(resp: Response<*>): BootstrapError? = try {
         val text = resp.errorBody()?.string()
         if (text.isNullOrBlank()) null
         else gson.fromJson(text, BootstrapActionResponse::class.java)?.error
@@ -199,6 +373,32 @@ class BootstrapViewModel : ViewModel() {
             val guide = friendlyError(m)
             if (guide != m) "$guide\n$m" else m
         } ?: "Error del hub (HTTP $httpCode)"
+    }
+
+    /**
+     * F3 — error de /api/setup/final-check y /api/setup/auth/antigravity → mensaje
+     * en español; si el message del hub arrastra un código conocido del motor se
+     * prepende la guía friendlyError() sin perder el texto raw (mismo patrón que
+     * actionErrorMessage, aquí sin los códigos propios del motor de bootstrap).
+     */
+    private fun setupErrorMessage(err: BootstrapError?, httpCode: Int): String =
+        err?.message?.let { m ->
+            val guide = friendlyError(m)
+            if (guide != m) "$guide\n$m" else m
+        } ?: err?.code?.let { "Error del hub ($it)" }
+            ?: "Error del hub (HTTP $httpCode)"
+
+    /**
+     * F3 — error de /api/setup/smoke-test → guía en español SIN perder el raw
+     * del hub (el texto completo queda visible en la tarjeta, en rojo).
+     */
+    private fun smokeErrorMessage(err: BootstrapError?, httpCode: Int): String = when (err?.code) {
+        "SMOKE_FAILED" -> {
+            val guide = "La IA no respondió al mensaje de prueba: comprueba la autenticación de OpenCode/Antigravity y reintenta"
+            // err viene de err?.code en el selector → sin smart-cast garantizado: llamada segura
+            err?.message?.takeIf { it.isNotBlank() }?.let { "$guide\n$it" } ?: guide
+        }
+        else -> setupErrorMessage(err, httpCode)
     }
 }
 

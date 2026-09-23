@@ -350,3 +350,65 @@ data class BootstrapActionData(val phase: BootstrapPhase? = null)
 data class BootstrapActionResponse(val ok: Boolean, val data: BootstrapActionData?, val error: BootstrapError? = null)
 
 data class BootstrapRunRequest(val resume: Boolean)
+
+// ---- F3: verificación final + smoke test + guía de auth (contrato /api/setup/*) ----
+// Mismo patrón que F1: envelope {ok, data, error} (BootstrapResponse-style) con
+// data nullable; enums minúscula case-sensitive para Gson (como BootstrapPhase);
+// error = {code,message} reutilizando BootstrapError (mismo shape que server.js).
+
+// status del contrato: "ok" | "fail" | "manual"
+enum class SetupCheckStatus { ok, fail, manual }
+
+data class SetupCheck(
+    val id: String,
+    val label: String,
+    val status: SetupCheckStatus? = null,
+    val detail: String? = null
+) {
+    // Status desconocido/null → "manual" (revisión del usuario; nunca crashea,
+    // mismo precedente que BootstrapStep.statusOrPending)
+    val statusOrManual: SetupCheckStatus get() = status ?: SetupCheckStatus.manual
+}
+
+// data del GET /api/setup/final-check → {ready, checks:[{id,label,status,detail}]}
+data class FinalCheckData(
+    val ready: Boolean = false,
+    val checks: List<SetupCheck>? = null
+) {
+    val checkList: List<SetupCheck> get() = checks ?: emptyList()
+}
+
+// GET /api/setup/final-check → {ok, data:{ready, checks}}
+data class FinalCheckResponse(
+    val ok: Boolean,
+    val data: FinalCheckData?,
+    val error: BootstrapError? = null
+)
+
+// data del POST /api/setup/smoke-test → {ok, reply}
+data class SmokeTestData(
+    val ok: Boolean? = null,
+    val reply: String? = null
+)
+
+// POST /api/setup/smoke-test → {ok, data:{ok, reply}} ·
+// error → {ok:false, error:{code:"SMOKE_FAILED", message}}
+data class SmokeTestResponse(
+    val ok: Boolean,
+    val data: SmokeTestData?,
+    val error: BootstrapError? = null
+)
+
+// data del POST /api/setup/auth/antigravity → {mode, command, status}
+data class AuthGuideData(
+    val mode: String? = null,
+    val command: String? = null,
+    val status: String? = null
+)
+
+// POST /api/setup/auth/antigravity → {ok, data:{mode, command, status}}
+data class AuthGuideResponse(
+    val ok: Boolean,
+    val data: AuthGuideData?,
+    val error: BootstrapError? = null
+)

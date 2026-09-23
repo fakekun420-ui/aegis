@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.*
@@ -16,17 +17,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aegis.hub.data.AuthGuideResponse
 import com.aegis.hub.data.BootstrapPhase
 import com.aegis.hub.data.BootstrapRollback
 import com.aegis.hub.data.BootstrapState
 import com.aegis.hub.data.BootstrapStep
 import com.aegis.hub.data.BootstrapStepStatus
+import com.aegis.hub.data.SetupCheck
+import com.aegis.hub.data.SetupCheckStatus
 import com.aegis.hub.ui.theme.*
+import com.aegis.hub.ui.viewmodel.BootstrapUiState
 import com.aegis.hub.ui.viewmodel.BootstrapViewModel
 import com.aegis.hub.ui.viewmodel.friendlyError
 
@@ -35,6 +42,8 @@ import com.aegis.hub.ui.viewmodel.friendlyError
 // tipografía Monospace, Cards con borde sutil. Todo el texto en español y los
 // iconos con contentDescription en español; targets >= 48dp.
 // El estado vive en BootstrapViewModel → sobrevive a rotación.
+// F3: tarjeta "Verificación final" (checks ✓/✗/⚠, smoke test de la IA y guía de
+// auth de Antigravity) visible SÓLO cuando phase == done (contrato /api/setup/*).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SetupWizardScreen(
@@ -45,6 +54,18 @@ fun SetupWizardScreen(
     val state = ui.state
     val steps = state?.stepList ?: emptyList()
     val phase = state?.phaseOrIdle ?: BootstrapPhase.idle
+
+    // F3: si la verificación deja a Antigravity en fail/manual y aún no está la
+    // guía de comandos, se carga sola al mostrar la tarjeta (phase done).
+    val needsAuthGuide = ui.finalCheck?.data?.checkList
+        ?.any { it.id == "antigravity" && it.statusOrManual != SetupCheckStatus.ok } == true
+    LaunchedEffect(phase, needsAuthGuide) {
+        if (phase == BootstrapPhase.done && needsAuthGuide &&
+            ui.authGuide == null && !ui.authGuideLoading
+        ) {
+            viewModel.guideAuth()
+        }
+    }
 
     // ---- Cabecera: subtítulo según phase (contrato exacto) ----
     val subtitle = when (phase) {
@@ -198,6 +219,17 @@ fun SetupWizardScreen(
                                 onRetry = { viewModel.retry(step.id) }
                             )
                         }
+                        // F3: verificación final + smoke test — sólo cuando la instalación terminó
+                        // (fuera de done la tarjeta NO aparece: documentado en F3)
+                        if (phase == BootstrapPhase.done) {
+                            item {
+                                FinalVerificationCard(
+                                    ui = ui,
+                                    onRunFinalCheck = { viewModel.runFinalCheck() },
+                                    onSmokeTest = { viewModel.runSmokeTest() }
+                                )
+                            }
+                        }
                         item { Spacer(Modifier.height(8.dp)) }
                     }
                 }
@@ -269,6 +301,7 @@ private fun SetupActionButton(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     danger: Boolean = false,
+    loading: Boolean = false,
     onClick: () -> Unit
 ) {
     Button(
@@ -283,6 +316,15 @@ private fun SetupActionButton(
             ButtonDefaults.buttonColors()
         }
     ) {
+        // F3: estado de carga (spinner + etiqueta) manteniendo el target de 48dp
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                color = LocalContentColor.current,
+                strokeWidth = 2.dp
+            )
+            Spacer(Modifier.width(8.dp))
+        }
         Text(
             label,
             fontFamily = FontFamily.Monospace,
@@ -524,4 +566,279 @@ private fun failedStepTitle(state: BootstrapState?, steps: List<BootstrapStep>):
     val idx = currentStepIndex(state, steps)
     if (idx >= 0) return steps[idx].title
     return state?.currentStepId ?: "paso sin identificar"
+}
+
+// ==== F3: tarjeta "Verificación final" (sólo visible en phase == done) ====
+// Fuera de done la tarjeta NO aparece (decisión F3): mientras instala o se
+// reintenta un paso, el foco son los pasos del wizard; al resolverse un failed
+// y pasar a done, la tarjeta se muestra sola. Sin inputs de texto: todo el
+// estado vive en BootstrapViewModel (sobrevive a rotación).
+@Composable
+private fun FinalVerificationCard(
+    ui: BootstrapUiState,
+    onRunFinalCheck: () -> Unit,
+    onSmokeTest: () -> Unit
+) {
+    val finalCheck = ui.finalCheck
+    val checks = finalCheck?.data?.checkList ?: emptyList()
+    val needsAuth = checks.any {
+        it.id == "antigravity" && it.statusOrManual != SetupCheckStatus.ok
+    }
+    val clipboard = LocalClipboardManager.current
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = ClaudeSurface),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, ClaudeOutlineVariant, RoundedCornerShape(8.dp))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "Verificación final",
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = ClaudeOnSurface
+            )
+            Spacer(Modifier.height(12.dp))
+
+            // Botón principal (>= 48dp): la primera vez "Ejecutar verificación final";
+            // tras el primer chequeo pasa a "Reintentar verificación" (misma acción)
+            SetupActionButton(
+                label = when {
+                    ui.finalCheckLoading -> "Verificando…"
+                    finalCheck == null -> "Ejecutar verificación final"
+                    else -> "Reintentar verificación"
+                },
+                enabled = !ui.finalCheckLoading,
+                loading = ui.finalCheckLoading,
+                onClick = onRunFinalCheck
+            )
+
+            if (finalCheck != null) {
+                Spacer(Modifier.height(12.dp))
+                // Resultado global (ready) del contrato
+                val ready = finalCheck.data?.ready == true
+                Text(
+                    if (ready) "Verificación superada: todo listo"
+                    else "Hay puntos que requieren revisión",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = if (ready) Color(0xFF3FB950) else ClaudeSecondary
+                )
+                Spacer(Modifier.height(8.dp))
+                checks.forEach { check -> CheckRow(check) }
+
+                // Sub-bloque Antigravity: comando de autorización manual (si el check lo requiere)
+                if (needsAuth) {
+                    Spacer(Modifier.height(10.dp))
+                    AuthGuideBlock(
+                        authGuide = ui.authGuide,
+                        loading = ui.authGuideLoading,
+                        onCopy = { clipboard.setText(AnnotatedString(it)) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            // ---- Smoke test: "La IA responde: «…»" o error en rojo ----
+            SetupActionButton(
+                label = if (ui.smokeLoading) "Enviando mensaje…" else "Enviar mensaje de prueba",
+                enabled = !ui.smokeLoading,
+                loading = ui.smokeLoading,
+                onClick = onSmokeTest
+            )
+            ui.smokeReply?.let { reply ->
+                Spacer(Modifier.height(8.dp))
+                // Fondo ClaudeSurface (paleta de la casa) + borde sutil para distinguirlo de la card
+                Surface(
+                    color = ClaudeSurface,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, ClaudeOutlineVariant, RoundedCornerShape(6.dp))
+                ) {
+                    Text(
+                        "La IA responde: «$reply»",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        color = ClaudeOnSurface,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
+            ui.smokeError?.let { err ->
+                Spacer(Modifier.height(8.dp))
+                // Guía (ya en español) + raw del hub, en rojo; si friendlyError
+                // aporta algo más (código conocido del motor) se añade debajo (patrón F2)
+                Text(
+                    err,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = ClaudeError
+                )
+                val guide = friendlyError(err)
+                if (guide != err) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        guide,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = ClaudeOnSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ---- F3: una comprobación de la verificación final (✓ ok · ✗ fail · ⚠ manual) ----
+// label y detail SIEMPRE visibles; iconos con contentDescription en español.
+@Composable
+private fun CheckRow(check: SetupCheck) {
+    val status = check.statusOrManual
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        when (status) {
+            SetupCheckStatus.ok -> Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = "Comprobación correcta",
+                tint = Color(0xFF3FB950), // verde de la casa (mismo que "Completado")
+                modifier = Modifier.size(20.dp)
+            )
+            SetupCheckStatus.fail -> Icon(
+                Icons.Filled.Close,
+                contentDescription = "Comprobación fallida",
+                tint = ClaudeError,
+                modifier = Modifier.size(20.dp)
+            )
+            SetupCheckStatus.manual -> Icon(
+                Icons.Filled.Warning,
+                contentDescription = "Requiere acción manual",
+                tint = ClaudeSecondary, // naranja/terracota existente de la paleta Claude
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                check.label,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = ClaudeOnSurface
+            )
+            if (status == SetupCheckStatus.manual) {
+                Text(
+                    "Acción manual requerida",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = ClaudeSecondary
+                )
+            }
+            if (!check.detail.isNullOrBlank()) {
+                Text(
+                    check.detail,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = ClaudeOnSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// ---- F3: sub-bloque de autenticación de Antigravity (check en fail/manual) ----
+@Composable
+private fun AuthGuideBlock(
+    authGuide: AuthGuideResponse?,
+    loading: Boolean,
+    onCopy: (String) -> Unit
+) {
+    val command = authGuide?.data?.command
+    var copied by remember(command) { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            "Autenticación de Antigravity pendiente",
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            color = ClaudeSecondary
+        )
+        Spacer(Modifier.height(6.dp))
+        when {
+            loading -> Text(
+                "Obteniendo el comando de autorización…",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = ClaudeOnSurfaceVariant
+            )
+            !command.isNullOrBlank() -> {
+                Text(
+                    "Copia y ejecuta este comando, luego pulsa Reintentar verificación",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = ClaudeOnSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    color = ClaudeBackground,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        command,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = ClaudeOnSurface,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                // Copiar al portapapeles (>= 48dp, misma text-button que "Reintentar")
+                TextButton(
+                    onClick = {
+                        onCopy(command)
+                        copied = true
+                    },
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier
+                        .height(48.dp)
+                        .align(Alignment.Start)
+                ) {
+                    Text(
+                        if (copied) "Comando copiado" else "Copiar comando",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        color = ClaudePrimary
+                    )
+                }
+                authGuide?.data?.status?.takeIf { it.isNotBlank() }?.let { st ->
+                    Text(
+                        "Estado: $st",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = ClaudeOnSurfaceVariant
+                    )
+                }
+            }
+            authGuide != null -> Text(
+                "El hub no devolvió el comando de autorización",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = ClaudeError
+            )
+            else -> Text(
+                "Obteniendo el comando de autorización…",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = ClaudeOnSurfaceVariant
+            )
+        }
+    }
 }
