@@ -103,7 +103,7 @@ import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFile as execFileCb } from "node:child_process";
-import { SkillManager } from "../skills/SkillManager.js";
+import { SkillManager, loadSkillCatalog } from "../skills/SkillManager.js";
 import { STEP_DEFS, BACKEND_DIR, TEST_STEP_ID } from "./state.js";
 
 const EXEC_TIMEOUT_MS = 10000;
@@ -454,7 +454,7 @@ async function antigravityCheck(ctx) {
     return { done: false, detail: `auth PARCIAL: token OAuth en ${authPath} pero falta/falla el binario agy (probados: ${cands.filter(Boolean).join(", ")})${tail}` };
   }
   if (bin && !authPath) {
-    return { done: false, detail: `auth PARCIAL: agy ${version} en ${bin} pero SIN token OAuth en ~/.gemini/antigravity-cli/antigravity-oauth-token (login pendiente)` };
+    return { done: false, detail: `auth PARCIAL: agy ${version} en ${bin} pero SIN token OAuth en ~/.gemini/antigravity-cli/antigravity-oauth-token (login pendiente — ejecuta \`${bin}\` en una terminal y completa el login)` };
   }
   return { done: false, detail: `Antigravity/Artemis ausente: sin binario agy (${cands.filter(Boolean).join(", ")}) ni token OAuth en ~/.gemini/antigravity-cli` };
 }
@@ -486,6 +486,17 @@ async function skillsCheck() {
     return installed.length > 0
       ? { done: true, detail: `skills instalados (sin manifiesto): ${installed.join(", ")}` }
       : { done: false, detail: "ningún skill instalado y sin manifiesto que comprobar" };
+  }
+  // F3 (H-14): el manifiesto debe ser consistente con el MISMO catálogo que
+  // gatea SkillManager.install() — un id ajeno al catálogo haría fallar el run
+  // con ALLOWLIST, así que el check lo dice ANTES y con el motivo exacto.
+  const allowed = new Set(loadSkillCatalog().map(e => e.id));
+  const unknown = manifest.filter(id => !allowed.has(id));
+  if (unknown.length) {
+    return {
+      done: false,
+      detail: `skills-manifest.json con ids FUERA del catálogo allowlist (src/skills/catalog.json): ${unknown.join(", ")} — añádelos al catálogo o quítalos del manifiesto`
+    };
   }
   const missing = manifest.filter(id => !installed.includes(id));
   const detail = missing.length
@@ -1049,7 +1060,9 @@ async function antigravityRun(ctx) {
     throw new Error(
       "Autenticación de Antigravity/Artemis requerida: completa el login y reintenta el paso " +
       "(token OAuth ausente o vacío en ~/.gemini/antigravity-cli/antigravity-oauth-token — " +
-      "ejecuta `agy` y completa el login, o `python -m artemis auth login`)"
+      "F3 verificó que NO existe subcomando `agy auth login`: ejecuta `/root/.local/bin/agy` en una " +
+      "terminal y completa el login que inicia el CLI (abre el navegador / URL de autorización; " +
+      "docs: https://antigravity.google/docs/cli/install)"
     );
   }
 
@@ -1064,6 +1077,15 @@ async function antigravityRun(ctx) {
 // ---------------------------------------------------------------------------
 async function skillsRun(ctx) {
   const manifest = readSkillsManifest();
+  // F3 (H-14): consistencia manifiesto ↔ catálogo ANTES de tocar npm (mismo
+  // motivo que en skillsCheck — el allowlist rechazaría estos ids igualmente).
+  {
+    const allowed = new Set(loadSkillCatalog().map(e => e.id));
+    const unknown = manifest.filter(id => !allowed.has(id));
+    if (unknown.length) {
+      throw new Error(`skills-manifest.json con ids FUERA del catálogo allowlist: ${unknown.join(", ")} (añádelos a src/skills/catalog.json)`);
+    }
+  }
   if (ctx.dry) {
     let installed = [];
     try { installed = new SkillManager().listInstalled() || []; } catch { /* detalle no crítico en dry */ }
@@ -1103,7 +1125,7 @@ async function skillsRun(ctx) {
     ctx.progress(Math.round((i / missing.length) * 100), `instalando skill "${id}" (${i + 1}/${missing.length})…`);
     let tail = "";
     try {
-      const job = sm.install(id); // {stdout, stderr, promise} — id validado en A-1
+      const job = await sm.install(id); // F3: install() es async (allowlist H-14 + sha256 verificado) — id validado en A-1
       if (job.stdout) job.stdout.on("data", d => { tail = (tail + String(d)).slice(-400); });
       if (job.stderr) job.stderr.on("data", d => { tail = (tail + String(d)).slice(-400); });
       await job.promise;

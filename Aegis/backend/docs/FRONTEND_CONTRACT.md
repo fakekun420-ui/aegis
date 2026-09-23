@@ -306,7 +306,7 @@ All JSON emitted through `json()` in `server.js` (the helper also used by the 4 
 
 | Route | Response shape (`Models.kt`) |
 |---|---|
-| `GET /api/skills` (no query) | `SkillsResponse{ok, data:{installed:[SkillItem], available:[SkillItem]}}` — `installed` from disk; each `SkillItem = {id,name,version,description,installed,enabled}` |
+| `GET /api/skills` (no query) | `SkillsResponse{ok, data:{installed:[SkillItem], available:[SkillItem]}}` — `installed` from disk; `available` = **real allowlist catalog minus installed** (F3/H-14); each `SkillItem = {id,name,version,description,installed,enabled}` |
 | `GET /api/skills?projectId=…` (or `?project=`) | delegated to `server.js` → `Envelope<SkillListResponse{skills,projectId,counts}>` (same path, two shapes by query) |
 | `GET /api/skills?scope=…` | delegated → `{ok, data:[…]}` plain array (legacy shape, **no app consumer**) |
 | `POST /api/skills/install` | **202** `TaskResponse{ok,data:{taskId,message}}` — asynchronous JSON (was SSE; Retrofit only parses JSON) |
@@ -316,10 +316,11 @@ All JSON emitted through `json()` in `server.js` (the helper also used by the 4 
 
 **Honest gaps (documented, not invented):**
 
-- `SkillsData.available` is **always `[]`** — the hub has no installable-skills catalog.
-- `SkillItem.version/description` are `null` unless the skill's config JSON (`/root/.config/opencode/skills/<id>.json`) provides them (no manifest exists).
+- `SkillsData.available` = **`backend/src/skills/catalog.json` (allowlist, F3/H-14) minus what `listInstalled()` finds on disk** — no longer `[]`. Entries are full `SkillItem`s: `installed:false`, `enabled:true` (there is no real on/off state for a non-installed skill), `version` = the catalog pin (`null` when the catalog does not pin one), `description` from the catalog.
+- `POST /api/skills/install` rejects any id **outside the catalog** with `400 {ok:false,error:{code:"ALLOWLIST",…}}` (the A-1 regex check still applies *in addition*). If the catalog entry pins a `sha256`, the tarball is downloaded (`npm pack`), hashed and compared **before** installing: mismatch → `400 …code:"EBADCHECKSUM"`; verification itself impossible (registry down, bad hash format) → `400 …code:"EVERIFY"`. Only `opencode-mem@2.26.0` is pinned today (real `npm pack` sha256); `graphify` has **no `sha256`** because the installed artifact comes from a uv tool (`graphifyy`), while npm's `graphify` is an unrelated package — pinning either hash would be misleading (documented in `SkillManager.js`).
+- `SkillItem.version/description` for **installed** items are `null` unless the skill's config JSON (`/root/.config/opencode/skills/<id>.json`) provides them (no manifest exists).
 - `SkillItem.enabled` = `enabled` flag from that config JSON if boolean, otherwise `true` (there is no real on/off state).
-- `DELETE /api/skills/:id` runs `npm uninstall -g`, which does **not** remove entries from the dir `listInstalled()` scans → the item may still appear until the config file is removed manually (known mismatch, pending).
+- `DELETE /api/skills/:id` runs `npm uninstall -g`, which does **not** remove entries from the dir `listInstalled()` scans → the item may still appear until the config file is removed manually (known mismatch, pending). Uninstall is deliberately **not** allowlist-gated (the allowlist guards package *ingress*, not local cleanup).
 
 ### 7.4. Endpoint matrix (`ApiService.kt` → backend)
 
@@ -361,3 +362,51 @@ All JSON emitted through `json()` in `server.js` (the helper also used by the 4 
 - Probe = `curl -m 2 -s -f http://127.0.0.1:$HUB_PORT/api/health | grep -q '"server":"running"'` (token-exempt, light). The old probe hit `/api/status` **without** token → 403 forever → the loop killed/relaunched the hub every 10s.
 - Hub pid pattern = `node.*Aegis/backend/server.js` (the old `opencode-companion/server.js` pattern matched nothing).
 - Package guard = `com.aegis.hub` (real `applicationId`).
+
+---
+
+## 8. Setup contract (F3 — wizard closing, `/api/setup/*`)
+
+Router: `backend/src/api/setupRoutes.js` (`createSetupHandler({opencodeAdapter, probeOpencodeHealth})`), mounted in `server.js` next to the bootstrap router. **Auth:** standard — all three routes require `X-Aegis-Token` (the Fase 0 middleware covers every `/api/*` except `GET /api/health`); missing/invalid → `403 FORBIDDEN`. All responses go through `json()` → §7.1 envelope. Tests: `tests/setup.test.js`.
+
+### 8.1. `GET /api/setup/final-check`
+
+```json
+{ "ok": true, "data": {
+  "ready": false,
+  "checks": [
+    { "id": "opencode",    "label": "OpenCode (proxy4096)",              "status": "ok|fail|manual", "detail": "…" },
+    { "id": "antigravity", "label": "Antigravity/Artemis (agy + auth)",  "status": "…",              "detail": "…" },
+    { "id": "a11y",        "label": "Servicio de accesibilidad (:8766)", "status": "…",              "detail": "…" },
+    { "id": "bootstrap",   "label": "Instalación inicial (wizard)",      "status": "…",              "detail": "…" }
+  ]
+} }
+```
+
+- `ready` = `checks.every(c => c.status === "ok")`. Check **order and labels are literal** (the UI parses them).
+- `status` enum: `ok` · `fail` · `manual` (needs the user). `detail` is always a non-empty, human-readable Spanish string with the exact next action.
+- The 4 checks run **in parallel**, each capped at **≤2 s** (a check that exceeds it comes back `fail` with a `timeout` detail — the endpoint never hangs and never throws; unexpected errors become `fail`/`500 envelope`, never a hung socket).
+- How each check is resolved:
+  | id | Resolution | `ok` | `manual` | `fail` |
+  |---|---|---|---|---|
+  | `opencode` | `GET http://127.0.0.1:4096/global/health` (same probe as `GET /api/health`, remaining budget of the 2 s); if down → `opencode --version` binary fallback | serve reachable | binary installed but serve down → detail says how to start it | neither serve nor binary |
+  | `antigravity` | `fs.existsSync` on the `agy` candidates + `fs.statSync(...).size > 0` on `~/.gemini/antigravity-cli/antigravity-oauth-token` (**token content is never read or logged**) | `agy` + OAuth file >0 B | `agy` present but no session → detail carries the exact interactive login command | `agy` missing → detail carries the official installer `curl -fsSL https://antigravity.google/cli/install.sh \| bash` |
+  | `a11y` | TCP `connect 127.0.0.1:8766` (CompanionService bridge; 1.5 s socket timeout) | accepts connection | — | `ECONNREFUSED`/timeout → detail **"Abre la app y concede accesibilidad (…)"** |
+  | `bootstrap` | `state.phase` (bootstrap wizard state) | `done` | `running` → "instalación en curso" | any other phase (`idle`/`paused`/`failed`) |
+
+### 8.2. `POST /api/setup/smoke-test`
+
+- **Success (200):** `{ "ok": true, "data": { "ok": true, "reply": "<texto REAL del modelo>" } }` — `reply` is the model's actual first text part (usually `PONG`), **never fabricated**.
+- **Failure:** standard error envelope with `error.code = "SMOKE_FAILED"` and an honest message; HTTP status tells the failure class: `502` provider down / no session, `504` timeout (>60 s or empty answer), `500` hub-side surprise.
+- Mechanics: reuses the hub's real machinery — `probeOpencodeHealth()` (2 s) then `OpencodeAdapter.createSession`/`listSessions`/`sendMessage` against `127.0.0.1:4096`. It keeps a dedicated session titled **`aegis:smoke-test`** (reused across calls; recreated if OpenCode no longer lists it) and sends `"Responde exclusivamente: PONG"` with a hard **60 s** `AbortController` budget. Concurrent calls share one in-flight promise (single-flight). Async: nothing blocks the event loop, and the response is skipped if the client/hub closed the connection meanwhile.
+
+### 8.3. `POST /api/setup/auth/antigravity`
+
+```json
+{ "ok": true, "data": { "mode": "manual", "command": "<comando exacto>", "status": "authenticated|missing_auth|missing_cli" } }
+```
+
+- `mode` is **always `"manual"`** — investigated in F3: the current `agy` CLI has **no `auth login` subcommand** (`agy help auth` → *unknown subcommand*), and the official flow (antigravity.google/docs/cli/install) is interactive: local keyring sign-in that opens the default browser, or an authorization-URL + paste-code loop over SSH. Spawning it detached would just hang waiting for a TTY/browser, so the hub is honest instead of pretending (`mode:"spawned"` is never returned by design).
+- `command`: `curl -fsSL https://antigravity.google/cli/install.sh | bash` when `status:"missing_cli"`; otherwise the absolute `agy` path to run in a terminal and complete the interactive login.
+- `status`: `authenticated` (OAuth file > 0 B) · `missing_auth` (CLI present, no session) · `missing_cli` (binary absent).
+- The response **never contains the token** — only whether the credential file exists (> 0 B).

@@ -30,6 +30,8 @@ import { handleWorkflowRoutes } from "./src/api/workflowRoutes.js";
 import { handleContentRoutes } from "./src/api/contentRoutes.js";
 // F1: dominio bootstrap del wizard (estado idempotente + orquestador reanudable)
 import { handleBootstrapRoute } from "./src/api/bootstrapRoutes.js";
+// F3: checks finales + smoke-test + auth guide del cierre del wizard (/api/setup/*)
+import { createSetupHandler } from "./src/api/setupRoutes.js";
 import { jobScheduler } from "./src/core/jobScheduler.js";
 import { agentPool } from "./src/core/agentPool.js";
 import { eventBus, EVENTS } from "./src/core/eventBus.js";
@@ -423,6 +425,14 @@ providerManager.register(antigravityAdapter);
 // Bajo riesgo: listSessions()/getMessages() devuelven [], NUNCA es el provider por defecto
 // (defaultProvider = antigravity) y la app no consume GET /api/providers.
 providerManager.register(new ClaudeCodeAdapter());
+
+// F3: handler de /api/setup/* — recibe la maquinaria REAL del hub (adapter de
+// sesiones/mensajes de OpenCode + la misma sonda /global/health del health) para
+// que el smoke-test use el mismo cable que la app, no un atajo paralelo.
+const handleSetupRoute = createSetupHandler({
+  opencodeAdapter,
+  probeOpencodeHealth
+});
 
 // ---- Non-destructive session ownership discovery (hub must never kill TUI) ----
 // COMPANION_SESSION_FILE persists the PID we launched as companion-owned across restarts.
@@ -982,6 +992,8 @@ async function handleRequest(req, res){
   // F1: wizard de bootstrap — mismas reglas que los demás routers (truthy = ya
   // respondí) y ANTES del fallback 404 central (nunca llega al SPA text/html).
   if (await dispatchRoute(handleBootstrapRoute, req, res, pathname)) return;
+  // F3: cierre del wizard — misma regla que los demás routers (truthy = ya respondí)
+  if (await dispatchRoute(handleSetupRoute, req, res, pathname)) return;
 
   if(pathname==="/api/providers" && req.method==="GET"){
     return json(res, 200, { ok: true, data: { defaultProvider: providerManager.defaultProvider, providers: providerManager.listProviders() } });

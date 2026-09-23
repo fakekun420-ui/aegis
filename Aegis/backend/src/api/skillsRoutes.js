@@ -1,6 +1,7 @@
 // skillsRoutes.js — API Routes for Skills
 // Phase 3 / A-3: contratos de Models.kt (app):
 //   GET    /api/skills            -> SkillsResponse {ok, data:{installed:[SkillItem], available:[SkillItem]}}
+//                                    (F3: available = catálogo allowlist − instalados, H-14)
 //   GET    ?projectId=|scope=     -> DELEGA en server.js (SkillListResponse {ok,data:{skills,projectId,counts}})
 //   POST   /api/skills/install    -> TaskResponse {ok, data:{taskId,message}} (202, ASÍNCRONO: el consumidor
 //                                    es Retrofit, que sólo parsea JSON — antes devolvía SSE y llegaba siempre null)
@@ -21,26 +22,33 @@ export function handleSkillsRoute(req, res, pathname, jsonHelper, readJsonBody) 
   // handler inline de server.js responda con SkillListResponse (ProjectDetailScreen).
   if (pathname === "/api/skills" && req.method === "GET") {
     if (req.url && req.url.includes("?")) return false;
-    // installed = disco real (SkillManager); available = [] porque NO existe un
-    // catálogo honesto de instalables (no inventar: ver FRONTEND_CONTRACT.md).
+    // F3 (H-14): installed = disco real (SkillManager); available = catálogo
+    // REAL menos instalados (src/skills/catalog.json) — ya no es [].
     return jsonHelper(res, 200, {
       ok: true,
-      data: { installed: manager.listInstalledDetailed(), available: [] }
+      data: { installed: manager.listInstalledDetailed(), available: manager.listAvailable() }
     });
   }
 
   // POST /api/skills/install — JSON asíncrono (antes SSE; ver cabecera)
   if (pathname === "/api/skills/install" && req.method === "POST") {
-    return readJsonBody(req).then(raw => {
+    return readJsonBody(req).then(async raw => {
       let skillId = null;
       try { skillId = JSON.parse(raw || "{}").skillId; } catch (_) {}
       if (!skillId) return jsonHelper(res, 400, { ok: false, error: "skillId required" });
 
       let started;
       try {
-        started = manager.install(skillId); // valida skillId antes de interpolar en sh
+        // F3: install() es ASÍNCRONA — valida A-1 (regex) + allowlist del catálogo
+        // y, si el id trae sha256, verifica el tarball ANTES de responder. Los
+        // rechazos salen aquí con su code (ALLOWLIST / EBADCHECKSUM / EVERIFY).
+        started = await manager.install(skillId);
       } catch (e) {
-        return jsonHelper(res, 400, { ok: false, error: e.message });
+        return jsonHelper(res, 400, {
+          ok: false,
+          error: e.message,
+          code: typeof e.code === "string" ? e.code : undefined // normalizeEnvelope lo consume
+        });
       }
       // Drenamos los streams (antes iban al SSE): si nadie lee, el pipe se llena y
       // npm se bloquea. El resultado real se comprueba con GET /api/skills tras instalar.

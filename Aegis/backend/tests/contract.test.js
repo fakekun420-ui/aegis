@@ -7,6 +7,8 @@
 // Contratos cubiertos:
 //   GET  /api/health            -> 200 {ok,data:{10 claves exactas}} SIN token (A-1)
 //   GET  /api/skills            -> 200 {ok,data:{installed,available}} con token
+//                                  (F3: available = catálogo − instalados, H-14)
+//   POST /api/skills/install    -> 400 ALLOWLIST si el id no está en el catálogo (F3)
 //   GET  /api/workflows/:id     -> 200 {ok,data:[]} con token
 //   GET  /api/jobs              -> 200 {ok,data:[...]} con token
 //   GET  /api/noexiste          -> 404 {ok:false,error:{code:"NOT_FOUND"}}
@@ -39,14 +41,19 @@ function freePort() {
   });
 }
 
-/** GET con/sin token contra el hub de prueba. */
-async function api(pathname, { withToken = true, method = "GET" } = {}) {
+/** GET/POST con/sin token (y body JSON opcional) contra el hub de prueba. */
+async function api(pathname, { withToken = true, method = "GET", body } = {}) {
   const headers = {};
   if (withToken) headers["X-Aegis-Token"] = token;
-  const res = await fetch(`http://127.0.0.1:${port}${pathname}`, { method, headers });
-  let body = null;
-  try { body = await res.json(); } catch (_) { body = null; }
-  return { status: res.status, body };
+  const init = { method, headers };
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(body);
+  }
+  const res = await fetch(`http://127.0.0.1:${port}${pathname}`, init);
+  let parsed = null;
+  try { parsed = await res.json(); } catch (_) { parsed = null; }
+  return { status: res.status, body: parsed };
 }
 
 /** Espera a que el hub acepte conexiones (o falla con el stderr del hijo). */
@@ -118,7 +125,6 @@ test("GET /api/skills sin query -> SkillsResponse {installed[], available[]}", a
   assert.equal(body.ok, true);
   assert.deepEqual(Object.keys(body.data).sort(), ["available", "installed"]);
   assert.ok(Array.isArray(body.data.installed));
-  assert.deepEqual(body.data.available, [], "available debe ser [] (catálogo honesto, sin inventar)");
   for (const skill of body.data.installed) {
     assert.deepEqual(
       Object.keys(skill).sort(),
@@ -128,6 +134,42 @@ test("GET /api/skills sin query -> SkillsResponse {installed[], available[]}", a
     assert.equal(skill.installed, true);
     assert.equal(typeof skill.enabled, "boolean");
   }
+
+  // F3 (H-14): available = catálogo (src/skills/catalog.json) − instalados,
+  // calculado AQUÍ desde el catálogo real del repo (no se acepta [] a ciegas).
+  const catalog = JSON.parse(fs.readFileSync(join(BACKEND_DIR, "src", "skills", "catalog.json"), "utf8"));
+  assert.ok(Array.isArray(catalog) && catalog.length >= 1, "catálogo debe existir y no estar vacío");
+  const installedIds = new Set(body.data.installed.map(s => s.id));
+  const expectedAvailable = catalog.map(e => e.id).filter(id => !installedIds.has(id)).sort();
+  assert.deepEqual(
+    body.data.available.map(s => s.id).sort(),
+    expectedAvailable,
+    "available debe ser catálogo − instalados"
+  );
+  for (const skill of body.data.available) {
+    assert.deepEqual(
+      Object.keys(skill).sort(),
+      ["description", "enabled", "id", "installed", "name", "version"],
+      "shape de SkillItem cambiado en available"
+    );
+    assert.equal(skill.installed, false);
+    assert.equal(typeof skill.enabled, "boolean");
+    assert.ok(!installedIds.has(skill.id), `${skill.id} está instalado y no puede estar en available`);
+  }
+});
+
+test("POST /api/skills/install con id fuera del catálogo -> 400 ALLOWLIST (H-14)", async () => {
+  // Id que PASA la regex A-1 pero NO está en src/skills/catalog.json: el
+  // rechazo debe ser del allowlist (nunca llega a spawn de npm).
+  const { status, body } = await api("/api/skills/install", {
+    method: "POST",
+    body: { skillId: "no-esta-en-el-catalogo-f3" }
+  });
+  assert.equal(status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.error.code, "ALLOWLIST", `code inesperado: ${body.error && body.error.code}`);
+  assert.equal(typeof body.error.message, "string");
+  assert.match(body.error.message, /catálogo|catalogo|allowlist/i);
 });
 
 test("GET /api/workflows/:projectId -> 200 lista ( [] si no hay workflows )", async () => {
