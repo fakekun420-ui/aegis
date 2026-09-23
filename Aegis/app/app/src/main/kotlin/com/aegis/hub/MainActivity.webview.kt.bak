@@ -238,7 +238,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             var execError: String? = null
             try {
                 // No ejecutes keepalive.sh en foreground — desacopla con nohup & y exporta PATH de Termux para que nohup/sh se resuelvan
-                val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; nohup sh /sdcard/projects/opencode-companion/keepalive.sh > /sdcard/projects/opencode-companion/hub-startup.log 2>&1 &"))
+                val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", "export PATH=/data/data/com.termux/files/usr/bin:\$PATH; nohup sh /sdcard/projects/Aegis/backend/keepalive.sh > /sdcard/projects/Aegis/backend/hub-startup.log 2>&1 &"))
                 execExit = proc.waitFor()
                 val errText = try { proc.errorStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
                 if (errText.isNotEmpty()) execError = errText
@@ -279,7 +279,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     if (attempts == 10 && !startupLogShown) {
                         startupLogShown = true
                         try {
-                            val logFile = java.io.File("/sdcard/projects/opencode-companion/hub-startup.log")
+                            val logFile = java.io.File("/sdcard/projects/Aegis/backend/hub-startup.log")
                             val tail = if (logFile.exists()) {
                                 val lines = logFile.readLines()
                                 lines.takeLast(15).joinToString("\n").trim().ifEmpty { "(hub-startup.log vacío)" }
@@ -308,7 +308,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     // Lee tail final para mostrar error exacto si falló
                     var tailHint = ""
                     try {
-                        val logFile = java.io.File("/sdcard/projects/opencode-companion/hub-startup.log")
+                        val logFile = java.io.File("/sdcard/projects/Aegis/backend/hub-startup.log")
                         if (logFile.exists()) tailHint = "\n\n[hub-startup.log]\n" + logFile.readLines().takeLast(15).joinToString("\n")
                     } catch (_: Exception) {}
                     findViewById<TextView>(R.id.nativeStatus)?.text = "Timeout 45s: hub no respondió 200. Reintenta Iniciar Sistema.$tailHint"
@@ -340,7 +340,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private fun setupButtons(){
         findViewById<MaterialButton>(R.id.btnStartHub).setOnClickListener {
-            RootShell.exec("sh /sdcard/projects/opencode-companion/start-hub.sh 2>&1 | head -n 80")
+            RootShell.exec("sh /sdcard/projects/Aegis/backend/start-hub.sh 2>&1 | head -n 80")
             toast("Hub iniciado — revisa estado")
             webView.postDelayed({ webView.loadUrl("http://127.0.0.1:8765"); refreshStatus() }, 1800)
         }

@@ -112,7 +112,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Ejecuta su -c 'sh /sdcard/projects/opencode-companion/keepalive.sh'",
+                    "Ejecuta su -c 'sh /sdcard/projects/Aegis/backend/keepalive.sh'",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -160,13 +160,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         lifecycleScope.launch(Dispatchers.IO) {
             var execExit = -1
             try {
-                val script = "/sdcard/projects/opencode-companion/keepalive.sh"
-                val sysLog = "/sdcard/projects/opencode-companion/hub-startup.log"
+                val script = "/sdcard/projects/Aegis/backend/keepalive.sh"
+                val sysLog = "/sdcard/projects/Aegis/backend/hub-startup.log"
                 // chroot anchor: ubuntu init pid changes across reboots; find it by its
                 // unique root marker (/proc/PID/root/lib/ld-linux-aarch64.so.1 = ubuntu
                 // chroot with node+loader). Launch keepalive INSIDE the chroot so node,
                 // loader, server.js and ports all resolve in one namespace. No nsenter.
-                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /sdcard/projects/opencode-companion/find-ubuntu.sh"))
+                val stage = Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /sdcard/projects/Aegis/backend/find-ubuntu.sh"))
+                val stageErr = try { stage.errorStream.bufferedReader().readText() } catch (e: Exception) { "err: " + e.message }
+                android.util.Log.e("OpenCodeBoot", "find-ubuntu err: $stageErr")
                 val ubuntuPid = try { stage.inputStream.bufferedReader().readText().trim().lines().firstOrNull { it.isNotBlank() }?.trim() } catch (_: Exception) { null }
                 android.util.Log.i("OpenCodeBoot", "keepalive ubuntuPid=$ubuntuPid")
                 val direct = if (!ubuntuPid.isNullOrBlank()) arrayOf("su", "-c", "chroot /proc/" + ubuntuPid + "/root /bin/sh -c '/usr/bin/nohup /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'") else null

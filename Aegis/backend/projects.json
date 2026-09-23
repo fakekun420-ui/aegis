@@ -1,0 +1,228 @@
+{
+  "projects": [
+    {
+      "id": "mu6e90j5-fvgrx7",
+      "name": "Agencia de Marketing",
+      "description": "DespegaLab",
+      "createdAt": "2026-09-18T03:23:32.465Z",
+      "archivedAt": null,
+      "sessions": [
+        {
+          "sessionId": "ses_f8ba7151affeV44tOLJQ7MPZCT",
+          "title": "DepegaLab",
+          "createdAt": "2026-09-20T02:41:29.919Z",
+          "lastUsed": "2026-09-20T20:47:22.363Z",
+          "summary": ""
+        },
+        {
+          "sessionId": "agy_muajdj1m_pq7mee22",
+          "title": "companion:85851",
+          "createdAt": "2026-09-21T00:58:05.867Z",
+          "lastUsed": "2026-09-21T01:12:29.874Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "7125314e-1759-4613-baf8-2f1892c66503"
+        }
+      ],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "mu93puwd-9p0pqc",
+      "name": "ARTEMIS Test",
+      "description": "test",
+      "createdAt": "2026-09-20T00:52:01.070Z",
+      "archivedAt": "2026-09-20T00:56:29.985Z",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "mu94tbz2-y4szzd",
+      "name": "ARTEMIS Test",
+      "description": "test for g-j",
+      "createdAt": "2026-09-20T01:22:42.782Z",
+      "archivedAt": "2026-09-20T01:29:05.490Z",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "mu98ad63-s1svqt",
+      "name": "Kaesoft",
+      "description": "Desarrollador de software",
+      "createdAt": "2026-09-20T02:59:56.331Z",
+      "archivedAt": null,
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "mua2vreq-spzv7s",
+      "name": "Antigravity POC Project",
+      "description": "POC universal provider",
+      "createdAt": "2026-09-20T17:16:23.045Z",
+      "archivedAt": null,
+      "provider": "antigravity",
+      "sessions": [
+        {
+          "sessionId": "agy_mua2vw5p_y1o73xiz",
+          "title": "companion:Antigravity POC Project:001",
+          "createdAt": "2026-09-20T17:16:29.197Z",
+          "lastUsed": "2026-09-20T17:17:09.669Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "18ffce05-e3b5-4077-95f5-9bae5880d979"
+        }
+      ],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "mua4gydb-wgcwk9",
+      "name": "Opencode Companion",
+      "description": "Para mejorar Opencode Companion",
+      "createdAt": "2026-09-20T18:00:51.455Z",
+      "archivedAt": null,
+      "provider": "antigravity",
+      "sessions": [
+        {
+          "sessionId": "ses_f4c94c66dffenoqFOCFaytnre7",
+          "title": "Arquitecto",
+          "createdAt": "2026-09-20T18:01:56.155Z",
+          "lastUsed": "2026-09-20T20:49:05.512Z",
+          "summary": "",
+          "provider": "opencode"
+        },
+        {
+          "sessionId": "ed8f444b-168f-4e64-8c19-e832ab542c77",
+          "title": "Backend",
+          "createdAt": "2026-09-20T20:45:42.907Z",
+          "lastUsed": "2026-09-20T20:46:22.865Z",
+          "summary": "",
+          "provider": "antigravity"
+        },
+        {
+          "sessionId": "0adc77f9-68a1-4e32-8e03-d012d3a287c4",
+          "title": "Frontend QA Verified",
+          "createdAt": "2026-09-20T22:24:52.495Z",
+          "lastUsed": "2026-09-20T22:46:07.624Z",
+          "summary": "",
+          "provider": "antigravity"
+        },
+        {
+          "sessionId": "7cd5e3ec-156e-4696-ae9e-7ff5f72135e8",
+          "title": "El dispositivo se reinició repentinamente. Retoma y continúa",
+          "createdAt": "2026-09-21T01:10:09.433Z",
+          "lastUsed": "2026-09-21T01:10:09.434Z",
+          "summary": "",
+          "provider": "antigravity"
+        },
+        {
+          "sessionId": "agy_muasijwx_tacnpgwh",
+          "title": "lo que harás en este chat será…",
+          "createdAt": "2026-09-21T05:13:56.844Z",
+          "lastUsed": "2026-09-21T05:24:14.212Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "fccc1cc7-a31d-489a-8fed-c23d706160d5"
+        }
+      ],
+      "skills": [],
+      "linkedProjects": [],
+      "instructions": "Instrucciones personalizadas del proyecto: actuar con máxima precisión y modularidad."
+    },
+    {
+      "id": "muaivp64-1azqz5",
+      "name": "QA-Antigravity-TestProject",
+      "description": "Test project with Antigravity provider",
+      "instructions": "",
+      "createdAt": "2026-09-21T00:44:13.996Z",
+      "archivedAt": "2026-09-21T00:46:58.913Z",
+      "provider": "antigravity",
+      "sessions": [
+        {
+          "sessionId": "agy_muaiwngj_mq4t87k5",
+          "title": "Streaming Test Session",
+          "createdAt": "2026-09-21T00:44:58.435Z",
+          "lastUsed": "2026-09-21T00:45:10.922Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "2cc9a275-aeb7-463e-9140-3699644f99c9"
+        }
+      ],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "muajisy5-tv99vf",
+      "name": "Proyecto PonyTail QA",
+      "description": "",
+      "instructions": "",
+      "createdAt": "2026-09-21T01:02:11.981Z",
+      "archivedAt": null,
+      "provider": "antigravity",
+      "sessions": [
+        {
+          "sessionId": "agy_mualztby_5ww2v8e4",
+          "title": "companion:Proyecto PonyTail QA:84855",
+          "createdAt": "2026-09-21T02:11:24.887Z",
+          "lastUsed": "2026-09-21T02:11:39.464Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "b3bb8493-673d-4c44-b395-24698c200d26"
+        }
+      ],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "muaox5lr-eru8gb",
+      "name": "Petite Raw",
+      "description": "Estrategias de crecimiento",
+      "instructions": "",
+      "createdAt": "2026-09-21T03:33:19.647Z",
+      "archivedAt": null,
+      "provider": "antigravity",
+      "sessions": [
+        {
+          "sessionId": "agy_muaox9z7_ymaw91yq",
+          "title": "Embudos de tráfico",
+          "createdAt": "2026-09-21T03:33:25.334Z",
+          "lastUsed": "2026-09-21T03:34:51.683Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "a6e92078-909e-46c8-8dba-9bbe8218041c"
+        },
+        {
+          "sessionId": "agy_muaozdm5_s06mr1sj",
+          "title": "Hola, me ayudarás siendo un es…",
+          "createdAt": "2026-09-21T03:35:03.355Z",
+          "lastUsed": "2026-09-21T03:35:19.267Z",
+          "summary": "",
+          "provider": "antigravity"
+        }
+      ],
+      "skills": [],
+      "linkedProjects": []
+    }
+  ],
+  "sessionTitles": {
+    "ses_f8ba7151affeV44tOLJQ7MPZCT": "DepegaLab",
+    "agy_mua2vw5p_y1o73xiz": "companion:Antigravity POC Project:001",
+    "ses_f4c94c66dffenoqFOCFaytnre7": "Arquitecto",
+    "0adc77f9-68a1-4e32-8e03-d012d3a287c4": "Frontend QA Verified",
+    "ed8f444b-168f-4e64-8c19-e832ab542c77": "Backend",
+    "agy_muaiwngj_mq4t87k5": "Streaming Test Session",
+    "agy_muajdj1m_pq7mee22": "companion:85851",
+    "7cd5e3ec-156e-4696-ae9e-7ff5f72135e8": "El dispositivo se reinició repentinamente. Retoma y continúa",
+    "agy_mualztby_5ww2v8e4": "companion:Proyecto PonyTail QA:84855",
+    "agy_muaoqrmw_gm5o6yd4": "Capital de Francia",
+    "agy_muaox9z7_ymaw91yq": "Embudos de tráfico",
+    "agy_muaozdm5_s06mr1sj": "Hola, me ayudarás siendo un es…",
+    "agy_muasfxu2_nyhm2cdd": "que puedes hacer?",
+    "agy_muasijwx_tacnpgwh": "lo que harás en este chat será…",
+    "agy_mubtwxr2_rgejv65j": "hola",
+    "agy_mubykaoe_uc1alu9t": "Ejecuta un diagnostico con who…"
+  }
+}

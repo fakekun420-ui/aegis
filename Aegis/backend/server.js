@@ -59,7 +59,7 @@ function saveUiState() {
 
 // ---- Companion Project Management — persistent store projects.json ----
 // Schema per spec (1): { id, name, description, createdAt, archivedAt, sessions:[{sessionId,title,createdAt,lastUsed,summary}], skills:[], linkedProjects:[] }
-// Stored at /sdcard/projects/opencode-companion/projects.json ; soft delete via archivedAt timestamp.
+// Stored at /sdcard/projects/Aegis/backend/projects.json ; soft delete via archivedAt timestamp.
 // Envelope: all /api/projects routes return {ok:true,data:...} or {ok:false,error:...} (spec 6).
 const PROJECTS_STORE_FILE = path.join(__dirname, "projects.json");
 
@@ -1163,7 +1163,7 @@ const server = http.createServer(async (req, res)=>{
       let canWriteProjects = false;
       let projectsError = null;
       try {
-        const prjTest = `/sdcard/projects/opencode-companion/.health_test_${Date.now()}`;
+        const prjTest = `/sdcard/projects/Aegis/backend/.health_test_${Date.now()}`;
         fs.writeFileSync(prjTest, "ok");
         fs.unlinkSync(prjTest);
         canWriteProjects = true;
@@ -1323,10 +1323,10 @@ const server = http.createServer(async (req, res)=>{
       steps.push("opencode: not healthy — launching via host keepalive.sh (only when none)");
       // keepalive.sh y opencode deben lanzarse en HOST (donde existe /usr/bin/node), no en system (nsenter -t 1 -m no ve /usr/bin/node)
       // This path is only reached when ownership is "none" — safe per spec (3)
-      const r1 = await shellExecRaw(`nohup sh /sdcard/projects/opencode-companion/keepalive.sh > /sdcard/projects/opencode-companion/keepalive.log 2>&1 & echo keepalive_pid=$!`, 8000, 1024*1024);
+      const r1 = await shellExecRaw(`nohup sh /sdcard/projects/Aegis/backend/keepalive.sh > /sdcard/projects/Aegis/backend/keepalive.log 2>&1 & echo keepalive_pid=$!`, 8000, 1024*1024);
       steps.push(`keepalive.sh: ${r1.stdout.trim().slice(0,300)} ${r1.stderr.trim().slice(0,200)}`);
       // Direct launch fallback — also only when none; persist companion-owned meta so future probes classify correctly
-      const r2 = await shellExecRaw(`nohup opencode serve --port ${OPENCODE_PORT} --hostname 0.0.0.0 >> /sdcard/projects/opencode-companion/opencode.log 2>&1 & echo opencode_direct_pid=$!`, 8000, 1024*1024);
+      const r2 = await shellExecRaw(`nohup opencode serve --port ${OPENCODE_PORT} --hostname 0.0.0.0 >> /sdcard/projects/Aegis/backend/opencode.log 2>&1 & echo opencode_direct_pid=$!`, 8000, 1024*1024);
       steps.push(`opencode direct: ${r2.stdout.trim().slice(0,300)} ${r2.stderr.trim().slice(0,200)}`);
       // Extract pid from "opencode_direct_pid=12345" and persist as companion-owned
       const m = r2.stdout.match(/opencode_direct_pid=(\d+)/);
@@ -1452,7 +1452,7 @@ const server = http.createServer(async (req, res)=>{
             ponyTailFile,
             `# PONY-TAIL DE PROYECTO: ${createdProj.name}
 **Ubicación:** \`${ponyTailFile}\`  
-**Hereda de:** \`/sdcard/projects/opencode-companion/context/pony-tail-global.md\`  
+**Hereda de:** \`/sdcard/projects/Aegis/backend/context/pony-tail-global.md\`  
 **Última Actualización:** ${nowIso().split("T")[0]}  
 **Proveedor:** ${createdProj.provider}  
 **Estado General:** Inicializado  
