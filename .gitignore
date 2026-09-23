@@ -31,3 +31,7 @@ opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.w
 **/graphify-out/
 
 *.apk
+
+# respaldos locales de la migración legacy (no versionar)
+opencode-companion_backup/
+opencode-companion-apk_backup/
