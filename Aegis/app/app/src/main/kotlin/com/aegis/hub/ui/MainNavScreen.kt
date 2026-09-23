@@ -61,7 +61,7 @@ fun MainNavScreen(
                         scope.launch { drawerState.close() }
                         onNavigateChats()
                     },
-                    icon = { Icon(Icons.Filled.ChatBubble, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    icon = { Icon(Icons.Filled.ChatBubble, contentDescription = "Menu Icon", tint = MaterialTheme.colorScheme.primary) },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )
@@ -72,7 +72,7 @@ fun MainNavScreen(
                         scope.launch { drawerState.close() }
                         onNavigateProjects()
                     },
-                    icon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    icon = { Icon(Icons.Filled.Folder, contentDescription = "Menu Icon", tint = MaterialTheme.colorScheme.primary) },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )

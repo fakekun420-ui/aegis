@@ -100,7 +100,7 @@ fun ProjectCard(
                 }
             }
             Spacer(Modifier.height(4.dp))
-            Text(project.path ?: "", color = ClaudeOnSurfaceVariant, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            Text(project.path ?: "", color = ClaudeOnSurfaceVariant, fontFamily = FontFamily.Monospace, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (project.lastCommit != null) {
                 Spacer(Modifier.height(4.dp))
                 Text("Commit: ${project.lastCommit}", color = ClaudeOnSurfaceVariant, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
