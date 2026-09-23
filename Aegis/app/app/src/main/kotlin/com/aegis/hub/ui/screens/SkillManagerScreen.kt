@@ -1,3 +1,4 @@
+import androidx.compose.ui.text.font.FontWeight
 package com.aegis.hub.ui.screens
 
 import androidx.compose.foundation.background
