@@ -940,8 +940,12 @@ private fun UnifiedFloatingComposer(
                         shape = CircleShape,
                         color = buttonBg,
                         modifier = Modifier
-                            // A-5: target táctil mínimo 48dp (antes 32dp)
-                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                            // A-5: target táctil fijo 48dp. OJO: `.sizeIn(min=48)` sólo
+                            // acota el MÍNIMO y este Surface tiene hijo `fillMaxSize()`,
+                            // así que se tragaba toda la altura de la fila y crecía a
+                            // pantalla completa (bug_2026-09-24). `.size()` acota ambos
+                            // extremos: target táctil ≥48dp garantizado, chip contenido.
+                            .size(48.dp)
                             .semantics { contentDescription = modeDesc }
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
