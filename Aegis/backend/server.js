@@ -256,6 +256,22 @@ function sanitizeProjectId(v) { return String(v || "").trim(); }
 function nowIso() { return new Date().toISOString(); }
 // Find project by id (including archived) — caller filters visible if needed
 function findProject(store, id) { return store.projects.find(p => p.id === id) || null; }
+// F6: carpetas candidatas de un proyecto para el merge de sesiones de OpenCode.
+// directory explícito (PATCH) > rutas absolutas en linkedProjects >
+// PROJECTS_ROOT/<nombre> (POST /api/projects crea exactamente esa carpeta).
+function projectCandidateDirs(proj) {
+  const out = [];
+  const push = (v) => {
+    if (typeof v === "string" && v.trim() && v.trim().startsWith("/")) {
+      const clean = v.trim().replace(/\/+$/, "");
+      if (clean && !out.includes(clean)) out.push(clean);
+    }
+  };
+  push(proj.directory);
+  if (Array.isArray(proj.linkedProjects)) for (const lp of proj.linkedProjects) push(lp);
+  if (typeof proj.name === "string" && proj.name.trim()) push(path.join(PROJECTS_ROOT, proj.name.trim()));
+  return out;
+}
 // Validate project payload for create/update
 function validateProjectPayload(body, isCreate) {
   if (isCreate && (!body.name || !String(body.name).trim())) return "name required";
@@ -264,6 +280,7 @@ function validateProjectPayload(body, isCreate) {
   if (body.instructions !== undefined && typeof body.instructions !== "string") return "instructions must be string";
   if (body.skills !== undefined && !Array.isArray(body.skills)) return "skills must be array";
   if (body.linkedProjects !== undefined && !Array.isArray(body.linkedProjects)) return "linkedProjects must be array";
+  if (body.directory !== undefined && body.directory !== null && typeof body.directory !== "string") return "directory must be string";
   if (body.provider !== undefined && !["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim())) {
     return "invalid provider — must be 'opencode' or 'antigravity'";
   }
@@ -466,6 +483,9 @@ const providerManager = new ProviderManager(path.join(__dirname, "providers.json
 const opencodeAdapter = new OpencodeAdapter({
   host: OPENCODE_HOST,
   port: OPENCODE_PORT,
+  // F6: opencode.log es la fuente de la contraseña Basic de la API v2
+  // ("server password ...", rota en cada arranque del serve).
+  logPath: path.join(__dirname, "opencode.log"),
   getSystemContextBlock: (pid) => buildSystemContextBlock(pid)
 });
 const antigravityAdapter = new AntigravityAdapter({
@@ -506,18 +526,15 @@ let companionMeta = (() => {
 
 // Probe opencode health via HTTP — single source of truth for whether a serve is running (termux or companion).
 // Called on hub startup and on every /api/system/status call (spec 1).
+// F6: la sonda habla la API v2 autenticada (GET /api/info) y sólo cae a la SPA
+// como "vivo sin auth" si no hay contraseña todavía. Misma forma de respuesta.
 function probeOpencodeHealth() {
-  return new Promise(resolve => {
-    http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path: "/global/health", timeout: 2000 }, r => {
-      let d = ""; r.on("data", c => d += c); r.on("end", () => {
-        try { const j = JSON.parse(d); resolve({ up: !!j.healthy || r.statusCode === 200, healthy: !!j.healthy, version: j.version || null, raw: j }); }
-        catch {
-          const isV2 = r.statusCode === 200 && (d.includes("<title>OpenCode</title>") || d.toLowerCase().includes("opencode"));
-          resolve({ up: r.statusCode === 200, healthy: isV2, version: isV2 ? "v2" : null, raw: d });
-        }
-      });
-    }).on("error", () => resolve({ up: false, healthy: false, version: null })).end();
-  });
+  return opencodeAdapter.isHealthy().then(h => ({
+    up: !!h.up,
+    healthy: !!h.healthy,
+    version: h.version || null,
+    raw: h.error ? { error: h.error } : { source: "/api/info" }
+  })).catch(() => ({ up: false, healthy: false, version: null }));
 }
 
 // Scan /proc for opencode serve PIDs — distinguishes TUI (cmdline "opencode" only) from serve.
@@ -1280,6 +1297,10 @@ async function handleRequest(req, res){
           provId = "antigravity";
         }
       }
+      // F6: la convención del id de sesión (ses_/agy_) prevalece sobre cualquier
+      // header X-Provider — el vínculo de proveedor de nacimiento es inamovible.
+      const sidConv = sid.startsWith("agy_") ? "antigravity" : (sid.startsWith("ses_") ? "opencode" : null);
+      if (sidConv) provId = sidConv;
 
       // Immediate atomic persistence of session association and provider
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
@@ -1314,7 +1335,13 @@ async function handleRequest(req, res){
         }
 
         if (sessionEntry) {
-          if (provId) sessionEntry.provider = provId;
+          // F6: vínculo de proveedor INAMOVIBLE. La convención del id repara
+          // registros corrompidos; sin convención, sólo se llena el hueco
+          // (set-once). El header nunca pisa un vínculo ya existente — antes,
+          // cambiar el pill a Antigravity re-bindeaba la sesión y "desaparecía".
+          const sidConv2 = sid.startsWith("agy_") ? "antigravity" : (sid.startsWith("ses_") ? "opencode" : null);
+          if (sidConv2) sessionEntry.provider = sidConv2;
+          else if (!sessionEntry.provider && provId) sessionEntry.provider = provId;
           sessionEntry.lastUsed = nowIso();
           if (!pId && parentProject) pId = parentProject.id;
         }
@@ -1870,6 +1897,9 @@ async function handleRequest(req, res){
           createdAt: nowIso(),
           archivedAt: null,
           provider: initialProv,
+          // F6: la carpeta del proyecto en disco (misma que mkdir más abajo) es
+          // la clave con la que se mergean sesiones de OpenCode por origen.
+          directory: path.join(PROJECTS_ROOT, normName),
           sessions: [],
           skills: Array.isArray(body.skills) ? body.skills : [],
           linkedProjects: Array.isArray(body.linkedProjects) ? body.linkedProjects : []
@@ -1962,6 +1992,7 @@ async function handleRequest(req, res){
         }
         if (body.skills !== undefined) proj.skills = Array.isArray(body.skills) ? body.skills : [];
         if (body.linkedProjects !== undefined) proj.linkedProjects = Array.isArray(body.linkedProjects) ? body.linkedProjects : [];
+        if (body.directory !== undefined) proj.directory = body.directory === null ? null : (String(body.directory).trim() || null);
         if (body.sessions !== undefined) {
           if (!Array.isArray(body.sessions)) throw new Error("VALIDATION: sessions must be array");
           proj.sessions = body.sessions.map(normalizeSessionEntry).filter(s => s.sessionId);
@@ -2005,13 +2036,60 @@ async function handleRequest(req, res){
   }
 
   // GET /api/projects/:id/sessions — list sessions for a project
+  // F6: además del registro, mergea en vivo las sesiones de OpenCode nacidas en
+  // la CARPETA del proyecto (directory explícito > linkedProjects con ruta >
+  // PROJECTS_ROOT/<nombre>, que POST /api/projects crea en disco). Single-parent:
+  // una sesión ya vinculada a otro proyecto no se duplica.
   if(pathname.match(/^\/api\/projects\/[^\/]+\/sessions$/) && req.method==="GET"){
     const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions$/);
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
     if (!isValidId(id)) return invalidId(res, "project", id); // F4: antes del store
+    const store0 = loadProjectsStore();
+    const proj0 = findProject(store0, id);
+    if (!proj0) return json(res, 404, fail(`project ${id} not found`));
+
+    if (!proj0.archivedAt) {
+      try {
+        const dirs = projectCandidateDirs(proj0);
+        if (dirs.length > 0) {
+          const live = await opencodeAdapter.listSessions();
+          const elsewhere = new Set();
+          for (const p of store0.projects) {
+            if (p.id === id) continue;
+            for (const se of (p.sessions || [])) elsewhere.add(se.sessionId);
+          }
+          const mine = new Set((proj0.sessions || []).map(se => se.sessionId));
+          const toAdd = live.filter(s => s.directory && !elsewhere.has(s.id) && !mine.has(s.id) &&
+            dirs.some(d => s.directory === d || s.directory.startsWith(d + "/")));
+          if (toAdd.length > 0) {
+            await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+              const st = loadProjectsStore();
+              const p = findProject(st, id);
+              if (!p || p.archivedAt) return;
+              p.sessions = p.sessions || [];
+              for (const s of toAdd) {
+                if (p.sessions.some(se => se.sessionId === s.id)) continue;
+                const custom = resolveExistingSessionTitle(st, s.id, null);
+                const title = (custom && custom !== s.id) ? custom : s.title;
+                p.sessions.push(normalizeSessionEntry({
+                  sessionId: s.id,
+                  title,
+                  createdAt: s.createdAt,
+                  lastUsed: s.updatedAt || s.createdAt,
+                  provider: "opencode"
+                }));
+                log.info(`[hub] F6: sesion ${s.id} ("${title}") vinculada al proyecto ${id} por carpeta (${s.directory})`);
+              }
+              saveProjectsStore(st);
+            });
+          }
+        }
+      } catch (e) {
+        log.warn("[hub] project sessions live-merge failed", { err: e.message });
+      }
+    }
     const store = loadProjectsStore();
-    const proj = findProject(store, id);
-    if (!proj) return json(res, 404, fail(`project ${id} not found`));
+    const proj = findProject(store, id) || proj0;
     const sorted = [...(proj.sessions || [])].sort((a,b) => (b.lastUsed || b.createdAt || "").localeCompare(a.lastUsed || a.createdAt || ""));
     return json(res, 200, { ok: true, data: sorted });
   }
@@ -2282,6 +2360,9 @@ async function handleRequest(req, res){
       try {
         const store = loadProjectsStore();
         for (const item of list) {
+          // Registro único (F6): el item conserva el id, el nombre REAL que le
+          // puso OpenCode (providerTitle) y el nombre puesto desde la app (title).
+          item.providerTitle = (item.raw && item.raw.title) || item.title || null;
           const custom = resolveExistingSessionTitle(store, item.id);
           if (custom && custom !== item.id) {
             item.title = custom;
@@ -2420,7 +2501,10 @@ async function handleRequest(req, res){
           }
 
           if (sessionEntry) {
-            if (headerProvider) sessionEntry.provider = headerProvider;
+            // F6: convención del id manda; sin convención, set-once.
+            const convMsg = sid.startsWith("agy_") ? "antigravity" : (sid.startsWith("ses_") ? "opencode" : null);
+            const boundMsg = convMsg || sessionEntry.provider || headerProvider || null;
+            if (boundMsg) sessionEntry.provider = boundMsg;
             sessionEntry.lastUsed = nowIso();
           }
 
@@ -2524,11 +2608,7 @@ async function handleRequest(req, res){
   if(pathname==="/api/status" && req.method==="GET"){
     const rootCheck = await runShell("id; su -c id 2>&1 | head -1; getprop ro.build.version.release 2>&1; getprop ro.product.model 2>&1");
     // probe opencode
-    const health = await new Promise(resolve=>{
-      http.get({ hostname: OPENCODE_HOST, port: OPENCODE_PORT, path:"/global/health", timeout:2000 }, r=>{
-        let d=""; r.on("data",c=>d+=c); r.on("end",()=>{ try{ resolve(JSON.parse(d)); }catch{ resolve({ raw:d, status:r.statusCode })} });
-      }).on("error", e=> resolve({ error:String(e), reachable:false })).end();
-    });
+    const health = await probeOpencodeHealth();
     // A-3: envuelto. La sonda de keepalive.sh ya NO usa esta ruta (pesada + exige token):
     // usa GET /api/health (exento). install-su.sh sólo hace `head -c 300` de diagnóstico.
     return json(res, 200, { ok: true, data: { hub:"ok", hub_port: HUB_PORT, opencode: health, projects_root: PROJECTS_ROOT, projects: await listProjects(), root: rootCheck.stdout.slice(0,1200) } });
@@ -2990,6 +3070,25 @@ server.keepAliveTimeout = 125000;
 server.headersTimeout = 130000;
 server.requestTimeout = 135000;
 server.maxHeadersCount = 100;
+// F6: repara en el arranque vínculos de proveedor corrompidos por el header
+// X-Provider (sesiones ses_ marcadas como antigravity o viceversa). El prefijo
+// del id es la fuente de verdad del proveedor de nacimiento.
+function sanitizeSessionProviders() {
+  try {
+    const store = loadProjectsStore();
+    let fixed = 0;
+    for (const p of store.projects || []) {
+      for (const s of p.sessions || []) {
+        const conv = typeof s.sessionId === "string" && s.sessionId.startsWith("agy_") ? "antigravity"
+          : typeof s.sessionId === "string" && s.sessionId.startsWith("ses_") ? "opencode" : null;
+        if (conv && s.provider && s.provider !== conv) { s.provider = conv; fixed++; }
+      }
+    }
+    if (fixed) { saveProjectsStore(store); log.warn(`[hub] F6: ${fixed} vinculos de proveedor reparados por prefijo de sesion`); }
+  } catch (e) { log.warn("[hub] sanitizeSessionProviders failed", { err: e.message }); }
+}
+sanitizeSessionProviders();
+
 server.listen(HUB_PORT, "127.0.0.1", async ()=>{
   log.info(`[hub] listening http://127.0.0.1:${HUB_PORT} (loopback only)`);
   log.info(`  local  : http://127.0.0.1:${HUB_PORT}`);

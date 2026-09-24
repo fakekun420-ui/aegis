@@ -1,6 +1,11 @@
 // OpenCodeAdapter.js — OpenCode HTTP Serve Mode Adapter
 // Extracted from providers.js (Strangler Fig Step 4)
 // Zero behavior changes — exact copy of OpencodeAdapter class
+//
+// ⚠️ ESPEJO LEGADO — NO USADO POR EL HUB (server.js importa de providers.js).
+// El adapter vivo es `OpencodeAdapter` en backend/providers.js. Este fichero se
+// conserva sólo como referencia histórica v1 y NO debe sincronizarse a mano:
+// los cambios (p. ej. F6 — migración a la API v2 de OpenCode) van en providers.js.
 
 import http from "node:http";
 import { BaseProviderAdapter } from "./BaseProviderAdapter.js";

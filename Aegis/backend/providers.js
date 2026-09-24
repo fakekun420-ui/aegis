@@ -173,320 +173,271 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     this._modelsCache = null;
     this._modelsCacheTime = 0;
     this._fetchingModels = false;
+    // ---- F6 (transición OpenCode v1 → v2) -----------------------------------
+    // La API v2 vive bajo /api/* y exige HTTP Basic opencode:<password>. La
+    // contraseña rota en cada arranque del serve y se anota en opencode.log
+    // ("server password ..."), así que se lee el final del log con TTL corto y
+    // se invalida ante un401 para recapturar rotaciones sin reiniciar el hub.
+    this.logPath = options.logPath || null;
+    this._pw = null;
+    this._pwTime = 0;
+    this._modelRefs = new Map();   // alias(id/modelID/providerID/id) -> Model.Ref
+    this._lastModel = new Map();   // sessionId -> "providerID/id" ya activo
+    this._instrHash = new Map();   // sessionId -> hash del contexto inyectado
     // Pre-warm models cache in background
     setTimeout(() => { this.listModels().catch(() => {}); }, 1500);
   }
 
-  async isHealthy() {
-    return new Promise((resolve) => {
-      let resolved = false;
-      const r = http.get(
-        {
-          hostname: this.host,
-          port: this.port,
-          path: "/global/health",
-          timeout: 2500,
-          headers: { Connection: "close" }
-        },
-        (res) => {
-          let d = "";
-          res.on("data", (c) => (d += c));
-          res.on("end", () => {
-            if (resolved) return;
-            resolved = true;
-            try {
-              const j = JSON.parse(d);
-              resolve({ up: true, healthy: !!j.healthy, version: j.version || null });
-            } catch {
-              const isV2 = res.statusCode === 200 && (d.includes("<title>OpenCode</title>") || d.toLowerCase().includes("opencode"));
-              resolve({ up: res.statusCode === 200, healthy: isV2, version: isV2 ? "v2" : null });
-            }
-          });
-          res.on("error", (e) => {
-            if (resolved) return;
-            resolved = true;
-            resolve({ up: false, healthy: false, error: e.message });
-          });
+  _readPassword() {
+    const now = Date.now();
+    if (this._pw && now - (this._pwTime || 0) < 3000) return this._pw;
+    try {
+      if (this.logPath && fs.existsSync(this.logPath)) {
+        const fd = fs.openSync(this.logPath, "r");
+        try {
+          const size = fs.fstatSync(fd).size;
+          const len = Math.min(size, 8192);
+          const buf = Buffer.alloc(len);
+          fs.readSync(fd, buf, 0, len, Math.max(0, size - len));
+          const matches = [...buf.toString("utf8").matchAll(/server password (\S+)/g)];
+          if (matches.length) this._pw = matches[matches.length - 1][1];
+        } finally {
+          fs.closeSync(fd);
         }
-      );
-      r.on("error", (e) => {
-        if (resolved) return;
-        resolved = true;
-        resolve({ up: false, healthy: false, error: e.message });
+      }
+    } catch (e) {
+      log.warn("[opencode] readPassword error", { err: e.message });
+    }
+    this._pwTime = now;
+    return this._pw || null;
+  }
+
+  _invalidatePassword() {
+    this._pw = null;
+    this._pwTime = 0;
+  }
+
+  _authHeader() {
+    const pw = this._readPassword();
+    return pw ? { Authorization: `Basic ${Buffer.from(`opencode:${pw}`).toString("base64")}` } : {};
+  }
+
+  // Cliente HTTP genérico de la API v2: auth, timeout, abort del cliente y
+  // reintentos ante rotación de contraseña (401 una sola vez).
+  async _v2(pathname, { method = "GET", body = null, timeoutMs = 10000, signal = null, retried = false } = {}) {
+    const headers = { ...(body ? { "Content-Type": "application/json" } : {}), ...this._authHeader() };
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const onAbort = () => ctrl.abort();
+    if (signal) {
+      if (signal.aborted) {
+        clearTimeout(timer);
+        throw new Error("OpenCode request aborted by client");
+      }
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+    let res;
+    try {
+      res = await fetch(`http://${this.host}:${this.port}${pathname}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: ctrl.signal
       });
-      r.setTimeout(2500, () => {
-        if (resolved) return;
-        resolved = true;
-        try { r.destroy(); } catch (_) {}
-        resolve({ up: false, healthy: false, error: "timeout" });
-      });
-    });
+    } catch (e) {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
+      if (signal && signal.aborted) throw new Error("OpenCode request aborted by client");
+      throw new Error(`OpenCode v2 ${method} ${pathname} failed: ${e.message}`);
+    }
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener("abort", onAbort);
+    if (res.status === 401 && !retried) {
+      this._invalidatePassword();
+      return this._v2(pathname, { method, body, timeoutMs, signal, retried: true });
+    }
+    const text = await res.text();
+    let json = null;
+    if (text) {
+      try { json = JSON.parse(text); } catch (_) {}
+    }
+    if (!json && text && text.trimStart().startsWith("<")) {
+      throw new Error("OpenCode devolvió HTML en API v2 (¿serve sin /api? versión no soportada)");
+    }
+    return { status: res.status, ok: res.ok, json, text };
+  }
+
+  async isHealthy() {
+    try {
+      const r = await this._v2("/api/info", { timeoutMs: 2500 });
+      if (r.ok && r.json && r.json.version) return { up: true, healthy: true, version: String(r.json.version) };
+      if (r.status === 401) return { up: true, healthy: false, version: null, error: "auth" };
+      return { up: r.status < 500, healthy: false, version: null, error: `status ${r.status}` };
+    } catch (_) {
+      // Sin auth o caído: si la raíz sirve la SPA de OpenCode, el serve está vivo.
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 2000);
+        const res = await fetch(`http://${this.host}:${this.port}/`, { signal: ctrl.signal });
+        clearTimeout(t);
+        const html = await res.text();
+        const up = res.ok && html.includes("<title>OpenCode</title>");
+        return { up, healthy: false, version: up ? "v2" : null, error: up ? "auth" : "down" };
+      } catch (e) {
+        return { up: false, healthy: false, error: e.message };
+      }
+    }
   }
 
   async listSessions() {
-    return new Promise((resolve, reject) => {
-      let resolved = false;
-      const r = http.get(
-        {
-          hostname: this.host,
-          port: this.port,
-          path: "/session",
-          timeout: 8000,
-          headers: { Connection: "close" }
-        },
-        (res) => {
-          let d = "";
-          res.on("data", (c) => (d += c));
-          res.on("end", () => {
-            if (resolved) return;
-            resolved = true;
-            try {
-              const payload = JSON.parse(d || "[]");
-              const rawList = Array.isArray(payload)
-                ? payload
-                : (payload.sessions || payload.data || []);
-              const normalized = rawList.map((s) => ({
-                id: s.id || s.ID || "",
-                title: s.title || s.name || s.id || "untitled",
-                createdAt: s.time?.created
-                  ? new Date(s.time.created).toISOString()
-                  : (s.createdAt || s.created_at || new Date().toISOString()),
-                updatedAt: s.time?.updated
-                  ? new Date(s.time.updated).toISOString()
-                  : (s.updatedAt || s.updated_at || s.createdAt || new Date().toISOString()),
-                provider: "opencode",
-                raw: s
-              }));
-              resolve(normalized);
-            } catch (e) {
-              reject(new Error(`Failed to parse OpenCode sessions: ${e.message}`));
-            }
-          });
-          res.on("error", (e) => {
-            if (resolved) return;
-            resolved = true;
-            reject(e);
-          });
-        }
-      );
-      r.on("error", (e) => {
-        if (resolved) return;
-        resolved = true;
-        reject(e);
-      });
-      r.setTimeout(8000, () => {
-        if (resolved) return;
-        resolved = true;
-        try { r.destroy(); } catch (_) {}
-        reject(new Error("timeout GET /session"));
-      });
-    });
+    // F6: GET /api/session (session.list) — devuelve {data:[Session.Info]} con
+    // title real de OpenCode, projectID y location.directory (para el merge por carpeta).
+    const r = await this._v2("/api/session", { timeoutMs: 8000 });
+    if (!r.ok || !r.json) throw new Error(`OpenCode v2 GET /api/session -> ${r.status}${r.text ? `: ${String(r.text).slice(0, 120)}` : ""}`);
+    const payload = r.json;
+    const rawList = Array.isArray(payload) ? payload : (payload.sessions || payload.data || []);
+    // F6: el panel de Chats sólo muestra sesiones MANUALES. Las sub-sesiones de
+    // OpenCode (parentID != null y sin fork explícito) las crean los sub-agentes
+    // del harness (agent general/explore, p. ej. "Recon…", "F5 release…") y no
+    // deben visualizarse; un fork explícito (campo fork) sí cuenta como manual.
+    // El filtro vive en la FUENTE, así que cubre listAllSessions (panel Chats),
+    // el overlay de títulos y el merge por carpeta de proyectos.
+    return rawList
+      .filter((s) => !(s.parentID && !s.fork))
+      .map((s) => ({
+      id: s.id || s.ID || "",
+      title: s.title || s.name || s.id || "untitled",
+      createdAt: s.time?.created
+        ? new Date(s.time.created).toISOString()
+        : (s.createdAt || s.created_at || new Date().toISOString()),
+      updatedAt: s.time?.updated
+        ? new Date(s.time.updated).toISOString()
+        : (s.updatedAt || s.updated_at || s.createdAt || new Date().toISOString()),
+      provider: "opencode",
+      projectId: s.projectID || null,
+      directory: s.location?.directory || null,
+      raw: s
+    }));
   }
 
   async createSession(opts = {}) {
+    // F6: POST /api/session (session.create) — acepta {title} y responde {data:Session.Info}.
     const title = opts.title || `session:${Date.now().toString(36)}`;
-    const postData = JSON.stringify({ title });
-    return new Promise((resolve, reject) => {
-      let resolved = false;
-      const req = http.request(
-        {
-          hostname: this.host,
-          port: this.port,
-          path: "/session",
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(postData),
-            Connection: "close"
-          },
-          timeout: 8000
-        },
-        (res) => {
-          let d = "";
-          res.on("data", (c) => (d += c));
-          res.on("end", () => {
-            if (resolved) return;
-            resolved = true;
-            try {
-              const j = JSON.parse(d || "{}");
-              const id = j.id || j.ID || (j.data && (j.data.id || j.data.ID)) || null;
-              if (!id) return reject(new Error(`Failed to create opencode session: ${d}`));
-              resolve({
-                id,
-                title,
-                createdAt: new Date().toISOString(),
-                provider: "opencode",
-                raw: j
-              });
-            } catch (e) {
-              reject(new Error(`Failed to parse createSession response: ${e.message}`));
-            }
-          });
-          res.on("error", (e) => {
-            if (resolved) return;
-            resolved = true;
-            reject(e);
-          });
-        }
-      );
-      req.on("error", (e) => {
-        if (resolved) return;
-        resolved = true;
-        reject(e);
-      });
-      req.setTimeout(8000, () => {
-        if (resolved) return;
-        resolved = true;
-        try { req.destroy(); } catch (_) {}
-        reject(new Error("timeout POST /session"));
-      });
-      req.write(postData);
-      req.end();
-    });
+    const r = await this._v2("/api/session", { method: "POST", body: { title }, timeoutMs: 8000 });
+    const data = r.json && (r.json.data || r.json);
+    if (!r.ok || !data || !data.id) {
+      throw new Error(`Failed to create opencode session: ${r.status} ${r.text ? String(r.text).slice(0, 200) : ""}`.trim());
+    }
+    return {
+      id: data.id,
+      title: data.title || title,
+      createdAt: data.time?.created ? new Date(data.time.created).toISOString() : new Date().toISOString(),
+      provider: "opencode",
+      // Sin envoltorio {data}: el hub hace ...created.raw y un raw.envuelto
+      // pisaría el envelope {ok,data} de la respuesta.
+      raw: data
+    };
   }
 
   async renameSession(sessionId, title) {
-    return new Promise((resolve, reject) => {
-      const postData = JSON.stringify({ title });
-      const req = http.request(
-        {
-          hostname: this.host,
-          port: this.port,
-          path: `/session/${encodeURIComponent(sessionId)}`,
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(postData),
-            Connection: "close"
-          }
-        },
-        (res) => {
-          let d = "";
-          res.on("data", (c) => (d += c));
-          res.on("end", () => {
-            try {
-              const j = JSON.parse(d || "{}");
-              resolve(j);
-            } catch {
-              resolve({ id: sessionId, title });
-            }
-          });
-        }
-      );
-      req.on("error", (e) => reject(e));
-      req.setTimeout(8000, () => {
-        try { req.destroy(); } catch (_) {}
-        reject(new Error("timeout PATCH /session"));
-      });
-      req.write(postData);
-      req.end();
+    // F6: PATCH /api/session/:id (session.update) — {title} y responde 204 sin body.
+    const r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}`, {
+      method: "PATCH",
+      body: { title },
+      timeoutMs: 8000
     });
+    if (!r.ok) throw new Error(`OpenCode rename failed: ${r.status}${r.text ? ` ${String(r.text).slice(0, 160)}` : ""}`);
+    return { id: sessionId, title };
   }
 
   async deleteSession(sessionId) {
-    return new Promise((resolve, reject) => {
-      const req = http.request(
-        {
-          hostname: this.host,
-          port: this.port,
-          path: `/session/${encodeURIComponent(sessionId)}`,
-          method: "DELETE",
-          headers: { Connection: "close" }
-        },
-        (res) => {
-          let d = "";
-          res.on("data", (c) => (d += c));
-          res.on("end", () => {
-            resolve({ id: sessionId, deleted: true });
-          });
-        }
-      );
-      req.on("error", (e) => reject(e));
-      req.setTimeout(8000, () => {
-        try { req.destroy(); } catch (_) {}
-        reject(new Error("timeout DELETE /session"));
-      });
-      req.end();
+    const r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+      timeoutMs: 8000
     });
+    if (!r.ok && r.status !== 404) throw new Error(`OpenCode delete failed: ${r.status}${r.text ? ` ${String(r.text).slice(0, 160)}` : ""}`);
+    return { id: sessionId, deleted: true };
+  }
+
+  // GET /api/session/:id (session.get) — metadatos puros (projectID, location,
+  // agent, model). Usado por el hub para sellar el origen de una sesión.
+  async getSessionMeta(sessionId) {
+    const r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}`, { timeoutMs: 6000 });
+    if (!r.ok || !r.json) return null;
+    return r.json.data || r.json || null;
+  }
+
+  // Convierte un mensaje v2 (type + content[]) al shape que entiende
+  // normalizeMessage (role + parts[]) sin perder reasoning/tools.
+  _mapV2Message(m, sessionId, idx) {
+    const role = m.role || (m.type === "user" ? "user" : "assistant");
+    let parts;
+    if (Array.isArray(m.content) && m.content.length > 0) {
+      parts = m.content.map((c, i) => ({
+        id: c.id || `prt_${m.id || idx}_${i}`,
+        type: c.type || "text",
+        text: typeof c.text === "string" ? c.text : "",
+        ...(c.tool ? { tool: c.tool } : {}),
+        ...(c.state ? { state: c.state } : {}),
+        ...(c.mime ? { mime: c.mime } : {})
+      }));
+    } else if (Array.isArray(m.parts) && m.parts.length > 0) {
+      parts = m.parts;
+    } else if (typeof m.text === "string") {
+      parts = [{ id: `prt_${m.id || idx}_0`, type: "text", text: m.text }];
+    }
+    return normalizeMessage(
+      { ...m, role, ...(parts ? { parts } : {}), ...(typeof m.text === "string" ? { text: m.text } : {}) },
+      sessionId,
+      idx
+    );
+  }
+
+  async _fetchMessagePage(sessionId, query, signal, timeoutMs = 15000) {
+    const r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}/message${query}`, { timeoutMs, signal });
+    if (r.status === 404) return { data: [], cursor: null, notFound: true };
+    if (!r.ok || !r.json) throw new Error(`OpenCode GET /message -> ${r.status}${r.text ? `: ${String(r.text).slice(0, 120)}` : ""}`);
+    return { data: r.json.data || [], cursor: r.json.cursor || null };
   }
 
   async getMessages(sessionId, opts = {}) {
-    return new Promise((resolve, reject) => {
-      let resolved = false;
-      const reqOpts = {
-        hostname: this.host,
-        port: this.port,
-        path: `/session/${encodeURIComponent(sessionId)}/message`,
-        timeout: 15000,
-        headers: { Connection: "close" }
-      };
-
-      const r = http.get(reqOpts, (res) => {
-        let d = "";
-        res.on("data", (c) => (d += c));
-        res.on("end", () => {
-          if (resolved) return;
-          resolved = true;
-          try {
-            let payload;
-            try {
-              payload = JSON.parse(d || "[]");
-            } catch {
-              payload = d;
-            }
-            const rawList = Array.isArray(payload)
-              ? payload
-              : (payload.messages || payload.data || []);
-            const normalized = rawList.map((m, idx) => normalizeMessage(m, sessionId, idx));
-            resolve(normalized);
-          } catch (e) {
-            reject(new Error(`Failed to parse messages from OpenCode: ${e.message}`));
-          }
-        });
-        res.on("error", (e) => {
-          if (resolved) return;
-          resolved = true;
-          reject(e);
-        });
-      });
-
-      if (opts.signal) {
-        opts.signal.addEventListener("abort", () => {
-          if (resolved) return;
-          resolved = true;
-          try { r.destroy(); } catch (_) {}
-          reject(new Error("OpenCode getMessages aborted by client"));
-        }, { once: true });
-      }
-
-      r.on("error", (e) => {
-        if (resolved) return;
-        resolved = true;
-        reject(e);
-      });
-      r.setTimeout(15000, () => {
-        if (resolved) return;
-        resolved = true;
-        try { r.destroy(); } catch (_) {}
-        reject(new Error(`timeout GET /session/${sessionId}/message`));
-      });
-    });
+    // F6: session.message.list con paginación por cursor (order=asc sólo en la
+    // primera página).404 = sesión inexistente en opencode (p.ej. id agy_) → []
+    // para que getUnifiedMessages la ignore en lugar de propagar ruido.
+    const all = [];
+    let query = "?order=asc&limit=200";
+    for (let page = 0; page < 15; page++) {
+      const { data, cursor, notFound } = await this._fetchMessagePage(sessionId, query, opts.signal);
+      if (notFound) break;
+      all.push(...data);
+      if (!cursor || !cursor.next) break;
+      query = `?cursor=${encodeURIComponent(cursor.next)}&limit=200`;
+    }
+    // F6: v2 mezcla mensajes-evento en el historial (model-switched,
+    // agent-switched, idle, ...). Sin este filtro se convertían en asistentes
+    // vacíos = burbujas fantasma en la app. Turnos reales: user/assistant.
+    return all
+      .filter((m) => !m || !m.type || m.type === "user" || m.type === "assistant")
+      .map((m, idx) => this._mapV2Message(m, sessionId, idx));
   }
 
   async sendMessage(sessionId, payload = {}, opts = {}) {
-    // 1. Prepare OpenCode payload structure: ensure parts array
-    let parts = [];
-    if (Array.isArray(payload.parts) && payload.parts.length > 0) {
-      parts = [...payload.parts];
-    } else if (typeof payload.text === "string" && payload.text.trim()) {
-      parts = [{ type: "text", text: payload.text.trim() }];
-    } else if (typeof payload.prompt === "string" && payload.prompt.trim()) {
-      parts = [{ type: "text", text: payload.prompt.trim() }];
-    } else {
-      parts = [{ type: "text", text: "" }];
-    }
+    // ==== F6: OpenCode v2 — POST /api/session/:id/prompt (session.prompt) ====
+    // Contrato v2 estricto: el body SOLO admite {text} (additionalProperties:
+    // false). Los archivos se inlinean en el texto, el contexto del hub va a las
+    // instructions de la sesión, y modelo/agente se cambian por endpoints
+    // separados (session.switchModel / session.switchAgent). El turno
+    // asistente se espera por polling newest-first (la app además re-sincroniza).
 
-    // 2. Handle attached files if present
+    // 1) Texto final desde parts/text/prompt + archivos adjuntos
+    const chunks = [];
+    if (Array.isArray(payload.parts) && payload.parts.length > 0) {
+      for (const p of payload.parts) if (p && typeof p.text === "string" && p.text) chunks.push(p.text);
+    } else if (typeof payload.text === "string" && payload.text.trim()) {
+      chunks.push(payload.text.trim());
+    } else if (typeof payload.prompt === "string" && payload.prompt.trim()) {
+      chunks.push(payload.prompt.trim());
+    }
     if (Array.isArray(payload.files)) {
       for (const f of payload.files) {
         if (f.name) {
@@ -499,204 +450,225 @@ export class OpencodeAdapter extends BaseProviderAdapter {
               }
             } catch (_) {}
           }
-          parts.push({ type: "text", text: fileText });
+          chunks.push(fileText);
         }
       }
     }
+    const text = chunks.join("\n").trim();
+    if (!text) throw new Error("OpenCode prompt rechazado: mensaje vacío");
 
-    // 3. Inject system context block silently as a system prompt (NEVER in visible parts)
+    // 2) Contexto del hub -> instructions persistentes de la sesión (best-effort).
+    //    v2 ya no acepta {system} en el prompt.
     const projectId = payload.projectId || opts.projectId || null;
-    const block = this.getSystemContextBlock(projectId);
-    const finalPayload = { parts };
-    if (payload.system && typeof payload.system === "string") {
-      finalPayload.system = payload.system;
-    } else if (block && block.trim()) {
-      finalPayload.system = block.trim();
-    }
-    const agentMode = payload.agent || payload.mode || opts.agent || opts.mode || "build";
-    finalPayload.agent = agentMode;
+    const block = (typeof payload.system === "string" && payload.system.trim()) || this.getSystemContextBlock(projectId);
+    if (block && block.trim()) await this._setSessionInstruction(sessionId, "aegis-context", block.trim());
+
+    // 3) Modelo — endpoint aparte POST /session/:id/model {model:{id,providerID}}
     if (payload.model) {
-      if (typeof payload.model === "object" && payload.model.modelID) {
-        finalPayload.model = payload.model;
-      } else if (typeof payload.model === "string" && payload.model.trim()) {
-        const mStr = payload.model.trim();
-        let providerID = "opencode";
-        let modelID = mStr;
-        if (mStr.includes("/")) {
-          const parts = mStr.split("/");
-          providerID = parts[0];
-          modelID = parts.slice(1).join("/");
+      const ref = await this._resolveModelRef(payload.model);
+      if (ref) {
+        const key = `${ref.providerID}/${ref.id}`;
+        if (this._lastModel.get(sessionId) !== key) {
+          let r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}/model`, {
+            method: "POST", body: { model: { id: ref.id, providerID: ref.providerID } }, timeoutMs: 8000, signal: opts.signal
+          });
+          if (!r.ok && ref.alt && ref.alt.id && ref.alt.id !== ref.id) {
+            r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}/model`, {
+              method: "POST", body: { model: { id: ref.alt.id, providerID: ref.providerID } }, timeoutMs: 8000, signal: opts.signal
+            });
+          }
+          if (!r.ok) throw new Error(`OpenCode no pudo activar el modelo ${key}: ${r.status}${r.text ? ` ${String(r.text).slice(0, 160)}` : ""}`);
+          this._lastModel.set(sessionId, key);
         }
-        finalPayload.model = { modelID, providerID };
       }
     }
 
-    const postData = JSON.stringify(finalPayload);
-
-    return new Promise((resolve, reject) => {
-      let resolved = false;
-
-      const req = http.request(
-        {
-          hostname: this.host,
-          port: this.port,
-          path: `/session/${encodeURIComponent(sessionId)}/message`,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(postData),
-            Connection: "close"
-          },
-          timeout: 90000 // Hard 90s timeout per specification
-        },
-        (res) => {
-          let d = "";
-          res.on("data", (c) => (d += c));
-          res.on("end", () => {
-            if (resolved) return;
-            resolved = true;
-            try {
-              const j = JSON.parse(d || "{}");
-              if (j.name === "BadRequest" || j.error) {
-                return reject(new Error(j.data?.message || j.message || j.error || "OpenCode error"));
-              }
-              const isUserMsg = j.role === "user" || j.type === "user" || (j.info && j.info.role === "user");
-              if (isUserMsg) {
-                log.info(`[opencode] user prompt acknowledged for ${sessionId}, polling for assistant response...`);
-                const startTime = Date.now();
-                const pollTimer = setInterval(async () => {
-                  if (Date.now() - startTime > 45000) {
-                    clearInterval(pollTimer);
-                    return resolve(normalizeMessage({ role: "assistant", text: "" }, sessionId));
-                  }
-                  try {
-                    const msgs = await this.getMessages(sessionId);
-                    const lastAssistant = msgs.filter((m) => m.role === "assistant" && m.text).pop();
-                    if (lastAssistant) {
-                      clearInterval(pollTimer);
-                      if (typeof opts.onChunk === "function" && lastAssistant.text) {
-                        try { opts.onChunk(lastAssistant.text); } catch (_) {}
-                      }
-                      return resolve(lastAssistant);
-                    }
-                  } catch (_) {}
-                }, 1000);
-                return;
-              }
-              const normalized = normalizeMessage(j, sessionId);
-              if (typeof opts.onChunk === "function" && normalized.text) {
-                try { opts.onChunk(normalized.text); } catch (_) {}
-              }
-              resolve(normalized);
-            } catch (e) {
-              reject(new Error(`Failed to parse opencode response: ${d} (${e.message})`));
-            }
-          });
-          res.on("error", (e) => {
-            if (resolved) return;
-            resolved = true;
-            reject(e);
-          });
-        }
-      );
-
-      // Manage abort signal from client connection drop
-      if (opts.signal) {
-        opts.signal.addEventListener("abort", () => {
-          if (resolved) return;
-          resolved = true;
-          try { req.destroy(); } catch (_) {}
-          reject(new Error("OpenCode sendMessage aborted by client"));
-        }, { once: true });
+    // 4) Agente PLAN/BUILD — POST /session/:id/agent (mejor esfuerzo)
+    const agentMode = payload.agent || payload.mode || opts.agent || opts.mode || null;
+    if (agentMode && ["plan", "build"].includes(String(agentMode))) {
+      try {
+        const r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}/agent`, {
+          method: "POST", body: { agent: String(agentMode) }, timeoutMs: 6000, signal: opts.signal
+        });
+        if (!r.ok && r.status !== 404) log.warn("[opencode] switchAgent failed", { status: r.status });
+      } catch (e) {
+        log.warn("[opencode] switchAgent error", { err: e.message });
       }
+    }
 
-      req.on("error", (e) => {
-        if (resolved) return;
-        resolved = true;
-        reject(e);
+    // 5) Prompt — encola en el inbox de la sesión (200 -> {data:{id,time}})
+    let ack = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}/prompt`, {
+        method: "POST", body: { text }, timeoutMs: 20000, signal: opts.signal
       });
+      if (r.ok && r.json && r.json.data) { ack = r.json.data; break; }
+      if (r.status === 409 && attempt === 0) { await new Promise((res) => setTimeout(res, 1500)); continue; }
+      const msg = (r.json && (r.json.message || r.json.error)) || `HTTP ${r.status}`;
+      throw new Error(`OpenCode prompt rechazado: ${msg}`);
+    }
+    if (!ack) throw new Error("OpenCode prompt rechazado: sin confirmación (409 persistente)");
+    const cutoff = ack.time?.created || Date.now();
+    log.info(`[opencode] prompt accepted for ${sessionId} (msg ${ack.id || "?"}), esperando turno asistente...`);
 
-      // Hard 90s timeout guard
-      req.setTimeout(90000, () => {
-        if (resolved) return;
-        resolved = true;
-        try { req.destroy(); } catch (_) {}
-        reject(new Error("OpenCode execution timed out after 90s"));
-      });
-
-      req.write(postData);
-      req.end();
-    });
+    // 6) Espera del asistente: página newest-first; completo cuando trae
+    //    time.streamed (turno cerrado) o cuando el texto es estable en 2 polls.
+    const deadline = Date.now() + 70000;
+    let stableKey = null;
+    while (Date.now() < deadline) {
+      if (opts.signal?.aborted) throw new Error("OpenCode sendMessage aborted by client");
+      await new Promise((res) => setTimeout(res, 1000));
+      if (opts.signal?.aborted) throw new Error("OpenCode sendMessage aborted by client");
+      try {
+        const page = await this._fetchMessagePage(sessionId, "?order=desc&limit=20", opts.signal, 10000);
+        let hit = null;
+        let hitText = "";
+        for (const m of page.data || []) {
+          const ts = m.time?.created || 0;
+          const isAssistant = !m.type || m.type === "assistant";
+          if (!isAssistant || ts < cutoff) continue;
+          const txt = Array.isArray(m.content)
+            ? m.content.filter((c) => c && c.type === "text" && c.text).map((c) => c.text).join("")
+            : (typeof m.text === "string" ? m.text : "");
+          if (!txt.trim()) continue;
+          hit = m; hitText = txt; break;
+        }
+        if (hit) {
+          const key = `${hit.id}:${hitText.length}`;
+          const complete = !!(hit.time && hit.time.streamed) || key === stableKey;
+          stableKey = key;
+          if (complete) {
+            const normalized = this._mapV2Message(hit, sessionId, 0);
+            if (typeof opts.onChunk === "function" && normalized.text) {
+              try { opts.onChunk(normalized.text); } catch (_) {}
+            }
+            log.info(`[opencode] assistant turn completed for ${sessionId} (${normalized.text.length} chars)`);
+            return normalized;
+          }
+        } else {
+          stableKey = null;
+        }
+      } catch (e) {
+        if (opts.signal?.aborted) throw new Error("OpenCode sendMessage aborted by client");
+        // fallo transitorio del poll — se reintenta en la siguiente vuelta
+      }
+    }
+    throw new Error("OpenCode no respondió en 70s (timeout del turno)");
   }
 
+  // F6: GET /api/model (model.list) — lista REAL de v2 (opencode, google,
+  // openrouter) con cost por modelo. Orden pedido por el usuario:
+  //   rango 0: gratis OpenCode Zen      rango 1: gratis resto (openrouter/otros)
+  //   rango 2: pago  OpenCode Zen       rango 3: pago / API-key / privados
+  // sort estable => dentro de cada rango se conserva el orden de la API.
   async listModels() {
     const now = Date.now();
     if (this._modelsCache && (now - (this._modelsCacheTime || 0) < 600000) && this._modelsCache.length > 0) {
       return this._modelsCache;
     }
-
     if (this._fetchingModels) {
       if (this._modelsCache && this._modelsCache.length > 0) return this._modelsCache;
       return this._fallbackModels();
     }
-
     this._fetchingModels = true;
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 12000);
-      const res = await fetch(`http://${this.host}:${this.port}/provider`, { signal: controller.signal });
-      clearTimeout(timer);
-
-      if (res.ok) {
-        const data = await res.json();
-        const connected = Array.isArray(data.connected) ? data.connected : ["opencode"];
-        const allProviders = Array.isArray(data.all) ? data.all : [];
-        const models = [];
-
-        // Include connected providers prioritizing opencode and google
-        const priority = ["opencode", "google", "xiaomi", "openrouter"];
-        const targetProviders = allProviders.filter(p => connected.includes(p.id))
-          .sort((a, b) => {
-            const idxA = priority.indexOf(a.id);
-            const idxB = priority.indexOf(b.id);
-            return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
-          });
-
-        for (const prov of targetProviders) {
-          for (const [key, m] of Object.entries(prov.models || {})) {
-            if (m.status && m.status !== "active") continue;
-            models.push({
-              id: m.id || key,
-              name: m.name || key,
-              description: `${prov.name || prov.id} · ${m.family || "AI"}`
-            });
+      const r = await this._v2("/api/model", { timeoutMs: 12000 });
+      if (r.ok && r.json && Array.isArray(r.json.data)) {
+        const raw = r.json.data.filter((m) => m && m.enabled !== false && (m.id || m.modelID));
+        // Índice de alias -> Model.Ref para session.switchModel
+        const refIdx = new Map();
+        for (const m of raw) {
+          const primary = String(m.modelID || m.id);
+          const secondary = String(m.id || m.modelID);
+          const ref = {
+            id: primary,
+            providerID: String(m.providerID || "opencode"),
+            ...(secondary !== primary ? { alt: { id: secondary } } : {})
+          };
+          for (const alias of new Set([m.id, m.modelID, `${m.providerID}/${m.modelID}`, `${m.providerID}/${m.id}`].filter(Boolean))) {
+            refIdx.set(String(alias), ref);
           }
         }
+        this._modelRefs = refIdx;
 
-        if (models.length > 0) {
-          this._modelsCache = models;
+        const isFree = (m) => {
+          const costs = Array.isArray(m.cost) ? m.cost : (m.cost ? [m.cost] : []);
+          if (costs.length > 0 && costs.every((c) => c && c.input === 0 && c.output === 0)) return true;
+          const id = String(m.id || "").toLowerCase();
+          return id.endsWith(":free") || id.endsWith("-free");
+        };
+        const rank = (m) => {
+          const free = isFree(m);
+          if (free) return m.providerID === "opencode" ? 0 : 1;
+          return m.providerID === "opencode" ? 2 : 3;
+        };
+        const label = { opencode: "OpenCode Zen", google: "Google AI (API key)", openrouter: "OpenRouter" };
+        const pairs = raw.map((m) => ({
+          m,
+          disp: {
+            id: String(m.id || m.modelID),
+            name: String(m.name || m.modelID || m.id),
+            description: `${label[m.providerID] || m.providerID} · ${m.family || "AI"}${isFree(m) ? " · Gratis" : ""}`,
+            provider: String(m.providerID || "opencode"),
+            free: isFree(m)
+          }
+        }));
+        pairs.sort((a, b) => rank(a.m) - rank(b.m));
+        if (pairs.length > 0) {
+          this._modelsCache = pairs.map((p) => p.disp);
           this._modelsCacheTime = now;
-          return models;
+          return this._modelsCache;
         }
       }
+      throw new Error(`GET /api/model -> ${r.status}${r.text ? `: ${String(r.text).slice(0, 100)}` : ""}`);
     } catch (e) {
       log.warn("[opencode] listModels fetch error", { err: e.message });
     } finally {
       this._fetchingModels = false;
     }
+    return (this._modelsCache && this._modelsCache.length > 0) ? this._modelsCache : this._fallbackModels();
+  }
 
-    return this._fallbackModels();
+  async _resolveModelRef(model) {
+    if (model && typeof model === "object") {
+      const id = model.modelID || model.id;
+      if (!id) return null;
+      return { id: String(id), providerID: String(model.providerID || "opencode") };
+    }
+    const key = String(model || "").trim();
+    if (!key) return null;
+    if (!this._modelRefs || this._modelRefs.size === 0) {
+      try { await this.listModels(); } catch (_) {}
+    }
+    const ref = this._modelRefs ? this._modelRefs.get(key) : null;
+    if (!ref) log.warn("[opencode] modelo no encontrado en el índice v2 (se mantiene el de la sesión)", { model: key });
+    return ref || null;
+  }
+
+  async _setSessionInstruction(sessionId, key, value) {
+    try {
+      const h = `${value.length}:${Buffer.from(value).toString("base64").slice(0, 48)}`;
+      if (this._instrHash.get(sessionId) === h) return;
+      const r = await this._v2(
+        `/api/experimental/session/${encodeURIComponent(sessionId)}/instructions/entries/${encodeURIComponent(key)}`,
+        { method: "PUT", body: { value }, timeoutMs: 6000 }
+      );
+      if (r.ok) this._instrHash.set(sessionId, h);
+      else log.warn("[opencode] instruction PUT failed", { status: r.status });
+    } catch (e) {
+      log.warn("[opencode] instruction PUT error", { err: e.message });
+    }
   }
 
   _fallbackModels() {
+    // Fallback honesto: models free reales de Zen, sólo con opencode caído.
     return [
-      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", description: "OpenCode Zen · claude-sonnet" },
-      { id: "gemini-3.1-pro", name: "Gemini 3.1 Pro Preview", description: "OpenCode Zen · gemini-pro" },
-      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", description: "OpenCode Zen · gemini-flash" },
-      { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", description: "OpenCode Zen · deepseek" },
-      { id: "gpt-5-codex", name: "GPT-5 Codex", description: "OpenCode Zen · gpt-codex" },
-      { id: "mimo-v2.5-free", name: "Mimo v2.5 Free", description: "OpenCode Zen · mimo-free" },
-      { id: "nemotron-3-ultra-free", name: "Nemotron 3 Ultra Free", description: "OpenCode Zen · nemotron-free" }
+      { id: "space-bunny-free", name: "Space Bunny Free", description: "OpenCode Zen · AI · Gratis (fallback)" },
+      { id: "mimo-v2.6-flash-free", name: "Mimo v2.6 Flash Free", description: "OpenCode Zen · AI · Gratis (fallback)" },
+      { id: "muse-spark-1.3-contributor-free", name: "Muse Spark 1.3 Contributor Free", description: "OpenCode Zen · AI · Gratis (fallback)" },
+      { id: "ling-3.0-flash-fin-free", name: "Ling 3.0 Flash Fin Free", description: "OpenCode Zen · AI · Gratis (fallback)" },
+      { id: "nemotron-3.5-lightning-free", name: "Nemotron 3.5 Lightning Free", description: "OpenCode Zen · AI · Gratis (fallback)" },
+      { id: "nemotron-3-ultra-free", name: "Nemotron 3 Ultra Free", description: "OpenCode Zen · AI · Gratis (fallback)" }
     ];
   }
 }
@@ -1522,26 +1494,45 @@ export class ProviderManager {
     return list;
   }
 
-  // Resolve which provider should handle a session or request
+  // F6: el proveedor de nacimiento de una sesión es INAMOVIBLE. Orden:
+  // 1) vínculo persistente en projects.json (reparado en caliente por prefijo),
+  // 2) convención del id (ses_ -> opencode, agy_ -> antigravity),
+  // 3) header explícito (sólo para ids sin convención conocida),
+  // 4) heurística brain-dir y default.
+  // Así, cambiar el pill de modelo en la app NUNCA re-bindea ("borra") la sesión.
+  static _conventionProvider(sessionId) {
+    if (typeof sessionId !== "string") return null;
+    if (sessionId.startsWith("agy_")) return "antigravity";
+    if (sessionId.startsWith("ses_")) return "opencode";
+    return null;
+  }
+
   resolveProvider(sessionId, explicitProvider = null, projectsStore = null) {
-    if (explicitProvider && this.adapters.has(explicitProvider.toLowerCase())) {
-      return this.adapters.get(explicitProvider.toLowerCase());
-    }
+    const convention = ProviderManager._conventionProvider(sessionId);
 
     if (sessionId && projectsStore && Array.isArray(projectsStore.projects)) {
       for (const p of projectsStore.projects) {
         const sess = (p.sessions || []).find((s) => s.sessionId === sessionId);
         if (sess) {
-          const provId = (sess.provider || p.provider || this.defaultProvider).toLowerCase();
+          let provId = String(sess.provider || p.provider || this.defaultProvider || "").toLowerCase();
+          // Reparación en caliente: si el registro quedó corrompido por un
+          // header X-Provider, el prefijo del id es la autoridad.
+          if (convention && provId !== convention) provId = convention;
           if (this.adapters.has(provId)) return this.adapters.get(provId);
+          if (convention && this.adapters.has(convention)) return this.adapters.get(convention);
         }
       }
     }
 
+    if (convention && this.adapters.has(convention)) return this.adapters.get(convention);
+
+    if (explicitProvider && this.adapters.has(explicitProvider.toLowerCase())) {
+      return this.adapters.get(explicitProvider.toLowerCase());
+    }
+
     if (
       sessionId &&
-      (sessionId.startsWith("agy_") ||
-        fs.existsSync(path.join("/root/.gemini/antigravity-cli/brain", sessionId)))
+      fs.existsSync(path.join("/root/.gemini/antigravity-cli/brain", sessionId))
     ) {
       return this.adapters.get("antigravity");
     }
