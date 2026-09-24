@@ -1275,7 +1275,10 @@ async function handleRequest(req, res){
     const isStream = url.searchParams.get("stream") === "true" ||
                      (req.headers["accept"] && req.headers["accept"].includes("text/event-stream"));
     try {
-      const raw = await readJsonBody(req, 512 * 1024);
+      // F7: este límite era 512KB y rechazaba CUALQUIER envío con adjuntos
+      // (6 archivos × 5MB base64 ≈ 40MB) con "JSON body excede 0.5MB". Se usa
+      // el límite global MAX_JSON_BODY (55MB), coherente con MAX_BUFFER.
+      const raw = await readJsonBody(req, MAX_JSON_BODY);
       const body = JSON.parse(raw || "{}");
 
       const headerProvider = req.headers["x-provider"]

@@ -292,10 +292,27 @@ export class OpencodeAdapter extends BaseProviderAdapter {
   async listSessions() {
     // F6: GET /api/session (session.list) — devuelve {data:[Session.Info]} con
     // title real de OpenCode, projectID y location.directory (para el merge por carpeta).
-    const r = await this._v2("/api/session", { timeoutMs: 8000 });
-    if (!r.ok || !r.json) throw new Error(`OpenCode v2 GET /api/session -> ${r.status}${r.text ? `: ${String(r.text).slice(0, 120)}` : ""}`);
-    const payload = r.json;
-    const rawList = Array.isArray(payload) ? payload : (payload.sessions || payload.data || []);
+    // F7: la API PAGINA (limit por defecto = las50 más recientes + cursor.next).
+    // Con una sola llamada sólo llegaban las50 primeras →23 sesiones manuales
+    // antiguas (Sep07–Sep23) no aparecían en el panel hasta que se creaba un chat
+    // nuevo que "empujaba" el tope. Recorremos todas las páginas (200/pág., tope
+    // de10 =2000 sesiones) con dedupe por id.
+    const rawList = [];
+    const seenIds = new Set();
+    let cursor = null;
+    for (let page = 0; page < 10; page++) {
+      const qs = `?order=desc&limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+      const r = await this._v2(`/api/session${qs}`, { timeoutMs: 10000 });
+      if (!r.ok || !r.json) throw new Error(`OpenCode v2 GET /api/session -> ${r.status}${r.text ? `: ${String(r.text).slice(0, 120)}` : ""}`);
+      const payload = r.json;
+      const batch = Array.isArray(payload) ? payload : (payload.sessions || payload.data || []);
+      for (const s of batch) {
+        const id = s && (s.id || s.ID);
+        if (id && !seenIds.has(id)) { seenIds.add(id); rawList.push(s); }
+      }
+      cursor = (!Array.isArray(payload) && payload.cursor && payload.cursor.next) || null;
+      if (!batch.length || !cursor) break;
+    }
     // F6: el panel de Chats sólo muestra sesiones MANUALES. Las sub-sesiones de
     // OpenCode (parentID != null y sin fork explícito) las crean los sub-agentes
     // del harness (agent general/explore, p. ej. "Recon…", "F5 release…") y no
@@ -386,6 +403,27 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     } else if (typeof m.text === "string") {
       parts = [{ id: `prt_${m.id || idx}_0`, type: "text", text: m.text }];
     }
+    // F7: los adjuntos del usuario viven en m.files (top-level), no en
+    // content[]/parts; sin este mapeo las imágenes/docs desaparecían del
+    // historial al recargar la conversación (solo se veían en el optimista).
+    if (Array.isArray(m.files) && m.files.length > 0) {
+      const fileParts = m.files.map((f, i) => {
+        const mime = f.mime || "application/octet-stream";
+        const url = f.source && f.source.type === "uri" && f.source.uri
+          ? f.source.uri
+          : (f.data ? `data:${mime};base64,${f.data}` : null);
+        return {
+          id: `prt_${m.id || idx}_f${i}`,
+          type: "file",
+          text: "",
+          ...(f.name ? { filename: f.name } : {}),
+          mime,
+          ...(url ? { url } : {})
+        };
+      });
+      parts = parts ? [...parts, ...fileParts] : fileParts;
+      if (!parts.some((p) => p.type === "text")) parts.unshift({ id: `prt_${m.id || idx}_t`, type: "text", text: typeof m.text === "string" ? m.text : "" });
+    }
     return normalizeMessage(
       { ...m, role, ...(parts ? { parts } : {}), ...(typeof m.text === "string" ? { text: m.text } : {}) },
       sessionId,
@@ -454,8 +492,29 @@ export class OpencodeAdapter extends BaseProviderAdapter {
         }
       }
     }
-    const text = chunks.join("\n").trim();
-    if (!text) throw new Error("OpenCode prompt rechazado: mensaje vacío");
+    // F7: adjuntos nativos v2 (PromptInput.FileAttachment {uri,name}). Antes los
+    // parts tipo "file" (imágenes/videos/docs en data:...;base64) se DESCARTABAN
+    // porque sólo se leía p.text → el modelo nunca recibía los adjuntos. Ahora se
+    // reenvían tal cual en files[] del prompt (v2 los acepta como source inline);
+    // los ficheros de texto siguen inlineados arriba para máxima compatibilidad.
+    const v2Files = [];
+    const pushV2File = (uri, name) => {
+      if (typeof uri === "string" && /^(data|https?):/i.test(uri)) v2Files.push({ uri, name: name || "adjunto" });
+    };
+    if (Array.isArray(payload.parts)) {
+      for (const p of payload.parts) if (p && p.type === "file") pushV2File(p.url, p.filename || p.name);
+    }
+    if (Array.isArray(payload.files)) {
+      for (const f of payload.files) {
+        if (!f) continue;
+        if (f.url) pushV2File(f.url, f.name);
+        else if (f.base64) pushV2File(`data:${f.mime || "application/octet-stream"};base64,${f.base64}`, f.name);
+      }
+    }
+
+    let text = chunks.join("\n").trim();
+    if (!text && v2Files.length === 0) throw new Error("OpenCode prompt rechazado: mensaje vacío");
+    if (!text) text = "[Mensaje solo con adjuntos]";
 
     // 2) Contexto del hub -> instructions persistentes de la sesión (best-effort).
     //    v2 ya no acepta {system} en el prompt.
@@ -496,18 +555,32 @@ export class OpencodeAdapter extends BaseProviderAdapter {
       }
     }
 
-    // 5) Prompt — encola en el inbox de la sesión (200 -> {data:{id,time}})
+    // 5) Prompt — encola en el inbox de la sesión (200 -> {data:{id,time}}).
+    //    F7: si hay adjuntos nativos se envían en files[] (v2 los normaliza a
+    //    source inline). Si v2 los rechaza (4xx), se reintenta SIN adjuntos para
+    //    que el texto del mensaje no se pierda (fallback degradado + warn).
+    let sentFiles = v2Files.length > 0;
     let ack = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let droppedFiles = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const body = sentFiles ? { text, files: v2Files } : { text };
       const r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}/prompt`, {
-        method: "POST", body: { text }, timeoutMs: 20000, signal: opts.signal
+        method: "POST", body, timeoutMs: 30000, signal: opts.signal
       });
       if (r.ok && r.json && r.json.data) { ack = r.json.data; break; }
-      if (r.status === 409 && attempt === 0) { await new Promise((res) => setTimeout(res, 1500)); continue; }
+      if (r.status === 409 && attempt < 2) { await new Promise((res) => setTimeout(res, 1500)); continue; }
+      if (sentFiles && r.status >= 400 && r.status < 500) {
+        log.warn(`[opencode] v2 rechazó adjuntos (${r.status}); reenvío solo texto`, { files: v2Files.length });
+        sentFiles = false;
+        droppedFiles = true;
+        attempt = -1; // reinicia el ciclo: reintento con texto solo + reintento 409
+        continue;
+      }
       const msg = (r.json && (r.json.message || r.json.error)) || `HTTP ${r.status}`;
       throw new Error(`OpenCode prompt rechazado: ${msg}`);
     }
     if (!ack) throw new Error("OpenCode prompt rechazado: sin confirmación (409 persistente)");
+    if (droppedFiles) log.warn(`[opencode] adjuntos descartados para ${sessionId}; el modelo NO los recibió`);
     const cutoff = ack.time?.created || Date.now();
     log.info(`[opencode] prompt accepted for ${sessionId} (msg ${ack.id || "?"}), esperando turno asistente...`);
 
