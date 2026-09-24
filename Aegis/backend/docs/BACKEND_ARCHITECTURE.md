@@ -1,4 +1,4 @@
-# Arquitectura del Backend: OpenCode & Antigravity Companion Hub
+# Arquitectura del Backend: Aegis Hub (OpenCode & Antigravity)
 
 **Versión:** 2.0.0  
 **Host Runtime:** Node.js v24 (Linux aarch64, POCO F3 "Alioth" / KernelSU)  
@@ -9,18 +9,18 @@
 
 ## 1. Resumen Ejecutivo y Topología del Sistema
 
-El **Companion Hub** actúa como el núcleo de orquestación local y proxy inteligente entre los clientes frontend (Aplicación Android Jetpack Compose `com.aegis.hub` y clientes web) y los motores de IA para desarrollo de software: **OpenCode** (daemon HTTP en puerto 4096) y **Google Antigravity CLI** (`/root/.local/bin/agy`).
+El **Aegis Hub** actúa como el núcleo de orquestación local y proxy inteligente entre los clientes frontend (Aplicación Android Jetpack Compose `com.aegis.hub` y clientes web) y los motores de IA para desarrollo de software: **OpenCode** (daemon HTTP en puerto 4096) y **Google Antigravity CLI** (`/root/.local/bin/agy`).
 
 ### 1.1 Diagrama de Arquitectura de Alto Nivel
 
 ```mermaid
 flowchart TD
     subgraph Frontend["Frontend Clients"]
-        App["Android Companion App<br/>(Jetpack Compose + OkHttp 90s)"]
+        App["Aegis App<br/>(Jetpack Compose + OkHttp 90s)"]
         Web["Web / REST API Clients"]
     end
 
-    subgraph Hub["Companion Hub (Node.js :8765)"]
+    subgraph Hub["Aegis Hub (Node.js :8765)"]
         Router["HTTP Router & Header Processor<br/>(X-Provider, X-Project-Id)"]
         Mutex["FileMutex & Atomic IO<br/>(projects.json, providers.json)"]
         Normalizer["Message Normalizer<br/>Strict Typing: { ok: true, data }"]
@@ -205,13 +205,13 @@ El endpoint `/api/system/health` ofrece visibilidad completa sobre los subsistem
 - **`runtime`:** Versión de Node.js, ruta de ejecutable, PID del hub, tiempo activo (uptime), estadísticas de memoria (heap/rss) y plataforma.
 - **`a11ySocket`:** Sonda HTTP activa a `http://127.0.0.1:8766/status` verificando el estado del `CompanionService` y la reparación reactiva de accesibilidad.
 - **`agy`:** Validación de presencia de `/root/.local/bin/agy`, permisos de ejecución y verificación de respuesta vía `agy --version`.
-- **`permissions`:** Comprobación en tiempo real de escritura en `/tmp` y `/sdcard/projects/opencode-companion`, verificación de UID root (`uid === 0`) y namespace actual.
+- **`permissions`:** Comprobación en tiempo real de escritura en `/tmp` y `/sdcard/projects/Aegis/backend`, verificación de UID root (`uid === 0`) y namespace actual.
 - **`opencode`:** Sonda HTTP hacia `http://127.0.0.1:4096/global/health` reportando disponibilidad y versión.
 
 ---
 
 ## 7. Supervisor y Resiliencia (`keepalive.sh`)
 
-- **Gestión de Bloqueo:** Utiliza `/sdcard/projects/opencode-companion/keepalive.lock` para prevenir instancias duplicadas.
+- **Gestión de Bloqueo:** Utiliza `/sdcard/projects/Aegis/backend/keepalive.lock` para prevenir instancias duplicadas.
 - **Protección de Sesiones TUI:** Distingue rigurosamente entre procesos de OpenCode TUI interactivos en terminales virtuales (`tty_nr !== 0`, pts) y el modo daemon (`tty_nr === 0`), garantizando que los reinicios del hub nunca cierren la sesión manual del desarrollador.
 - **Recuperación Automática:** Cada 10 segundos evalúa la disponibilidad de OpenCode (`:4096`) y del Hub (`:8765`), relanzando de forma limpia los procesos caídos.

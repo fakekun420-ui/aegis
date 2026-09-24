@@ -552,7 +552,7 @@ private fun buildInline(src: String, cursor: String = ""): AnnotatedString {
 }
 
 /**
- * CLI Wizard Continuous Tool Execution Card for OpenCode Companion & Antigravity.
+ * CLI Wizard Continuous Tool Execution Card for Aegis & Antigravity.
  * Renderiza pasos de ejecución en tiempo real: comando ❯ bash(...), progreso,
  * código de salida (exit code) y bloque de consola terminal `#0D1117`.
  */

@@ -1,4 +1,4 @@
-# FRONTEND CONTRACT: OpenCode & Antigravity Companion
+# FRONTEND CONTRACT: Aegis (OpenCode & Antigravity)
 
 **Version:** 1.3.0  
 **Target Clients:** Android App (`com.aegis.hub`, Jetpack Compose Material 3), Web Clients  
@@ -10,7 +10,7 @@
 
 ## 1. Overview & Communication Architecture
 
-The Companion app interfaces with the backend hub at `http://127.0.0.1:8765` (or configured host), which routes requests dynamically to either **OpenCode** (native daemon on port 4096) or **Antigravity CLI** (`/root/.local/bin/agy`).
+The Aegis app interfaces with the backend hub at `http://127.0.0.1:8765` (or configured host), which routes requests dynamically to either **OpenCode** (native daemon on port 4096) or **Antigravity CLI** (`/root/.local/bin/agy`).
 
 ```
 ┌────────────────────────────┐
@@ -291,7 +291,7 @@ All JSON emitted through `json()` in `server.js` (the helper also used by the 4 
 | `GET /api/system/status` | Raw `SystemStatus{ready,sessionOwnership,...}` — overlay gate in `MainActivity` parses the raw body. |
 | `/opencode/*` proxy (SSE streams) | Event/message streams, not JSON envelopes. |
 | `GET /api/device/screenshot?raw=1` | Explicit raw mode: `text/plain` base64 body. |
-| `POST /api/device/a11y` forward | Passthrough of the Companion APK (:8766) body/status as-is. |
+| `POST /api/device/a11y` forward | Passthrough of the Aegis app (:8766) body/status as-is. |
 
 ### 7.2. Health contracts
 
@@ -360,7 +360,7 @@ All JSON emitted through `json()` in `server.js` (the helper also used by the 4 
 ### 7.5. keepalive.sh contract
 
 - Probe = `curl -m 2 -s -f http://127.0.0.1:$HUB_PORT/api/health | grep -q '"server":"running"'` (token-exempt, light). The old probe hit `/api/status` **without** token → 403 forever → the loop killed/relaunched the hub every 10s.
-- Hub pid pattern = `node.*Aegis/backend/server.js` (the old `opencode-companion/server.js` pattern matched nothing).
+- Hub pid pattern = `node.*Aegis/backend/server.js` (el patrón del repo pre-migración ya no matcheaba nada — no lo reintroducir).
 - Package guard = `com.aegis.hub` (real `applicationId`).
 
 ---
@@ -502,7 +502,7 @@ Todo `:id` de proyecto/sesión/skill —incluidos los de **query** (`?projectId=
   "generatedAt": "2026-09-24T01:04:30.467Z" } }
 ```
 
-- **Fuentes de verdad:** `HUB_VERSION` de `server.js` (en F4 sigue siendo `1.0.0-SNAPSHOT`; la sube F5) · `src/bootstrap/node-manifest.json` (la `version` de `node` es `process.version`, la del artefacto es la pineada) · `src/bootstrap/ubuntu-manifest.json` (la versión se **deriva** del `fileName` con `ubuntu-base-([\d.]+)`) · `src/bootstrap/skills-manifest.json` ∪ `src/skills/catalog.json` (versión pineada del catálogo; `graphify → null` porque no la lleva).
+- **Fuentes de verdad:** `HUB_VERSION` de `server.js` (fijada en `1.0.0` por F5; el test la lee del fuente) · `src/bootstrap/node-manifest.json` (la `version` de `node` es `process.version`, la del artefacto es la pineada) · `src/bootstrap/ubuntu-manifest.json` (la versión se **deriva** del `fileName` con `ubuntu-base-([\d.]+)`) · `src/bootstrap/skills-manifest.json` ∪ `src/skills/catalog.json` (versión pineada del catálogo; `graphify → null` porque no la lleva).
 - **Honestidad `null + note`:** `opencode` y `agy` son sondas reales con timeout corto (1500 ms y 3000 ms, **en paralelo**; `agy` se cachea por proceso). Si no hay serve ni binario, o el binario no responde, el campo va en `null` con un `note` que explica el porqué — **nunca se inventa una versión**.
 - `skills[].version` es `string | null` (`null` = el catálogo no pinea versión).
 

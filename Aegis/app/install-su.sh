@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# opencode-companion su installer — POCO F3 crDroid15 (ROOT)
+# Aegis su installer — POCO F3 crDroid15 (ROOT)
 # Uso: su -c "sh /sdcard/projects/Aegis/app/install-su.sh [/ruta/al.apk]"
 # Tiempo: ~60s (instalación) + 10s whitelist
 set -e
@@ -8,7 +8,7 @@ if [ -z "$APK" ]; then
   for p in \
     "/sdcard/Download/app-debug.apk" \
     "/sdcard/Download/app-release.apk" \
-    "/sdcard/Download/opencode-companion.apk" \
+    "/sdcard/Download/aegis.apk" \
     "/sdcard/projects/Aegis/app/app/build/outputs/apk/debug/app-debug.apk" \
     "/sdcard/projects/Aegis/app/app/build/outputs/apk/release/app-release-unsigned.apk"; do
     if [ -f "$p" ]; then APK="$p"; break; fi
@@ -74,5 +74,5 @@ echo "  deviceidle whitelist:"; nsenter -t 1 -m -- dumpsys deviceidle whitelist 
 echo "  bridge 8766:"; curl -m 3 -s http://127.0.0.1:8766/status 2>&1 | head -c 400; echo
 echo "  hub 8765:"; curl -m 3 -s http://127.0.0.1:8765/api/status 2>&1 | head -c 300; echo
 echo ""
-echo "Listo. Abre la app 'Opencode Companion' para ver estado, o http://127.0.0.1:8765 para el hub voz."
+echo "Listo. Abre la app 'Aegis' para ver estado, o http://127.0.0.1:8765 para el hub voz."
 echo "Si el bridge 8766 no responde, abre la app manualmente una vez (dispara onCreate del CompanionService)."

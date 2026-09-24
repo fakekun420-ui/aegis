@@ -11,7 +11,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // Auto-increment versionCode via BUILD_NUMBER (GitHub run_number) — each CI build unique (spec 2)
-        versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        // F5 (v1.0.0): fallback LOCAL subido 1 -> 2; en CI manda BUILD_NUMBER/GITHUB_RUN_NUMBER
+        versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 2
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

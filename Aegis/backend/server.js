@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// opencode-companion hub — proxy opencode + device bridge + TTS/STT host
+// Aegis hub — proxy opencode + device bridge + TTS/STT host
 // Node 18+ only builtins. No npm deps.
 // Listens 127.0.0.1:8765 (loopback only, exige X-Aegis-Token en /api/*) -> serves public/ + /opencode/* proxy + /api/device/*
 import http from "node:http";
@@ -55,9 +55,10 @@ import { SkillManager } from "./src/skills/SkillManager.js";
 // hub.log, así que el log persistente sale igual, ahora con nivel y módulo.
 const log = createLogger("hub");
 
-// F4: versión del hub para GET /api/setup/manifest (SBOM). Constante TEMPORAL
-// en SNAPSHOT: F5 la subirá a "1.0.0" — NO cambiarla desde fases de backend.
-const HUB_VERSION = "1.0.0-SNAPSHOT";
+// Versión del hub para GET /api/setup/manifest (SBOM). Fuente ÚNICA: el valor
+// vive aquí y lo consumen tests/manifest.test.js y el contrato §9.5; subirlo es
+// tarea de release (F5 subió "1.0.0-SNAPSHOT" -> "1.0.0").
+const HUB_VERSION = "1.0.0"; // F5: release v1.0.0 (fuente única del SBOM; la sigue tests/manifest.test.js)
 
 // Helper: send ok envelope consistently
 function ok(data) { return { ok: true, data }; }

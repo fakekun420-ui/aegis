@@ -83,7 +83,7 @@ class CompanionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     private fun startForegroundNotif(){
-        val chId = "opencode-companion"
+        val chId = "aegis-hub" // F5: canal de notificación renombrado del id legado (no es patrón de proceso/path)
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
             val ch = NotificationChannel(chId, "Aegis", NotificationManager.IMPORTANCE_LOW)

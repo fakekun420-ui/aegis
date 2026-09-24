@@ -22,4 +22,4 @@
 
 ## Companion project — `SESSION_HANDOFF.md`
 
-- Continuation handoff for the Companion web/hub work lives at `/sdcard/projects/opencode-companion/SESSION_HANDOFF.md`. The new session must read it first and confirm readiness there before resuming UI fixes.
+- Continuation handoff for the Companion web/hub work lives at `/sdcard/projects/Aegis/backend/SESSION_HANDOFF.md`. The new session must read it first and confirm readiness there before resuming UI fixes.

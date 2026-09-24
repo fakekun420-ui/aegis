@@ -1,4 +1,4 @@
-# FRONTEND CONTRACT: OpenCode & Antigravity Companion
+# FRONTEND CONTRACT: Aegis (OpenCode & Antigravity)
 
 **Version:** 1.2.0  
 **Target Clients:** Android App (`com.aegis.hub`, Jetpack Compose Material 3), Web Clients  
@@ -9,7 +9,7 @@
 
 ## 1. Overview & Communication Architecture
 
-The Companion app interfaces with the backend hub at `http://127.0.0.1:8765` (or configured host), which routes requests dynamically to either **OpenCode** (native daemon on port 4096) or **Antigravity CLI** (`/root/.local/bin/agy`).
+The Aegis app interfaces with the backend hub at `http://127.0.0.1:8765` (or configured host), which routes requests dynamically to either **OpenCode** (native daemon on port 4096) or **Antigravity CLI** (`/root/.local/bin/agy`).
 
 ```
 ┌────────────────────────────┐

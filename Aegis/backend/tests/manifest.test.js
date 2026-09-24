@@ -6,7 +6,8 @@
 //   * honestidad: donde no hay dato verificable el campo va `null` + `note`
 //     (NUNCA se inventa una versión)
 //   * hub.version sale de HUB_VERSION de server.js (se lee del FICHERO FUENTE:
-//     F4 no sube la versión — eso lo hace F5 — y el test la sigue, no la pisa)
+//     la sube F5 y el test la sigue, no la pisa — así el literal vive en un
+//     solo sitio y este test no hay que tocarlo en cada release)
 //   * versiones de node/ubuntu = manifests con los que el bootstrap INSTALA de
 //     verdad (src/bootstrap/*-manifest.json), sha256 = 64 hex
 //   * skills = ids de skills-manifest.json ∪ catálogo allowlist, con la versión
@@ -120,7 +121,7 @@ test("2. shape EXACTO del SBOM + versiones derivadas de los manifests reales", a
     "shape del SBOM cambiado"
   );
 
-  // hub.version = HUB_VERSION de server.js (leído del fuente: F4 no sube la versión, F5 lo hará)
+  // hub.version = HUB_VERSION de server.js (leída del fuente: F5 la fija en "1.0.0")
   const src = fs.readFileSync(SERVER_FILE, "utf8");
   const hv = src.match(/const\s+HUB_VERSION\s*=\s*"([^"]+)"/);
   assert.ok(hv, "HUB_VERSION no encontrada en server.js");

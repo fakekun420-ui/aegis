@@ -1,5 +1,9 @@
 # Build Aegis APK — pipeline F4 (backend blindado + APK debug/release + SAST)
 #
+# ⚠️ ESPEJO: GitHub sólo ejecuta .github/workflows/ de la RAÍZ del repo.
+# El CANÓNICO es /.github/workflows/build-apk.yml (paths con prefijo Aegis/).
+# Si editas aquí, replica en la raíz — y viceversa.
+#
 # Cadena (los jobs encadenados con `needs` se ejecutan en este orden):
 #   backend-checks ──► lint ──┬──► build-debug ──► build-release (condicional)
 #                             ├──► semgrep   (continue-on-error: ver nota)
