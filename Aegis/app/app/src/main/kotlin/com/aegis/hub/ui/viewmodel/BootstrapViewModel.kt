@@ -42,7 +42,7 @@ data class BootstrapUiState(
 )
 
 /**
- * F1 — dominio de bootstrap contra /api/bootstrap/* (ApiClient + token del hub).
+ * F1 — dominio de bootstrap bajo el prefijo /api/bootstrap/ (state, run, step, cancel) —ApiClient + token del hub.
  *
  * - Polling en vivo cada 1000 ms mientras phase == running; carga única en el resto de fases.
  * - Red/403 → hubReachable=false ("Esperando el hub…") + reintento suave cada 5 s.
@@ -51,7 +51,7 @@ data class BootstrapUiState(
  * F2: friendlyError() (top-level, al final de este archivo) traduce los códigos
  * crudos del motor de instalación a mensajes guía; el raw sigue visible en
  * SetupWizardScreen (cabecera y card del paso).
- * F3: runFinalCheck()/runSmokeTest()/guideAuth() contra /api/setup/*. Sus fallos
+ * F3: runFinalCheck()/runSmokeTest()/guideAuth() bajo el prefijo /api/setup/ (final-check, smoke-test, auth). Sus fallos
  * quedan LOCALES (actionError o smokeError) sin alternar hubReachable, para que
  * la tarjeta "Verificación final" siga visible con su error; el bloqueo
  * "Esperando el hub…" queda reservado al polling de estado (fetchState).
@@ -356,7 +356,7 @@ class BootstrapViewModel(
     /**
      * Retrofit NO convierte los errorBody (4xx/5xx): el envelope {ok,error:{code,message}}
      * se parsea a mano. F1 y F3 comparten el MISMO shape de envelope de error, por lo
-     * que se reutiliza el mismo parser para /api/bootstrap/* y /api/setup/*.
+     * que se reutiliza el mismo parser para /api/bootstrap/ y /api/setup/.
      * Cualquier cuerpo inesperado → null (sin excepción).
      */
     private fun parseErrorBody(resp: Response<*>): BootstrapError? = try {
