@@ -17,10 +17,17 @@ import {
   atomicWriteFileSync,
   normalizeMessage
 } from "./providers.js";
+// BACKLOG (F0-F2, unificación): loadProjectsStore con define SOLO en
+// src/core/storage.js (antes también aquí y en providers.js — firmas idénticas).
+import { loadProjectsStore } from "./src/core/storage.js";
 
 import { handleSkillsRoute } from "./src/api/skillsRoutes.js";
-// A-7 (A-4 backlog #1): adapter claudecode — taskClassifier recomienda "claudecode" y la rama
-// existía sin adapter registrado (modelRouter caía siempre al fallback antigravity).
+// A-7 (A-4 backlog #1): adapter claudecode — lo recomendaba taskClassifier y la
+// rama existía sin adapter registrado. BACKLOG F0-F2: taskClassifier/modelRouter se
+// ELIMINARON como código muerto (0 consumidores en runtime; su ruteo por prompt
+// cambiaba el adapter/modelo por defecto => incumplía el "cero cambio de
+// comportación"; ver decisión en docs/AEGIS_MASTER_PROMPT.md Fase 7). El adapter
+// claudecode se MANTIENE registrado y seleccionable (providers.json / X-Provider).
 import { ClaudeCodeAdapter } from "./src/adapters/ClaudeCodeAdapter.js";
 import { handleProjectRoutes } from "./src/api/projectRoutes.js";
 // A-2: routers antes huérfanos (jobs/agents/workflows/content) + subsistemas del motor
@@ -213,28 +220,9 @@ function saveUiState() {
 // Envelope: all /api/projects routes return {ok:true,data:...} or {ok:false,error:...} (spec 6).
 const PROJECTS_STORE_FILE = path.join(__dirname, "projects.json");
 
-// Load projects from disk — returns {projects: [], sessionTitles: {}} envelope on disk (or [] legacy).
-function loadProjectsStore() {
-  try {
-    const raw = atomicReadFileSync(PROJECTS_STORE_FILE, { projects: [], sessionTitles: {} });
-    let store;
-    if (Array.isArray(raw)) store = { projects: raw, sessionTitles: {} };
-    else if (raw && Array.isArray(raw.projects)) store = raw;
-    else store = { projects: [], sessionTitles: {} };
-    if (!store.sessionTitles || typeof store.sessionTitles !== "object") {
-      store.sessionTitles = {};
-    }
-    // Seed sessionTitles from projects
-    for (const p of (store.projects || [])) {
-      for (const s of (p.sessions || [])) {
-        if (s.sessionId && s.title && s.title !== s.sessionId && !store.sessionTitles[s.sessionId]) {
-          store.sessionTitles[s.sessionId] = s.title;
-        }
-      }
-    }
-    return store;
-  } catch (e) { log.error("[projects] load err", { err: e.message }); return { projects: [], sessionTitles: {} }; }
-}
+// BACKLOG (F0-F2, unificación): loadProjectsStore se MOVIO a src/core/storage.js
+// (fuente única — antes existía también en providers.js). Misma firma, misma
+// semántica (versión canónica con seeds de sessionTitles); se importa arriba.
 
 function resolveExistingSessionTitle(store, sessionId, fallbackTitle = null) {
   if (!sessionId) return fallbackTitle || "";
@@ -1050,8 +1038,16 @@ async function handleRequest(req, res){
     }
   }
 
-  // ---- Auth de TODAS las rutas /api/*: exige X-Aegis-Token (única excepción sin token: GET /api/health) ----
-  if (isApi && !isPublicHealth && !tokenMatches(req.headers["x-aegis-token"])) {
+  // ---- Auth de TODAS las rutas /api/* Y /opencode/*: exige X-Aegis-Token (única excepción sin token: GET /api/health) ----
+  // BACKLOG (F0-F2, cierre A-1): el prefijo /opencode/* (rutas de sesión/mensaje sin
+  // /api y el proxy de respaldo) quedaba FUERA del middleware — cualquier proceso
+  // local podía invocarlo. Consumidores verificados con grep: la app Android añade
+  // X-Aegis-Token a TODAS sus peticiones (ApiClient.authInterceptor + TokenProvider
+  // para HttpURLConnection) y los tests/envíos de prueba ya llevan token; scripts de
+  // diagnóstico sólo usan /api/health (exento). Nota: el rate limit /api/* NO se
+  // toca (exenciones y techo F4 intactos).
+  const needsToken = isApi || pathname === "/opencode" || pathname.startsWith("/opencode/");
+  if (needsToken && !isPublicHealth && !tokenMatches(req.headers["x-aegis-token"])) {
     return json(res, 403, { ok: false, error: { code: "FORBIDDEN", message: "missing or invalid token" } });
   }
 
@@ -1350,6 +1346,12 @@ async function handleRequest(req, res){
 
       body.projectId = pId;
       if (!body.model) {
+        // BACKLOG F0-F2 (decisión documentada — BUG-05/06): default de modelo
+        // INTENCIONAL y único. modelRouter/taskClassifier se eliminaron porque
+        // route() clasificaba POR PROMPT (p.ej. "fix" -> claudecode, "arquitectura"
+        // -> gemini-3.1-pro) y eso cambiaba el comportamiento por defecto; providers.json
+        // no tiene sección de modelos que consumir. El PROVEEDOR por defecto sí es
+        // configurable (providers.json -> ProviderManager.loadConfig / POST /api/providers/default).
         body.model = "gemini-3.8-flash-high";
       }
       const agentMode = body.agent || body.mode || req.headers["x-agent"] || req.headers["x-mode"] || "build";
@@ -2466,9 +2468,15 @@ async function handleRequest(req, res){
   }
 
   // GET /api/projects/:id/summary — read summary (optional fetch helper)
-  if(pathname.match(/^\/api\/projects\/[^\/]+\/summary$/) && req.method==="GET"){
-    const m = pathname.match(/^\/api\/projects\/[^\/]+\/summary$/);
-    const id = sanitizeProjectId(decodeURIComponent(m[1]));
+  // BACKLOG F0-F2 (bug preexistente, hallazgo F4): el regex original NO tenía grupo
+  // de captura => m[1] === undefined => id literal "undefined" => 404 SIEMPRE, hasta
+  // con el fichero en disco. Ahora: ([^/]+) captura el id, isValidId rechaza
+  // traversal con 400 ANTES de tocar summaries/, y un id válido sin fichero devuelve
+  // 404 honesto (NOT_FOUND vía normalizeEnvelope).
+  if(pathname.match(/^\/api\/projects\/([^\/]+)\/summary$/) && req.method==="GET"){
+    const m = pathname.match(/^\/api\/projects\/([^\/]+)\/summary$/);
+    let id = "";
+    try { id = sanitizeProjectId(decodeURIComponent(m[1])); } catch (_) { id = String(m[1] || ""); } // % inválido => id con "%" => 400
     if (!isValidId(id)) return invalidId(res, "project", id); // F4: antes de leer summaries/<id>.json
     const data = readSummary(id);
     if (!data) return json(res, 404, fail(`no summary for project ${id} — POST /api/projects/${id}/summarize to generate`));

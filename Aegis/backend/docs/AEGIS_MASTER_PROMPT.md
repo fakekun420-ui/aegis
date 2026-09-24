@@ -36,7 +36,11 @@ Las siguientes fases ya fueron implementadas y commiteadas:
 
 - ✅ **Fase 0** — Auditoría técnica completa
 - ✅ **Fase 1** — Modularización de `providers.js` con patrón Strangler Fig
-- ✅ **Fase 2** — Extracción de `normalizer.js` y `providerManager.js`, limpieza de imports
+- ✅ **Fase 2** — Extracción del normalizer y del providerManager, limpieza de imports
+  (**realidad verificada con grep**: NO existe `src/core/normalizer.js` ni
+  `src/core/providerManager.js` — `normalizeMessage` y `ProviderManager` viven
+  exportados en `backend/providers.js`, que es de donde los importan `server.js`
+  y los adapters)
 - ✅ **Fase 3** — `ClaudeCodeAdapter.js`, `GitAdapter.js`, `SkillManager.js`, `SkillInvoker.js`, `skillsRoutes.js`
 - ✅ **Fase 3.5** — Integración de rutas `/api/skills` y `/api/projects/:id/path` en `server.js`
 - ✅ **Fase 4** — `projectManager.js`, `projectRoutes.js`, estructura `.hub/` por proyecto
@@ -50,19 +54,47 @@ src/
 │   ├── ClaudeCodeAdapter.js
 │   ├── GitAdapter.js
 │   └── OpenCodeAdapter.js
+├── agents/
+│   ├── ArchitectAgent.js
+│   ├── AuditorAgent.js
+│   ├── BaseAgent.js
+│   └── ResearchAgent.js
 ├── api/
+│   ├── agentRoutes.js
+│   ├── bootstrapRoutes.js
+│   ├── contentRoutes.js
+│   ├── jobRoutes.js
 │   ├── projectRoutes.js
-│   └── skillsRoutes.js
+│   ├── setupRoutes.js
+│   ├── skillsRoutes.js
+│   └── workflowRoutes.js
+├── bootstrap/
+│   ├── orchestrator.js
+│   ├── state.js
+│   ├── steps.js
+│   └── {node,ubuntu,skills}-manifest.json
 ├── core/
-│   ├── normalizer.js
+│   ├── agentPool.js
+│   ├── eventBus.js
+│   ├── jobScheduler.js
+│   ├── logger.js
 │   ├── pathResolver.js
 │   ├── projectManager.js
-│   ├── providerManager.js
-│   └── storage.js
-└── skills/
-    ├── SkillInvoker.js
-    └── SkillManager.js
+│   ├── storage.js          ← fuente única: FileMutex/fileMutex/atomic*/loadProjectsStore
+│   ├── workflowEngine.js
+│   └── workflowParser.js
+├── plugins/
+│   └── content/index.js
+├── skills/
+│   ├── SkillInvoker.js
+│   ├── SkillManager.js
+│   └── catalog.json
+└── workflows/
+    └── templates/
 ```
+(No hay `normalizer.js` ni `providerManager.js` en `core/`: `normalizeMessage` y
+`ProviderManager` están en `backend/providers.js`. Tampoco hay `modelRouter.js` /
+`taskClassifier.js`: ver NOTA de la Fase 7.)
 
 ---
 
@@ -283,6 +315,23 @@ git add src/core/taskClassifier.js src/core/modelRouter.js
 git commit -m "feat: Phase 7 - task classifier and model router for auto provider selection"
 ```
 
+> **NOTA — Backlog técnico F0-F2 (decisión documentada): ambos ELIMINADOS.**
+> `taskClassifier.js` y `modelRouter.js` se crearon en Fase 7 pero **nunca se
+> cablearon**: grep de consumidores antes de eliminar = 0 en runtime (sólo se
+> importaban entre sí; `server.js` jamás los invocaba — ARQ-04/BUG-05/06 de las
+> auditorías; el paso 7.3 `X-Provider: auto` tampoco existía en el código).
+> Cablearlos habría CAMBIADO el comportamiento por defecto: `route()` clasifica
+> POR PROMPT ("fix/bug/corrige" → adapter `claudecode`, "diseña/arquitectura" →
+> `gemini-3.1-pro`) en lugar de caer siempre a `antigravity` +
+> `gemini-3.8-flash-high`, y `providers.json` no tiene sección de modelos que
+> consumir — el "fallback idéntico cuando no haya config" es imposible con esa
+> diseño. Decisión: **eliminar ambos módulos** (grep tras la eliminación: 0);
+> el hardcode `antigravity` + `gemini-3.8-flash-high` queda como default
+> INTENCIONAL comentado en `server.js` (junto a `body.model`), y el proveedor
+> por defecto sigue configurable vía `providers.json` /
+> `POST /api/providers/default`. Si en el futuro se quiere routing por tarea,
+> deberá ser config-driven (no prompt-driven) para no romper el default.
+
 ---
 
 ## FASE 8 — AUTOMATION Y JOBS
@@ -363,8 +412,17 @@ Hardening de seguridad, optimización de memoria y observabilidad.
 
 ### Paso 10.1 — Security Hardening
 En `server.js` y todos los endpoints:
-- Implementa token de autenticación efímero entre app Android y backend: header `X-Aegis-Token` validado contra un token generado al arranque y almacenado en memoria (no en disco)
-- Agrega rate limiting simple: máximo 100 requests por minuto por IP usando un Map en memoria
+- **Token (REALIDAD — F0/F4 implementado):** header `X-Aegis-Token` validado en el
+  middleware de `server.js` con comparación **timing-safe** (`crypto.timingSafeEqual`).
+  El token NO vive sólo en memoria: se persiste en `backend/.aegis_token`
+  (mode 0600, gitignored) para que la app Android lo lea vía root
+  (`ApiClient.authInterceptor` / `TokenProvider`). Cobertura: **todas las rutas
+  `/api/*` y `/opencode/*`** (el cierre de `/opencode/*` es del backlog F0-F2,
+  revisión A-1); única exención sin token: `GET /api/health` (sonda de keepalive.sh).
+- **Rate limiting (REALIDAD):** sliding window en memoria, **120 req/min por IP por
+  defecto** (`AEGIS_RATE_LIMIT_N`; `AEGIS_RATE_LIMIT=0` lo desactiva en tests),
+  exentos `GET /api/health` y `GET /api/bootstrap/state`, respuesta 429 con
+  envelope `{ok:false,error:{code:"RATE_LIMITED"}}` + header `Retry-After`.
 - Audita todos los endpoints que aceptan `projectId` y verifica que usen `getProjectAbsPath()` con validación de regex
 - Agrega middleware que loguea cada request con timestamp, método, path y tiempo de respuesta (sin loguear bodies que puedan contener secrets)
 
@@ -378,10 +436,15 @@ En `server.js` y todos los endpoints:
 Crea `src/core/logger.js`:
 - Logger estructurado con niveles: `debug`, `info`, `warn`, `error`
 - Formato: `[TIMESTAMP] [LEVEL] [MODULE] message {context}`
-- Rotación simple: mantiene últimas 1000 líneas en memoria, endpoint para consultarlas
+- **Realidad (F4):** NO mantiene "las últimas 1000 líneas en memoria" como fuente
+  de verdad — el sink propio es `backend/logs/aegis.log` con **rotación por tamaño**
+  (1 MB, 3 backups `.1/.2/.3`, dir redirigible con `AEGIS_LOG_DIR`); el array
+  in-memory de 1000 entradas sigue existiendo como buffer secundario del `Logger`.
 - Exporta un logger por módulo: `createLogger(moduleName)`
 
-Crea endpoint `GET /api/system/logs` que retorna las últimas N líneas del log en memoria.
+Crea endpoint `GET /api/system/logs` que retorna las últimas N líneas del log
+(**REALIDAD F4:** lee el fichero rotado del sink — `getLogFile()` — no sólo el
+buffer en memoria; params `?lines=` y legacy `?limit=`).
 
 ### Paso 10.4 — Health Dashboard Completo
 Actualiza o crea `GET /api/system/health` con respuesta completa:

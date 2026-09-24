@@ -5,6 +5,10 @@
 import http from "node:http";
 import { BaseProviderAdapter } from "./BaseProviderAdapter.js";
 import { normalizeMessage } from "../../providers.js"; // Temporary: still imports from providers.js until normalizeMessage is extracted
+// BACKLOG (F0-F2): llamadas directas a stdout/stderr -> logger del hub
+import { createLogger } from "../core/logger.js";
+
+const log = createLogger("opencode");
 
 export class OpencodeAdapter extends BaseProviderAdapter {
   constructor(options = {}) {
@@ -404,7 +408,7 @@ export class OpencodeAdapter extends BaseProviderAdapter {
               }
               const isUserMsg = j.role === "user" || j.type === "user" || (j.info && j.info.role === "user");
               if (isUserMsg) {
-                console.log(`[opencode] user prompt acknowledged for ${sessionId}, polling for assistant response...`);
+                log.info(`[opencode] user prompt acknowledged for ${sessionId}, polling for assistant response...`);
                 const startTime = Date.now();
                 const pollTimer = setInterval(async () => {
                   if (Date.now() - startTime > 45000) {
@@ -522,7 +526,7 @@ export class OpencodeAdapter extends BaseProviderAdapter {
         }
       }
     } catch (e) {
-      console.warn("[opencode] listModels fetch error:", e.message);
+      log.warn("[opencode] listModels fetch error", { err: e.message });
     } finally {
       this._fetchingModels = false;
     }

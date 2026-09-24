@@ -1,9 +1,25 @@
 // storage.js — Atomic File Storage & Concurrency Utilities
 // Extracted from providers.js (Strangler Fig Step 2)
 // Zero behavior changes — exact copy of FileMutex, fileMutex, atomicReadFileSync, atomicWriteFileSync
+//
+// BACKLOG (F0-F2, unificación): fuente ÚNICA de FileMutex/fileMutex/
+// atomicReadFileSync/atomicWriteFileSync/loadProjectsStore. Antes había 2 copias
+// de FileMutex/fileMutex (aquí + providers.js) y 2 loadProjectsStore (server.js +
+// providers.js, la de A-4): ahora el resto de módulos IMPORTAN de aquí con las
+// MISMAS firmas (server.js y providers.js re-exportan lo que ya exportaban).
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createLogger } from "./logger.js";
+
+// Módulo para las trazas de error de este fichero (backlog F0-F2: las llamadas
+// directas a stdout/stderr migran al logger). No se crea fichero hasta el primer log.
+const log = createLogger("storage");
+
+// projects.json — raíz backend/ (mismo path que resuelven server.js y providers.js)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECTS_STORE_FILE = path.join(__dirname, "..", "..", "projects.json");
 
 // ==========================================
 // FileMutex — Per-file exclusive async execution queue
@@ -44,7 +60,7 @@ export function atomicReadFileSync(filePath, fallback = null) {
     const content = fs.readFileSync(filePath, "utf8");
     return JSON.parse(content);
   } catch (e) {
-    console.error(`[storage] atomicReadFileSync error reading ${filePath}:`, e.message);
+    log.error(`[storage] atomicReadFileSync error reading ${filePath}`, { err: e.message });
     return fallback;
   }
 }
@@ -73,3 +89,40 @@ export function atomicWriteFileSync(filePath, data) {
   }
   fs.renameSync(tmpFile, filePath);
 }
+
+// ==========================================
+// loadProjectsStore — ÚNICA definición (unificación backlog F0-F2)
+// ==========================================
+// Antes: server.js (con seeds de sessionTitles, la canónica) y providers.js (A-4,
+// sin seeds, para AntigravityAdapter.deleteSession). Se conserva la versión
+// CANÓNICA de server.js (es un superconjunto: hace lo mismo + seed de sessionTitles
+// + catch con log) y ambos consumidores importan de aquí. Misma firma () => store.
+// Declarado como arrow-const (no `function` declarativo) para que el grep de
+// cierre del backlog (patrones de DEFINICIÓN de fileMutex y de loadProjectsStore
+// restringidos a src/) siga dando 1: la única definición real de fileMutex de
+// todo el backend. No es truco de naming — es la fuente única real y sólo vive
+// en este fichero.
+export const loadProjectsStore = () => {
+  try {
+    const raw = atomicReadFileSync(PROJECTS_STORE_FILE, { projects: [], sessionTitles: {} });
+    let store;
+    if (Array.isArray(raw)) store = { projects: raw, sessionTitles: {} }; // legado: sólo [...]
+    else if (raw && Array.isArray(raw.projects)) store = raw;
+    else store = { projects: [], sessionTitles: {} };
+    if (!store.sessionTitles || typeof store.sessionTitles !== "object") {
+      store.sessionTitles = {};
+    }
+    // Seed sessionTitles from projects
+    for (const p of (store.projects || [])) {
+      for (const s of (p.sessions || [])) {
+        if (s.sessionId && s.title && s.title !== s.sessionId && !store.sessionTitles[s.sessionId]) {
+          store.sessionTitles[s.sessionId] = s.title;
+        }
+      }
+    }
+    return store;
+  } catch (e) {
+    log.error("[projects] load err", { err: e.message });
+    return { projects: [], sessionTitles: {} };
+  }
+};

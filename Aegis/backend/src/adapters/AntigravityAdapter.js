@@ -7,6 +7,10 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { BaseProviderAdapter } from "./BaseProviderAdapter.js";
 import { normalizeMessage } from "../../providers.js"; // Temporary: still imports from providers.js until normalizeMessage is extracted
+// BACKLOG (F0-F2): llamadas directas a stdout/stderr -> logger del hub
+import { createLogger } from "../core/logger.js";
+
+const log = createLogger("antigravity");
 
 export class AntigravityAdapter extends BaseProviderAdapter {
   constructor(options = {}) {
@@ -71,7 +75,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
 
           // Orphaned (ppid 1) or Zombie (state Z)
           if (ppid === 1 || state === "Z") {
-            console.log(`[antigravity] Reaping orphaned/zombie agy process: pid=${pid}, state=${state}, ppid=${ppid}`);
+            log.info(`[antigravity] Reaping orphaned/zombie agy process: pid=${pid}, state=${state}, ppid=${ppid}`);
             try {
               process.kill(pid, "SIGKILL");
               reapedCount++;
@@ -81,7 +85,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       }
       return reapedCount;
     } catch (e) {
-      console.error("[antigravity] cleanupZombieProcesses err:", e.message);
+      log.error("[antigravity] cleanupZombieProcesses err", { err: e.message });
       return 0;
     }
   }
@@ -142,7 +146,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
         });
       }
     } catch (e) {
-      console.error("[antigravity] listSessions err", e.message);
+      log.error("[antigravity] listSessions err", { err: e.message });
     }
     return sessions;
   }
@@ -166,17 +170,20 @@ export class AntigravityAdapter extends BaseProviderAdapter {
 
     // Also check if any project in projects.json has this session's agyConversationId
     try {
-      // Note: loadProjectsStore is in server.js, not available here
-      // This will be handled by the caller (server.js) via ProviderManager
+      // BACKLOG (F0-F2): antes "loadProjectsStore is in server.js, not available
+      // aquí" (stub vacío). Ahora SÍ existe una fuente única importable:
+      // src/core/storage.js. Esta copia NO está montada (server.js usa la clase de
+      // providers.js, que ya resuelve esto vía su propio loadProjectsStore); se
+      // mantiene el stub para no cambiar comportación de un módulo huérfano.
     } catch (_) {}
 
     const targetDir = path.join(this.brainDir, convId);
     if (fs.existsSync(targetDir)) {
       try {
         fs.rmSync(targetDir, { recursive: true, force: true });
-        console.log(`[antigravity] purged brain directory: ${targetDir}`);
+        log.info(`[antigravity] purged brain directory: ${targetDir}`);
       } catch (err) {
-        console.warn(`[antigravity] failed to remove brain directory ${targetDir}:`, err.message);
+        log.warn(`[antigravity] failed to remove brain directory ${targetDir}`, { err: err.message });
       }
     }
 
@@ -185,7 +192,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     if (directDir !== targetDir && fs.existsSync(directDir)) {
       try {
         fs.rmSync(directDir, { recursive: true, force: true });
-        console.log(`[antigravity] purged brain directory: ${directDir}`);
+        log.info(`[antigravity] purged brain directory: ${directDir}`);
       } catch (_) {}
     }
 
@@ -345,7 +352,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       flushAssistantTurn();
       return messages;
     } catch (e) {
-      console.error(`[antigravity] getMessages err for ${sessionId}:`, e.message);
+      log.error(`[antigravity] getMessages err for ${sessionId}`, { err: e.message });
       return [];
     }
   }
@@ -444,7 +451,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       "85s"
     );
 
-    console.log(`[antigravity] executing agy for session ${sessionId} (convId: ${convId || "new"}, streaming: ${isStreaming})...`);
+    log.info(`[antigravity] executing agy for session ${sessionId} (convId: ${convId || "new"}, streaming: ${isStreaming})...`);
 
     // Helper to safely kill process group
     const killGroup = (proc, signal = "SIGTERM") => {
@@ -605,11 +612,11 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       const timer = setTimeout(() => {
         if (isDone) return;
         isDone = true;
-        console.warn(`[antigravity] Process ${p.pid} exceeded hard 90s timeout. Killing group with SIGTERM...`);
+        log.warn(`[antigravity] Process ${p.pid} exceeded hard 90s timeout. Killing group with SIGTERM...`);
         killGroup(p, "SIGTERM");
         const killTimer = setTimeout(() => {
           try {
-            console.warn(`[antigravity] Escalating to SIGKILL for process group ${p.pid}...`);
+            log.warn(`[antigravity] Escalating to SIGKILL for process group ${p.pid}...`);
             killGroup(p, "SIGKILL");
           } catch (_) {}
         }, 2000);
@@ -627,7 +634,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
             if (isDone) return;
             isDone = true;
             clearTimeout(timer);
-            console.log(`[antigravity] Client connection aborted. Killing process group ${p.pid}...`);
+            log.info(`[antigravity] Client connection aborted. Killing process group ${p.pid}...`);
             killGroup(p, "SIGTERM");
             setTimeout(() => killGroup(p, "SIGKILL"), 1500).unref();
             if (p.pid) this.activeProcesses.delete(p.pid);

@@ -13,11 +13,16 @@
 //   Todas las peticiones llevan token: el middleware de auth va ANTES de los
 //   routers, sin token la respuesta sería 403 (se testea aparte).
 //
-// Hallazgos documentados en el informe F4 (NO "arreglados" aquí, fuera de alcance):
-//   * GET /api/projects/:id/summary usa un regex SIN grupo de captura (server.js
+// Hallazgos del informe F4 vinculados a este fichero (estado tras el BACKLOG F0-F2):
+//   * GET /api/projects/:id/summary usaba un regex SIN grupo de captura (server.js
 //     ~L2470) => m[1] es undefined => id "undefined" => 404 SIEMPRE, también para
-//     ids válidos. El test lo fija como 404: el traversal NO llega al filesystem
-//     (queda el test 6 abajo).
+//     ids válidos. ARREGLADO en el backlog (regex con captura + isValidId): el
+//     test 6 ahora exige el comportamiento CORRECTO (200 con fichero en disco,
+//     404 honesto sin él, 400 PROJECT_INVALID para traversal) — ver comentario
+//     del test 6.
+//   * POST /opencode/session/:id/message (sin prefijo /api) quedaba FUERA del
+//     middleware de token (revisión A-1). CERRADO en el backlog: el middleware
+//     cubre /opencode/* => test 9 (sin token 403; con token, igual que antes).
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -196,16 +201,45 @@ test("5. regresión: los ids VÁLIDOS no se rechazan (la validación no rompe lo
   assert.equal(inst.body.error.code, "ALLOWLIST", "el allowlist F3 no puede perderse tras la validación F4");
 });
 
-test("6. GET /api/projects/:id/summary -> 404 SIEMPRE (bug PREEXISTENTE, documentado y NO tocado)", async () => {
-  // server.js ~L2470: pathname.match(/^\/api\/projects\/[^\/]+\/summary$/) no tiene
-  // grupo de captura => m[1] === undefined => id "undefined" => readSummary nunca
-  // encuentra fichero => 404 para TODO id, válido o traversal. F4 NO lo arregla
-  // (alcance: hardening, no cambiar comportamiento ya verificado); este test fija
-  // que el traversal tampoco llega al filesystem.
+test("6. GET /api/projects/:id/summary -> 200 con shape para id válido; 404 honesto sin fichero; 400 para traversal (bug del regex SIN captura, corregido en backlog)", async () => {
+  // ANTES (bug preexistente documentado en F4): el regex no tenía grupo de captura
+  // => m[1] === undefined => id "undefined" => 404 para TODO id, con o sin fichero.
+  // DESPUÉS del backlog F0-F2:
+  //   * id válido + summaries/<id>.summary.json en disco -> 200 {ok,data:{projectId,summary,updatedAt}}
+  //   * id válido SIN fichero -> 404 honesto (error.code NOT_FOUND, envelope F4)
+  //   * id con traversal -> 400 PROJECT_INVALID ANTES de tocar el filesystem
+  const validId = `f4-summary-${process.pid}`; // ^[A-Za-z0-9._-]+$ => id válido
+  const summaryFile = join(BACKEND_DIR, "summaries", `${validId}.summary.json`);
+  fs.mkdirSync(join(BACKEND_DIR, "summaries"), { recursive: true });
+  fs.writeFileSync(summaryFile, JSON.stringify({
+    projectId: validId,
+    summary: "resumen de prueba del backlog F0-F2",
+    updatedAt: "2026-09-24T00:00:00.000Z"
+  }));
+  try {
+    const okRes = await api(`/api/projects/${validId}/summary`);
+    assert.equal(okRes.status, 200, `id válido con fichero debe dar 200, vino ${okRes.status} (${JSON.stringify(okRes.body).slice(0, 200)})`);
+    assert.equal(okRes.body.ok, true);
+    assert.equal(okRes.body.data.projectId, validId, "data.projectId debe ser el id REAL (no 'undefined')");
+    assert.equal(okRes.body.data.summary, "resumen de prueba del backlog F0-F2");
+    assert.equal(typeof okRes.body.data.updatedAt, "string");
+
+    // Id válido pero SIN summary en disco -> 404 honesto (no un 200 falso ni el
+    // viejo 404 por id "undefined": aquí el id del message SÍ es el correcto)
+    const sinFichero = await api("/api/projects/backlog-f4-sin-summary/summary");
+    assert.equal(sinFichero.status, 404);
+    assert.equal(sinFichero.body.ok, false);
+    assert.equal(sinFichero.body.error.code, "NOT_FOUND");
+    assert.match(sinFichero.body.error.message, /backlog-f4-sin-summary/, "el 404 debe citar el id pedido");
+  } finally {
+    try { fs.unlinkSync(summaryFile); } catch (_) {}
+  }
+
+  // Traversal: 400 PROJECT_INVALID ANTES de leer summaries/ (antes "404 por id undefined")
   const malo = await api("/api/projects/..%2F..%2Fetc%2Fpasswd/summary");
-  assert.equal(malo.status, 404, `summary con traversal debe quedar en 404, vino ${malo.status}`);
+  assert.equal(malo.status, 400, `summary con traversal debe quedar en 400, vino ${malo.status}`);
   assert.equal(malo.body.ok, false);
-  assert.equal(malo.body.error.code, "NOT_FOUND");
+  assert.equal(malo.body.error.code, "PROJECT_INVALID");
   assert.ok(!JSON.stringify(malo.body).includes("root:"), "nunca debe volcar contenido externo");
 });
 
@@ -227,4 +261,33 @@ test("8. orden de middleware: sin token, el traversal responde 403 (auth ANTES q
   const { status, body } = await api("/api/projects/..%2F..%2Fetc%2Fpasswd", { withToken: false });
   assert.equal(status, 403, "el rate-limit/token middleware va antes que cualquier router");
   assert.equal(body.error.code, "FORBIDDEN");
+});
+
+test("9. /opencode/* exige token (cierre A-1 del backlog): sin token 403; con token, igual que antes", async () => {
+  // Rutas sin prefijo /api que ANTES del cierre quedaban fuera del middleware de
+  // token (cualquier proceso local las usaba gratis). Con token, la validación F4
+  // de ids es la que manda — MISMO resultado que antes del cierre (400), lo que
+  // demuestra que autenticar no cambia el flujo autenticado.
+  const sin = await api("/opencode/session/backlog-sin-token/message", { withToken: false, method: "POST", body: {} });
+  assert.equal(sin.status, 403, "POST /opencode/session/:id/message sin token debe dar 403");
+  assert.equal(sin.body.ok, false);
+  assert.equal(sin.body.error.code, "FORBIDDEN");
+
+  const falso = await fetch(`http://127.0.0.1:${port}/opencode/session/backlog-token-falso/message`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Aegis-Token": "token-falso" },
+    body: "{}"
+  });
+  assert.equal(falso.status, 403, "con token inválido también 403");
+
+  // El proxy de respaldo /opencode/* (antes puerta abierta al opencode serve)
+  const proxy = await api("/opencode/global/health", { withToken: false });
+  assert.equal(proxy.status, 403, "GET /opencode/* sin token debe dar 403");
+
+  // Con token: se comporta como ANTES del cierre (la validación de sessionId F4
+  // responde 400 SESSION_INVALID antes de tocar store/adapter — id con traversal)
+  const con = await api("/opencode/session/..%2F..%2Fetc%2Fpasswd/message", { method: "POST", body: {} });
+  assert.equal(con.status, 400, "con token el flujo previo no cambia (400 SESSION_INVALID)");
+  assert.equal(con.body.ok, false);
+  assert.equal(con.body.error.code, "SESSION_INVALID");
 });

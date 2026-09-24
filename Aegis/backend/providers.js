@@ -6,90 +6,24 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
+// BACKLOG (F0-F2): llamadas directas a stdout/stderr -> logger del hub (mismo
+// formato/sink que el resto). Nivel coherente: log->info, warn->warn, error->error.
+import { createLogger } from "./src/core/logger.js";
+// BACKLOG (F0-F2, unificación): FileMutex/fileMutex/atomic*/loadProjectsStore viven
+// SOLO en src/core/storage.js. Se importan y se re-exportan con las MISMAS firmas
+// para no romper a los consumidores históricos (server.js importa fileMutex/
+// atomic*/normalizeMessage de ESTE fichero; aquí sólo se usan internamente).
+import {
+  FileMutex,
+  fileMutex,
+  atomicReadFileSync,
+  atomicWriteFileSync,
+  loadProjectsStore
+} from "./src/core/storage.js";
 
-// ==========================================
-// Atomic Storage & Concurrency Utilities
-// ==========================================
+export { FileMutex, fileMutex, atomicReadFileSync, atomicWriteFileSync };
 
-export class FileMutex {
-  constructor() {
-    this.queues = new Map();
-  }
-
-  async runExclusive(filePath, fn) {
-    const key = path.resolve(filePath);
-    let queue = this.queues.get(key) || Promise.resolve();
-    const next = queue.then(async () => {
-      try {
-        return await fn();
-      } finally {
-        if (this.queues.get(key) === next) {
-          this.queues.delete(key);
-        }
-      }
-    });
-    this.queues.set(key, next.catch(() => {}));
-    return next;
-  }
-}
-
-export const fileMutex = new FileMutex();
-
-export function atomicReadFileSync(filePath, fallback = null) {
-  try {
-    if (!fs.existsSync(filePath)) return fallback;
-    const content = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(content);
-  } catch (e) {
-    console.error(`[storage] atomicReadFileSync error reading ${filePath}:`, e.message);
-    return fallback;
-  }
-}
-
-export function atomicWriteFileSync(filePath, data) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  const tmpFile = path.join(
-    dir,
-    `.${path.basename(filePath)}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`
-  );
-  const content = typeof data === "string" ? data : JSON.stringify(data, null, 2);
-  const fd = fs.openSync(tmpFile, "w");
-  try {
-    fs.writeFileSync(fd, content, "utf8");
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  fs.renameSync(tmpFile, filePath);
-}
-
-// ==========================================
-// A-4 (ARQ-01): projectsStore local — dependencia fantasma eliminada
-// ==========================================
-// AntigravityAdapter.deleteSession llamaba a loadProjectsStore(), función que sólo
-// existía en server.js: aquí era un ReferenceError que el catch(_) del llamador
-// silenciaba, de modo que la purga de brainDir por agyConversationId (sacado de
-// projects.json) NUNCA se ejecutaba y quedaban conversaciones huérfano en disco.
-// Se reutiliza el MISMO lector atómico y el MISMO projects.json que server.js
-// (mismo archivo en disco — providers.js y server.js están en backend/), sin
-// duplicar la lógica de seeds de sessionTitles (aquí sólo se necesita .projects).
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECTS_STORE_FILE = path.join(__dirname, "projects.json");
-function loadProjectsStore() {
-  const raw = atomicReadFileSync(PROJECTS_STORE_FILE, { projects: [], sessionTitles: {} });
-  if (Array.isArray(raw)) return { projects: raw, sessionTitles: {} }; // legado: sólo [...]
-  if (raw && Array.isArray(raw.projects)) {
-    return {
-      projects: raw.projects,
-      sessionTitles: (raw.sessionTitles && typeof raw.sessionTitles === "object") ? raw.sessionTitles : {}
-    };
-  }
-  return { projects: [], sessionTitles: {} };
-}
+const log = createLogger("providers");
 
 // ==========================================
 // Message Normalizer (Strict Typing)
@@ -628,7 +562,7 @@ export class OpencodeAdapter extends BaseProviderAdapter {
               }
               const isUserMsg = j.role === "user" || j.type === "user" || (j.info && j.info.role === "user");
               if (isUserMsg) {
-                console.log(`[opencode] user prompt acknowledged for ${sessionId}, polling for assistant response...`);
+                log.info(`[opencode] user prompt acknowledged for ${sessionId}, polling for assistant response...`);
                 const startTime = Date.now();
                 const pollTimer = setInterval(async () => {
                   if (Date.now() - startTime > 45000) {
@@ -746,7 +680,7 @@ export class OpencodeAdapter extends BaseProviderAdapter {
         }
       }
     } catch (e) {
-      console.warn("[opencode] listModels fetch error:", e.message);
+      log.warn("[opencode] listModels fetch error", { err: e.message });
     } finally {
       this._fetchingModels = false;
     }
@@ -835,7 +769,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
 
           // Orphaned (ppid 1) or Zombie (state Z)
           if (ppid === 1 || state === "Z") {
-            console.log(`[antigravity] Reaping orphaned/zombie agy process: pid=${pid}, state=${state}, ppid=${ppid}`);
+            log.info(`[antigravity] Reaping orphaned/zombie agy process: pid=${pid}, state=${state}, ppid=${ppid}`);
             try {
               process.kill(pid, "SIGKILL");
               reapedCount++;
@@ -845,7 +779,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       }
       return reapedCount;
     } catch (e) {
-      console.error("[antigravity] cleanupZombieProcesses err:", e.message);
+      log.error("[antigravity] cleanupZombieProcesses err", { err: e.message });
       return 0;
     }
   }
@@ -906,7 +840,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
         });
       }
     } catch (e) {
-      console.error("[antigravity] listSessions err", e.message);
+      log.error("[antigravity] listSessions err", { err: e.message });
     }
     return sessions;
   }
@@ -946,9 +880,9 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     if (fs.existsSync(targetDir)) {
       try {
         fs.rmSync(targetDir, { recursive: true, force: true });
-        console.log(`[antigravity] purged brain directory: ${targetDir}`);
+        log.info(`[antigravity] purged brain directory: ${targetDir}`);
       } catch (err) {
-        console.warn(`[antigravity] failed to remove brain directory ${targetDir}:`, err.message);
+        log.warn(`[antigravity] failed to remove brain directory ${targetDir}`, { err: err.message });
       }
     }
 
@@ -957,7 +891,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     if (directDir !== targetDir && fs.existsSync(directDir)) {
       try {
         fs.rmSync(directDir, { recursive: true, force: true });
-        console.log(`[antigravity] purged brain directory: ${directDir}`);
+        log.info(`[antigravity] purged brain directory: ${directDir}`);
       } catch (_) {}
     }
 
@@ -1117,7 +1051,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       flushAssistantTurn();
       return messages;
     } catch (e) {
-      console.error(`[antigravity] getMessages err for ${sessionId}:`, e.message);
+      log.error(`[antigravity] getMessages err for ${sessionId}`, { err: e.message });
       return [];
     }
   }
@@ -1216,7 +1150,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       "85s"
     );
 
-    console.log(`[antigravity] executing agy for session ${sessionId} (convId: ${convId || "new"}, streaming: ${isStreaming})...`);
+    log.info(`[antigravity] executing agy for session ${sessionId} (convId: ${convId || "new"}, streaming: ${isStreaming})...`);
 
     // Helper to safely kill process group
     const killGroup = (proc, signal = "SIGTERM") => {
@@ -1377,11 +1311,11 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       const timer = setTimeout(() => {
         if (isDone) return;
         isDone = true;
-        console.warn(`[antigravity] Process ${p.pid} exceeded hard 90s timeout. Killing group with SIGTERM...`);
+        log.warn(`[antigravity] Process ${p.pid} exceeded hard 90s timeout. Killing group with SIGTERM...`);
         killGroup(p, "SIGTERM");
         const killTimer = setTimeout(() => {
           try {
-            console.warn(`[antigravity] Escalating to SIGKILL for process group ${p.pid}...`);
+            log.warn(`[antigravity] Escalating to SIGKILL for process group ${p.pid}...`);
             killGroup(p, "SIGKILL");
           } catch (_) {}
         }, 2000);
@@ -1399,7 +1333,7 @@ export class AntigravityAdapter extends BaseProviderAdapter {
             if (isDone) return;
             isDone = true;
             clearTimeout(timer);
-            console.log(`[antigravity] Client connection aborted. Killing process group ${p.pid}...`);
+            log.info(`[antigravity] Client connection aborted. Killing process group ${p.pid}...`);
             killGroup(p, "SIGTERM");
             setTimeout(() => killGroup(p, "SIGKILL"), 1500).unref();
             if (p.pid) this.activeProcesses.delete(p.pid);
@@ -1548,7 +1482,7 @@ export class ProviderManager {
         this.defaultProvider = raw.defaultProvider;
       }
     } catch (e) {
-      console.error("[provider-mgr] loadConfig err", e.message);
+      log.error("[provider-mgr] loadConfig err", { err: e.message });
     }
   }
 
@@ -1663,7 +1597,7 @@ export class ProviderManager {
           }
         }
       } catch (e) {
-        console.warn(`[provider-mgr] listSessions error for ${adapter.id}:`, e.message);
+        log.warn(`[provider-mgr] listSessions error for ${adapter.id}`, { err: e.message });
       }
     }
 

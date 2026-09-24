@@ -20,8 +20,20 @@
          La app solo se comunica con el hub local http://127.0.0.1:8765 (sin
          hosts http externos); ponerlo en `false` bloquearía también el cleartext
          hacia loopback y rompería el hub (la app quedaría siempre OFFLINE).
-         Backlog: sustituirlo por un android:networkSecurityConfig que permita
-         cleartext ÚNICAMENTE a 127.0.0.1/localhost.
+
+         DECISIÓN documentada (backlog técnico F0-F2) — NO se sustituye por un
+         android:networkSecurityConfig: el XML de configuración de red de Android
+         sólo permite allowlist de cleartext por NOMBRES DE DOMINIO
+         (<domain-config><domain>…</domain>); un literal IP de loopback
+         (127.0.0.1) no es un dominio y no puede listarse de forma fiable, así
+         que un cleartextTrafficPermitted=false global (base-config) cortaría
+         también http://127.0.0.1:8765 (hub) y la app quedaría OFFLINE: no
+         existe forma declarativa de "sólo cleartext a loopback". Por eso `true`
+         es la opción correcta AQUÍ. Los mitigantes reales viven en el backend,
+         no en este flag: el hub sólo hace bind a 127.0.0.1 (loopback, F0 A-1.2)
+         y exige X-Aegis-Token timing-safe en /api/* y /opencode/* (única
+         exención: GET /api/health), de modo que ni otras apps del dispositivo
+         ni la red pueden invocarlo sin token.
 
          Deep link: no existe ninguno (solo MAIN/LAUNCHER; sin scheme, sin
          BROWSABLE, sin autoVerify). No se declara `aegis://` porque no hay
