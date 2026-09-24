@@ -16,6 +16,23 @@ import { createLogger } from "../core/logger.js";
 const manager = new SkillManager();
 const log = createLogger("skills");
 
+// ---- F4: validación de skillId de ruta/body (SKILL_INVALID) ----------------
+// Mismo contrato que isValidId/invalidId de server.js (sin importar de él: éste
+// módulo no debe conocer server.js). OJO: scope/names con "@" de los skills
+// scoped (@scope/name) van por server.js (dos segmentos), no por aquí — las
+// rutas de este fichero sólo manejan UN segmento, que por contrato F4 es
+// [A-Za-z0-9._-] (ids del catálogo: graphify, opencode-mem, ...).
+const ID_RE = /^[A-Za-z0-9._-]+$/;
+function isValidSkillRouteId(v) {
+  return typeof v === "string" && v.length > 0 && v.length <= 256 && ID_RE.test(v) && !v.includes("..");
+}
+function invalidSkillId(res, jsonHelper, value) {
+  return jsonHelper(res, 400, {
+    ok: false,
+    error: { code: "SKILL_INVALID", message: `invalid skillId: "${String(value ?? "").slice(0, 80)}" (must match ^[A-Za-z0-9._-]+$, max 256, sin "..")` }
+  });
+}
+
 export function handleSkillsRoute(req, res, pathname, jsonHelper, readJsonBody) {
   // GET /api/skills — SIN query = inventario de la app (SkillManagerScreen).
   // Con query (projectId/project/scope) NO tocamos: devolvemos false para que el
@@ -36,6 +53,8 @@ export function handleSkillsRoute(req, res, pathname, jsonHelper, readJsonBody) 
       let skillId = null;
       try { skillId = JSON.parse(raw || "{}").skillId; } catch (_) {}
       if (!skillId) return jsonHelper(res, 400, { ok: false, error: "skillId required" });
+      // F4: forma del id ANTES de tocar SkillManager (regex + ".." + max 256)
+      if (!isValidSkillRouteId(String(skillId))) return invalidSkillId(res, jsonHelper, skillId);
 
       let started;
       try {
@@ -70,6 +89,7 @@ export function handleSkillsRoute(req, res, pathname, jsonHelper, readJsonBody) 
   const matchDel = pathname.match(/^\/api\/skills\/([^\/]+)$/);
   if (matchDel && req.method === "DELETE") {
     const id = matchDel[1];
+    if (!isValidSkillRouteId(id)) return invalidSkillId(res, jsonHelper, id); // F4: antes de uninstall
     return manager.uninstall(id)
       .then(() => jsonHelper(res, 200, { ok: true, data: { removed: id } }))
       .catch(e => jsonHelper(res, 500, { ok: false, error: e.message }));
@@ -79,6 +99,7 @@ export function handleSkillsRoute(req, res, pathname, jsonHelper, readJsonBody) 
   const matchGetConf = pathname.match(/^\/api\/skills\/([^\/]+)\/config$/);
   if (matchGetConf && req.method === "GET") {
     const id = matchGetConf[1];
+    if (!isValidSkillRouteId(id)) return invalidSkillId(res, jsonHelper, id); // F4: antes de getConfig
     return jsonHelper(res, 200, { ok: true, data: manager.getConfig(id) });
   }
 
@@ -86,6 +107,7 @@ export function handleSkillsRoute(req, res, pathname, jsonHelper, readJsonBody) 
   const matchPatchConf = pathname.match(/^\/api\/skills\/([^\/]+)\/config$/);
   if (matchPatchConf && req.method === "PATCH") {
     const id = matchPatchConf[1];
+    if (!isValidSkillRouteId(id)) return invalidSkillId(res, jsonHelper, id); // F4: antes de updateConfig
     return readJsonBody(req).then(raw => {
       const config = JSON.parse(raw || "{}");
       return jsonHelper(res, 200, { ok: true, data: manager.updateConfig(id, config) });

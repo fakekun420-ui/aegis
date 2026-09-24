@@ -15,6 +15,24 @@ import { createLogger } from "../core/logger.js";
 const manager = new ProjectManager();
 const log = createLogger("workspace");
 
+// ---- F4: validación de ids de ruta (projectId) -----------------------------
+// Mismo contrato que isValidId/invalidId de server.js (aquí NO se importa de
+// server.js para evitar un ciclo de imports: server.js importa ESTE módulo).
+// Regex ^[A-Za-z0-9._-]+$ + rechazo de ".." + max 256 => 400 PROJECT_INVALID
+// ANTES de tocar ProjectManager/path.join. `pathResolver.isValidProjectId`
+// queda como segunda barrera (defensa en profundidad).
+const ID_RE = /^[A-Za-z0-9._-]+$/;
+function isValidProjectRouteId(v) {
+  return typeof v === "string" && v.length > 0 && v.length <= 256 && ID_RE.test(v) && !v.includes("..");
+}
+// 400 envelope {ok:false,error:{code,message}} — normalizeEnvelope lo deja tal cual
+function invalidProjectId(res, jsonHelper, value) {
+  return jsonHelper(res, 400, {
+    ok: false,
+    error: { code: "PROJECT_INVALID", message: `invalid projectId: "${String(value ?? "").slice(0, 80)}" (must match ^[A-Za-z0-9._-]+$, max 256, sin "..")` }
+  });
+}
+
 // lastCommit: ISO del último commit del proyecto (Models.kt lo declara nullable).
 // execFile sin shell (sin metacaracteres), timeout corto y null como fallback
 // honesto: sin git o sin commits, el campo va vacío — nunca inventado.
@@ -45,6 +63,7 @@ export function handleProjectRoutes(req, res, pathname, jsonHelper, readJsonBody
   const matchInit = pathname.match(/^\/api\/workspace\/projects\/([^\/]+)\/init$/);
   if (matchInit && req.method === "POST") {
     const id = matchInit[1];
+    if (!isValidProjectRouteId(id)) return invalidProjectId(res, jsonHelper, id); // F4: antes de initProject
     try {
       return jsonHelper(res, 200, { ok: true, data: manager.initProject(id) });
     } catch (e) {
@@ -56,6 +75,7 @@ export function handleProjectRoutes(req, res, pathname, jsonHelper, readJsonBody
   const matchGetState = pathname.match(/^\/api\/workspace\/projects\/([^\/]+)\/state$/);
   if (matchGetState && req.method === "GET") {
     const id = matchGetState[1];
+    if (!isValidProjectRouteId(id)) return invalidProjectId(res, jsonHelper, id); // F4: antes del store
     const state = manager.getProjectState(id);
     if (!state) return jsonHelper(res, 404, { ok: false, error: "Not found or not initialized" });
     return jsonHelper(res, 200, { ok: true, data: state });
@@ -65,6 +85,7 @@ export function handleProjectRoutes(req, res, pathname, jsonHelper, readJsonBody
   const matchPatchState = pathname.match(/^\/api\/workspace\/projects\/([^\/]+)\/state$/);
   if (matchPatchState && req.method === "PATCH") {
     const id = matchPatchState[1];
+    if (!isValidProjectRouteId(id)) return invalidProjectId(res, jsonHelper, id); // F4: antes del store
     return readJsonBody(req).then(raw => {
       const patch = JSON.parse(raw || "{}");
       return jsonHelper(res, 200, { ok: true, data: manager.updateProjectState(id, patch) });
@@ -75,6 +96,7 @@ export function handleProjectRoutes(req, res, pathname, jsonHelper, readJsonBody
   const matchIndex = pathname.match(/^\/api\/workspace\/projects\/([^\/]+)\/index$/);
   if (matchIndex && req.method === "POST") {
     const id = matchIndex[1];
+    if (!isValidProjectRouteId(id)) return invalidProjectId(res, jsonHelper, id); // F4: antes de indexProject
     const taskId = `index_${Date.now().toString(36)}`;
     // JSON asíncrono (antes SSE con res — el consumidor Retrofit esperaba JSON y
     // recibía text/event-stream). res=null: indexProject ya maneja el modo sin stream.
@@ -92,6 +114,7 @@ export function handleProjectRoutes(req, res, pathname, jsonHelper, readJsonBody
   const matchPath = pathname.match(/^\/api\/projects\/([^\/]+)\/path$/);
   if (matchPath && req.method === "GET") {
     const id = matchPath[1];
+    if (!isValidProjectRouteId(id)) return invalidProjectId(res, jsonHelper, id); // F4: antes de getProjectAbsPath
     try {
       return jsonHelper(res, 200, { 
         ok: true, 

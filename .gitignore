@@ -4,6 +4,8 @@ node_modules/
 *.log
 hub.log
 opencode.log
+# F4: sink del logger del hub (aegis.log + rotaciones .1/.2/.3)
+Aegis/backend/logs/
 *.tmp
 tmp/
 .opencode-mem/

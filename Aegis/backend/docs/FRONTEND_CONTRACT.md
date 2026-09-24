@@ -410,3 +410,105 @@ Router: `backend/src/api/setupRoutes.js` (`createSetupHandler({opencodeAdapter, 
 - `command`: `curl -fsSL https://antigravity.google/cli/install.sh | bash` when `status:"missing_cli"`; otherwise the absolute `agy` path to run in a terminal and complete the interactive login.
 - `status`: `authenticated` (OAuth file > 0 B) · `missing_auth` (CLI present, no session) · `missing_cli` (binary absent).
 - The response **never contains the token** — only whether the credential file exists (> 0 B).
+
+---
+
+## 9. Blindado F4 — rate limit, logs, SBOM e ids (backend)
+
+Sección nueva en FASE F4. Router/ubicación y tests de cada pieza:
+
+| Pieza | Dónde vive | Test |
+|---|---|---|
+| Validación de ids (anti path-traversal) | `server.js` (`ID_RE`/`isValidId`/`invalidId`) + helpers locales en `src/api/projectRoutes.js` y `src/api/skillsRoutes.js` | `tests/security.test.js` |
+| Rate limiting `/api/*` | `server.js`, middleware **antes** del token | `tests/ratelimit.test.js` |
+| Logger con sink + rotación | `src/core/logger.js` (formato de línea INALTERADO) | `tests/logs.test.js` |
+| `GET /api/system/logs` | `server.js` (lee el sink rotado) | `tests/logs.test.js`, `tests/cross-contract.test.js` |
+| `GET /api/setup/manifest` (SBOM) | `src/api/setupRoutes.js` | `tests/manifest.test.js` |
+| Contrato cruzado ↔ `Models.kt` | — (lee el fichero Kotlin, SOLO lectura) | `tests/cross-contract.test.js` |
+
+### 9.1. Validación de ids (anti path-traversal)
+
+Todo `:id` de proyecto/sesión/skill —incluidos los de **query** (`?projectId=`, `?scope=`)— se valida **antes** de tocar store, `fs` o cualquier `path.join`:
+
+- Forma: `^[A-Za-z0-9._-]+$`, longitud **1..256**, y sin `..` (se valida tras `decodeURIComponent`, así que `%2F`/`%2e` codificados también caen).
+- Rechazo: `400` con el envelope estándar y `error.code` según el tipo de id:
+
+| Tipo | `error.code` |
+|---|---|
+| proyecto | `PROJECT_INVALID` |
+| sesión | `SESSION_INVALID` |
+| skill (`skillId`, `?scope=`) | `SKILL_INVALID` |
+| `?projectId=` en `GET /api/skills` | `PROJECT_INVALID` |
+
+- `?scope=` acepta además el literal `"global"`.
+- El **orden de middleware no cambia**: rate limit → token (403) → routers. Sin token, un id malicioso responde `403 FORBIDDEN`, nunca `400` (no se filtra información de validación sin autenticar).
+- Segunda barrera: `pathResolver.isValidProjectId` (`^[a-zA-Z0-9\-_]+$`) sigue operativa en las rutas que ya la usaban.
+- Los ids **válidos** no se ven afectados: `?scope=global`, `GET /api/workflows/:projectId` y el `400 ALLOWLIST` de `POST /api/skills/install` (F3/H-14) siguen respondiendo igual.
+
+**Divergencia documentada (NO corregida en F4):** `GET /api/projects/:id/summary` usa un regex **sin grupo de captura** → `m[1]` es `undefined` → el id resuelve `"undefined"` → `404` para *todo* id, válido o traversal. El endpoint nunca llega al filesystem con un id ajeno (seguridad intacta), pero tampoco devuelve nunca un resumen existente. Corrección de comportamiento pendiente fuera del alcance de esta fase; fijada por `tests/security.test.js` ("test 6").
+
+### 9.2. Rate limiting `/api/*`
+
+- Ventana **deslizante de 60 s** en memoria, sin dependencias; techo por defecto **120 peticiones/min por IP**.
+- Configuración (entorno del proceso):
+  - `AEGIS_RATE_LIMIT_N=<n>` → cambia el techo.
+  - `AEGIS_RATE_LIMIT=0` → **desactiva** el límite (tests y depuración). No desactiva la autenticación.
+- **Exentas** de consumir cuota (por diseño): `GET /api/health` (sonda de `keepalive.sh`, 1/10 s) y `GET /api/bootstrap/state` (polling del wizard, 1/s). Con ellas el wizard nunca gasta cuota.
+- Excepción de techo → `429`:
+
+```json
+{ "ok": false, "error": { "code": "RATE_LIMITED", "message": "rate limit excedido: 120 peticiones/min por IP — reintenta en 42s (header Retry-After)" } }
+```
+
+  con cabecera **`Retry-After: <segundos>`** (1..60). Envelope estándar §7.1, nunca HTML.
+- El middleware corre **antes** que el de token: un flood sin token también consume cuota.
+
+### 9.3. Logger con sink + rotación (`src/core/logger.js`)
+
+- **Formato de línea INALTERADO** (F0-F3): `[ISO] [NIVEL] [módulo] <msg> <ctx-json>`; en stdout sigue yendo por `console.log` (y por ahí `keepalive.sh` lo redirige a `hub.log`).
+- **Sink nuevo** `backend/logs/aegis.log` (dir auto-creado, gitignorado en `.gitignore`: `Aegis/backend/logs/`). Escritura síncrona (`fs.writeSync` append) con el mismo `entry` que stdout: no se duplica el formato.
+- **Rotación por tamaño**: al superar el máximo → `.1 → .2 → .3` (se elimina `.3`), **3 backups** ⇒ hasta 4 ficheros.
+- Variables: `AEGIS_LOG_DIR` (redirige el dir — lo usan los tests) · `AEGIS_LOG_MAX_BYTES` (default 1 MB; sólo lo bajan los tests).
+- **Nunca lanza**: cualquier fallo de E/S (dir no creable, disco lleno, fd invalidado) **desactiva el sink** y el logger sigue sólo con stdout. El hub sigue sirviendo con el sink caído.
+
+### 9.4. `GET /api/system/logs`
+
+- **Token:** requerido (`403 FORBIDDEN` sin él).
+- **Parámetros:** `?lines=` (default `200`, mínimo `1`, tope `5000`) y el legacy `?limit=` que sigue enviando `ApiService.getSystemLogs(limit = 100)` — los dos se aceptan.
+- **Fuente:** el sink rotado (`aegis.log` + `.1` + `.2` + `.3`), leído en orden **cronológico** (` .3 → .2 → .1 → principal`); **ya no** `hub.log` (eso es la redirección de stdout de `keepalive.sh`).
+
+```json
+{ "ok": true,
+  "data":  ["[2026-09-24T01:04:30.467Z] [INFO] [hub] … {}", "…"],
+  "logs":  ["… idéntico a data …"],
+  "note":  "sin fichero de log todavía: …/aegis.log no existe (el sink se crea en el primer mensaje del logger)" }
+```
+
+- **Contrato con la app:** `data` sigue siendo **`Array<String>`** — es lo único que parsea `LogsResponse(val ok: Boolean, val data: List<String>?)` en `Models.kt` y **no se cambia**. `logs` es un espejo para consumidores nuevos y `note` sólo aparece si todavía no hay fichero (nunca `500` por un `.1` ilegible ni por un dir de log inutilizable). Un fichero roto se salta; la respuesta es `200`.
+
+### 9.5. `GET /api/setup/manifest` (SBOM)
+
+- **Token:** requerido. **Nunca lanza**: los errores se convierten en `500` envelope o en `null + note`.
+- **Shape exacto:**
+
+```json
+{ "ok": true, "data": {
+  "hub":     { "version": "…" },
+  "node":    { "version": "v24.21.0", "sha256": "<64 hex>", "fileName": "node-v24.21.0-linux-arm64.tar.gz" },
+  "ubuntu":  { "version": "24.04.5",  "sha256": "<64 hex>", "fileName": "ubuntu-base-24.04.5-base-arm64.tar.gz" },
+  "opencode":{ "version": "…" | null, "note": "…" },
+  "agy":     { "version": "…" | null, "note": "…" },
+  "skills":  [ { "id": "graphify", "version": null }, { "id": "opencode-mem", "version": "2.26.0" } ],
+  "generatedAt": "2026-09-24T01:04:30.467Z" } }
+```
+
+- **Fuentes de verdad:** `HUB_VERSION` de `server.js` (en F4 sigue siendo `1.0.0-SNAPSHOT`; la sube F5) · `src/bootstrap/node-manifest.json` (la `version` de `node` es `process.version`, la del artefacto es la pineada) · `src/bootstrap/ubuntu-manifest.json` (la versión se **deriva** del `fileName` con `ubuntu-base-([\d.]+)`) · `src/bootstrap/skills-manifest.json` ∪ `src/skills/catalog.json` (versión pineada del catálogo; `graphify → null` porque no la lleva).
+- **Honestidad `null + note`:** `opencode` y `agy` son sondas reales con timeout corto (1500 ms y 3000 ms, **en paralelo**; `agy` se cachea por proceso). Si no hay serve ni binario, o el binario no responde, el campo va en `null` con un `note` que explica el porqué — **nunca se inventa una versión**.
+- `skills[].version` es `string | null` (`null` = el catálogo no pinea versión).
+
+### 9.6. CI/CD (F4)
+
+Workflow `.github/workflows/build-apk.yml` del proyecto `Aegis`:
+
+`backend-checks` (node --check + 46 tests) → `lint` (node --check · `bash -n` en `backend/**` y `app/**` · `grep` de `console.*` en `server.js` · YAML de los workflows) → `build-debug` (Gradle **8.9** pineado) → `build-release` (**condicional**: sin secreto `KEYSTORE_BASE64` los pasos se omiten con un aviso, sin fallar) → `semgrep` (`p/security-audit`) y `gitleaks`, ambos con **`continue-on-error: true`** hasta el primer ciclo limpio. El job `instrumented` (emulador + install + monkey) **sólo** se dispara con `workflow_dispatch` + input booleano `instrumented`.
+

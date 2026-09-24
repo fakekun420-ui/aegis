@@ -6,6 +6,9 @@
 //   POST /api/setup/smoke-test           -> 200 {ok,data:{ok:true, reply:"<texto REAL del modelo>"}}
 //                                            | 502/504 envelope code:"SMOKE_FAILED"
 //   POST /api/setup/auth/antigravity     -> 200 {ok,data:{mode:"manual", command, status}}
+//   GET  /api/setup/manifest             -> 200 {ok,data:{hub,node,ubuntu,opencode,agy,skills,generatedAt}}
+//                                            (F4: SBOM honesto — null+note cuando
+//                                            algo no es verificable, nunca inventa)
 //
 // Patrón idéntico a bootstrapRoutes.js/skillsRoutes.js: firma
 // (req, res, pathname, jsonHelper, readJsonBody), respuestas SIEMPRE vía
@@ -25,10 +28,12 @@ import net from "node:net";
 import path from "node:path";
 import http from "node:http";
 import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { snapshot as bootstrapSnapshot } from "../bootstrap/state.js";
 import { createLogger } from "../core/logger.js";
 
 const log = createLogger("setup");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CHECK_TIMEOUT_MS = 2000;   // contrato F3: <=2s por check
 const A11Y_TIMEOUT_MS = 1500;    // margen por debajo del budget del check
@@ -56,6 +61,126 @@ const AGY_AUTH_FILES = [...new Set([
 ])];
 
 function uniq(list) { return [...new Set(list.filter(Boolean))]; }
+
+// ---------------------------------------------------------------------------
+// F4 · SBOM de GET /api/setup/manifest
+//
+// Fuente de verdad: los manifests con los que el bootstrap INSTALA de verdad
+// (src/bootstrap/{node,ubuntu,skills}-manifest.json) + el catálogo allowlist
+// (src/skills/catalog.json) + sondas REALES con timeout corto. Reglas:
+//  - honestidad null+note: si algo no es verificable (binario ausente, serve
+//    caído, manifest ilegible) el campo va en null con un note que explica el
+//    porqué — NUNCA se inventa una versión.
+//  - timeouts: opencode --version <=1500ms, agy --version <=3000ms; ambas
+//    sondas en paralelo (el endpoint resuelve en ~el peor caso, no la suma).
+//  - agy se cachea por proceso (binario que no cambia durante la vida del hub).
+//  - NUNCA lanza: toda excepción se convierte en null+note o en el catch del
+//    handler (500 envelope), jamás en un socket colgado.
+// ---------------------------------------------------------------------------
+const NODE_MANIFEST_FILE = path.join(__dirname, "..", "bootstrap", "node-manifest.json");
+const UBUNTU_MANIFEST_FILE = path.join(__dirname, "..", "bootstrap", "ubuntu-manifest.json");
+const SKILLS_MANIFEST_FILE = path.join(__dirname, "..", "bootstrap", "skills-manifest.json");
+const CATALOG_FILE = path.join(__dirname, "..", "skills", "catalog.json");
+
+function readJsonSafe(file) {
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) { return null; }
+}
+const isSha256 = v => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
+
+// node: versión REAL del runtime que ejecuta el hub (process.version) + el
+// artefacto pineado con el que el bootstrap lo instala (sha256/fileName).
+function nodeManifestEntry() {
+  const m = readJsonSafe(NODE_MANIFEST_FILE);
+  return {
+    version: process.version,
+    sha256: m && isSha256(m.sha256) ? m.sha256 : null,
+    fileName: m && typeof m.fileName === "string" ? m.fileName : null
+  };
+}
+
+// ubuntu: el rootfs no expone "version" como campo — se deriva del fileName
+// del tarball oficial (ubuntu-base-24.04.5-base-arm64.tar.gz -> "24.04.5").
+function ubuntuManifestEntry() {
+  const m = readJsonSafe(UBUNTU_MANIFEST_FILE);
+  const fileName = m && typeof m.fileName === "string" ? m.fileName : null;
+  const vm = (fileName || (m && typeof m.url === "string" ? m.url : "")).match(/ubuntu-base-([\d.]+)/);
+  return {
+    version: vm ? vm[1] : null,
+    sha256: m && isSha256(m.sha256) ? m.sha256 : null,
+    fileName
+  };
+}
+
+// opencode: sonda del serve (misma que usa el health) y, como fallback, el
+// binario local `opencode --version` (<=1500ms). Cada salida trae su note.
+async function opencodeManifestEntry(probeOpenCode, binTimeoutMs) {
+  let h = null;
+  try { h = await probeOpenCode(); } catch (_) { h = null; }
+  if (h && (h.healthy || h.up)) {
+    if (h.version) return { version: String(h.version), note: `sonda /global/health en ${OPENCODE_HOST}:${OPENCODE_PORT} (serve arriba)` };
+    const v = await opencodeVersion(binTimeoutMs);
+    if (v) return { version: v, note: "serve arriba sin campo version — versión leída de `opencode --version`" };
+    return { version: null, note: "serve arriba pero sin versión expuesta ni binario local verificable" };
+  }
+  const v = await opencodeVersion(binTimeoutMs);
+  if (v) return { version: v, note: `serve caído en ${OPENCODE_HOST}:${OPENCODE_PORT} — versión del binario local (\`opencode --version\`)` };
+  return { version: null, note: `sin serve en ${OPENCODE_HOST}:${OPENCODE_PORT} ni binario "opencode" verificable — no se inventa versión` };
+}
+
+// agy: binario oficial (findAgyBin) + `agy --version` (<=3000ms), CACHEADO por
+// proceso — la primera llamada paga el timeout, las demás son síncronas.
+let agyVersionCache; // undefined = aún no resuelto
+function agyManifestEntry(timeoutMs) {
+  if (agyVersionCache !== undefined) return Promise.resolve(agyVersionCache);
+  const bin = findAgyBin();
+  if (!bin) {
+    agyVersionCache = { version: null, note: `binario agy ausente (${AGY_BIN_CANDIDATES.join(", ")}) — instálalo con: ${AGY_INSTALL_CMD}` };
+    return Promise.resolve(agyVersionCache);
+  }
+  return new Promise(resolve => {
+    execFile(bin, ["--version"], { timeout: timeoutMs, env: process.env }, (err, stdout) => {
+      const v = err ? null : String(stdout || "").trim() || null;
+      agyVersionCache = v
+        ? { version: v, note: `\`agy --version\` (${bin})` }
+        : { version: null, note: `\`agy --version\` falló/no respondió en ${timeoutMs}ms (${bin}) — no se inventa versión` };
+      resolve(agyVersionCache);
+    });
+  });
+}
+
+// skills: ids del manifiesto del bootstrap ∪ catálogo allowlist, enriquecidos
+// con la versión pineada del catálogo (graphify -> null: no lleva versión;
+// opencode-mem -> "2.26.0").
+function skillsManifestList() {
+  const boot = readJsonSafe(SKILLS_MANIFEST_FILE);
+  const catalog = readJsonSafe(CATALOG_FILE);
+  const catById = new Map(
+    Array.isArray(catalog) ? catalog.filter(e => e && typeof e.id === "string").map(e => [e.id, e]) : []
+  );
+  const ids = [];
+  if (Array.isArray(boot)) for (const e of boot) if (e && typeof e.id === "string") ids.push(e.id);
+  for (const id of catById.keys()) if (!ids.includes(id)) ids.push(id);
+  return ids.map(id => {
+    const entry = catById.get(id);
+    return { id, version: entry && typeof entry.version === "string" && entry.version ? entry.version : null };
+  });
+}
+
+async function buildManifest({ probeOpenCode, hubVersion }) {
+  const [opencode, agy] = await Promise.all([
+    opencodeManifestEntry(probeOpenCode, 1500),
+    agyManifestEntry(3000)
+  ]);
+  return {
+    hub: { version: hubVersion || null },
+    node: nodeManifestEntry(),
+    ubuntu: ubuntuManifestEntry(),
+    opencode,
+    agy,
+    skills: skillsManifestList(),
+    generatedAt: new Date().toISOString()
+  };
+}
 
 function findAgyBin() {
   for (const c of AGY_BIN_CANDIDATES) {
@@ -395,6 +520,7 @@ export function createSetupHandler(deps = {}) {
   const probeOpenCode = typeof deps.probeOpenCode === "function"
     ? deps.probeOpenCode
     : (typeof deps.probeOpencodeHealth === "function" ? deps.probeOpencodeHealth : defaultProbeOpenCode);
+  const hubVersion = typeof deps.hubVersion === "string" && deps.hubVersion ? deps.hubVersion : null; // F4: HUB_VERSION desde server.js
   const smoke = makeSmokeRunner({ opencodeAdapter: deps.opencodeAdapter, probeOpenCode });
 
   return function handleSetupRoute(req, res, pathname, jsonHelper, readJsonBody) {
@@ -455,6 +581,23 @@ export function createSetupHandler(deps = {}) {
       }
       // NUNCA el token: ni contenido, ni bytes, ni hash — sólo si existe (>0 B).
       return jsonHelper(res, 200, { ok: true, data: { mode: "manual", command, status } });
+    }
+
+    // 4) GET /api/setup/manifest — SBOM (F4): qué trae este despliegue, con
+    //    versiones REALES de manifests/sondas y null+note donde no hay dato
+    //    verificable. Sondas en paralelo + agy cacheado por proceso.
+    if (pathname === "/api/setup/manifest" && req.method === "GET") {
+      return buildManifest({ probeOpenCode, hubVersion })
+        .then(manifest => {
+          if (res.writableEnded) return true;
+          return jsonHelper(res, 200, { ok: true, data: manifest });
+        })
+        .catch(e => {
+          // NUNCA lanza: cualquier sorpresa sale como 500 envelope, nunca colgado.
+          log.error("[setup] manifest error", { err: String((e && e.message) || e) });
+          if (res.writableEnded) return true;
+          return jsonHelper(res, 500, { ok: false, error: String((e && e.message) || e).slice(0, 300), code: "INTERNAL_ERROR" });
+        });
     }
 
     return false; // bajo /api/setup pero sin handler propio (=>404 central)

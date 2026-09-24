@@ -35,7 +35,10 @@ import { createSetupHandler } from "./src/api/setupRoutes.js";
 import { jobScheduler } from "./src/core/jobScheduler.js";
 import { agentPool } from "./src/core/agentPool.js";
 import { eventBus, EVENTS } from "./src/core/eventBus.js";
-import { createLogger } from "./src/core/logger.js";
+// F4: createLogger + getLogFile (sink rotado backend/logs/aegis.log que lee
+// GET /api/system/logs — la fuente deja de ser hub.log, que sigue siendo sólo
+// la redirección de stdout que hace keepalive.sh).
+import { createLogger, getLogFile } from "./src/core/logger.js";
 // A-3: fuente honesta de skills para el contrato HealthData/SkillsResponse (disco real)
 import { SkillManager } from "./src/skills/SkillManager.js";
 
@@ -45,9 +48,72 @@ import { SkillManager } from "./src/skills/SkillManager.js";
 // hub.log, así que el log persistente sale igual, ahora con nivel y módulo.
 const log = createLogger("hub");
 
+// F4: versión del hub para GET /api/setup/manifest (SBOM). Constante TEMPORAL
+// en SNAPSHOT: F5 la subirá a "1.0.0" — NO cambiarla desde fases de backend.
+const HUB_VERSION = "1.0.0-SNAPSHOT";
+
 // Helper: send ok envelope consistently
 function ok(data) { return { ok: true, data }; }
 function fail(error, code) { return { ok: false, error: String(error).slice(0, 800), code }; }
+
+// ---- F4: validación de ids de ruta (projectId/sessionId/skillId) -----------
+// Regex DEL CONTRATO F4: los ids que el hub GENERA (genProjectId, sesiones de
+// los adapters, ids del catálogo de skills) y los nombres de carpeta de
+// workspace saneados caben todos en [A-Za-z0-9._-]. Cualquier "/" "\" null,
+// metacaracter de shell (";" "|" "$"…) o ".." queda FUERA => 400 con code
+// PROJECT_INVALID/SESSION_INVALID (envelope estándar), ANTES de tocar el store,
+// fs o cualquier path.join. Se valida SIEMPRE tras decodeURIComponent.
+const ID_RE = /^[A-Za-z0-9._-]+$/;
+function isValidId(v) {
+  return typeof v === "string" && v.length > 0 && v.length <= 256 && ID_RE.test(v) && !v.includes("..");
+}
+// 400 envelope {ok:false,error:{code,message}} — normalizeEnvelope lo deja tal cual
+function invalidId(res, kind, value) {
+  const code = kind === "project" ? "PROJECT_INVALID" : kind === "session" ? "SESSION_INVALID" : "SKILL_INVALID";
+  const label = kind === "project" ? "projectId" : kind === "session" ? "sessionId" : "skillId";
+  return json(res, 400, {
+    ok: false,
+    error: { code, message: `invalid ${label}: "${String(value ?? "").slice(0, 80)}" (must match ^[A-Za-z0-9._-]+$, max 256, sin "..")` }
+  });
+}
+
+// ---- F4: rate limiting básico /api/* (sliding window en memoria, sin deps) --
+// Techo por defecto: 120 req/min por IP (AEGIS_RATE_LIMIT_N cambia el techo;
+// AEGIS_RATE_LIMIT=0 lo desactiva — lo usan tests y depuración). El hub sólo
+// escucha en 127.0.0.1 => TODOS los clientes comparten un único bucket por IP
+// de loopback. Exentos de contar:
+//   - GET /api/health        (sonda pública de keepalive.sh, 1 cada 10s)
+//   - GET /api/bootstrap/state (polling de 1s del wizard = 60 req/min solo:
+//     contarlo comería la mitad de la cuota junto al chat-polling de 1.5s)
+// Con ambas exenciones el wizard nunca consume cuota; el techo de 120/min
+// reserva el resto para chat/UI (chat-polling ~40/min + UI ≈ holgado).
+// 429 => envelope {ok:false,error:{code:"RATE_LIMITED"}} + header Retry-After.
+const RATE_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_N = (() => {
+  const n = parseInt(process.env.AEGIS_RATE_LIMIT_N || "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 120;
+})();
+const RATE_LIMIT_ENABLED = process.env.AEGIS_RATE_LIMIT !== "0" && RATE_LIMIT_N > 0;
+const rateHits = new Map(); // ip -> [timestamps dentro de la ventana]
+function rateLimitCheck(ip) {
+  if (!RATE_LIMIT_ENABLED) return { allowed: true };
+  const now = Date.now();
+  const cutoff = now - RATE_WINDOW_MS;
+  let arr = rateHits.get(ip);
+  if (!arr) { arr = []; rateHits.set(ip, arr); }
+  // poda sliding-window de los timestamps fuera de la ventana
+  let i = 0;
+  while (i < arr.length && arr[i] <= cutoff) i++;
+  if (i > 0) arr = arr.slice(i);
+  if (arr.length >= RATE_LIMIT_N) {
+    rateHits.set(ip, arr);
+    const retryAfterMs = (arr[0] + RATE_WINDOW_MS) - now;
+    return { allowed: false, retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)) };
+  }
+  arr.push(now);
+  rateHits.set(ip, arr);
+  return { allowed: true };
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -431,7 +497,9 @@ providerManager.register(new ClaudeCodeAdapter());
 // que el smoke-test use el mismo cable que la app, no un atajo paralelo.
 const handleSetupRoute = createSetupHandler({
   opencodeAdapter,
-  probeOpencodeHealth
+  probeOpencodeHealth,
+  // F4: HUB_VERSION (server.js) para el SBOM de GET /api/setup/manifest
+  hubVersion: HUB_VERSION
 });
 
 // ---- Non-destructive session ownership discovery (hub must never kill TUI) ----
@@ -963,9 +1031,26 @@ async function handleRequest(req, res){
   try { url = new URL(req.url, `http://${req.headers.host}`); } catch (e) { return json(res, 400, { error: 'bad url', detail: String(e) }); }
   const pathname = url.pathname;
 
-  // ---- Auth de TODAS las rutas /api/*: exige X-Aegis-Token (única excepción sin token: GET /api/health) ----
+  // ---- F4: rate limiting /api/* (antes incluso del token: un flood sin token
+  // también consume cuota). Exentos: GET /api/health y GET /api/bootstrap/state
+  // (justificación en la cabecera de rateLimitCheck). OPTIONS ya salió arriba.
   const isApi = pathname === "/api" || pathname.startsWith("/api/");
   const isPublicHealth = pathname === "/api/health" && req.method === "GET";
+  const isBootstrapStatePoll = pathname === "/api/bootstrap/state" && req.method === "GET";
+  if (isApi && !isPublicHealth && !isBootstrapStatePoll) {
+    const ip = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : "unknown";
+    const rl = rateLimitCheck(ip);
+    if (!rl.allowed) {
+      res.setHeader("Retry-After", String(rl.retryAfterSec));
+      log.warn(`[ratelimit] 429 ${req.method} ${pathname.slice(0, 120)} desde ${ip} (techo ${RATE_LIMIT_N}/min)`);
+      return json(res, 429, {
+        ok: false,
+        error: { code: "RATE_LIMITED", message: `rate limit excedido: ${RATE_LIMIT_N} peticiones/min por IP — reintenta en ${rl.retryAfterSec}s (header Retry-After)` }
+      });
+    }
+  }
+
+  // ---- Auth de TODAS las rutas /api/*: exige X-Aegis-Token (única excepción sin token: GET /api/health) ----
   if (isApi && !isPublicHealth && !tokenMatches(req.headers["x-aegis-token"])) {
     return json(res, 403, { ok: false, error: { code: "FORBIDDEN", message: "missing or invalid token" } });
   }
@@ -1102,6 +1187,8 @@ async function handleRequest(req, res){
   const deleteSessionIntercept = pathname.match(/^\/(?:api\/opencode|opencode|api)\/session(?:s)?\/([^\/]+)$/);
   if (deleteSessionIntercept && req.method === "DELETE") {
     const sid = sanitizeProjectId(decodeURIComponent(deleteSessionIntercept[1]));
+    // F4: primera línea de validación (regex del contrato) ANTES de tocar store/fs
+    if (!isValidId(sid)) return invalidId(res, "session", sid);
     // Anti path-traversal: id debe resolver dentro de basePath (brainDir) — este sid llega a
     // fs.rmSync(recursive) en AntigravityAdapter.deleteSession (providers.js) vía path.join(brainDir, sid)
     if (!resolvesInside(antigravityAdapter.brainDir, sid)) {
@@ -1169,6 +1256,8 @@ async function handleRequest(req, res){
                        pathname.match(/^\/api\/opencode\/sessions\/([^\/]+)\/message$/);
   if (sendMsgMatch && req.method === "POST") {
     const sid = sanitizeProjectId(decodeURIComponent(sendMsgMatch[1]));
+    // F4: id de sesión validado ANTES de leer body, tocar el store o el adapter
+    if (!isValidId(sid)) return invalidId(res, "session", sid);
     const isStream = url.searchParams.get("stream") === "true" ||
                      (req.headers["accept"] && req.headers["accept"].includes("text/event-stream"));
     try {
@@ -1514,15 +1603,37 @@ async function handleRequest(req, res){
   }
 
   // 2c) Logs (Models.kt LogsResponse — últimas líneas del log REAL del hub, nunca inventadas)
+  // F4: fuente = sink rotado del logger (backend/logs/aegis.log + backups .1..3,
+  // dir redirigible vía AEGIS_LOG_DIR), NO el hub.log (que es la redirección de
+  // stdout de keepalive.sh). Params: ?lines= (default 200, tope 5000) y el
+  // legacy ?limit= que sigue enviando ApiService.getSystemLogs(limit=100).
+  // Contrato: data = Array<String> (LogsResponse lo exige — NO romper la app) +
+  // espejo `logs` (consumidor nuevo) + `note` honesto cuando no hay fichero aún.
   if (pathname === "/api/system/logs" && req.method === "GET") {
-    const limit = Math.max(1, Math.min(1000, parseInt(url.searchParams.get("limit") || "100", 10) || 100));
+    const rawLimit = url.searchParams.get("lines") || url.searchParams.get("limit") || "200";
+    const limit = Math.max(1, Math.min(5000, parseInt(rawLimit, 10) || 200));
     try {
-      const logFile = path.join(__dirname, "hub.log");
+      // Orden cronológico: .3 (más viejo) .2 .1 principal (más reciente)
+      const logFile = getLogFile();
+      const files = [`${logFile}.3`, `${logFile}.2`, `${logFile}.1`, logFile];
       let lines = [];
-      if (fs.existsSync(logFile)) {
-        lines = fs.readFileSync(logFile, "utf8").split("\n").filter(l => l.trim()).slice(-limit);
+      let anyFile = false;
+      for (const f of files) {
+        try {
+          if (!fs.existsSync(f)) continue;
+          anyFile = true;
+          lines = lines.concat(fs.readFileSync(f, "utf8").split("\n").filter(l => l.trim()));
+        } catch (_) { /* backup ilegible: se salta, nunca 500 por un .1 roto */ }
       }
-      return json(res, 200, { ok: true, data: lines });
+      const tail = lines.slice(-limit);
+      return json(res, 200, {
+        ok: true,
+        data: tail,                 // LogsResponse.data: List<String>? (app, SOLO esto parsea Gson)
+        logs: tail,                 // espejo documentado para consumidores nuevos (F4)
+        ...(anyFile
+          ? {}
+          : { note: `sin fichero de log todavía: ${logFile} no existe (el sink se crea en el primer mensaje del logger)` })
+      });
     } catch (e) {
       return json(res, 500, { ok: false, error: `log read failed: ${e.message}` });
     }
@@ -1809,6 +1920,7 @@ async function handleRequest(req, res){
     const m = pathname.match(/^\/api\/projects\/([^\/]+)$/);
     if (!m) return json(res, 404, fail("not found"));
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    if (!isValidId(id)) return invalidId(res, "project", id); // F4: antes del store
     try {
       const raw = await readJsonBody(req, 64*1024);
       const body = JSON.parse(raw || "{}");
@@ -1869,6 +1981,7 @@ async function handleRequest(req, res){
     const m = pathname.match(/^\/api\/projects\/([^\/]+)$/);
     if (!m) return json(res, 404, fail("not found"));
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    if (!isValidId(id)) return invalidId(res, "project", id); // F4: antes del store
     try {
       let resultProj = null;
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
@@ -1892,6 +2005,7 @@ async function handleRequest(req, res){
   if(pathname.match(/^\/api\/projects\/[^\/]+\/sessions$/) && req.method==="GET"){
     const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions$/);
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    if (!isValidId(id)) return invalidId(res, "project", id); // F4: antes del store
     const store = loadProjectsStore();
     const proj = findProject(store, id);
     if (!proj) return json(res, 404, fail(`project ${id} not found`));
@@ -1905,6 +2019,7 @@ async function handleRequest(req, res){
     try {
       const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions$/);
       const id = sanitizeProjectId(decodeURIComponent(m[1]));
+      if (!isValidId(id)) return invalidId(res, "project", id); // F4: antes de crear/asociar
       const raw = await readJsonBody(req, 64*1024);
       const body = JSON.parse(raw || "{}");
       let sessionId = String(body.sessionId || body.id || "").trim();
@@ -1990,6 +2105,8 @@ async function handleRequest(req, res){
     const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions\/([^\/]+)$/);
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
     const sessionId = sanitizeProjectId(decodeURIComponent(m[2]));
+    if (!isValidId(id)) return invalidId(res, "project", id);   // F4: antes del store
+    if (!isValidId(sessionId)) return invalidId(res, "session", sessionId);
     try {
       const raw = await readJsonBody(req, 64*1024);
       const body = JSON.parse(raw || "{}");
@@ -2031,6 +2148,8 @@ async function handleRequest(req, res){
     const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions\/([^\/]+)$/);
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
     const sessionId = sanitizeProjectId(decodeURIComponent(m[2]));
+    if (!isValidId(id)) return invalidId(res, "project", id);   // F4: antes del store
+    if (!isValidId(sessionId)) return invalidId(res, "session", sessionId);
     try {
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
         const store = loadProjectsStore();
@@ -2054,6 +2173,12 @@ async function handleRequest(req, res){
   if(pathname==="/api/skills" && req.method==="GET"){
     const projectId = url.searchParams.get("projectId") || url.searchParams.get("project") || null;
     const scopeFilter = url.searchParams.get("scope");
+    // F4: los ids de QUERY también se validan (llegan a path.join(SKILLS_ROOT, scope)
+    // y a listAllSkillsMerged(projectId)) — scope acepta "global" o un id válido.
+    if (projectId && !isValidId(projectId)) return invalidId(res, "project", projectId);
+    if (scopeFilter && scopeFilter !== "global" && !isValidId(scopeFilter)) {
+      return invalidId(res, "skill", scopeFilter);
+    }
     if (scopeFilter) {
       const list = listSkills(scopeFilter);
       return json(res, 200, ok(list));
@@ -2118,6 +2243,7 @@ async function handleRequest(req, res){
   if(pathname.match(/^\/api\/projects\/[^\/]+\/summarize$/) && req.method==="POST"){
     const m = pathname.match(/^\/api\/projects\/([^\/]+)\/summarize$/);
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    if (!isValidId(id)) return invalidId(res, "project", id); // F4: antes de leer/escribir resumen
     const store = loadProjectsStore();
     const proj = findProject(store, id);
     if (!proj) return json(res, 404, fail(`project ${id} not found`));
@@ -2169,6 +2295,7 @@ async function handleRequest(req, res){
   const patchSessionMatch = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)$/);
   if (patchSessionMatch && req.method === "PATCH") {
     const sid = sanitizeProjectId(decodeURIComponent(patchSessionMatch[1]));
+    if (!isValidId(sid)) return invalidId(res, "session", sid); // F4: antes del store/adapter
     try {
       const raw = await readJsonBody(req, 64 * 1024);
       const body = JSON.parse(raw || "{}");
@@ -2211,6 +2338,7 @@ async function handleRequest(req, res){
   const deleteSessionMatch = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)$/);
   if (deleteSessionMatch && req.method === "DELETE") {
     const sid = sanitizeProjectId(decodeURIComponent(deleteSessionMatch[1]));
+    if (!isValidId(sid)) return invalidId(res, "session", sid); // F4: primera línea (regex del contrato)
     // Anti path-traversal: mismo criterio que GET/POST — path.resolve(basePath, id) debe quedar dentro de basePath
     if (!resolvesInside(antigravityAdapter.brainDir, sid)) {
       return json(res, 400, { ok: false, error: `invalid session id (path traversal): ${sid}`, code: "BAD_REQUEST" });
@@ -2252,6 +2380,7 @@ async function handleRequest(req, res){
   if((pathname.match(/^\/api\/opencode\/sessions\/[^\/]+\/messages$/) || pathname.match(/^\/api\/sessions\/[^\/]+\/messages$/)) && req.method==="GET"){
     const m = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)\/messages$/);
     const sid = sanitizeProjectId(decodeURIComponent(m[1]));
+    if (!isValidId(sid)) return invalidId(res, "session", sid); // F4: antes del store/adapter
     try {
       const headerProvider = req.headers["x-provider"] ? String(req.headers["x-provider"]).toLowerCase().trim() : null;
       const headerProjectId = req.headers["x-project-id"] ? sanitizeProjectId(decodeURIComponent(req.headers["x-project-id"])) : null;
@@ -2340,6 +2469,7 @@ async function handleRequest(req, res){
   if(pathname.match(/^\/api\/projects\/[^\/]+\/summary$/) && req.method==="GET"){
     const m = pathname.match(/^\/api\/projects\/[^\/]+\/summary$/);
     const id = sanitizeProjectId(decodeURIComponent(m[1]));
+    if (!isValidId(id)) return invalidId(res, "project", id); // F4: antes de leer summaries/<id>.json
     const data = readSummary(id);
     if (!data) return json(res, 404, fail(`no summary for project ${id} — POST /api/projects/${id}/summarize to generate`));
     return json(res, 200, ok(data));
