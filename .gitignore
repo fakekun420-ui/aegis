@@ -38,5 +38,3 @@ opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.w
 opencode-companion_backup/
 opencode-companion-apk_backup/
 Aegis/backend/hub.log.wedged-*
-Aegis/.hub/
-Aegis/agents/
