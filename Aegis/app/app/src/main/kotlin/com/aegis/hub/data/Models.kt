@@ -63,6 +63,8 @@ data class OpencodeSession(
     @SerializedName("ID") val ID: String? = null,
     val title: String? = null,
     val name: String? = null,
+    // F6: registro único — nombre REAL que le puso OpenCode (title = nombre puesto desde la app)
+    val providerTitle: String? = null,
     val model: Any? = null,
     val createdAt: String? = null,
     @SerializedName("created_at") val createdAtAlt: String? = null,

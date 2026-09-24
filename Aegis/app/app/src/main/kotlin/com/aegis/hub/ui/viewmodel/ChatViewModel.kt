@@ -45,6 +45,11 @@ class ChatViewModel : ViewModel() {
     private val _selectedProvider = MutableStateFlow<String>("antigravity")
     val selectedProvider: StateFlow<String> = _selectedProvider
 
+    // F6: sesión ya vinculada a un proveedor — el pill queda fijo para que
+    // cambiar de motor en un chat abierto NO re-bindea ni "borra" la sesión.
+    private val _sessionProviderBound = MutableStateFlow(false)
+    val sessionProviderBound: StateFlow<Boolean> = _sessionProviderBound
+
     private val _sessionTitle = MutableStateFlow<String?>("Nuevo chat")
     val sessionTitle: StateFlow<String?> = _sessionTitle
 
@@ -100,6 +105,8 @@ class ChatViewModel : ViewModel() {
 
     fun selectProvider(provider: String) {
         val p = provider.lowercase().trim()
+        // F6: en una sesión ya vinculada el proveedor de nacimiento es inamovible
+        if (_sessionProviderBound.value && p != _selectedProvider.value) return
         _selectedProvider.value = p
         loadModels(p)
     }
@@ -119,6 +126,7 @@ class ChatViewModel : ViewModel() {
     fun loadModels(provider: String? = null) {
         val prov = (provider ?: _selectedProvider.value).lowercase().trim().ifBlank { "antigravity" }
         viewModelScope.launch {
+            _modelsLoading.value = true
             try {
                 val resp = api.getModels(prov)
                 if (resp.ok && resp.data != null && resp.data.isNotEmpty()) {
@@ -127,8 +135,16 @@ class ChatViewModel : ViewModel() {
                         val defaultHigh = resp.data.find { it.id == "gemini-3.8-flash-high" }
                         _selectedModel.value = defaultHigh?.id ?: resp.data.first().id
                     }
+                } else {
+                    // F6: sin lista fiable NO se conserva la del proveedor anterior
+                    // (antes se veían modelos ajenos/v1 bajo la pestaña de OpenCode).
+                    _models.value = emptyList()
                 }
-            } catch (_: Exception) { }
+            } catch (_: Exception) {
+                _models.value = emptyList()
+            } finally {
+                _modelsLoading.value = false
+            }
         }
     }
 
@@ -136,6 +152,9 @@ class ChatViewModel : ViewModel() {
         pollingJob?.cancel()
         val prov = (provider ?: if (sessionId.isBlank() || sessionId.startsWith("agy_")) "antigravity" else "opencode").lowercase().trim()
         _selectedProvider.value = prov
+        // F6: sólo una sesión existente queda vinculada al proveedor de nacimiento;
+        // los chats nuevos pueden cambiar libremente de motor.
+        _sessionProviderBound.value = sessionId.isNotBlank()
         if (_selectedModel.value.isNullOrBlank()) {
             _selectedModel.value = "gemini-3.8-flash-high"
         }

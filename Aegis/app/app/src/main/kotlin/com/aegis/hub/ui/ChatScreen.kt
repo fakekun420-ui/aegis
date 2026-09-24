@@ -75,6 +75,8 @@ fun ChatScreen(
     val models by vm.models.collectAsState()
     val selectedModel by vm.selectedModel.collectAsState()
     val selectedProvider by vm.selectedProvider.collectAsState()
+    val sessionProviderBound by vm.sessionProviderBound.collectAsState()
+    val modelsLoading by vm.modelsLoading.collectAsState()
     val streamingText by vm.streamingText.collectAsState()
     val streamingTools by vm.streamingTools.collectAsState()
     val agentMode by vm.agentMode.collectAsState()
@@ -484,15 +486,25 @@ fun ChatScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     FilterChip(
                         selected = selectedProvider == "opencode",
+                        enabled = !sessionProviderBound,
                         onClick = { vm.selectProvider("opencode") },
                         label = { Text("OpenCode Zen") },
                         shape = RoundedCornerShape(10.dp)
                     )
                     FilterChip(
                         selected = selectedProvider == "antigravity",
+                        enabled = !sessionProviderBound,
                         onClick = { vm.selectProvider("antigravity") },
                         label = { Text("Antigravity") },
                         shape = RoundedCornerShape(10.dp)
+                    )
+                }
+                if (sessionProviderBound) {
+                    Text(
+                        "Sesión ya vinculada: el proveedor de nacimiento se mantiene. " +
+                            "Para usar otro motor, crea un chat nuevo.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -512,7 +524,12 @@ fun ChatScreen(
                     )
                 }
                 if (models.isEmpty()) {
-                    Text("Cargando modelos…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (modelsLoading) "Cargando modelos…"
+                        else "No se pudieron cargar los modelos. Revisa que OpenCode esté activo.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Spacer(Modifier.height(16.dp))
             }
