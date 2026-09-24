@@ -77,4 +77,20 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // ---- F4: tests JVM unitarios + suite instrumentada ----
+    // Unitarios (src/test): BootstrapViewModelTest (coroutines-test virtualiza el
+    // polling de 1s con Dispatchers.setMain + runTest), FriendlyErrorTest y
+    // ModelsEnvelopeTest (Gson puro, sin Android). NO se añade mockwebserver:
+    // los fakes construyen retrofit2.Response a mano y no hay red real.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1") // misma versión que coroutines-android
+    // Instrumentada (src/androidTest): ext junit + espresso + compose ui-test.
+    // El BOM se REUTILIZA (el mismo de release, 2024.10.00): no se introduce una
+    // segunda versión de compose-bom que pudiera desalinear ui-test y la app.
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

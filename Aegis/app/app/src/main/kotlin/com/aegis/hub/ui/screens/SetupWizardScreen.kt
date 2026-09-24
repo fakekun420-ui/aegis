@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +37,16 @@ import com.aegis.hub.ui.theme.*
 import com.aegis.hub.ui.viewmodel.BootstrapUiState
 import com.aegis.hub.ui.viewmodel.BootstrapViewModel
 import com.aegis.hub.ui.viewmodel.friendlyError
+
+// F4 — testTags estables de los botones principales, compartidos con la suite
+// instrumentada (SetupWizardNavigationTest). Son el único ancla de localización:
+// los tests NO dependen de los labels variables ("Ejecutar…"/"Reintentar…",
+// "Enviando mensaje…") del botón de verificación ni del smoke test.
+object SetupTestTags {
+    const val START = "setup_btn_start"                 // "Iniciar instalación" (phase idle)
+    const val FINAL_CHECK = "setup_btn_final_check"     // "Ejecutar/Reintentar verificación"
+    const val SMOKE_TEST = "setup_btn_smoke_test"       // "Enviar mensaje de prueba"
+}
 
 // F1 — Wizard de configuración inicial de Aegis (contrato /api/bootstrap/*).
 // Estilo de los screens existentes (ControlCenter/SkillManager): paleta Claude,
@@ -268,7 +279,12 @@ private fun WizardActions(
 ) {
     when (phase) {
         BootstrapPhase.idle ->
-            SetupActionButton("Iniciar instalación", enabled = !loading, onClick = onStart)
+            SetupActionButton(
+                "Iniciar instalación",
+                enabled = !loading,
+                tag = SetupTestTags.START,
+                onClick = onStart
+            )
         BootstrapPhase.running ->
             SetupActionButton("Cancelar", enabled = !loading, danger = true, onClick = onCancel)
         BootstrapPhase.failed -> Row(
@@ -302,14 +318,17 @@ private fun SetupActionButton(
     modifier: Modifier = Modifier,
     danger: Boolean = false,
     loading: Boolean = false,
+    tag: String? = null,
     onClick: () -> Unit
 ) {
+    // F4: testTag opcional (SetupTestTags) para localizar el botón en androidTest
+    val baseModifier = modifier
+        .fillMaxWidth()
+        .height(48.dp)
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp),
+        modifier = if (tag != null) baseModifier.testTag(tag) else baseModifier,
         colors = if (danger) {
             ButtonDefaults.buttonColors(containerColor = ClaudeError, contentColor = Color.Black)
         } else {
@@ -613,6 +632,7 @@ private fun FinalVerificationCard(
                 },
                 enabled = !ui.finalCheckLoading,
                 loading = ui.finalCheckLoading,
+                tag = SetupTestTags.FINAL_CHECK,
                 onClick = onRunFinalCheck
             )
 
@@ -647,6 +667,7 @@ private fun FinalVerificationCard(
                 label = if (ui.smokeLoading) "Enviando mensaje…" else "Enviar mensaje de prueba",
                 enabled = !ui.smokeLoading,
                 loading = ui.smokeLoading,
+                tag = SetupTestTags.SMOKE_TEST,
                 onClick = onSmokeTest
             )
             ui.smokeReply?.let { reply ->

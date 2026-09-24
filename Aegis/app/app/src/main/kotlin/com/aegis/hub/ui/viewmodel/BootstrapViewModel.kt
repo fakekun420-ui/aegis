@@ -2,14 +2,15 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.aegis.hub.data.ApiClient
 import com.aegis.hub.data.AuthGuideResponse
 import com.aegis.hub.data.BootstrapActionResponse
 import com.aegis.hub.data.BootstrapError
 import com.aegis.hub.data.BootstrapPhase
+import com.aegis.hub.data.BootstrapRepository
 import com.aegis.hub.data.BootstrapRunRequest
 import com.aegis.hub.data.BootstrapState
 import com.aegis.hub.data.FinalCheckResponse
+import com.aegis.hub.data.RetrofitBootstrapRepository
 import com.aegis.hub.data.SetupCheckStatus
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
@@ -54,8 +55,13 @@ data class BootstrapUiState(
  * quedan LOCALES (actionError o smokeError) sin alternar hubReachable, para que
  * la tarjeta "Verificación final" siga visible con su error; el bloqueo
  * "Esperando el hub…" queda reservado al polling de estado (fetchState).
+ * F4: la fuente de datos se inyecta con DEFAULT ([RetrofitBootstrapRepository]);
+ * la firma sin argumentos que usan AppNavHost/MainActivity (viewModel()) sigue
+ * intacta porque Kotlin genera el ctor sin args al tener todos los params default.
  */
-class BootstrapViewModel : ViewModel() {
+class BootstrapViewModel(
+    private val repo: BootstrapRepository = RetrofitBootstrapRepository
+) : ViewModel() {
 
     private val _ui = MutableStateFlow(BootstrapUiState())
     val ui: StateFlow<BootstrapUiState> = _ui.asStateFlow()
@@ -95,7 +101,7 @@ class BootstrapViewModel : ViewModel() {
     private suspend fun fetchState(silent: Boolean) {
         if (!silent) _ui.value = _ui.value.copy(loading = true)
         try {
-            val resp = ApiClient.service.getBootstrapState()
+            val resp = repo.getBootstrapState()
             val st = resp.body()?.data
             when {
                 resp.isSuccessful && st != null -> {
@@ -156,17 +162,17 @@ class BootstrapViewModel : ViewModel() {
 
     /** idle/paused/failed → POST /api/bootstrap/run {resume:true}; recarga inmediata al terminar. */
     fun start() {
-        runAction { ApiClient.service.runBootstrap(BootstrapRunRequest(resume = true)) }
+        runAction { repo.runBootstrap(BootstrapRunRequest(resume = true)) }
     }
 
     /** failed → POST /api/bootstrap/step/{id}/retry; recarga inmediata al terminar. */
     fun retry(stepId: String) {
-        runAction { ApiClient.service.retryBootstrapStep(stepId) }
+        runAction { repo.retryBootstrapStep(stepId) }
     }
 
     /** running → POST /api/bootstrap/cancel; recarga inmediata al terminar. */
     fun cancel() {
-        runAction { ApiClient.service.cancelBootstrap() }
+        runAction { repo.cancelBootstrap() }
     }
 
     private fun runAction(call: suspend () -> Response<BootstrapActionResponse>) {
@@ -214,7 +220,7 @@ class BootstrapViewModel : ViewModel() {
             pendingActionError = false
             _ui.value = _ui.value.copy(finalCheckLoading = true, actionError = null)
             try {
-                val resp = ApiClient.service.getFinalCheck()
+                val resp = repo.getFinalCheck()
                 val body = resp.body()
                 val data = body?.data
                 when {
@@ -262,7 +268,7 @@ class BootstrapViewModel : ViewModel() {
         smokeJob = viewModelScope.launch {
             _ui.value = _ui.value.copy(smokeLoading = true, smokeReply = null, smokeError = null)
             try {
-                val resp = ApiClient.service.runSmokeTest()
+                val resp = repo.runSmokeTest()
                 val body = resp.body()
                 val data = body?.data
                 val envErr = body?.error
@@ -314,7 +320,7 @@ class BootstrapViewModel : ViewModel() {
             pendingActionError = false
             _ui.value = _ui.value.copy(authGuideLoading = true, actionError = null)
             try {
-                val resp = ApiClient.service.runAuthGuide()
+                val resp = repo.runAuthGuide()
                 val body = resp.body()
                 when {
                     resp.isSuccessful && body != null && body.data != null ->
