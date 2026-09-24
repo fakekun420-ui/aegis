@@ -107,7 +107,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       - name: Setup Android SDK
+        # Con packages explícitos: sin ellos sdkmanager falla aceptando
+        # licencias de preview en este runner (regresión observada en run1)
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -156,7 +160,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       - name: Setup Android SDK
+        # Con packages explícitos: sin ellos sdkmanager falla aceptando
+        # licencias de preview en este runner (regresión observada en run1)
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
