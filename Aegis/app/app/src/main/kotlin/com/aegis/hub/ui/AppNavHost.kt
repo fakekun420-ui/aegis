@@ -130,6 +130,10 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
         }
         composable(NavRoutes.CHATS) {
             val scope = rememberCoroutineScope()
+            // F6: refrescar la lista al ENTRAR en la ventana de Chats — la ventana siempre
+            // muestra el estado vivo del hub (y cubre cualquier fallo transitorio del
+            // arranque en frío del token: la lista ya no puede quedar "fantasma" vacía).
+            LaunchedEffect(Unit) { vm.refreshSessions() }
             ChatsScreen(
                 sessions = sessions,
                 projects = projects,

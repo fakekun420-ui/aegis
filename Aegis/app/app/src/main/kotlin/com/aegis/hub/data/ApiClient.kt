@@ -29,6 +29,13 @@ object ApiClient {
 
     /** Lee el token del hub vía root (la app tiene root). Cachea en memoria; las lecturas fallidas
      *  NO se cachean (se reintenta) y van limitadas a 1 intento / 2s para no saturar `su`. */
+    // F6 (single-flight): en el arranque en frío, refreshProjects() y refreshSessions()
+    // compiten por la primera lectura (el `cat` por root tarda ~100ms y el cooldown se fija
+    // ANTES de tener el token). Sin este candado, el segundo hilo recibe `null` en silencio y
+    // su petición sale SIN X-Aegis-Token →403 → la ventana de Chats aparecía vacía hasta el
+    // próximo refresh (al crear un chat, cuando el token ya estaba cacheado). Con el candado,
+    // los hilos concurrentes ESPERAN la primera lectura y reutilizan el token resultante.
+    @Synchronized
     private fun readToken(): String? {
         tokenCache?.let { if (it.isNotEmpty()) return it }
         val now = System.currentTimeMillis()
