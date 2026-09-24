@@ -751,6 +751,33 @@ export class OpencodeAdapter extends BaseProviderAdapter {
 // Hard 90s timeout, process tree killing, zombie cleanup
 // ==========================================
 
+// Tope por adjunto materializado en disco (la app ya limita a 5MB/archivo y
+// 6 archivos; aquí sólo una red de seguridad para no llenar el almacén).
+const ANTIGRAVITY_MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
+/** data:[mime];base64,<datos> -> Buffer (null si no lo es). */
+function decodeDataUriBuffer(url) {
+  if (typeof url !== "string") return null;
+  const i = url.indexOf(";base64,");
+  if (i < 0) return null;
+  try {
+    return Buffer.from(url.slice(i + ";base64,".length), "base64");
+  } catch (_) {
+    return null;
+  }
+}
+
+/** base64 suelto -> Buffer (null si está vacío). */
+function safeBase64Buffer(b64) {
+  if (typeof b64 !== "string" || !b64) return null;
+  try {
+    const buf = Buffer.from(b64, "base64");
+    return buf.length ? buf : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 export class AntigravityAdapter extends BaseProviderAdapter {
   constructor(options = {}) {
     super("antigravity", "Antigravity", "cli");
@@ -758,6 +785,10 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       options.binPath ||
       (fs.existsSync("/root/.local/bin/agy") ? "/root/.local/bin/agy" : "agy");
     this.brainDir = options.brainDir || "/root/.gemini/antigravity-cli/brain";
+    // Adjuntos materializados FUERA de brainDir: el adapter escanea brainDir
+    // (readdirSync) para detectar conversaciones nuevas y no debe ver basura.
+    this.attachmentsDir =
+      options.attachmentsDir || path.join(path.dirname(this.brainDir), "attachments");
     this.cwd = options.cwd || "/sdcard/projects";
     this.getSystemContextBlock = options.getSystemContextBlock || (() => null);
     this.sessionMap = new Map(); // sessionId -> agyConversationId
@@ -1101,7 +1132,106 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     }
   }
 
-  async sendMessage(sessionId, payload = {}, opts = {}) {
+  /**
+   * Materializa un adjunto binario en disco y devuelve su ruta ABSOLUTA.
+   * Fuera de brainDir (para no envenenar el escaneo de conversaciones nuevas).
+   */
+  _materializeAttachment(sessionId, filename, buffer) {
+    const base = path.basename(String(filename || "adjunto.bin")) || "adjunto.bin";
+    const safe = base.replace(/[^\w.\-]+/g, "_").slice(0, 120) || "adjunto.bin";
+    const sid = String(sessionId || "sin-sesion").replace(/[^\w-]/g, "_");
+    const dir = path.join(this.attachmentsDir, sid);
+    fs.mkdirSync(dir, { recursive: true });
+    const target = path.join(dir, `${Date.now()}_${safe}`);
+    fs.writeFileSync(target, buffer);
+    return target;
+  }
+
+  /**
+   * Adjuntos -> fragmento de prompt para agy.
+   *
+   * agy sólo acepta bloques `text` en print/stream-json
+   * ("stream input content block type %q is not supported (only %q)"): los
+   * píxeles de una imagen JAMÁS llegan inlineados. Lo que sí funciona
+   * (verificado con agy 1.2.10) es guardar el archivo en disco y pasar la
+   * RUTA ABSOLUTA en el prompt: el agente la abre con view_file y la imagen
+   * se entrega al modelo multimodal. Los ficheros de texto siguen
+   * inlineándose en un bloque de código (historial de siempre).
+   */
+  _buildAttachmentPrompt(sessionId, specs) {
+    let out = "";
+    for (const s of specs) {
+      if (!s || !s.name) continue;
+      const mime = s.mime || "application/octet-stream";
+      const note = (abs) =>
+        `\n\n[Attached File: ${s.name} (${mime})] → ${abs}` +
+        `\nRuta absoluta: pásasela a view_file para ver el contenido (las imágenes se muestran directamente).`;
+
+      // (a) ruta absoluta ya existente: referenciarla tal cual
+      if (s.path && path.isAbsolute(s.path) && fs.existsSync(s.path)) {
+        out += note(s.path);
+        continue;
+      }
+      if (!s.buffer || !s.buffer.length) {
+        out += `\n\n[Attached File: ${s.name} (${mime})]`;
+        continue;
+      }
+      // (b) texto imprimible -> inlineado en bloque de código (como siempre)
+      const asText = s.buffer.toString("utf8");
+      if (/^[\x20-\x7E\s\n\r\t]+$/.test(asText.slice(0, 500))) {
+        out += `\n\n[Attached File: ${s.name} (${mime})]\n\`\`\`\n${asText.slice(0, 8000)}\n\`\`\``;
+        continue;
+      }
+      // (c) binario -> disco + ruta absoluta entregada a view_file
+      if (s.buffer.length > ANTIGRAVITY_MAX_ATTACHMENT_BYTES) {
+        out += `\n\n[Attached File: ${s.name} (${mime})] OMITIDO: ${s.buffer.length} bytes superan el máximo de ${ANTIGRAVITY_MAX_ATTACHMENT_BYTES} bytes.`;
+        continue;
+      }
+      try {
+        out += note(this._materializeAttachment(sessionId, s.name, s.buffer));
+      } catch (e) {
+        out += `\n\n[Attached File: ${s.name} (${mime})] (no se pudo guardar en disco: ${e.message})`;
+      }
+    }
+    return out;
+  }
+
+  /** Normaliza los adjuntos (parts type=file y payload.files) a specs comunes. */
+  _collectAttachmentSpecs(payload = {}) {
+    const specs = [];
+    if (Array.isArray(payload.parts)) {
+      for (const fp of payload.parts) {
+        if (!fp || fp.type !== "file" || !fp.filename) continue;
+        const dataUri = typeof fp.url === "string" && fp.url.startsWith("data:") ? fp.url : null;
+        specs.push({
+          name: fp.filename,
+          mime:
+            fp.mime ||
+            (dataUri ? dataUri.slice(5).split(";")[0] || "application/octet-stream" : "application/octet-stream"),
+          buffer: dataUri ? decodeDataUriBuffer(dataUri) : null,
+          path: typeof fp.url === "string" && fp.url.startsWith("/") ? fp.url : null
+        });
+      }
+    }
+    if (Array.isArray(payload.files)) {
+      for (const f of payload.files) {
+        if (!f || !f.name) continue;
+        specs.push({
+          name: f.name,
+          mime: f.mime || "application/octet-stream",
+          buffer: f.base64 ? safeBase64Buffer(f.base64) : f.url ? decodeDataUriBuffer(f.url) : null,
+          path: typeof f.path === "string" ? f.path : null
+        });
+      }
+    }
+    return specs;
+  }
+
+  /**
+   * Prompt de usuario completo para agy: texto + adjuntos.
+   * Se aísla en su propio método para poder testearlo sin spawnar `agy`.
+   */
+  _buildUserPrompt(sessionId, payload = {}) {
     // 1. Resolve prompt text
     let userPrompt = "";
     if (typeof payload.text === "string" && payload.text.trim()) {
@@ -1113,41 +1243,24 @@ export class AntigravityAdapter extends BaseProviderAdapter {
         .filter((p) => p && (p.type === "text" || !p.type) && typeof p.text === "string")
         .map((p) => p.text);
       userPrompt = textParts.join("\n").trim();
-
-      // Handle attached files if any
-      const fileParts = payload.parts.filter((p) => p && p.type === "file");
-      for (const fp of fileParts) {
-        if (fp.filename) {
-          userPrompt += `\n\n[Attached File: ${fp.filename}]`;
-          if (fp.url && fp.url.startsWith("data:") && fp.url.includes(";base64,")) {
-            try {
-              const base64Data = fp.url.split(";base64,")[1];
-              const decoded = Buffer.from(base64Data, "base64").toString("utf8");
-              if (/^[\x20-\x7E\s\n\r\t]+$/.test(decoded.slice(0, 500))) {
-                userPrompt += `\n\`\`\`\n${decoded.slice(0, 8000)}\n\`\`\``;
-              }
-            } catch (_) {}
-          }
-        }
-      }
     }
 
-    if (Array.isArray(payload.files)) {
-      for (const f of payload.files) {
-        if (f.name) {
-          userPrompt += `\n\n[Attached File: ${f.name} (${f.mime || "application/octet-stream"})]`;
-          if (f.base64) {
-            try {
-              const decoded = Buffer.from(f.base64, "base64").toString("utf8");
-              if (/^[\x20-\x7E\s\n\r\t]+$/.test(decoded.slice(0, 500))) {
-                userPrompt += `\n\`\`\`\n${decoded.slice(0, 8000)}\n\`\`\``;
-              }
-            } catch (_) {}
-          }
-        }
-      }
+    // 2. Adjuntos: se recogen en TODAS las ramas (antes sólo si el prompt
+    // venía por `parts`, y una imagen binaria acababa en un placeholder de
+    // texto — el modelo no veía nada y se ponía a buscar el fichero a ciegas).
+    const specs = this._collectAttachmentSpecs(payload);
+    if (specs.length) {
+      const notes = this._buildAttachmentPrompt(sessionId, specs);
+      // Mensaje SOLO con adjuntos (sin texto): antes estallaba con
+      // "No user text or prompt provided in message payload".
+      userPrompt = `${userPrompt || "Este mensaje sólo contiene archivos adjuntos."}${notes}`;
     }
+    return userPrompt;
+  }
 
+  async sendMessage(sessionId, payload = {}, opts = {}) {
+    // 1. Prompt de usuario (texto + adjuntos materializados en disco)
+    const userPrompt = this._buildUserPrompt(sessionId, payload);
     if (!userPrompt) {
       throw new Error("No user text or prompt provided in message payload");
     }
