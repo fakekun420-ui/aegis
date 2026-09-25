@@ -427,13 +427,13 @@ function buildSkillsContext(projectId) {
   if (!skills.length) return "";
   return skills.map(s => `### Skill: ${s.name} [${s.scope}]\n${s.content}`).join("\n\n---\n\n");
 }
-// El ponytail GLOBAL ya no se lee aqui: lo entrega OpenCode a TODAS las sesiones
-// por su propio mecanismo, `~/.config/opencode/AGENTS.md` -> ese mismo archivo.
-// (V2 acepta el campo `instructions` en config pero NO lo resuelve, asi que
-// AGENTS.md es el unico mecanismo que cubre el 100% de las sesiones.)
-// Reinyectarlo duplicaria ~12KB por sesion del hub y consumiria el presupuesto de
-// 24KB de buildSystemContextBlock, desplazando el contexto especifico de proyecto
-// que solo el hub puede ensamblar. Aqui queda unicamente la capa por proyecto.
+// El ponytail GLOBAL ya no se lee aquí: lo entrega OpenCode a TODAS las sesiones
+// por su propio mecanismo, `~/.config/opencode/AGENTS.md` -> este mismo archivo.
+// (V2 acepta el campo `instructions` en config pero NO lo resuelve, así que
+// AGENTS.md es el único mecanismo que cubre el 100% de las sesiones.)
+// Reinyectarlo duplicaría ~12KB por sesión del hub y consumiría el presupuesto de
+// 24KB de buildSystemContextBlock, desplazando el contexto específico de proyecto
+// que solo el hub puede ensamblar. Aquí queda únicamente la capa por proyecto.
 const PONYTAIL_GLOBAL_FILE = "/sdcard/projects/ponytail-global.md";
 
 function loadPonyTailContext(projectId) {
@@ -760,7 +760,8 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
   }
   // Do NOT fallback to UI_STATE.projectId — sessions created outside a project must remain strictly loose.
   // No pre-guard on the global ponytail file: that layer is delivered by AGENTS.md, not from
-  // here. The `!block` check below is now the single authoritative "nothing to inject" condition.
+  // here. The `!block` check below is now the single authoritative "nothing to inject" condition,
+  // which also lets project-less sessions still receive skills / project instructions.
   let block = buildSystemContextBlock(projectId);
   if (!block) return modified ? Buffer.from(JSON.stringify(parsed)) : null;
   // Defensive sanitization: remove control chars that break JSON/provider validation, keep \n \r \t
@@ -807,12 +808,19 @@ function proxyToOpencode(req, res){
   const shouldTryInject = len > 0 && len < 512 * 1024 && req.method === "POST" && /\/session\/[^\/]+\/(message|prompt|chat)/.test(targetPath);
   if (shouldTryInject) {
     return (async () => {
-      // For LLM-backed message routes, wait up to 60s (injected guard) — 8s was too short and caused premature 502 before LLM replied
+      // For LLM-backed message routes, wait for OpenCode. 8s was too short and caused
+      // premature 502 before LLM replied; 60s was still too short for AGENTIC turns
+      // (tool calls, file reads, commands) which routinely run for minutes — it produced
+      // "opencode timeout (injected)" 502s on the Aegis app. Now shares the
+      // AEGIS_TURN_TIMEOUT_MS knob with providers.js so both ends of the proxy agree.
+      const injectGuardMs = Number(process.env.AEGIS_TURN_TIMEOUT_MS) > 0
+        ? Number(process.env.AEGIS_TURN_TIMEOUT_MS)
+        : 600000;
       const guard = setTimeout(() => {
         if (!res.headersSent) {
-          try { json(res, 502, { error: 'opencode timeout (injected)', hint: `opencode serve no respondió en 60s en ${OPENCODE_HOST}:${OPENCODE_PORT}` }); } catch (_) {}
+          try { json(res, 502, { error: 'opencode timeout (injected)', hint: `opencode serve no respondió en ${Math.round(injectGuardMs / 1000)}s en ${OPENCODE_HOST}:${OPENCODE_PORT} (ajustable con AEGIS_TURN_TIMEOUT_MS)` }); } catch (_) {}
         }
-      }, 60000);
+      }, injectGuardMs);
       try {
         const chunks = [];
         for await (const c of req) chunks.push(c);
@@ -836,8 +844,16 @@ function proxyToOpencode(req, res){
           if(!res.headersSent) try { json(res, 502, { error:"opencode unreachable (injected)", detail:String(e) }); } catch(_){}
           else try{ res.end(); }catch(_){}
         });
-        pr2.setTimeout(120000, ()=> { clearTimeout(guard); log.error('[proxy inj] timeout 120s'); try{ pr2.destroy(); }catch(_){} });
-        res.setTimeout(130000, () => { clearTimeout(guard); try { res.destroy(); } catch (_) {} });
+        // Los timeouts de socket de Node son de INACTIVIDAD: se reinician con cada byte.
+        // Durante un turno agéntico (tool calls, comandos) no circula ni un byte, así que
+        // los valores hardcodeados de 120s/130s destruían la conexión a mitad de turno y el
+        // cliente se quedaba sin respuesta (curl: HTTP 000 a los 125s, 0 bytes). Eran
+        // ademas INCONSISTENTES con el guard explícito de arriba, que nunca llegaba a
+        // dispararse porque estos lo precedian.
+        // Ahora ambos son solo una red de seguridad posterior al guard explicito, para que
+        // el guard sea quien responde con un 502 descriptivo en vez de un corte mudo.
+        pr2.setTimeout(injectGuardMs + 15000, ()=> { clearTimeout(guard); log.error(`[proxy inj] socket timeout ${Math.round((injectGuardMs+15000)/1000)}s`); try{ pr2.destroy(); }catch(_){} });
+        res.setTimeout(injectGuardMs + 20000, () => { clearTimeout(guard); try { res.destroy(); } catch (_) {} });
         pr2.write(outBuf);
         pr2.end();
       } catch (e) {
@@ -876,8 +892,14 @@ function proxyToOpencode(req, res){
   });
   req.on('error', e => { clearTimeout(guard); log.error('[proxy] req error', { err: e.message }); try { pr.destroy(); } catch (_) {} });
   try { req.pipe(pr); } catch (e) { clearTimeout(guard); log.error('[proxy] pipe err', { err: e.message }); }
-  pr.setTimeout(120000, ()=> { clearTimeout(guard); log.error('[proxy] timeout 120s (payload grande)'); try{ pr.destroy(); }catch(_){} });
-  res.setTimeout(130000, () => { clearTimeout(guard); log.error('[proxy] res timeout 130s'); try { res.destroy(); } catch (_) {} });
+  // Mismo problema que en el path inyectado: timeouts de socket por INACTIVIDAD que
+  // cortaban la conexión a los 120s/130s durante turnos agénticos. Se derivan del mismo
+  // knob para que el guard explicito de 8s sea el que responda con un 502 legible.
+  const plainSocketMs = Number(process.env.AEGIS_TURN_TIMEOUT_MS) > 0
+    ? Number(process.env.AEGIS_TURN_TIMEOUT_MS)
+    : 600000;
+  pr.setTimeout(plainSocketMs + 15000, ()=> { clearTimeout(guard); log.error(`[proxy] socket timeout ${Math.round((plainSocketMs+15000)/1000)}s (payload grande)`); try{ pr.destroy(); }catch(_){} });
+  res.setTimeout(plainSocketMs + 20000, () => { clearTimeout(guard); log.error(`[proxy] res socket timeout ${Math.round((plainSocketMs+20000)/1000)}s`); try { res.destroy(); } catch (_) {} });
 }
 
 // device helpers — portable + Android namespace aware
@@ -1040,8 +1062,15 @@ async function dispatchRoute(handler, req, res, pathname) {
 // process.on('unhandledRejection') y la petición quedaba COLGADA: sin headers y
 // sin res.end() — el cliente sufría timeout con respuesta vacía.
 async function handleRequest(req, res){
-  // timeouts largos para payloads multimodales grandes (video/audio/docs en Base64)
-  req.setTimeout(125000, () => { log.error(`[hub] req timeout 125s (multimodal) ${req.url?.slice(0,140)}`); try { res.destroy(); } catch (_) {} });
+  // timeouts largos para payloads multimodales grandes (video/audio/docs en Base64).
+  // Este req.setTimeout es de INACTIVIDAD y se aplica a TODAS las peticiones que entran,
+  // incluida la ruta de envío de la app Aegis: durante un turno agéntico no llegan bytes
+  // de entrada, así que a los 125s destruía la petición. Mismo bug que los de 120s/130s
+  // del proxy. Se deriva del mismo knob para que no vuelva a cutting por debajo del guard.
+  const inboundIdleMs = Number(process.env.AEGIS_TURN_TIMEOUT_MS) > 0
+    ? Number(process.env.AEGIS_TURN_TIMEOUT_MS)
+    : 600000;
+  req.setTimeout(inboundIdleMs + 25000, () => { log.error(`[hub] req idle timeout ${Math.round((inboundIdleMs+25000)/1000)}s ${req.url?.slice(0,140)}`); try { res.destroy(); } catch (_) {} });
   res.on('close', () => { /* cleanup */ });
   // CORS: el origin solo se refleja si está en la allowlist (withCors lo lee de res._corsOrigin)
   res._corsOrigin = req.headers.origin || null;
