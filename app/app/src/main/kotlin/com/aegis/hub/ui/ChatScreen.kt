@@ -89,8 +89,15 @@ fun ChatScreen(
         vm.load(sessionId, sessionProvider)
     }
 
-    // Auto-scroll on new messages / loading / streaming tools or text changes
-    LaunchedEffect(messages.size, loading, streamingText, streamingTools) {
+    // Auto-scroll on new messages / loading / streaming tools or text changes.
+    // Se observan también el id y la LONGITUD del último mensaje: antes la clave era
+    // solo `messages.size`, de modo que cuando el asistente seguía escribiendo sobre el
+    // MISMO mensaje (poll o streaming) el tamaño no cambiaba, el efecto no se relanzaba
+    // y la lista se quedaba anclada a un mensaje anterior en vez de seguir la respuesta
+    // más reciente.
+    val lastMsgId = messages.lastOrNull()?.info?.id
+    val lastMsgTextLen = messages.lastOrNull()?.text?.length ?: 0
+    LaunchedEffect(messages.size, loading, streamingText, streamingTools, lastMsgId, lastMsgTextLen) {
         val hasLive = streamingText != null || streamingTools.isNotEmpty() || (loading && messages.isNotEmpty())
         val totalCount = messages.size + (if (hasLive) 1 else 0)
         if (totalCount > 0) {

@@ -291,24 +291,42 @@ class ChatViewModel : ViewModel() {
             val countBefore = _messages.value.size
             var messageDelivered = false
 
+            // Baseline para detectar un mensaje del asistente REALMENTE NUEVO.
+            // Antes se comprobaba `nonEmpties.any { it.role == "assistant" }`, que en un
+            // chat con historial es SIEMPRE cierto: el poll rompía en el primer intento
+            // (1.5s), marcaba messageDelivered=true y la UI dejaba de actualizarse
+            // mientras el modelo seguía trabajando (respuesta congelada / no se
+            // mantenía en la última). Ahora se compara el id del último asistente.
+            val lastAssistantIdBefore =
+                _messages.value.lastOrNull { it.role == "assistant" && !it.isEmpty }?.info?.id
+
             // 4. Start active background polling in parallel to catch assistant output or SSE stream completions
             pollingJob?.cancel()
             pollingJob = launch {
-                // Poll every 1.5s for up to 50 attempts (~75s)
-                for (attempt in 1..50) {
+                // Poll cada 1.5s hasta ~600s, alineado con AEGIS_TURN_TIMEOUT_MS del Hub
+                // (antes 50 intentos = 75s, muy corto para un turno agéntico con tool calls).
+                for (attempt in 1..400) {
                     delay(1500)
                     if (!isActive || messageDelivered) break
                     try {
                         val pollResp = api.getMessages(targetSessionId)
                         if (pollResp.ok && pollResp.data != null) {
                             val nonEmpties = pollResp.data.filterNot { it.isEmpty }
-                            // Check if a new assistant message arrived
-                            val hasAssistant = nonEmpties.any { it.role == "assistant" && !it.isEmpty }
-                            if (hasAssistant && nonEmpties.size >= countBefore) {
+                            // Un asistente NUEVO: último assistant con id distinto al baseline.
+                            val lastAssistant = nonEmpties.lastOrNull { it.role == "assistant" && !it.isEmpty }
+                            val newAssistantArrived = lastAssistant != null &&
+                                lastAssistant.info?.id != null &&
+                                lastAssistant.info.id != lastAssistantIdBefore
+                            if (newAssistantArrived && nonEmpties.size >= countBefore) {
                                 _messages.value = nonEmpties
                                 _loading.value = false
                                 messageDelivered = true
                                 break
+                            }
+                            // Aunque el turno siga en curso, refresca la lista para que el
+                            // texto parcial del asistente se vea en vivo.
+                            if (nonEmpties.size >= countBefore) {
+                                _messages.value = nonEmpties
                             }
                         }
                     } catch (_: Exception) { }
@@ -486,7 +504,14 @@ class ChatViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 // Check if background polling already retrieved the response
-                val hasAssistantNow = _messages.value.any { it.role == "assistant" && it.info?.id != tempMsgId }
+                // ¿El poll trajo ya la respuesta? Debe ser un asistente NUEVO (id distinto
+                // al baseline). Antes `any { ...id != tempMsgId }` daba true en cuanto el
+                // chat tenía historial, así que nunca se marcaba ERROR y la píldora
+                // "Enviando..." se quedaba cargando indefinidamente.
+                val lastAssistantNow = _messages.value.lastOrNull { it.role == "assistant" && !it.isEmpty }
+                val hasAssistantNow = lastAssistantNow != null &&
+                    lastAssistantNow.info?.id != null &&
+                    lastAssistantNow.info.id != lastAssistantIdBefore
                 if (!hasAssistantNow && !messageDelivered) {
                     // Try one last fast getMessages attempt before declaring failure
                     try {
@@ -494,7 +519,9 @@ class ChatViewModel : ViewModel() {
                         val lastTry = api.getMessages(targetSessionId)
                         if (lastTry.ok && lastTry.data != null) {
                             val list = lastTry.data.filterNot { it.isEmpty }
-                            if (list.any { it.role == "assistant" }) {
+                            // Mismo criterio que el poll: asistente NUEVO, no "existe alguno"
+                            val lastA = list.lastOrNull { it.role == "assistant" }
+                            if (lastA != null && lastA.info?.id != null && lastA.info.id != lastAssistantIdBefore) {
                                 _messages.value = list
                                 _loading.value = false
                                 return@launch
