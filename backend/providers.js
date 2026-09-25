@@ -192,11 +192,16 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     const now = Date.now();
     if (this._pw && now - (this._pwTime || 0) < 3000) return this._pw;
     try {
-      const candidates = [
-        "/root/.config/opencode/service.json",
-        this.logPath,
-        "/root/.local/share/opencode/log/opencode.log"
-      ];
+      const candidates = [];
+      if (this.port === 4096) {
+        if (this.logPath) candidates.push(this.logPath);
+        candidates.push("/root/.local/share/opencode/log/opencode.log");
+        candidates.push("/root/.config/opencode/service.json");
+      } else {
+        candidates.push("/root/.config/opencode/service.json");
+        if (this.logPath) candidates.push(this.logPath);
+        candidates.push("/root/.local/share/opencode/log/opencode.log");
+      }
       for (const p of candidates) {
         if (!p || !fs.existsSync(p)) continue;
         if (p.endsWith(".json")) {
@@ -609,9 +614,24 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     log.info(`[opencode] prompt accepted for ${sessionId} (msg ${ack.id || "?"}), esperando turno asistente...`);
 
     // 6) Espera del asistente: página newest-first; completo cuando trae
-    //    time.streamed (turno cerrado) o cuando el texto es estable en 2 polls.
-    const deadline = Date.now() + 70000;
+    //    time.streamed (turno cerrado) o cuando el texto lleva varios polls estable.
+    //
+    //    AEGIS_TURN_TIMEOUT_MS: un turno agéntico real (el modelo invoca
+    //    herramientas, lee ficheros, ejecuta comandos) tarda con frecuencia
+    //    minutos. Con el deadline fijo de 70s el Hub abortaba con "no respondió
+    //    en 70s" y la app Aegis mostraba error aunque la respuesta llegara
+    //    segundos después — el usuario perceived como "no me puede enviar".
+    //    Default 10 min; ajustable por env para tests o dispositivos lentos.
+    const _turnTimeoutRaw = Number(process.env.AEGIS_TURN_TIMEOUT_MS);
+    const TURN_TIMEOUT_MS = _turnTimeoutRaw > 0 ? _turnTimeoutRaw : 600000;
+    // Estabilidad: durante las tool calls el texto del asistente puede quedarse
+    // quieto más de 1s, así que "estable en 2 polls" devolvía una respuesta
+    // PARCIAL antes de tiempo. Exigimos 3 polls consecutivos y damos prioridad
+    // a time.streamed, que es el cierre real del turno según OpenCode.
+    const STABLE_POLLS_REQUIRED = 3;
+    const deadline = Date.now() + TURN_TIMEOUT_MS;
     let stableKey = null;
+    let stableCount = 0;
     while (Date.now() < deadline) {
       if (opts.signal?.aborted) throw new Error("OpenCode sendMessage aborted by client");
       await new Promise((res) => setTimeout(res, 1000));
@@ -636,8 +656,10 @@ export class OpencodeAdapter extends BaseProviderAdapter {
         }
         if (hit) {
           const key = `${hit.id}:${hitText.length}`;
-          const complete = !!(hit.time && hit.time.streamed) || key === stableKey;
-          stableKey = key;
+          const streamed = !!(hit.time && hit.time.streamed);
+          if (key === stableKey) stableCount += 1;
+          else { stableKey = key; stableCount = 1; }
+          const complete = streamed || stableCount >= STABLE_POLLS_REQUIRED;
           if (complete) {
             const normalized = this._mapV2Message(hit, sessionId, 0);
             if (typeof opts.onChunk === "function" && normalized.text) {
@@ -648,13 +670,14 @@ export class OpencodeAdapter extends BaseProviderAdapter {
           }
         } else {
           stableKey = null;
+          stableCount = 0;
         }
       } catch (e) {
         if (opts.signal?.aborted) throw new Error("OpenCode sendMessage aborted by client");
         // fallo transitorio del poll — se reintenta en la siguiente vuelta
       }
     }
-    throw new Error("OpenCode no respondió en 70s (timeout del turno)");
+    throw new Error(`OpenCode no respondió en ${Math.round(TURN_TIMEOUT_MS / 1000)}s (timeout del turno; ajustable con AEGIS_TURN_TIMEOUT_MS)`);
   }
 
   // F6: GET /api/model (model.list) — lista REAL de v2 (opencode, google,
