@@ -1,0 +1,15 @@
+{
+  "id": "Aegis",
+  "backend_path": "/sdcard/projects/Aegis/backend",
+  "app_path": "/sdcard/projects/Aegis/app",
+  "agents_path": "/sdcard/projects/Aegis/agents",
+  "phases_completed": [
+    "phase_0_audit",
+    "phase_1_modularization",
+    "phase_2_architecture",
+    "phase_3_adapters",
+    "phase_3_5_skill_engine",
+    "phase_4_project_management"
+  ],
+  "createdAt": "2024-03-24T00:00:00.000Z"
+}

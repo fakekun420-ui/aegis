@@ -2,60 +2,127 @@ package com.aegis.hub.data
 
 import android.util.Log
 import com.aegis.hub.RootShell
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
- * Token del hub para los consumidores HTTP directos que NO pasan por ApiClient
- * (MainActivity.checkSystemReady/isHubReady y CompanionVoiceInteractionService).
+ * Proveedor canónico y singleton del token de autenticación del hub (`X-Aegis-Token`).
  *
- * A-3: misma fuente y semántica que ApiClient — lectura vía root de .aegis_token,
- * cache en memoria, cooldown de 2s ante lecturas fallidas (sin saturar `su`) y
- * reintento único ante 403 (rotación futura del token). ApiClient NO se toca:
- * conserva su copia privada dentro del interceptor de OkHttp; esta object sólo
- * atiende a quien abre HttpURLConnection a mano.
+ * Centraliza la lectura de `/sdcard/projects/Aegis/backend/.aegis_token` vía root,
+ * el cacheo en memoria con TTL de 2000 ms, la invalidación ante errores 401/403/logout,
+ * y provee wrappers tanto para OkHttp/corutinas como para llamadas directas HttpURLConnection.
  */
 object TokenProvider {
     private const val TAG = "AegisToken"
-    // Misma resolución de ruta que ApiClient/TOKEN_FILE del hub
     private const val TOKEN_FILE = "/sdcard/projects/Aegis/backend/.aegis_token"
-    private const val TOKEN_RETRY_COOLDOWN_MS = 2_000L
+    private const val CACHE_TTL_MS = 2_000L
 
-    @Volatile private var tokenCache: String? = null
-    @Volatile private var tokenLastReadAt = 0L
+    @Volatile
+    private var cachedToken: String? = null
 
-    /** Lee el token del hub vía root. Las lecturas fallidas NO se cachean (se reintenta),
-     *  limitadas a 1 intento / 2s para no saturar `su`. */
-    fun token(): String? {
-        tokenCache?.let { if (it.isNotEmpty()) return it }
+    @Volatile
+    private var lastFetched = 0L
+
+    @Volatile
+    var lastError: String? = null
+        private set
+
+    private val mutex = Mutex()
+
+    /**
+     * Obtiene el token de forma asíncrona y segura entre hilos/corutinas.
+     * Si el token está en caché y dentro del TTL (2000 ms), se retorna directamente.
+     * De lo contrario, lee `.aegis_token` usando `RootShell` en `Dispatchers.IO`.
+     */
+    suspend fun getToken(): String? = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        if (now - tokenLastReadAt < TOKEN_RETRY_COOLDOWN_MS) return null
-        tokenLastReadAt = now
+        val cached = cachedToken
+        if (!cached.isNullOrEmpty() && (now - lastFetched) < CACHE_TTL_MS) {
+            return@withContext cached
+        }
+
+        mutex.withLock {
+            val checkNow = System.currentTimeMillis()
+            val currentCached = cachedToken
+            if (!currentCached.isNullOrEmpty() && (checkNow - lastFetched) < CACHE_TTL_MS) {
+                return@withLock currentCached
+            }
+
+            try {
+                val r = RootShell.exec("cat $TOKEN_FILE 2>/dev/null")
+                val t = r.stdout.trim()
+                if (t.isNotEmpty()) {
+                    cachedToken = t
+                    lastFetched = checkNow
+                    lastError = null
+                    t
+                } else {
+                    lastError = "Token no disponible: $TOKEN_FILE no existe o está vacío"
+                    Log.e(TAG, lastError!!)
+                    null
+                }
+            } catch (e: Exception) {
+                lastError = "Error leyendo el token del hub: ${e.message}"
+                Log.e(TAG, lastError!!)
+                null
+            }
+        }
+    }
+
+    /**
+     * Obtiene el token de manera síncrona / bloqueante (útil para interceptores de OkHttp
+     * o llamadas síncronas existentes).
+     */
+    @Synchronized
+    fun getTokenBlocking(): String? {
+        val now = System.currentTimeMillis()
+        val cached = cachedToken
+        if (!cached.isNullOrEmpty() && (now - lastFetched) < CACHE_TTL_MS) {
+            return cached
+        }
+
         return try {
             val r = RootShell.exec("cat $TOKEN_FILE 2>/dev/null")
             val t = r.stdout.trim()
             if (t.isNotEmpty()) {
-                tokenCache = t
+                cachedToken = t
+                lastFetched = now
+                lastError = null
                 t
             } else {
-                Log.e(TAG, "Token no disponible: $TOKEN_FILE no existe o está vacío")
+                lastError = "Token no disponible: $TOKEN_FILE no existe o está vacío"
+                Log.e(TAG, lastError!!)
                 null
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error leyendo el token del hub: ${e.message}")
+            lastError = "Error leyendo el token del hub: ${e.message}"
+            Log.e(TAG, lastError!!)
             null
         }
     }
 
-    /** Invalida la cache (ante un 403: el hub pudo rotar el token). */
-    fun invalidate() { tokenCache = null }
+    /**
+     * Alias para retrocompatibilidad con código existente que llame a `TokenProvider.token()`.
+     */
+    fun token(): String? = getTokenBlocking()
+
+    /**
+     * Invalida el token en caché ante un 401, 403, rotación o logout.
+     */
+    fun invalidate() {
+        cachedToken = null
+        lastFetched = 0L
+    }
 
     /** Respuesta HTTP ya leída: código + cuerpo (legible aunque sea un 4xx). */
     data class Response(val code: Int, val body: String)
 
     /**
-     * Ejecuta una petición completa con X-Aegis-Token y reintenta UNA vez ante 403
-     * (relée el token; sólo repite si el valor cambió). El body va como ByteArray
-     * para que el reintento pueda reproducirlo. Las IOException de red se propagan:
-     * cada llamador ya las captura (comportamiento previo idéntico).
+     * Ejecuta una petición completa con X-Aegis-Token y reintenta UNA vez ante 401 o 403
+     * (invalida el token, relée y sólo repite si obtuvo un token nuevo).
      */
     @Throws(java.io.IOException::class)
     fun request(
@@ -65,11 +132,11 @@ object TokenProvider {
         connectTimeoutMs: Int = 3000,
         readTimeoutMs: Int = 15_000
     ): Response {
-        var used = token()
+        var used = getTokenBlocking()
         var resp = execute(url, method, body, used, connectTimeoutMs, readTimeoutMs)
-        if (resp.code == 403) {
+        if (resp.code == 401 || resp.code == 403) {
             invalidate()
-            val fresh = token()
+            val fresh = getTokenBlocking()
             if (fresh != null && fresh != used) {
                 used = fresh
                 resp = execute(url, method, body, fresh, connectTimeoutMs, readTimeoutMs)

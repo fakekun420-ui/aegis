@@ -1,8 +1,13 @@
 package com.aegis.hub.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,7 +20,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.*
@@ -39,6 +46,20 @@ fun MarkdownText(
     cursor: String = "",
     onLinkClick: ((String) -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    val handleLink: (String) -> Unit = onLinkClick ?: { url ->
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "No browser found to open link", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(context, "No browser found to open link", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val blocks = remember(text) { parseMarkdown(text) }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         blocks.forEachIndexed { index, block ->
@@ -46,7 +67,7 @@ fun MarkdownText(
             val trailingCursor = if (isLast) cursor else ""
 
             when (block) {
-                is MdBlock.Header -> Text(
+                is MdBlock.Header -> MarkdownInlineText(
                     text = buildInline(block.text, trailingCursor),
                     style = when (block.level) {
                         1 -> MaterialTheme.typography.titleMedium.copy(
@@ -68,7 +89,8 @@ fun MarkdownText(
                             lineHeight = 19.sp
                         )
                     },
-                    color = Color(0xFF79C0FF)
+                    color = Color(0xFF79C0FF),
+                    onLinkClick = handleLink
                 )
                 is MdBlock.CodeBlock -> {
                     CodeBlockItem(block)
@@ -104,15 +126,16 @@ fun MarkdownText(
                     shape = RoundedCornerShape(4.dp),
                     border = BorderStroke(1.dp, Color(0xFF30363D))
                 ) {
-                    Text(
-                        buildInline(block.text, trailingCursor),
+                    MarkdownInlineText(
+                        text = buildInline(block.text, trailingCursor),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = FontFamily.SansSerif,
                             fontSize = 13.5.sp,
                             lineHeight = 19.sp
                         ),
-                        color = Color(0xFF8B949E)
+                        color = Color(0xFF8B949E),
+                        onLinkClick = handleLink
                     )
                 }
                 is MdBlock.BulletList -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -127,14 +150,15 @@ fun MarkdownText(
                                 ),
                                 color = Color(0xFF8B949E)
                             )
-                            Text(
-                                buildInline(item, itemCursor),
+                            MarkdownInlineText(
+                                text = buildInline(item, itemCursor),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontFamily = FontFamily.SansSerif,
                                     fontSize = 14.5.sp,
                                     lineHeight = 21.sp
                                 ),
-                                color = Color(0xFFE6EDF3)
+                                color = Color(0xFFE6EDF3),
+                                onLinkClick = handleLink
                             )
                         }
                     }
@@ -151,30 +175,68 @@ fun MarkdownText(
                                 ),
                                 color = Color(0xFF8B949E)
                             )
-                            Text(
-                                buildInline(item, itemCursor),
+                            MarkdownInlineText(
+                                text = buildInline(item, itemCursor),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontFamily = FontFamily.SansSerif,
                                     fontSize = 14.5.sp,
                                     lineHeight = 21.sp
                                 ),
-                                color = Color(0xFFE6EDF3)
+                                color = Color(0xFFE6EDF3),
+                                onLinkClick = handleLink
                             )
                         }
                     }
                 }
-                is MdBlock.Paragraph -> Text(
-                    buildInline(block.text, trailingCursor),
+                is MdBlock.Paragraph -> MarkdownInlineText(
+                    text = buildInline(block.text, trailingCursor),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontFamily = FontFamily.SansSerif,
                         fontSize = 14.5.sp,
                         lineHeight = 21.sp
                     ),
-                    color = Color(0xFFE6EDF3)
+                    color = Color(0xFFE6EDF3),
+                    onLinkClick = handleLink
                 )
             }
         }
     }
+}
+
+@Composable
+private fun MarkdownInlineText(
+    text: AnnotatedString,
+    modifier: Modifier = Modifier,
+    style: TextStyle = LocalTextStyle.current,
+    color: Color = Color.Unspecified,
+    onLinkClick: (String) -> Unit
+) {
+    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val hasLinks = remember(text) { text.getStringAnnotations("URL", 0, text.length).isNotEmpty() }
+
+    val tapModifier = if (hasLinks) {
+        modifier.pointerInput(text) {
+            detectTapGestures { offset ->
+                layoutResult?.let { layout ->
+                    val position = layout.getOffsetForPosition(offset)
+                    val annotation = text.getStringAnnotations("URL", position, position).firstOrNull()
+                    if (annotation != null) {
+                        onLinkClick(annotation.item)
+                    }
+                }
+            }
+        }
+    } else {
+        modifier
+    }
+
+    Text(
+        text = text,
+        modifier = tapModifier,
+        style = style,
+        color = color,
+        onTextLayout = { layoutResult = it }
+    )
 }
 
 @Composable

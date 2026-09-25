@@ -8,4 +8,5 @@ bootstrap-state.json
 patch_main.py
 patch_main_2.py
 copy_facebook_post.sh
+projects.json
 # (*.log ya cubierto por .gitignore raíz: `*.log` y `keepalive.log` — ver /sdcard/projects/.gitignore)

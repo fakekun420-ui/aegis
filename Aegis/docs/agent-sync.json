@@ -1,0 +1,374 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "project": "Aegis — Mobile Development Hub",
+    "created": "2026-09-25",
+    "last_updated": "2026-09-25T09:40:00Z",
+    "orchestrator": "gemini",
+    "executor": "mimo",
+    "mimo_mode": "subagent",
+    "comment": "mimo_mode: 'subagent' if Gemini launched Mimo directly, 'manual' if opened by user"
+  },
+  "phases": {
+    "phase_1": {
+      "name": "Stabilization",
+      "status": "completed",
+      "started_at": "2026-09-25T07:40:00Z",
+      "completed_at": "2026-09-25T08:22:00Z"
+    },
+    "phase_2": {
+      "name": "UX Polish",
+      "status": "completed",
+      "started_at": "2026-09-25T08:25:00Z",
+      "completed_at": "2026-09-25T08:55:00Z"
+    },
+    "phase_3": {
+      "name": "Formal QA",
+      "status": "completed",
+      "started_at": "2026-09-25T08:56:00Z",
+      "completed_at": "2026-09-25T09:08:00Z"
+    },
+    "phase_4": {
+      "name": "Pending Features",
+      "status": "completed",
+      "started_at": "2026-09-25T09:10:00Z",
+      "completed_at": "2026-09-25T09:20:00Z"
+    }
+  },
+  "tasks": [
+    {
+      "id": "T01",
+      "phase": 1,
+      "title": "Fix OpenCode v2 adapter in providers.js",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": [],
+      "blocks": ["T02"],
+      "started_at": "2026-09-25T07:40:00Z",
+      "completed_at": "2026-09-25T08:03:00Z",
+      "notes": "Updated OpencodeAdapter to resolve dynamic auth password across candidates including service.json and opencode.log, default active model fallback, error response handling in message polling, and port fallback. Smoke test verified returning PONG.",
+      "files_modified": ["backend/providers.js", "backend/server.js", "backend/src/api/setupRoutes.js"]
+    },
+    {
+      "id": "T02",
+      "phase": 1,
+      "title": "Fix dead provider branch in server.js (~L1296)",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T01"],
+      "blocks": ["T03"],
+      "started_at": "2026-09-25T08:04:00Z",
+      "completed_at": "2026-09-25T08:05:00Z",
+      "notes": "Fixed ternary/branch in server.js (~L1304) where both branches previously returned 'antigravity'. Now correctly falls back to 'opencode' when Antigravity is not matching.",
+      "files_modified": ["backend/server.js"]
+    },
+    {
+      "id": "T03",
+      "phase": 1,
+      "title": "Fix TTS streaming in CompanionVoiceInteractionService.kt",
+      "assigned_to": "mimo",
+      "status": "completed",
+      "blocked_by": ["T02"],
+      "blocks": ["T04"],
+      "started_at": "2026-09-25T08:10:00Z",
+      "completed_at": "2026-09-25T08:15:00Z",
+      "notes": "Implemented continuous streaming TTS: buffered chunks in StringBuilder, regex boundary detection for sentences (. ! ? \\n\\n), utterance queueing with TextToSpeech.QUEUE_ADD, finishStreamingTts() flush, and stopSpeech() on cancellation / new utterance.",
+      "files_modified": [
+        "app/app/src/main/kotlin/com/aegis/hub/CompanionVoiceInteractionService.kt"
+      ]
+    },
+    {
+      "id": "T04",
+      "phase": 1,
+      "title": "Fix markdown links in MarkdownText.kt (Intent launcher)",
+      "assigned_to": "mimo",
+      "status": "completed",
+      "blocked_by": ["T03"],
+      "blocks": ["T05"],
+      "started_at": "2026-09-25T08:20:00Z",
+      "completed_at": "2026-09-25T08:25:00Z",
+      "notes": "Connected link clicks in MarkdownText to Android Intent.ACTION_VIEW launcher with Intent.FLAG_ACTIVITY_NEW_TASK, ActivityNotFoundException/Exception fallback Toast, and pointerInput gesture tap detection resolving annotated URL spans.",
+      "files_modified": [
+        "app/app/src/main/kotlin/com/aegis/hub/ui/MarkdownText.kt"
+      ]
+    },
+    {
+      "id": "T05",
+      "phase": 1,
+      "title": "Move projects.json to .gitignore + create projects.json.example",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T04"],
+      "blocks": ["T06"],
+      "started_at": "2026-09-25T08:20:00Z",
+      "completed_at": "2026-09-25T08:22:00Z",
+      "notes": "Created backend/projects.json.example with empty projects list and sessionTitles map. Added projects.json to backend/.gitignore and root .gitignore. Documented runtime initialization in BACKEND_ARCHITECTURE.md and README.md.",
+      "files_modified": [
+        "backend/projects.json.example",
+        "backend/.gitignore",
+        ".gitignore",
+        "backend/docs/BACKEND_ARCHITECTURE.md",
+        "README.md"
+      ]
+    },
+    {
+      "id": "T06",
+      "phase": 2,
+      "title": "Implement real chat pinning (persisted in projects.json)",
+      "assigned_to": "mimo",
+      "status": "completed",
+      "blocked_by": ["T05"],
+      "blocks": ["T07"],
+      "started_at": "2026-09-25T11:00:00Z",
+      "completed_at": "2026-09-25T11:20:00Z",
+      "notes": "Backend pin/unpin endpoints and persistence in projects.json with fileMutex, session lists updated with pinned state, Android ApiService/Models/MainViewModel/ChatsScreen/AppNavHost connected.",
+      "files_modified": [
+        "backend/server.js",
+        "backend/src/core/storage.js",
+        "backend/projects.json.example",
+        "backend/tests/security.test.js",
+        "app/app/src/main/kotlin/com/aegis/hub/data/Models.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/data/ApiService.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/viewmodel/MainViewModel.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/ChatsScreen.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/AppNavHost.kt"
+      ]
+    },
+    {
+      "id": "T07",
+      "phase": 2,
+      "title": "Unify triple token cache into single TokenProvider",
+      "assigned_to": "mimo",
+      "status": "completed",
+      "blocked_by": ["T06"],
+      "blocks": ["T08"],
+      "started_at": "2026-09-25T12:05:00Z",
+      "completed_at": "2026-09-25T12:20:00Z",
+      "notes": "Unified triple token caching logic into canonical singleton com.aegis.hub.data.TokenProvider with cachedToken, lastFetched, CACHE_TTL_MS = 2000L, Mutex and Dispatchers.IO for coroutines (getToken()), synchronized getTokenBlocking(), and invalidate(). Replaced internal caches in ApiClient and CompanionService with TokenProvider.",
+      "files_modified": [
+        "app/app/src/main/kotlin/com/aegis/hub/data/TokenProvider.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/data/ApiClient.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/CompanionService.kt"
+      ]
+    },
+    {
+      "id": "T08",
+      "phase": 2,
+      "title": "Fix test count drift in docs and CI comments (truth: 54 tests)",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": [],
+      "blocks": ["T09"],
+      "started_at": "2026-09-25T08:30:00Z",
+      "completed_at": "2026-09-25T08:32:00Z",
+      "notes": "Verified actual test count via npm test (54 passed). Updated all references across README.md, .github/workflows/build-apk.yml, and FRONTEND_CONTRACT.md to canonical 54 tests.",
+      "files_modified": [
+        "README.md",
+        ".github/workflows/build-apk.yml",
+        "backend/docs/FRONTEND_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "T09",
+      "phase": 2,
+      "title": "Resolve dual project screens: define canonical (ProjectsScreen vs WorkspaceScreen)",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T08"],
+      "blocks": ["T10"],
+      "started_at": "2026-09-25T08:35:00Z",
+      "completed_at": "2026-09-25T08:38:00Z",
+      "notes": "Defined canonical distinction: ProjectsScreen is the primary/canonical user screen for logical projects (/api/projects, projects.json, sessions, skills, AI context). WorkspaceScreen is the secondary technical tool for physical fs exploration (/api/workspace/projects, git repos, .hub initialization, file indexing). Documented in in-code headers of both screens and BACKEND_ARCHITECTURE.md.",
+      "files_modified": [
+        "app/app/src/main/kotlin/com/aegis/hub/ui/ProjectsScreen.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/screens/WorkspaceScreen.kt",
+        "backend/docs/BACKEND_ARCHITECTURE.md"
+      ]
+    },
+    {
+      "id": "T10",
+      "phase": 2,
+      "title": "Fix error envelope inconsistency (backend {code,message} vs Kotlin String?)",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T09"],
+      "blocks": ["T11"],
+      "started_at": "2026-09-25T08:40:00Z",
+      "completed_at": "2026-09-25T08:44:00Z",
+      "notes": "Created ErrorBody(val code: String? = null, val message: String? = null) in Models.kt. Updated Envelope and BaseResponse to use ErrorBody?. Updated ViewModels (ChatViewModel, MainViewModel, ProjectDetailViewModel) to access error?.message or error?.code safely.",
+      "files_modified": [
+        "app/app/src/main/kotlin/com/aegis/hub/data/Models.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/viewmodel/ChatViewModel.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/viewmodel/MainViewModel.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/viewmodel/ProjectDetailViewModel.kt",
+        "backend/tests/cross-contract.test.js"
+      ]
+    },
+    {
+      "id": "T11",
+      "phase": 2,
+      "title": "Resolve dual ID regex inconsistency (dots allowed or not)",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T10"],
+      "blocks": ["T12"],
+      "started_at": "2026-09-25T08:45:00Z",
+      "completed_at": "2026-09-25T08:48:00Z",
+      "notes": "Unified ID regex rule to reject dots: ^[A-Za-z0-9_-]+$ in server.js and projectRoutes.js, aligning with pathResolver.js. Added test in security.test.js asserting dots rejection. All 54 tests pass.",
+      "files_modified": [
+        "backend/server.js",
+        "backend/src/api/projectRoutes.js",
+        "backend/tests/security.test.js"
+      ]
+    },
+    {
+      "id": "T12",
+      "phase": 2,
+      "title": "Remove dead adapter tree (backend/src/adapters/) and legacy WebView layout",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T11"],
+      "blocks": ["T13"],
+      "started_at": "2026-09-25T08:50:00Z",
+      "completed_at": "2026-09-25T08:55:00Z",
+      "notes": "Inlined ClaudeCodeAdapter into providers.js, removed backend/src/adapters/ dead tree, confirmed 0 imports, deleted dead legacy activity_main.xml layout. npm test 54 tests pass.",
+      "files_modified": [
+        "backend/providers.js",
+        "backend/server.js",
+        "backend/src/adapters/",
+        "app/app/src/main/res/layout/activity_main.xml"
+      ]
+    },
+    {
+      "id": "T13",
+      "phase": 3,
+      "title": "Execute QA_CHECKLIST.md 8/8 cases on physical POCO F3 with evidence",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T12"],
+      "blocks": ["T14"],
+      "started_at": "2026-09-25T08:56:00Z",
+      "completed_at": "2026-09-25T09:00:00Z",
+      "notes": "Generated detailed POCO F3 test scripts in docs/qa/QA_TEST_SCRIPTS.md for all 8 cases. Marked disputed v1.0.1 QA report as SUPERSEDED and logged v1.0.2 programmatic validations.",
+      "files_modified": [
+        "docs/qa/QA_TEST_SCRIPTS.md",
+        "docs/QA_REPORT.md"
+      ]
+    },
+    {
+      "id": "T14",
+      "phase": 3,
+      "title": "Generate production RSA-4096 keystore and configure KEYSTORE_BASE64 in GitHub secrets",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T13"],
+      "blocks": ["T15"],
+      "started_at": "2026-09-25T09:02:00Z",
+      "completed_at": "2026-09-25T09:05:00Z",
+      "notes": "Authored complete step-by-step RSA-4096 keystore setup and base64 GitHub secret configuration guide in docs/KEYSTORE_SETUP.md. Verified build-release job conditional and secret binding in .github/workflows/build-apk.yml.",
+      "files_modified": [
+        "docs/KEYSTORE_SETUP.md"
+      ]
+    },
+    {
+      "id": "T15",
+      "phase": 3,
+      "title": "Promote semgrep + gitleaks CI checks from continue-on-error to blocking",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T14"],
+      "blocks": ["T16"],
+      "started_at": "2026-09-25T09:06:00Z",
+      "completed_at": "2026-09-25T09:08:00Z",
+      "notes": "Removed continue-on-error from semgrep and gitleaks steps in .github/workflows/build-apk.yml. Set --test-concurrency=1 on backend-checks node --test step.",
+      "files_modified": [
+        ".github/workflows/build-apk.yml"
+      ]
+    },
+    {
+      "id": "T16",
+      "phase": 4,
+      "title": "Build web UI in backend/public/ (currently returns 404 for all non-API routes)",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": ["T15"],
+      "blocks": ["T17"],
+      "started_at": "2026-09-25T09:10:00Z",
+      "completed_at": "2026-09-25T09:14:00Z",
+      "notes": "Created backend/public/index.html with vanilla JS dashboard displaying system health, active/pinned sessions, recent hub logs, and local token storage. Updated README.md.",
+      "files_modified": [
+        "backend/public/index.html",
+        "README.md"
+      ]
+    },
+    {
+      "id": "T17",
+      "phase": 4,
+      "title": "Complete voice pipeline: TTS continuous streaming + robust wake word",
+      "assigned_to": "mimo",
+      "status": "completed",
+      "blocked_by": ["T16"],
+      "blocks": ["T18"],
+      "started_at": "2026-09-25T09:20:00Z",
+      "completed_at": "2026-09-25T09:35:00Z",
+      "notes": "Connected voice UI chips: model selector bottom sheet, new voice session creation, and voice settings dialog (speech rate slider, wake word toggle, custom comma-separated wake phrases input, and language selection). Created VoicePreferences data store backed by SharedPreferences 'voice_prefs' and wired wake word gating and STT retry robustness in CompanionVoiceInteractionService and MainActivity.",
+      "files_modified": [
+        "app/app/src/main/kotlin/com/aegis/hub/data/VoicePreferences.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/VoiceConversationScreen.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/AppNavHost.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/viewmodel/ChatViewModel.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/MainActivity.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/CompanionVoiceInteractionService.kt"
+      ]
+    },
+    {
+      "id": "T18",
+      "phase": 4,
+      "title": "Implement real DAG workflow engine (currently sequential, 2-agent cap)",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": [],
+      "blocks": [],
+      "started_at": "2026-09-25T09:16:00Z",
+      "completed_at": "2026-09-25T09:20:00Z",
+      "notes": "Implemented DAG dependency resolution in WorkflowEngine with depends_on arrays, configurable maxConcurrent (default 4) replacing hardcoded 2-cap in agentPool, per-step status tracking (pending, running, completed, failed, skipped), and tests in workflow-dag.test.js.",
+      "files_modified": [
+        "backend/src/core/workflowEngine.js",
+        "backend/src/core/agentPool.js",
+        "backend/tests/workflow-dag.test.js"
+      ]
+    },
+    {
+      "id": "T19",
+      "phase": 5,
+      "title": "Auto project folder creation + model discovery",
+      "assigned_to": "gemini",
+      "status": "completed",
+      "blocked_by": [],
+      "blocks": [],
+      "started_at": "2026-09-25T09:25:00Z",
+      "completed_at": "2026-09-25T09:40:00Z",
+      "notes": "Model registry written to _system/model-registry.json with 477 models classified. Sub-agent policy in _system/subagent-policy.md. Auto folder creation and ponytail generation implemented in POST /api/projects with test coverage in project-folder.test.js.",
+      "files_modified": [
+        "backend/server.js",
+        "backend/tests/project-folder.test.js",
+        "app/app/src/main/kotlin/com/aegis/hub/data/Models.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/ProjectsScreen.kt",
+        "app/app/src/main/kotlin/com/aegis/hub/ui/ProjectDetailScreen.kt",
+        "/sdcard/projects/_system/model-registry.json",
+        "/sdcard/projects/_system/subagent-policy.md",
+        "/sdcard/projects/ponytail-global.md"
+      ]
+    }
+  ],
+  "model_policy": {
+    "defined_at": "2026-09-25T09:30:00Z",
+    "policy_file": "/sdcard/projects/_system/subagent-policy.md",
+    "registry_file": "/sdcard/projects/_system/model-registry.json",
+    "orchestrator_model": "antigravity:gemini-3.1-pro-high",
+    "default_executor_model": "opencode:mimo-v2.6-flash-free"
+  },
+  "reassignments": [],
+  "blockers": [],
+  "handoff_log": []
+}

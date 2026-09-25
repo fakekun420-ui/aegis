@@ -37,7 +37,7 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1) Backend: sintaxis + contratos (idéntico a la F3 — 46 tests en verde)
+  # 1) Backend: sintaxis + contratos (idéntico a la F3 — 54 tests en verde)
   # ---------------------------------------------------------------------------
   backend-checks:
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
         run: find backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check
       - name: Contratos (node --test)
         # glob sin comillas: lo expande el shell (portable Node 20+ y local)
-        run: node --test tests/*.test.js
+        run: node --test --test-concurrency=1 tests/*.test.js
         working-directory: backend
 
   # ---------------------------------------------------------------------------
@@ -183,13 +183,12 @@ jobs:
           retention-days: 30
 
   # ---------------------------------------------------------------------------
-  # 5) SAST — NO bloquean hasta el primer ciclo limpio (continue-on-error)
+  # 5) SAST — checks de seguridad bloqueantes
   # ---------------------------------------------------------------------------
   semgrep:
-    name: semgrep (SAST, no bloqueante)
+    name: semgrep (SAST)
     needs: lint
     runs-on: ubuntu-latest
-    continue-on-error: true   # F4: se retira tras el primer ciclo limpio
     steps:
       - uses: actions/checkout@v4
       - name: Semgrep — p/security-audit
@@ -200,10 +199,9 @@ jobs:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
   gitleaks:
-    name: gitleaks (secret scan, no bloqueante)
+    name: gitleaks (secret scan)
     needs: lint
     runs-on: ubuntu-latest
-    continue-on-error: true   # F4: se retira tras el primer ciclo limpio
     steps:
       - uses: actions/checkout@v4
         with:

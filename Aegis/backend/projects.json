@@ -11,17 +11,18 @@
           "sessionId": "ses_f8ba7151affeV44tOLJQ7MPZCT",
           "title": "DepegaLab",
           "createdAt": "2026-09-20T02:41:29.919Z",
-          "lastUsed": "2026-09-20T20:47:22.363Z",
-          "summary": ""
+          "lastUsed": "2026-09-24T04:32:29.875Z",
+          "summary": "",
+          "provider": "opencode"
         },
         {
-          "sessionId": "agy_muajdj1m_pq7mee22",
-          "title": "companion:85851",
-          "createdAt": "2026-09-21T00:58:05.867Z",
-          "lastUsed": "2026-09-21T01:12:29.874Z",
+          "sessionId": "agy_muf1d93g_mz3ctljl",
+          "title": "Hola en que puuedes ayudarme?",
+          "createdAt": "2026-09-24T04:32:50.783Z",
+          "lastUsed": "2026-09-24T04:33:23.920Z",
           "summary": "",
           "provider": "antigravity",
-          "agyConversationId": "7125314e-1759-4613-baf8-2f1892c66503"
+          "agyConversationId": "agy_muf1d93g_mz3ctljl"
         }
       ],
       "skills": [],
@@ -62,70 +63,68 @@
       "name": "Antigravity POC Project",
       "description": "POC universal provider",
       "createdAt": "2026-09-20T17:16:23.045Z",
-      "archivedAt": null,
+      "archivedAt": "2026-09-25T04:54:39.767Z",
       "provider": "antigravity",
-      "sessions": [
-        {
-          "sessionId": "agy_mua2vw5p_y1o73xiz",
-          "title": "companion:Antigravity POC Project:001",
-          "createdAt": "2026-09-20T17:16:29.197Z",
-          "lastUsed": "2026-09-20T17:17:09.669Z",
-          "summary": "",
-          "provider": "antigravity",
-          "agyConversationId": "18ffce05-e3b5-4077-95f5-9bae5880d979"
-        }
-      ],
+      "sessions": [],
       "skills": [],
       "linkedProjects": []
     },
     {
       "id": "mua4gydb-wgcwk9",
-      "name": "Opencode Companion",
-      "description": "Para mejorar Opencode Companion",
+      "name": "Aegis",
+      "description": "Centro de desarrollo de aegis",
       "createdAt": "2026-09-20T18:00:51.455Z",
       "archivedAt": null,
       "provider": "antigravity",
       "sessions": [
         {
-          "sessionId": "ses_f4c94c66dffenoqFOCFaytnre7",
-          "title": "Arquitecto",
-          "createdAt": "2026-09-20T18:01:56.155Z",
-          "lastUsed": "2026-09-20T20:49:05.512Z",
+          "sessionId": "agy_mudia0re_p4xb4kqi",
+          "title": "Hola, usaras los agentes de ag…",
+          "createdAt": "2026-09-23T02:50:41.134Z",
+          "lastUsed": "2026-09-23T02:57:08.585Z",
+          "summary": "",
+          "provider": "antigravity"
+        },
+        {
+          "sessionId": "d42665b3-83f0-43fe-856d-c6edf89c5046",
+          "title": "<USER_REQUEST>\nHola, usaras los agentes de agency-agents par",
+          "createdAt": "2026-09-23T02:58:59.176Z",
+          "lastUsed": "2026-09-23T03:02:22.455Z",
+          "summary": "",
+          "provider": "antigravity",
+          "agyConversationId": "d42665b3-83f0-43fe-856d-c6edf89c5046"
+        },
+        {
+          "sessionId": "76f83bcb-b1e6-483e-b375-7189487de77d",
+          "title": "<USER_REQUEST>\nHola, usaras los agentes de agency-agents par",
+          "createdAt": "2026-09-23T02:59:03.408Z",
+          "lastUsed": "2026-09-23T02:59:03.408Z",
+          "summary": "",
+          "provider": "antigravity"
+        },
+        {
+          "sessionId": "ses_f3444d9d0ffe3Bq1nkXUk7Xryx",
+          "title": "Ejecución de AEGIS_BUILD_AND_QA.md",
+          "createdAt": "2026-09-23T00:47:15.100Z",
+          "lastUsed": "2026-09-23T02:38:29.785Z",
           "summary": "",
           "provider": "opencode"
         },
         {
-          "sessionId": "ed8f444b-168f-4e64-8c19-e832ab542c77",
-          "title": "Backend",
-          "createdAt": "2026-09-20T20:45:42.907Z",
-          "lastUsed": "2026-09-20T20:46:22.865Z",
+          "sessionId": "ses_f340f5645ffeercD2aYy4UpanR",
+          "title": "agency-agents README installation",
+          "createdAt": "2026-09-23T01:45:42.189Z",
+          "lastUsed": "2026-09-23T01:52:07.310Z",
           "summary": "",
-          "provider": "antigravity"
+          "provider": "opencode"
         },
         {
-          "sessionId": "0adc77f9-68a1-4e32-8e03-d012d3a287c4",
-          "title": "Frontend QA Verified",
-          "createdAt": "2026-09-20T22:24:52.495Z",
-          "lastUsed": "2026-09-20T22:46:07.624Z",
+          "sessionId": "ses_f34fb83c1ffe8Z2257rPeIHTDe",
+          "title": "Verificación estado backend Aegis",
+          "createdAt": "2026-09-22T21:27:44.028Z",
+          "lastUsed": "2026-09-23T00:35:38.789Z",
           "summary": "",
-          "provider": "antigravity"
-        },
-        {
-          "sessionId": "7cd5e3ec-156e-4696-ae9e-7ff5f72135e8",
-          "title": "El dispositivo se reinició repentinamente. Retoma y continúa",
-          "createdAt": "2026-09-21T01:10:09.433Z",
-          "lastUsed": "2026-09-21T01:10:09.434Z",
-          "summary": "",
-          "provider": "antigravity"
-        },
-        {
-          "sessionId": "agy_muasijwx_tacnpgwh",
-          "title": "lo que harás en este chat será…",
-          "createdAt": "2026-09-21T05:13:56.844Z",
-          "lastUsed": "2026-09-21T05:24:14.212Z",
-          "summary": "",
-          "provider": "antigravity",
-          "agyConversationId": "fccc1cc7-a31d-489a-8fed-c23d706160d5"
+          "provider": "opencode"
         }
       ],
       "skills": [],
@@ -140,17 +139,7 @@
       "createdAt": "2026-09-21T00:44:13.996Z",
       "archivedAt": "2026-09-21T00:46:58.913Z",
       "provider": "antigravity",
-      "sessions": [
-        {
-          "sessionId": "agy_muaiwngj_mq4t87k5",
-          "title": "Streaming Test Session",
-          "createdAt": "2026-09-21T00:44:58.435Z",
-          "lastUsed": "2026-09-21T00:45:10.922Z",
-          "summary": "",
-          "provider": "antigravity",
-          "agyConversationId": "2cc9a275-aeb7-463e-9140-3699644f99c9"
-        }
-      ],
+      "sessions": [],
       "skills": [],
       "linkedProjects": []
     },
@@ -160,19 +149,9 @@
       "description": "",
       "instructions": "",
       "createdAt": "2026-09-21T01:02:11.981Z",
-      "archivedAt": null,
+      "archivedAt": "2026-09-25T04:54:33.667Z",
       "provider": "antigravity",
-      "sessions": [
-        {
-          "sessionId": "agy_mualztby_5ww2v8e4",
-          "title": "companion:Proyecto PonyTail QA:84855",
-          "createdAt": "2026-09-21T02:11:24.887Z",
-          "lastUsed": "2026-09-21T02:11:39.464Z",
-          "summary": "",
-          "provider": "antigravity",
-          "agyConversationId": "b3bb8493-673d-4c44-b395-24698c200d26"
-        }
-      ],
+      "sessions": [],
       "skills": [],
       "linkedProjects": []
     },
@@ -186,23 +165,66 @@
       "provider": "antigravity",
       "sessions": [
         {
-          "sessionId": "agy_muaox9z7_ymaw91yq",
-          "title": "Embudos de tráfico",
-          "createdAt": "2026-09-21T03:33:25.334Z",
-          "lastUsed": "2026-09-21T03:34:51.683Z",
+          "sessionId": "ses_f32d94111ffeJlbEGqn6iazs94",
+          "title": "Plan de gestión y organización del proyecto Petite Raw",
+          "createdAt": "2026-09-25T04:53:50.973Z",
+          "lastUsed": "2026-09-25T04:53:50.973Z",
           "summary": "",
-          "provider": "antigravity",
-          "agyConversationId": "a6e92078-909e-46c8-8dba-9bbe8218041c"
-        },
-        {
-          "sessionId": "agy_muaozdm5_s06mr1sj",
-          "title": "Hola, me ayudarás siendo un es…",
-          "createdAt": "2026-09-21T03:35:03.355Z",
-          "lastUsed": "2026-09-21T03:35:19.267Z",
-          "summary": "",
-          "provider": "antigravity"
+          "provider": "opencode"
         }
       ],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "mugd87z1-gno6dj",
+      "name": "Quant Math",
+      "description": "para gestionar Quant Math",
+      "instructions": "",
+      "createdAt": "2026-09-25T02:52:37.597Z",
+      "archivedAt": null,
+      "provider": "antigravity",
+      "directory": "/sdcard/projects/Projects",
+      "sessions": [
+        {
+          "sessionId": "ses_f3403a77bffe64IbpUvj0JhqL6",
+          "title": "Auditoría ecosistema Quant-Math-Public",
+          "createdAt": "2026-09-25T04:54:04.286Z",
+          "lastUsed": "2026-09-25T04:54:04.286Z",
+          "summary": "",
+          "provider": "opencode"
+        }
+      ],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "mugs8erk-qfh2f8",
+      "name": "Test Auto Folder 1790329960624",
+      "description": "Automated test project for trading bot verification",
+      "instructions": "",
+      "createdAt": "2026-09-25T09:52:40.640Z",
+      "archivedAt": null,
+      "provider": "opencode",
+      "folder": "/sdcard/projects/test-auto-folder-1790329960624",
+      "directory": "/sdcard/projects/test-auto-folder-1790329960624",
+      "ponytail": "/sdcard/projects/test-auto-folder-1790329960624/.ponytail.md",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "mugs8oyg-71v99r",
+      "name": "Test Auto Folder 1790329973825",
+      "description": "Automated test project for trading bot verification",
+      "instructions": "",
+      "createdAt": "2026-09-25T09:52:53.848Z",
+      "archivedAt": null,
+      "provider": "opencode",
+      "folder": "/sdcard/projects/test-auto-folder-1790329973825",
+      "directory": "/sdcard/projects/test-auto-folder-1790329973825",
+      "ponytail": "/sdcard/projects/test-auto-folder-1790329973825/.ponytail.md",
+      "sessions": [],
       "skills": [],
       "linkedProjects": []
     }
@@ -210,19 +232,30 @@
   "sessionTitles": {
     "ses_f8ba7151affeV44tOLJQ7MPZCT": "DepegaLab",
     "agy_mua2vw5p_y1o73xiz": "companion:Antigravity POC Project:001",
-    "ses_f4c94c66dffenoqFOCFaytnre7": "Arquitecto",
-    "0adc77f9-68a1-4e32-8e03-d012d3a287c4": "Frontend QA Verified",
-    "ed8f444b-168f-4e64-8c19-e832ab542c77": "Backend",
     "agy_muaiwngj_mq4t87k5": "Streaming Test Session",
     "agy_muajdj1m_pq7mee22": "companion:85851",
-    "7cd5e3ec-156e-4696-ae9e-7ff5f72135e8": "El dispositivo se reinició repentinamente. Retoma y continúa",
     "agy_mualztby_5ww2v8e4": "companion:Proyecto PonyTail QA:84855",
     "agy_muaoqrmw_gm5o6yd4": "Capital de Francia",
     "agy_muaox9z7_ymaw91yq": "Embudos de tráfico",
-    "agy_muaozdm5_s06mr1sj": "Hola, me ayudarás siendo un es…",
     "agy_muasfxu2_nyhm2cdd": "que puedes hacer?",
-    "agy_muasijwx_tacnpgwh": "lo que harás en este chat será…",
     "agy_mubtwxr2_rgejv65j": "hola",
-    "agy_mubykaoe_uc1alu9t": "Ejecuta un diagnostico con who…"
+    "agy_mubykaoe_uc1alu9t": "Ejecuta un diagnostico con who…",
+    "agy_mudi7mei_ruve2ey9": "Ping",
+    "agy_mudia0re_p4xb4kqi": "Hola, usaras los agentes de ag…",
+    "d42665b3-83f0-43fe-856d-c6edf89c5046": "<USER_REQUEST>\nHola, usaras los agentes de agency-agents par",
+    "76f83bcb-b1e6-483e-b375-7189487de77d": "<USER_REQUEST>\nHola, usaras los agentes de agency-agents par",
+    "agy_muf1d93g_mz3ctljl": "Hola en que puuedes ayudarme?",
+    "agy_muf2he5n_gnxbc497": "Hola Que puedes hacer?",
+    "ses_f3444d9d0ffe3Bq1nkXUk7Xryx": "Ejecución de AEGIS_BUILD_AND_QA.md",
+    "agy_muf4y6hh_tmdrrnkz": "hola",
+    "agy_mufyuu8p_yyit9gyi": "Hola, que puedes hacer?",
+    "agy_mug5hjnc_8n0f09qh": "que es esto?",
+    "ses_f32d94111ffeJlbEGqn6iazs94": "Plan de gestión y organización del proyecto Petite Raw",
+    "ses_f3403a77bffe64IbpUvj0JhqL6": "Auditoría ecosistema Quant-Math-Public",
+    "ses_f340f5645ffeercD2aYy4UpanR": "agency-agents README installation",
+    "ses_f34fb83c1ffe8Z2257rPeIHTDe": "Verificación estado backend Aegis"
+  },
+  "sessionPins": {
+    "f4-sesion-valida": false
   }
 }

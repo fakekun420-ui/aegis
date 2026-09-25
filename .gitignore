@@ -38,3 +38,29 @@ opencode-companion-apk/app/src/main/kotlin/com/opencode/companion/MainActivity.w
 opencode-companion_backup/
 opencode-companion-apk_backup/
 Aegis/backend/hub.log.wedged-*
+Aegis/backend/projects.json
+
+# Otros proyectos no vinculados al repo de Aegis
+.nomedia
+.opencode/
+_system/
+_tmp/
+_screenshots/
+_quarantine/
+_repos/
+_archive/
+/docs/
+ponytail-global.md
+DespegaLab/
+MoneyPrinterTurbo/
+Petite Raw/
+Quant-Math-Public/
+compraseguro-bo/
+forex-signal-engine/
+poco_f3_optimizer/
+crdroid16_custom/
+Projects/
+login-antigravity.mjs
+package.json
+package-lock.json
+Aegis/agents/

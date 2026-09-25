@@ -2,11 +2,16 @@ package com.aegis.hub.data
 
 import com.google.gson.annotations.SerializedName
 
-// Generic envelope server.js returns: { ok:true, data: ... } or { ok:false, error }
+// Generic envelope server.js returns: { ok:true, data: ... } or { ok:false, error:{code,message} }
+data class ErrorBody(
+    val code: String? = null,
+    val message: String? = null
+)
+
 data class Envelope<T>(
     val ok: Boolean,
     val data: T? = null,
-    val error: String? = null
+    val error: ErrorBody? = null
 )
 
 // ---- Projects ----
@@ -16,6 +21,7 @@ data class SessionRef(
     val createdAt: String? = null,
     val lastUsed: String? = null,
     val summary: String? = null,
+    val pinned: Boolean = false,
     val provider: String? = null
 ) {
     fun resolvedProvider(projectProvider: String? = null): String {
@@ -31,11 +37,14 @@ data class Project(
     val createdAt: String? = null,
     val archivedAt: String? = null,
     val provider: String? = "antigravity",
+    val folder: String? = null,
+    val ponytail: String? = null,
     val sessions: List<SessionRef>? = null,
     val skills: List<Any>? = null,
     val linkedProjects: List<String>? = null
 ) {
     val resolvedProvider: String get() = if (provider?.lowercase() == "antigravity") "Antigravity" else "OpenCode"
+    val resolvedFolder: String get() = folder ?: "/sdcard/projects/${name.lowercase().replace(" ", "-").replace(Regex("[^a-z0-9_-]"), "")}/"
 }
 
 data class CreateProjectRequest(
@@ -70,6 +79,7 @@ data class OpencodeSession(
     @SerializedName("created_at") val createdAtAlt: String? = null,
     val updatedAt: String? = null,
     @SerializedName("updated_at") val updatedAtAlt: String? = null,
+    val pinned: Boolean = false,
     val provider: String? = null
 ) {
     val resolvedId: String get() = id ?: ID ?: ""
@@ -77,6 +87,11 @@ data class OpencodeSession(
     val lastActivityIso: String? get() = updatedAt ?: updatedAtAlt ?: createdAt ?: createdAtAlt
     val resolvedProvider: String get() = if (provider?.lowercase() == "antigravity" || resolvedId.startsWith("agy_")) "Antigravity" else "OpenCode"
 }
+
+data class PinResponse(
+    val id: String,
+    val pinned: Boolean = false
+)
 
 // ---- Messages (GET /session/:id/message proxied via hub) ----
 enum class MessageDeliveryStatus { PENDING, SENT, ERROR }
@@ -235,7 +250,7 @@ data class SystemStatus(
 
 // ---- Aegis Phase 11 Models ----
 
-data class BaseResponse(val ok: Boolean, val error: String? = null)
+data class BaseResponse(val ok: Boolean, val error: ErrorBody? = null)
 
 data class HealthResponse(
     val ok: Boolean,
@@ -342,7 +357,7 @@ data class BootstrapState(
 }
 
 // Envelope de error del hub: {ok:false, error:{code,message}} (server.js)
-data class BootstrapError(val code: String? = null, val message: String? = null)
+typealias BootstrapError = ErrorBody
 
 // GET /api/bootstrap/state → {ok, data:{phase,currentStepId,...,steps:[...]}}
 data class BootstrapResponse(val ok: Boolean, val data: BootstrapState?, val error: BootstrapError? = null)

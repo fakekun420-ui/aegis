@@ -510,5 +510,5 @@ Todo `:id` de proyecto/sesión/skill —incluidos los de **query** (`?projectId=
 
 Workflow `.github/workflows/build-apk.yml` del proyecto `Aegis`:
 
-`backend-checks` (node --check + 46 tests) → `lint` (node --check · `bash -n` en `backend/**` y `app/**` · `grep` de `console.*` en `server.js` · YAML de los workflows) → `build-debug` (Gradle **8.9** pineado) → `build-release` (**condicional**: sin secreto `KEYSTORE_BASE64` los pasos se omiten con un aviso, sin fallar) → `semgrep` (`p/security-audit`) y `gitleaks`, ambos con **`continue-on-error: true`** hasta el primer ciclo limpio. El job `instrumented` (emulador + install + monkey) **sólo** se dispara con `workflow_dispatch` + input booleano `instrumented`.
+`backend-checks` (node --check + 54 tests) → `lint` (node --check · `bash -n` en `backend/**` y `app/**` · `grep` de `console.*` en `server.js` · YAML de los workflows) → `build-debug` (Gradle **8.9** pineado) → `build-release` (**condicional**: sin secreto `KEYSTORE_BASE64` los pasos se omiten con un aviso, sin fallar) → `semgrep` (`p/security-audit`) y `gitleaks`, ambos con **`continue-on-error: true`** hasta el primer ciclo limpio. El job `instrumented` (emulador + install + monkey) **sólo** se dispara con `workflow_dispatch` + input booleano `instrumented`.
 

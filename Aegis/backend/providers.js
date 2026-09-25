@@ -192,17 +192,36 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     const now = Date.now();
     if (this._pw && now - (this._pwTime || 0) < 3000) return this._pw;
     try {
-      if (this.logPath && fs.existsSync(this.logPath)) {
-        const fd = fs.openSync(this.logPath, "r");
-        try {
-          const size = fs.fstatSync(fd).size;
-          const len = Math.min(size, 8192);
-          const buf = Buffer.alloc(len);
-          fs.readSync(fd, buf, 0, len, Math.max(0, size - len));
-          const matches = [...buf.toString("utf8").matchAll(/server password (\S+)/g)];
-          if (matches.length) this._pw = matches[matches.length - 1][1];
-        } finally {
-          fs.closeSync(fd);
+      const candidates = [
+        "/root/.config/opencode/service.json",
+        this.logPath,
+        "/root/.local/share/opencode/log/opencode.log"
+      ];
+      for (const p of candidates) {
+        if (!p || !fs.existsSync(p)) continue;
+        if (p.endsWith(".json")) {
+          try {
+            const raw = JSON.parse(fs.readFileSync(p, "utf8"));
+            if (raw && raw.password) {
+              this._pw = raw.password;
+              break;
+            }
+          } catch (_) {}
+        } else {
+          const fd = fs.openSync(p, "r");
+          try {
+            const size = fs.fstatSync(fd).size;
+            const len = Math.min(size, 8192);
+            const buf = Buffer.alloc(len);
+            fs.readSync(fd, buf, 0, len, Math.max(0, size - len));
+            const matches = [...buf.toString("utf8").matchAll(/server password (\S+)/g)];
+            if (matches.length) {
+              this._pw = matches[matches.length - 1][1];
+              break;
+            }
+          } finally {
+            fs.closeSync(fd);
+          }
         }
       }
     } catch (e) {
@@ -522,9 +541,14 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     const block = (typeof payload.system === "string" && payload.system.trim()) || this.getSystemContextBlock(projectId);
     if (block && block.trim()) await this._setSessionInstruction(sessionId, "aegis-context", block.trim());
 
-    // 3) Modelo — endpoint aparte POST /session/:id/model {model:{id,providerID}}
-    if (payload.model) {
-      const ref = await this._resolveModelRef(payload.model);
+    // 1b) Modelo por defecto si no viene especificado
+    let effectiveModel = payload.model || "google/antigravity-gemini-3.8-flash";
+    if (effectiveModel) {
+      let ref = await this._resolveModelRef(effectiveModel);
+      if (!ref && !payload.model) {
+        // Fallback si antigravity-gemini-3.8-flash no está en el índice
+        ref = await this._resolveModelRef("antigravity-gemini-3-flash") || (this._modelRefs && this._modelRefs.values().next().value);
+      }
       if (ref) {
         const key = `${ref.providerID}/${ref.id}`;
         if (this._lastModel.get(sessionId) !== key) {
@@ -600,6 +624,10 @@ export class OpencodeAdapter extends BaseProviderAdapter {
           const ts = m.time?.created || 0;
           const isAssistant = !m.type || m.type === "assistant";
           if (!isAssistant || ts < cutoff) continue;
+          if (m.error) {
+            const errMsg = m.error.message || JSON.stringify(m.error);
+            throw new Error(`OpenCode assistant error: ${errMsg}`);
+          }
           const txt = Array.isArray(m.content)
             ? m.content.filter((c) => c && c.type === "text" && c.text).map((c) => c.text).join("")
             : (typeof m.text === "string" ? m.text : "");
@@ -1618,6 +1646,50 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Thinking)", description: "Anthropic Claude con Thinking" },
       { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Thinking)", description: "Anthropic Claude Opus con Thinking" }
     ];
+  }
+}
+
+// ClaudeCodeAdapter class inline in providers.js
+export class ClaudeCodeAdapter extends BaseProviderAdapter {
+  constructor(options = {}) {
+    super("claudecode", "Claude Code", "cli");
+    this.binPath = options.binPath || (fs.existsSync("/root/.local/bin/claude") ? "/root/.local/bin/claude" : "claude");
+    this.cwd = options.cwd || "/sdcard/projects";
+    this.activeProcesses = new Map();
+  }
+
+  async isHealthy() {
+    try {
+      if (fs.existsSync(this.binPath)) {
+        return { up: true, healthy: true, version: "claude" };
+      }
+      return { up: false, healthy: false, error: `claude binary not found at ${this.binPath}` };
+    } catch (e) {
+      return { up: false, healthy: false, error: e.message };
+    }
+  }
+
+  async listSessions() {
+    return [];
+  }
+
+  async createSession(opts = {}) {
+    const id = `claude_${Date.now().toString(36)}`;
+    return {
+      id,
+      title: opts.title || "Claude Session",
+      createdAt: new Date().toISOString(),
+      provider: "claudecode"
+    };
+  }
+
+  async getMessages() {
+    return [];
+  }
+
+  async sendMessage(sessionId, payload = {}) {
+    const text = payload.text || payload.prompt || "";
+    return normalizeMessage({ role: "assistant", text: `ClaudeCode not configured locally for execution: ${text.slice(0, 30)}` }, sessionId);
   }
 }
 

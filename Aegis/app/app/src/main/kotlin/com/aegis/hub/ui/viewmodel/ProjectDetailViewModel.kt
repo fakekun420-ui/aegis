@@ -160,7 +160,7 @@ class ProjectDetailViewModel : ViewModel() {
                 if (resp.ok) {
                     load(pid)
                 } else {
-                    _error.value = resp.error ?: "Error renombrando sesión"
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error renombrando sesión"
                     load(pid)
                 }
             } catch (e: Exception) {
@@ -183,7 +183,7 @@ class ProjectDetailViewModel : ViewModel() {
                 if (resp.ok) {
                     load(pid)
                 } else {
-                    _error.value = resp.error ?: "Error desvinculando sesión"
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error desvinculando sesión"
                     load(pid)
                 }
             } catch (e: Exception) {
@@ -207,7 +207,7 @@ class ProjectDetailViewModel : ViewModel() {
                 if (resp.ok) {
                     load(pid)
                 } else {
-                    _error.value = resp.error ?: "Error eliminando sesión"
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error eliminando sesión"
                     load(pid)
                 }
             } catch (e: Exception) {
@@ -222,7 +222,7 @@ class ProjectDetailViewModel : ViewModel() {
             try {
                 val realScope = if (scope == "project") _project.value?.id ?: "global" else "global"
                 val resp = api.createSkill(SkillCreateRequest(scope = realScope, name = name, content = content))
-                if (resp.ok) load(_project.value?.id ?: return@launch) else _error.value = resp.error
+                if (resp.ok) load(_project.value?.id ?: return@launch) else _error.value = resp.error?.message ?: resp.error?.code
             } catch (e: Exception) { _error.value = e.message }
         }
     }
@@ -231,7 +231,7 @@ class ProjectDetailViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val resp = api.deleteSkill(scope, name)
-                if (resp.ok) load(_project.value?.id ?: return@launch) else _error.value = resp.error
+                if (resp.ok) load(_project.value?.id ?: return@launch) else _error.value = resp.error?.message ?: resp.error?.code
             } catch (e: Exception) { _error.value = e.message }
         }
     }

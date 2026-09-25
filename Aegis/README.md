@@ -40,8 +40,11 @@ Aegis/
 
 ```sh
 cd backend
-npm test                 # node --test tests/*.test.js → 47 tests
+npm test                 # node --test tests/*.test.js → 54 tests
 node --check server.js   # (o find backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check)
+
+# projects.json: runtime file (ignorado por git), copiar plantilla si es una instalación limpia:
+# cp projects.json.example projects.json
 
 # hub manual (NO hacerlo si ya corre el de producción en :8765)
 sh start-hub.sh          # opencode serve :4096 + hub :8765
@@ -70,6 +73,14 @@ CI (`.github/workflows/build-apk.yml`): `backend-checks` · `lint` · `build-deb
 | [backend/docs/FRONTEND_CONTRACT.md](backend/docs/FRONTEND_CONTRACT.md) | Contrato app ↔ hub (envelope, health, setup, F4) |
 | [backend/docs/BACKEND_ARCHITECTURE.md](backend/docs/BACKEND_ARCHITECTURE.md) | Arquitectura del hub y keepalive |
 | [docs/audits/](docs/audits/) | 3 auditorías + plan de mejora Fase 0 (históricas) |
+
+## Web UI Dashboard
+
+Aegis includes a vanilla JavaScript dashboard served from `backend/public/index.html` at `http://127.0.0.1:8765/`:
+- **Real-time health**: Memory heap, server uptime, active providers (`opencode` + `antigravity`).
+- **Session management**: Active and pinned sessions viewer.
+- **System logs**: Live inspection of `/api/system/logs`.
+- **Token authentication**: Prompts and stores `X-Aegis-Token` in local browser storage.
 
 ## Stack
 

@@ -57,6 +57,16 @@ fun ProviderBadge(provider: String, modifier: Modifier = Modifier) {
     }
 }
 
+// ============================================================================
+// CANONICAL DEFINITION: ProjectsScreen vs WorkspaceScreen
+// - ProjectsScreen (CANÓNICA): Vista principal de Proyectos para el usuario.
+//   Maneja proyectos lógicos (/api/projects), sus sesiones, archivado, skills
+//   e instrucciones de proyecto en la base de datos projects.json.
+// - WorkspaceScreen (SECUNDARIA/HERRAMIENTA TÉCNICA): Vista técnica del sistema
+//   de archivos físico (/sdcard/projects/ vía /api/workspace/projects) para
+//   auditoría de repositorios git, inicialización de carpetas .hub e indexación.
+// ============================================================================
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ProjectsScreen(
@@ -81,6 +91,8 @@ fun ProjectsScreen(
     var deleteTarget by remember { mutableStateOf<Project?>(null) }
     var menuTarget by remember { mutableStateOf<Project?>(null) }
     var pinnedIds by remember { mutableStateOf(setOf<String>()) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     val filtered = remember(projects, query) {
         if (query.isBlank()) projects else projects.filter {
@@ -89,6 +101,7 @@ fun ProjectsScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Proyectos", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)) },
@@ -316,7 +329,17 @@ fun ProjectsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { if (name.isNotBlank()) { onCreateProject(name.trim(), desc.trim(), selectedProvider); showCreate = false } }) { Text("Crear", fontWeight = FontWeight.SemiBold) }
+                TextButton(onClick = {
+                    if (name.isNotBlank()) {
+                        val trimmedName = name.trim()
+                        onCreateProject(trimmedName, desc.trim(), selectedProvider)
+                        showCreate = false
+                        val safe = trimmedName.lowercase().replace(" ", "-").replace(Regex("[^a-z0-9_-]"), "")
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Proyecto creado en /sdcard/projects/$safe/")
+                        }
+                    }
+                }) { Text("Crear", fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = { TextButton(onClick = { showCreate = false }) { Text("Cancelar") } }
         )

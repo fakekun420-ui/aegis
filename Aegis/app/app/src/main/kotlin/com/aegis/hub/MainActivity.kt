@@ -281,26 +281,17 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     // ---- minimal retained helpers from previous WebView version (wake word gating, TTS, etc.) ----
     companion object {
-        const val PREF_WAKE = "voice_prefs"
-        const val KEY_WAKE_PHRASES = "wake_phrases_json"
-        val DEFAULT_WAKE = arrayOf("viernes escucha", "hola viernes", "viernes atenta")
+        const val PREF_WAKE = com.aegis.hub.data.VoicePreferences.PREFS_NAME
+        const val KEY_WAKE_PHRASES = com.aegis.hub.data.VoicePreferences.KEY_WAKE_PHRASES
+        val DEFAULT_WAKE = com.aegis.hub.data.VoicePreferences.DEFAULT_WAKE_PHRASES
     }
-    fun getWakePhrases(): Array<String> {
-        val p = getSharedPreferences(PREF_WAKE, MODE_PRIVATE)
-        val raw = p.getString(KEY_WAKE_PHRASES, null)
-        return try { if (raw != null) org.json.JSONArray(raw).let { j -> Array(j.length()) { j.getString(it) } } else DEFAULT_WAKE } catch (_:Exception) { DEFAULT_WAKE }
-    }
-    fun saveWakePhrases(arr: Array<String>) {
-        getSharedPreferences(PREF_WAKE, MODE_PRIVATE).edit().putString(KEY_WAKE_PHRASES, org.json.JSONArray(arr.toList()).toString()).apply()
-    }
+    fun getWakePhrases(): Array<String> = com.aegis.hub.data.VoicePreferences.getWakePhrases(this)
+    fun saveWakePhrases(arr: Array<String>) = com.aegis.hub.data.VoicePreferences.saveWakePhrases(this, arr)
 
     private var wakeRecognizer: SpeechRecognizer? = null
     private var wakeListening = false
     private var duplexEnabledInSession: Boolean = false
-    private fun containsWakeWord(text: String): Boolean {
-        val lower = text.lowercase(Locale.ROOT)
-        return getWakePhrases().any { ph -> lower.contains(ph.lowercase(Locale.ROOT)) }
-    }
+    private fun containsWakeWord(text: String): Boolean = com.aegis.hub.data.VoicePreferences.containsWakeWord(this, text)
     private fun isNativeOverlayVisible(): Boolean = !systemReady
     private fun shouldWakeListen(): Boolean {
         if (isNativeOverlayVisible()) return false

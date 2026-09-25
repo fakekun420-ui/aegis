@@ -2,6 +2,33 @@
 
 Todo notable de Aegis se documenta aquí. Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [Unreleased]
+
+### Added
+- **Auto Project Folder Creation & Ponytail:** Creación automática de directorio en `/sdcard/projects/<nombre-sanitizado>/`, subdirectorio `.hub/project.json` y archivo `.ponytail.md` con inferencia contextual de tipo y stack al crear proyectos desde la app.
+- **Model Discovery y Sub-agent Policy:** Registro clasificado de 477 modelos en `_system/model-registry.json` y política de selección multinivel en `_system/subagent-policy.md`.
+- **Ruta de proyecto en UI Android:** Indicador de ruta interactivo en `ProjectDetailScreen` con copiado al portapapeles y notificación de creación en `ProjectsScreen`.
+- **OpenCode v2 Adapter:** Soporte completo de API REST v2 de OpenCode con scraping dinámico de autenticación Basic en `service.json` y `opencode.log`, polling cursor-based de mensajes y fallback de modelo activo.
+- **Persistencia atómica de fijado de chats:** Endpoints `POST /api/opencode/sessions/:id/pin` y `unpin`, guardado seguro en `projects.json` mediante `fileMutex`, e interfaz con pin en Android (`ChatsScreen.kt`).
+- **TokenProvider unificado:** Singleton canónico en Kotlin (`TokenProvider.kt`) con cooldown de 2s, sincronización con Mutex y compatibilidad OkHttp sincrónica. Eliminadas duplicaciones en `ApiClient` y `CompanionService`.
+- **Motor DAG en Workflows:** Resolución de dependencias (`depends_on`), concurrencia configurable (`max_concurrent`), y ciclo de vida de pasos (`pending`/`running`/`completed`/`failed`/`skipped`) con test unitario dedicado.
+- **Pipeline de Voz Completo:** Chips funcionales en `VoiceConversationScreen`, selección de modelo, creación de sesión, diálogo de configuración de voz (velocidad TTS, selector de idioma, wake word configurable persistido en `SharedPreferences`).
+- **Dashboard Web UI:** Interfaz ligera vanilla en `backend/public/index.html` sirviendo estado del hub, lista de sesiones activas, visor de logs y almacenamiento de token.
+- **Plantilla `projects.json.example`:** Repositorio limpio con `projects.json` ignorado en `.gitignore`.
+- **Guía de Keystore RSA-4096:** `docs/KEYSTORE_SETUP.md` documentando generación, encoding en base64 y configuración de secretos CI.
+- **Scripts de prueba de QA física:** `docs/qa/QA_TEST_SCRIPTS.md` con 8 casos reproducibles para POCO F3.
+
+### Changed
+- **CI / Seguridad:** Promoción de `semgrep` y `gitleaks` a bloqueantes en `.github/workflows/build-apk.yml`. Concurrencia fijada a 1 en pruebas backend.
+- **Ruteo de Proveedores:** Corrección de rama muerta en `server.js` que forzaba Antigravity incluso cuando OpenCode era el destino.
+- **Validación de Identificadores:** Unificación canónica de `ID_RE` (`^[A-Za-z0-9_-]+$`) rechazando puntos para mayor seguridad en rutas de archivos.
+- **Envelope de Errores Tipado:** Creación de `ErrorBody` en `Models.kt` para `Envelope` y `BaseResponse`, actualizando ViewModels de Android.
+- **Sincronización de Conteo de Tests:** Unificación documental a 54/55 tests reales.
+
+### Removed
+- Árbol de adapters legado `backend/src/adapters/` (ClaudeCode inlined en `providers.js`).
+- Layout muerto `activity_main.xml`.
+
 ## [1.0.0] — 2026-09-24
 
 Primera release consolidada: del hub legacy con RCE anónima a un producto autogestionado

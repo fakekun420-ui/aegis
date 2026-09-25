@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import {
   OpencodeAdapter,
   AntigravityAdapter,
+  ClaudeCodeAdapter,
   ProviderManager,
   fileMutex,
   atomicReadFileSync,
@@ -22,13 +23,6 @@ import {
 import { loadProjectsStore } from "./src/core/storage.js";
 
 import { handleSkillsRoute } from "./src/api/skillsRoutes.js";
-// A-7 (A-4 backlog #1): adapter claudecode — lo recomendaba taskClassifier y la
-// rama existía sin adapter registrado. BACKLOG F0-F2: taskClassifier/modelRouter se
-// ELIMINARON como código muerto (0 consumidores en runtime; su ruteo por prompt
-// cambiaba el adapter/modelo por defecto => incumplía el "cero cambio de
-// comportación"; ver decisión en docs/AEGIS_MASTER_PROMPT.md Fase 7). El adapter
-// claudecode se MANTIENE registrado y seleccionable (providers.json / X-Provider).
-import { ClaudeCodeAdapter } from "./src/adapters/ClaudeCodeAdapter.js";
 import { handleProjectRoutes } from "./src/api/projectRoutes.js";
 // A-2: routers antes huérfanos (jobs/agents/workflows/content) + subsistemas del motor
 import { handleJobRoutes } from "./src/api/jobRoutes.js";
@@ -71,7 +65,8 @@ function fail(error, code) { return { ok: false, error: String(error).slice(0, 8
 // metacaracter de shell (";" "|" "$"…) o ".." queda FUERA => 400 con code
 // PROJECT_INVALID/SESSION_INVALID (envelope estándar), ANTES de tocar el store,
 // fs o cualquier path.join. Se valida SIEMPRE tras decodeURIComponent.
-const ID_RE = /^[A-Za-z0-9._-]+$/;
+// Regex canónica (sin puntos para evitar ambigüedades en segmentos de ruta de filesystem)
+const ID_RE = /^[A-Za-z0-9_-]+$/;
 function isValidId(v) {
   return typeof v === "string" && v.length > 0 && v.length <= 256 && ID_RE.test(v) && !v.includes("..");
 }
@@ -81,7 +76,7 @@ function invalidId(res, kind, value) {
   const label = kind === "project" ? "projectId" : kind === "session" ? "sessionId" : "skillId";
   return json(res, 400, {
     ok: false,
-    error: { code, message: `invalid ${label}: "${String(value ?? "").slice(0, 80)}" (must match ^[A-Za-z0-9._-]+$, max 256, sin "..")` }
+    error: { code, message: `invalid ${label}: "${String(value ?? "").slice(0, 80)}" (must match ^[A-Za-z0-9_-]+$, max 256, sin "..")` }
   });
 }
 
@@ -194,7 +189,11 @@ function argVal(name, fallback){
   return i !== -1 && process.argv[i+1] ? process.argv[i+1] : fallback;
 }
 const HUB_PORT = parseInt(process.env.HUB_PORT || argVal("--port","8765"), 10);
-const OPENCODE_PORT = parseInt(process.env.OPENCODE_PORT || argVal("--opencode-port","4096"), 10);
+const OPENCODE_PORT = parseInt(
+  process.env.OPENCODE_PORT ||
+  argVal("--opencode-port", fs.existsSync("/root/.config/opencode/service.json") ? "49374" : "4096"),
+  10
+);
 const OPENCODE_HOST = process.env.OPENCODE_HOST || "127.0.0.1";
 const PROJECTS_ROOT = "/sdcard/projects";
 const UI_STATE_FILE = path.join(__dirname, "ui-state.json");
@@ -242,6 +241,21 @@ function resolveExistingSessionTitle(store, sessionId, fallbackTitle = null) {
     return fallbackTitle;
   }
   return sessionId;
+}
+function resolveExistingSessionPinned(store, sessionId) {
+  if (!sessionId || !store) return false;
+  if (store.sessionPins && store.sessionPins[sessionId] !== undefined) {
+    return Boolean(store.sessionPins[sessionId]);
+  }
+  if (Array.isArray(store.projects)) {
+    for (const p of store.projects) {
+      const s = (p.sessions || []).find(x => x.sessionId === sessionId);
+      if (s && s.pinned !== undefined) {
+        return Boolean(s.pinned);
+      }
+    }
+  }
+  return false;
 }
 function saveProjectsStore(store) {
   try {
@@ -294,6 +308,7 @@ function normalizeSessionEntry(s) {
     createdAt: s.createdAt || nowIso(),
     lastUsed: s.lastUsed || s.createdAt || nowIso(),
     summary: s.summary || "",
+    pinned: Boolean(s.pinned || false),
     provider: s.provider ? String(s.provider).toLowerCase().trim() : undefined,
     agyConversationId: s.agyConversationId ? String(s.agyConversationId).trim() : undefined
   };
@@ -1222,6 +1237,10 @@ async function handleRequest(req, res){
           delete store.sessionTitles[sid];
           changed = true;
         }
+        if (store.sessionPins && store.sessionPins[sid] !== undefined) {
+          delete store.sessionPins[sid];
+          changed = true;
+        }
         if (changed) saveProjectsStore(store);
       });
 
@@ -1297,7 +1316,7 @@ async function handleRequest(req, res){
         if (sid.startsWith("agy_") || antigravityAdapter.sessionMap.has(sid) || fs.existsSync(path.join(antigravityAdapter.brainDir, sid))) {
           provId = "antigravity";
         } else {
-          provId = "antigravity";
+          provId = "opencode";
         }
       }
       // F6: la convención del id de sesión (ses_/agy_) prevalece sobre cualquier
@@ -1867,6 +1886,14 @@ async function handleRequest(req, res){
     const store = loadProjectsStore();
     let list = store.projects;
     if (!includeArchived) list = list.filter(p => !p.archivedAt);
+    list = list.map(p => {
+      const safeFolder = p.folder || (p.name ? path.join(PROJECTS_ROOT, String(p.name).toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]/g, "")) : null);
+      return {
+        ...p,
+        folder: safeFolder,
+        ponytail: p.ponytail || (safeFolder ? path.join(safeFolder, ".ponytail.md") : null)
+      };
+    });
     // Sort: active first by createdAt desc, then archived
     list = [...list].sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
     return json(res, 200, ok(list));
@@ -1892,6 +1919,9 @@ async function handleRequest(req, res){
         if (store.projects.some(p => !p.archivedAt && p.name.toLowerCase() === normName.toLowerCase())) {
           throw new Error(`DUPLICATE_NAME: project name "${normName}" already exists`);
         }
+        const safeFolderName = normName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]/g, "");
+        const folderPath = path.join(PROJECTS_ROOT, safeFolderName);
+        const ponyTailPath = path.join(folderPath, ".ponytail.md");
         createdProj = {
           id: genProjectId(),
           name: normName,
@@ -1900,9 +1930,9 @@ async function handleRequest(req, res){
           createdAt: nowIso(),
           archivedAt: null,
           provider: initialProv,
-          // F6: la carpeta del proyecto en disco (misma que mkdir más abajo) es
-          // la clave con la que se mergean sesiones de OpenCode por origen.
-          directory: path.join(PROJECTS_ROOT, normName),
+          folder: folderPath,
+          directory: folderPath,
+          ponytail: ponyTailPath,
           sessions: [],
           skills: Array.isArray(body.skills) ? body.skills : [],
           linkedProjects: Array.isArray(body.linkedProjects) ? body.linkedProjects : []
@@ -1911,33 +1941,119 @@ async function handleRequest(req, res){
         saveProjectsStore(store);
       });
 
-      // Initialize project directory on disk (PROJECTS_ROOT) and default .ponytail.md
+      // Initialize project directory on disk (PROJECTS_ROOT), .hub/project.json and .ponytail.md
       try {
-        const projDir = path.join(PROJECTS_ROOT, createdProj.name);
+        const projDir = createdProj.folder;
         if (!fs.existsSync(projDir)) {
           fs.mkdirSync(projDir, { recursive: true });
         }
+        
+        // .hub/project.json
+        const hubDir = path.join(projDir, ".hub");
+        if (!fs.existsSync(hubDir)) {
+          fs.mkdirSync(hubDir, { recursive: true });
+        }
+        const hubProjectJson = path.join(hubDir, "project.json");
+        if (!fs.existsSync(hubProjectJson)) {
+          fs.writeFileSync(
+            hubProjectJson,
+            JSON.stringify({
+              id: createdProj.id,
+              name: createdProj.name,
+              provider: createdProj.provider,
+              created_at: createdProj.createdAt,
+              aegis_version: "1.0.0"
+            }, null, 2)
+          );
+        }
+
+        // Infer project type & stack
+        const descLower = (createdProj.description || "").toLowerCase();
+        const nameLower = createdProj.name.toLowerCase();
+        let inferredType = "other";
+        let inferredStack = "To be defined";
+        if (nameLower.includes("bot") || descLower.includes("trading") || descLower.includes("bot")) {
+          inferredType = "trading system";
+          inferredStack = "Python / Node.js";
+        } else if (nameLower.includes("app") || descLower.includes("android") || descLower.includes("mobile")) {
+          inferredType = "mobile app";
+          inferredStack = "Kotlin / Jetpack Compose";
+        } else if (nameLower.includes("api") || descLower.includes("backend") || descLower.includes("api")) {
+          inferredType = "API / backend service";
+          inferredStack = "Node.js / Express";
+        } else if (nameLower.includes("web") || descLower.includes("frontend") || descLower.includes("web")) {
+          inferredType = "web app";
+          inferredStack = "HTML / TypeScript / React";
+        }
+
         const ponyTailFile = path.join(projDir, ".ponytail.md");
         if (!fs.existsSync(ponyTailFile)) {
           fs.writeFileSync(
             ponyTailFile,
-            `# PONY-TAIL DE PROYECTO: ${createdProj.name}
-**Ubicación:** \`${ponyTailFile}\`  
-**Hereda de:** \`/sdcard/projects/Aegis/backend/context/pony-tail-global.md\`  
-**Última Actualización:** ${nowIso().split("T")[0]}  
-**Proveedor:** ${createdProj.provider}  
-**Estado General:** Inicializado  
+            `# PONYTAIL — ${createdProj.name}
+**Location:** \`${ponyTailFile}\`
+**Inherits:** \`/sdcard/projects/ponytail-global.md\`
+**Created:** ${createdProj.createdAt}
+**Provider:** ${createdProj.provider}
+**Last Updated by AI:** ${createdProj.createdAt}
 
 ---
 
-## 1. Arquitectura y Resumen
-- **Nombre:** ${createdProj.name}
-- **Descripción:** ${createdProj.description || "Sin descripción"}
-- **Proveedor predeterminado:** ${createdProj.provider}
-- **Instrucciones:** ${createdProj.instructions || "Estándar"}
+## 1. Project Identity
+- **Type:** ${inferredType}
+- **Stack:** ${inferredStack}
+- **Purpose:** ${createdProj.description || "To be defined"}
+- **Active since:** ${createdProj.createdAt.split("T")[0]}
+
+---
+
+## 2. Workspace
+- **Project root:** \`${projDir}/\`
+- **Hub metadata:** \`${path.join(projDir, ".hub", "project.json")}\`
+- **Aegis project ID:** ${createdProj.id}
+- **Provider:** ${createdProj.provider}
+
+---
+
+## 3. Verified Milestones
+*(AI must update this section after completing verified work in this project)*
+
+- [ ] Project initialized
+
+---
+
+## 4. Key Files & Structure
+*(AI must populate this section after first exploration of the project)*
+
+- To be discovered on first session.
+
+---
+
+## 5. Notes & Constraints
+*(AI must add relevant constraints, tech debt, or important decisions here)*
+
+- None yet.
+
+---
+
+## Update Instructions
+After completing any verified milestone in this project:
+1. Add it to §3 with a checkmark and date.
+2. Update §4 if new key files were created or discovered.
+3. Add any important decisions or constraints to §5.
+4. Update \`Last Updated by AI\` in the header.
+Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
 `
           );
         }
+
+        // Log operation to /sdcard/projects/_system/fs-operations.log
+        const fsLog = "/sdcard/projects/_system/fs-operations.log";
+        const ts = new Date().toISOString();
+        const logLines = `[${ts}] [AEGIS-HUB] [CREATE] ${projDir}/ created for project ${createdProj.id}\n[${ts}] [AEGIS-HUB] [CREATE] ${ponyTailFile} generated\n`;
+        try {
+          fs.appendFileSync(fsLog, logLines);
+        } catch (_) {}
       } catch (err) {
         log.warn(`[hub] failed to initialize project directory on disk: ${err.message}`);
       }
@@ -2093,7 +2209,10 @@ async function handleRequest(req, res){
     }
     const store = loadProjectsStore();
     const proj = findProject(store, id) || proj0;
-    const sorted = [...(proj.sessions || [])].sort((a,b) => (b.lastUsed || b.createdAt || "").localeCompare(a.lastUsed || a.createdAt || ""));
+    const sorted = [...(proj.sessions || [])].map(s => ({
+      ...s,
+      pinned: s.pinned !== undefined ? Boolean(s.pinned) : resolveExistingSessionPinned(store, s.sessionId)
+    })).sort((a,b) => (b.lastUsed || b.createdAt || "").localeCompare(a.lastUsed || a.createdAt || ""));
     return json(res, 200, { ok: true, data: sorted });
   }
 
@@ -2205,6 +2324,7 @@ async function handleRequest(req, res){
 
         if (body.title !== undefined) sess.title = String(body.title).trim();
         if (body.summary !== undefined) sess.summary = String(body.summary).trim();
+        if (body.pinned !== undefined) sess.pinned = Boolean(body.pinned);
         if (body.provider !== undefined) {
           const prov = String(body.provider).toLowerCase().trim();
           if (!["opencode", "antigravity"].includes(prov)) {
@@ -2359,7 +2479,7 @@ async function handleRequest(req, res){
   if((pathname==="/api/opencode/sessions" || pathname==="/api/sessions") && req.method==="GET"){
     try {
       const list = await providerManager.listAllSessions();
-      // Overlay custom titles from projects.json or store.sessionTitles
+      // Overlay custom titles and pinned state from projects.json
       try {
         const store = loadProjectsStore();
         for (const item of list) {
@@ -2370,6 +2490,7 @@ async function handleRequest(req, res){
           if (custom && custom !== item.id) {
             item.title = custom;
           }
+          item.pinned = resolveExistingSessionPinned(store, item.id);
         }
       } catch (_) {}
       return json(res, 200, ok(list));
@@ -2444,6 +2565,10 @@ async function handleRequest(req, res){
           delete store.sessionTitles[sid];
           changed = true;
         }
+        if (store.sessionPins && store.sessionPins[sid] !== undefined) {
+          delete store.sessionPins[sid];
+          changed = true;
+        }
         if (changed) saveProjectsStore(store);
       });
 
@@ -2460,6 +2585,58 @@ async function handleRequest(req, res){
       return json(res, 200, ok({ removed: sid }));
     } catch (e) {
       return json(res, 500, fail(`delete session failed: ${String(e)}`));
+    }
+  }
+
+  // POST /api/opencode/sessions/:id/pin (and /api/sessions/:id/pin) — pin session
+  const pinSessionMatch = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)\/pin$/);
+  if (pinSessionMatch && req.method === "POST") {
+    const sid = sanitizeProjectId(decodeURIComponent(pinSessionMatch[1]));
+    if (!isValidId(sid)) return invalidId(res, "session", sid);
+    try {
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        store.sessionPins = store.sessionPins || {};
+        store.sessionPins[sid] = true;
+
+        for (const p of store.projects) {
+          for (const s of (p.sessions || [])) {
+            if (s.sessionId === sid) {
+              s.pinned = true;
+            }
+          }
+        }
+        saveProjectsStore(store);
+      });
+      return json(res, 200, ok({ id: sid, pinned: true }));
+    } catch (e) {
+      return json(res, 500, fail(`pin session failed: ${String(e)}`));
+    }
+  }
+
+  // POST /api/opencode/sessions/:id/unpin (and /api/sessions/:id/unpin) — unpin session
+  const unpinSessionMatch = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)\/unpin$/);
+  if (unpinSessionMatch && req.method === "POST") {
+    const sid = sanitizeProjectId(decodeURIComponent(unpinSessionMatch[1]));
+    if (!isValidId(sid)) return invalidId(res, "session", sid);
+    try {
+      await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+        const store = loadProjectsStore();
+        store.sessionPins = store.sessionPins || {};
+        store.sessionPins[sid] = false;
+
+        for (const p of store.projects) {
+          for (const s of (p.sessions || [])) {
+            if (s.sessionId === sid) {
+              s.pinned = false;
+            }
+          }
+        }
+        saveProjectsStore(store);
+      });
+      return json(res, 200, ok({ id: sid, pinned: false }));
+    } catch (e) {
+      return json(res, 500, fail(`unpin session failed: ${String(e)}`));
     }
   }
 

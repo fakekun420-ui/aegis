@@ -41,7 +41,11 @@ const SMOKE_TIMEOUT_MS = 60000;  // contrato F3: 60s para el smoke-test
 
 const HOME = process.env.HOME || "/root";
 const OPENCODE_HOST = process.env.OPENCODE_HOST || "127.0.0.1";
-const OPENCODE_PORT = parseInt(process.env.OPENCODE_PORT || "4096", 10);
+const OPENCODE_PORT = parseInt(
+  process.env.OPENCODE_PORT ||
+  (fs.existsSync("/root/.config/opencode/service.json") ? "49374" : "4096"),
+  10
+);
 
 // Instalador oficial del CLI agy (documentado en F2/F3; los paquetes npm
 // "agy"/"antigravity-cli" son placeholders de terceros: NO usarlos).

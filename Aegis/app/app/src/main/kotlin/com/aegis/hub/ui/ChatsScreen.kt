@@ -65,9 +65,14 @@ fun ChatsScreen(
     }
 
     val filtered = remember(sessions, query) {
-        if (query.isBlank()) sessions else sessions.filter {
+        val baseList = if (query.isBlank()) sessions else sessions.filter {
             it.resolvedTitle.contains(query, ignoreCase = true) || it.resolvedId.contains(query, ignoreCase = true)
         }
+        // Pinned sessions first, then chronological (most recent first)
+        baseList.sortedWith(
+            compareByDescending<OpencodeSession> { it.pinned }
+                .thenByDescending { it.lastActivityIso ?: "" }
+        )
     }
 
     Scaffold(
@@ -191,17 +196,31 @@ fun ChatsScreen(
                                                 .padding(horizontal = 14.dp, vertical = 11.dp),
                                             verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            Text(
-                                                text = sess.resolvedTitle,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    fontSize = 15.sp,
-                                                    fontWeight = FontWeight.Medium
-                                                ),
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                if (sess.pinned) {
+                                                    Icon(
+                                                        Icons.Outlined.PushPin,
+                                                        contentDescription = "Fijado",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = sess.resolvedTitle,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Medium
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically,
@@ -236,10 +255,16 @@ fun ChatsScreen(
                                             modifier = Modifier.semantics { contentDescription = "Renombrar" }
                                         )
                                         DropdownMenuItem(
-                                            text = { Text("Fijar") },
-                                            leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                                            text = { Text(if (sess.pinned) "Desfijar" else "Fijar") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Outlined.PushPin,
+                                                    contentDescription = null,
+                                                    tint = if (sess.pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            },
                                             onClick = { menuTarget = null; onPinSession(sess.resolvedId) },
-                                            modifier = Modifier.semantics { contentDescription = "Fijar" }
+                                            modifier = Modifier.semantics { contentDescription = if (sess.pinned) "Desfijar" else "Fijar" }
                                         )
                                         DropdownMenuItem(
                                             text = { Text("Agregar a proyecto") },

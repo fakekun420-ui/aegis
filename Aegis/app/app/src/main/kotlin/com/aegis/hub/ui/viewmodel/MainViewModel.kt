@@ -73,7 +73,7 @@ class MainViewModel : ViewModel() {
                         } else proj
                     }
                 } else {
-                    _error.value = resp.error ?: "getProjects failed"
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "getProjects failed"
                     retrying = scheduleProjectsRetry()
                 }
             } catch (e: Exception) {
@@ -111,7 +111,7 @@ class MainViewModel : ViewModel() {
                         val rid = it.resolvedId
                         rid !in _deletedSessionIds && (it.id ?: "") !in _deletedSessionIds && (it.ID ?: "") !in _deletedSessionIds
                     }
-                } else _error.value = resp.error ?: "getSessions failed"
+                } else _error.value = resp.error?.message ?: resp.error?.code ?: "getSessions failed"
             } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
             finally { _loadingSessions.value = false }
         }
@@ -121,7 +121,7 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val resp = api.createProject(CreateProjectRequest(name, description.ifBlank { null }, provider = provider))
-                if (resp.ok) refreshProjects() else _error.value = resp.error
+                if (resp.ok) refreshProjects() else _error.value = resp.error?.message ?: resp.error?.code
             } catch (e: Exception) { _error.value = e.message }
         }
     }
@@ -130,7 +130,7 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val resp = api.patchProject(id, PatchProjectRequest(name = newName))
-                if (resp.ok) refreshProjects() else _error.value = resp.error
+                if (resp.ok) refreshProjects() else _error.value = resp.error?.message ?: resp.error?.code
             } catch (e: Exception) { _error.value = e.message }
         }
     }
@@ -139,7 +139,7 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val resp = api.patchProject(id, PatchProjectRequest(name = name, description = description))
-                if (resp.ok) refreshProjects() else _error.value = resp.error
+                if (resp.ok) refreshProjects() else _error.value = resp.error?.message ?: resp.error?.code
             } catch (e: Exception) { _error.value = e.message }
         }
     }
@@ -148,7 +148,7 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val resp = api.patchProject(id, PatchProjectRequest(archived = true))
-                if (resp.ok) refreshProjects() else _error.value = resp.error
+                if (resp.ok) refreshProjects() else _error.value = resp.error?.message ?: resp.error?.code
             } catch (e: Exception) { _error.value = e.message }
         }
     }
@@ -157,7 +157,7 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val resp = api.deleteProject(id)
-                if (resp.ok) refreshProjects() else _error.value = resp.error
+                if (resp.ok) refreshProjects() else _error.value = resp.error?.message ?: resp.error?.code
             } catch (e: Exception) { _error.value = e.message }
         }
     }
@@ -172,7 +172,7 @@ class MainViewModel : ViewModel() {
                     projectId,
                     LinkSessionRequest(sessionId = sessionId, title = currentTitle, provider = currentProvider)
                 )
-                if (resp.ok) refreshAll() else _error.value = resp.error ?: "move failed"
+                if (resp.ok) refreshAll() else _error.value = resp.error?.message ?: resp.error?.code ?: "move failed"
             } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
         }
     }
@@ -191,13 +191,70 @@ class MainViewModel : ViewModel() {
                 if (resp.ok) {
                     refreshAll()
                 } else {
-                    _error.value = resp.error ?: "Error renombrando sesión"
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error renombrando sesión"
                     refreshSessions()
                 }
             } catch (e: Exception) {
                 _error.value = e.message ?: "Error renombrando sesión"
                 refreshSessions()
             }
+        }
+    }
+
+    fun pinSession(sessionId: String) {
+        viewModelScope.launch {
+            // Optimistic update
+            val current = _sessions.value
+            _sessions.value = current.map {
+                if (it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId) it.copy(pinned = true) else it
+            }
+            try {
+                val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    api.pinSession(sessionId)
+                }
+                if (resp.ok) {
+                    refreshSessions()
+                } else {
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error fijando sesión"
+                    refreshSessions()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error fijando sesión"
+                refreshSessions()
+            }
+        }
+    }
+
+    fun unpinSession(sessionId: String) {
+        viewModelScope.launch {
+            // Optimistic update
+            val current = _sessions.value
+            _sessions.value = current.map {
+                if (it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId) it.copy(pinned = false) else it
+            }
+            try {
+                val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    api.unpinSession(sessionId)
+                }
+                if (resp.ok) {
+                    refreshSessions()
+                } else {
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error desfijando sesión"
+                    refreshSessions()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error desfijando sesión"
+                refreshSessions()
+            }
+        }
+    }
+
+    fun togglePinSession(sessionId: String) {
+        val target = _sessions.value.find { it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId }
+        if (target?.pinned == true) {
+            unpinSession(sessionId)
+        } else {
+            pinSession(sessionId)
         }
     }
 
@@ -222,7 +279,7 @@ class MainViewModel : ViewModel() {
                 if (resp.ok) {
                     refreshAll()
                 } else {
-                    _error.value = resp.error ?: "Error eliminando sesión"
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error eliminando sesión"
                     refreshSessions()
                 }
             } catch (e: Exception) {

@@ -24,6 +24,17 @@ import com.aegis.hub.ui.NavRoutes
 import com.aegis.hub.ui.viewmodel.WorkspaceViewModel
 import com.aegis.hub.ui.theme.*
 
+// ============================================================================
+// CANONICAL DEFINITION: ProjectsScreen vs WorkspaceScreen
+// - WorkspaceScreen (SECUNDARIA/HERRAMIENTA TÉCNICA):
+//   Explorador físico de directorios en el almacenamiento local (/sdcard/projects/
+//   vía /api/workspace/projects). Permite auditar qué carpetas tienen estructura
+//   de repositorio Git, inicializar metadatos locales .hub y lanzar tareas de indexación.
+// - ProjectsScreen (CANÓNICA):
+//   Gestiona la entidad de negocio Proyecto persistida en el Hub (projects.json),
+//   sus sesiones de chat vinculadas y contexto de IA.
+// ============================================================================
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkspaceScreen(

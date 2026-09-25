@@ -157,7 +157,7 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                     }
                 },
                 onRenameSession = { sid, name -> vm.renameSession(sid, name) },
-                onPinSession = { _ -> },
+                onPinSession = { sid -> vm.togglePinSession(sid) },
                 onMoveSession = { sessionId, projectId -> vm.moveSession(sessionId, projectId) },
                 onDeleteSession = { sid -> vm.deleteSession(sid) },
                 onRefresh = { vm.refreshSessions() },
@@ -185,7 +185,16 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
         composable(NavRoutes.VOICE, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->
             val sid = backStack.arguments?.getString("sessionId") ?: ""
             val chatVm: ChatViewModel = viewModel(key = "chat_$sid")
-            VoiceConversationScreen(sessionId = sid, vm = chatVm, onBack = { navController.popBackStack() })
+            VoiceConversationScreen(
+                sessionId = sid,
+                vm = chatVm,
+                onBack = { navController.popBackStack() },
+                onNewSession = { newSid ->
+                    navController.navigate(NavRoutes.voice(newSid)) {
+                        popUpTo(NavRoutes.voice(sid)) { inclusive = true }
+                    }
+                }
+            )
         }
         
         composable("control_center") {

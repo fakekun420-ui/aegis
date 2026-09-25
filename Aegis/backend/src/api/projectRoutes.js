@@ -21,7 +21,7 @@ const log = createLogger("workspace");
 // Regex ^[A-Za-z0-9._-]+$ + rechazo de ".." + max 256 => 400 PROJECT_INVALID
 // ANTES de tocar ProjectManager/path.join. `pathResolver.isValidProjectId`
 // queda como segunda barrera (defensa en profundidad).
-const ID_RE = /^[A-Za-z0-9._-]+$/;
+const ID_RE = /^[A-Za-z0-9_-]+$/;
 function isValidProjectRouteId(v) {
   return typeof v === "string" && v.length > 0 && v.length <= 256 && ID_RE.test(v) && !v.includes("..");
 }
@@ -29,7 +29,7 @@ function isValidProjectRouteId(v) {
 function invalidProjectId(res, jsonHelper, value) {
   return jsonHelper(res, 400, {
     ok: false,
-    error: { code: "PROJECT_INVALID", message: `invalid projectId: "${String(value ?? "").slice(0, 80)}" (must match ^[A-Za-z0-9._-]+$, max 256, sin "..")` }
+    error: { code: "PROJECT_INVALID", message: `invalid projectId: "${String(value ?? "").slice(0, 80)}" (must match ^[A-Za-z0-9_-]+$, max 256, sin "..")` }
   });
 }
 

@@ -293,12 +293,12 @@ test("§7.1: en 2xx NUNCA viaja `error`; la divergencia String? vs objeto está 
   assert.equal(typeof err.body.error.code, "string");
   assert.equal(typeof err.body.error.message, "string");
 
-  // 3) Models.kt declara Envelope.error: String?  => divergencia REAL detectada...
+  // 3) Models.kt declara Envelope.error: ErrorBody?  => ahora tipado como objeto coherente
   const envFields = MODELS.get("Envelope");
   const errorField = envFields.find(f => f.name === "error");
   assert.ok(errorField, "Envelope debe declarar error");
-  assert.ok(errorField.nullable, "Envelope.error sigue siendo String? en Models.kt");
-  assert.equal(typeof err.body.error, "object", "el hub manda objeto, Models.kt dice String? -> divergencia");
+  assert.ok(errorField.nullable, "Envelope.error sigue siendo nullable en Models.kt");
+  assert.equal(typeof err.body.error, "object", "el hub manda objeto, Models.kt tipa como objeto coherente");
 
   // 4) ...y documentada en FRONTEND_CONTRACT.md §7.1 (NO se arregla a ciegas)
   const doc = fs.readFileSync(CONTRACT_MD, "utf8");

@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.aegis.hub.data.TokenProvider
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.io.*
@@ -31,38 +32,18 @@ class CompanionService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
-        // Misma resolución de ruta del hub que ya usa la app (MainActivity / start-hub.sh)
-        private const val TOKEN_FILE = "/sdcard/projects/Aegis/backend/.aegis_token"
         // Mismo CORS_ALLOWLIST que el backend (server.js)
         private val CORS_ALLOWLIST = setOf("http://localhost:8765", "app://aegis")
-        private const val TOKEN_RETRY_COOLDOWN_MS = 2_000L
     }
 
-    @Volatile private var tokenCache: String? = null
-    @Volatile private var tokenLastAttemptAt = 0L
-
-    /** Lee el token del hub vía root (la app lo tiene). Cachea en memoria; si falla,
-     *  se reintenta pasada la fecha (próximo ciclo) en vez de golpear `su` en cada request. */
-    private fun hubToken(): String? {
-        tokenCache?.let { if (it.isNotEmpty()) return it }
-        val now = System.currentTimeMillis()
-        if (now - tokenLastAttemptAt < TOKEN_RETRY_COOLDOWN_MS) return null
-        tokenLastAttemptAt = now
-        return try {
-            val r = RootShell.exec("cat $TOKEN_FILE 2>/dev/null")
-            val t = r.stdout.trim()
-            if (t.isNotEmpty()) { tokenCache = t; t } else null
-        } catch (_: Exception) { null }
-    }
-
-    /** Sin token válido -> false (responde 403 y NO se ejecuta nada). Relee el archivo una vez
-     *  ante posible rotación del token del hub. */
+    /** Sin token válido -> false (responde 403 y NO se ejecuta nada). Relee el token vía TokenProvider
+     *  ante posible rotación o primera lectura. */
     private fun tokenValid(provided: String?): Boolean {
         if (provided.isNullOrEmpty()) return false
-        val cached = tokenCache
-        if (cached != null && constantTimeEquals(cached, provided)) return true
-        tokenCache = null   // posible rotación / hub reiniciado: releer el archivo una vez
-        val fresh = hubToken() ?: return false
+        val current = TokenProvider.getTokenBlocking()
+        if (current != null && constantTimeEquals(current, provided)) return true
+        TokenProvider.invalidate()   // posible rotación / hub reiniciado: releer una vez
+        val fresh = TokenProvider.getTokenBlocking() ?: return false
         return constantTimeEquals(fresh, provided)
     }
 

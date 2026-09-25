@@ -104,25 +104,31 @@ export function atomicWriteFileSync(filePath, data) {
 // en este fichero.
 export const loadProjectsStore = () => {
   try {
-    const raw = atomicReadFileSync(PROJECTS_STORE_FILE, { projects: [], sessionTitles: {} });
+    const raw = atomicReadFileSync(PROJECTS_STORE_FILE, { projects: [], sessionTitles: {}, sessionPins: {} });
     let store;
-    if (Array.isArray(raw)) store = { projects: raw, sessionTitles: {} }; // legado: sólo [...]
+    if (Array.isArray(raw)) store = { projects: raw, sessionTitles: {}, sessionPins: {} }; // legado: sólo [...]
     else if (raw && Array.isArray(raw.projects)) store = raw;
-    else store = { projects: [], sessionTitles: {} };
+    else store = { projects: [], sessionTitles: {}, sessionPins: {} };
     if (!store.sessionTitles || typeof store.sessionTitles !== "object") {
       store.sessionTitles = {};
     }
-    // Seed sessionTitles from projects
+    if (!store.sessionPins || typeof store.sessionPins !== "object") {
+      store.sessionPins = {};
+    }
+    // Seed sessionTitles & sessionPins from projects
     for (const p of (store.projects || [])) {
       for (const s of (p.sessions || [])) {
         if (s.sessionId && s.title && s.title !== s.sessionId && !store.sessionTitles[s.sessionId]) {
           store.sessionTitles[s.sessionId] = s.title;
+        }
+        if (s.sessionId && s.pinned !== undefined && store.sessionPins[s.sessionId] === undefined) {
+          store.sessionPins[s.sessionId] = Boolean(s.pinned);
         }
       }
     }
     return store;
   } catch (e) {
     log.error("[projects] load err", { err: e.message });
-    return { projects: [], sessionTitles: {} };
+    return { projects: [], sessionTitles: {}, sessionPins: {} };
   }
 };

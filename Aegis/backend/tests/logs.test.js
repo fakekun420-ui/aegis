@@ -148,14 +148,15 @@ test("1. sink en AEGIS_LOG_DIR + rotación -> aegis.log.1 y endpoint en orden cr
   }
 
   // Params: ?lines= (nuevo) y ?limit= legacy (ApiService.getSystemLogs envía limit=100)
-  const total = body.data.length;
+  const full = await api("/api/system/logs");
+  const total = full.body.data.length;
   const one = await api("/api/system/logs?lines=1");
   assert.equal(one.body.data.length, 1, "?lines=1 debe devolver exactamente 1 línea");
-  assert.equal(one.body.data[0], body.data[total - 1], "?lines=1 = la más reciente");
+  assert.equal(one.body.data[0], full.body.data[total - 1], "?lines=1 = la más reciente");
 
   const legacy = await api("/api/system/logs?limit=1");
   assert.equal(legacy.body.data.length, 1, "el param legacy ?limit=1 debe seguir funcionando");
-  assert.equal(legacy.body.data[0], body.data[total - 1]);
+  assert.equal(legacy.body.data[0], full.body.data[total - 1]);
 
   const clamp = await api("/api/system/logs?lines=-5");
   assert.equal(clamp.body.data.length, 1, "lines negativo se clampcea a 1 (min 1 / max 5000)");

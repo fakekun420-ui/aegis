@@ -109,6 +109,8 @@ Para prevenir condiciones de carrera (*race conditions*), actualizaciones perdid
 ### 3.1 Mutex Asíncrono en Memoria (`FileMutex`)
 Todas las operaciones de lectura-modificación-escritura sobre `projects.json` y `providers.json` se serializan mediante promesas encadenadas por ruta de archivo (`fileMutex.runExclusive(filePath, async () => { ... })`).
 
+`projects.json` es un archivo de estado en tiempo de ejecución (ignorado en git). En instalaciones limpias, se inicializa a partir de la plantilla `projects.json.example`.
+
 ### 3.2 Escritura Atómica en Disco (`atomicWriteFileSync`)
 1. Los datos se escriben primero en un archivo temporal único en el mismo directorio: `.<filename>.<timestamp>.<random>.tmp`.
 2. Se ejecuta `fs.fsyncSync(fd)` para forzar el vaciado del buffer de Linux a almacenamiento no volátil.
@@ -186,7 +188,14 @@ Para soportar tanto clientes que consumen `Envelope<Message>` como clientes Retr
 
 ---
 
-## 5. Endpoints Principales Robustecidos
+## 4.4 Distinción Canónica: Proyectos Lógicos (`/api/projects`) vs Workspace Físico (`/api/workspace/projects`)
+
+- **Proyectos Lógicos (`/api/projects` / `ProjectsScreen.kt` - CANÓNICA):**
+  Representan los proyectos de desarrollo en el nivel de aplicación y orquestación. Se almacenan en `projects.json`, gestionan asociaciones de sesiones de chat, prompts de sistema, configuración de modelos/proveedores y vinculación de skills.
+- **Workspace Físico (`/api/workspace/projects` / `WorkspaceScreen.kt` - SECUNDARIA):**
+  Herramienta técnica de inspección del sistema de archivos sobre `/sdcard/projects/`. Escanea directorios físicos, detecta commits Git (`lastCommit`), verifica o inicializa la presencia del directorio de metadatos `.hub` y dispara la indexación técnica de código.
+
+---
 
 | Endpoint | Método | Descripción | Headers Clave | Payload Retornado |
 |---|---|---|---|---|

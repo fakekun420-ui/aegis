@@ -143,6 +143,8 @@ test("2. traversal de sessionId -> 400 SESSION_INVALID (en todas las rutas de se
     ["/api/opencode/sessions/..%2F..%2Fetc%2Fpasswd", "DELETE", undefined],
     ["/api/sessions/..%2F..%2Fetc%2Fpasswd/message", "POST", {}],
     ["/opencode/session/..%2F..%2Fetc%2Fpasswd/message", "POST", {}],
+    ["/api/opencode/sessions/..%2F..%2Fetc%2Fpasswd/pin", "POST", {}],
+    ["/api/opencode/sessions/..%2F..%2Fetc%2Fpasswd/unpin", "POST", {}],
   ];
   for (const [ruta, method, body] of casos) {
     const { status, body: b } = await api(ruta, { method, ...(body !== undefined ? { body } : {}) });
@@ -199,6 +201,22 @@ test("5. regresión: los ids VÁLIDOS no se rechazan (la validación no rompe lo
   const inst = await api("/api/skills/install", { method: "POST", body: { skillId: "id-bien-formado-fuera-catalogo" } });
   assert.equal(inst.status, 400);
   assert.equal(inst.body.error.code, "ALLOWLIST", "el allowlist F3 no puede perderse tras la validación F4");
+
+  // T06: Pin / unpin sesión válida
+  const pinRes = await api("/api/opencode/sessions/f4-sesion-valida/pin", { method: "POST" });
+  assert.equal(pinRes.status, 200);
+  assert.equal(pinRes.body.ok, true);
+  assert.deepEqual(pinRes.body.data, { id: "f4-sesion-valida", pinned: true });
+
+  const unpinRes = await api("/api/opencode/sessions/f4-sesion-valida/unpin", { method: "POST" });
+  assert.equal(unpinRes.status, 200);
+  assert.equal(unpinRes.body.ok, true);
+  assert.deepEqual(unpinRes.body.data, { id: "f4-sesion-valida", pinned: false });
+
+  // T11: Project IDs with dots are rejected
+  const dotProject = await api("/api/projects/project.with.dots/path");
+  assert.equal(dotProject.status, 400);
+  assert.equal(dotProject.body.error.code, "PROJECT_INVALID");
 });
 
 test("6. GET /api/projects/:id/summary -> 200 con shape para id válido; 404 honesto sin fichero; 400 para traversal (bug del regex SIN captura, corregido en backlog)", async () => {

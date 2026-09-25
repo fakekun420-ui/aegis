@@ -187,7 +187,7 @@ class ChatViewModel : ViewModel() {
                     _messages.value = nonEmpties
                     updateTitleFromFirstMessage(nonEmpties)
                 } else if (!resp.ok) {
-                    _error.value = resp.error ?: "Error al obtener mensajes"
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error al obtener mensajes"
                 }
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: e.message ?: "Error de conexión con el servidor"
@@ -515,6 +515,8 @@ class ChatViewModel : ViewModel() {
             }
         }
     }
+
+    suspend fun createVoiceSession(provider: String = "antigravity"): String? = createNewSession(provider)
 
     private suspend fun createNewSession(provider: String = "antigravity"): String? = withContext(Dispatchers.IO) {
         try {

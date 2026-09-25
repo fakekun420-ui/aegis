@@ -74,22 +74,40 @@ fun ProjectDetailScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.semantics { contentDescription = project.name }
-                    ) {
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    Column(modifier = Modifier.semantics { contentDescription = project.name }) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                project.name,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontFamily = FontFamily.Serif,
+                                    fontWeight = FontWeight.Normal
+                                ),
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            ProviderBadge(project.resolvedProvider)
+                        }
                         Text(
-                            project.name,
+                            text = project.resolvedFolder,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontFamily = FontFamily.Serif,
-                                fontWeight = FontWeight.Normal
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.primary
                             ),
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = Modifier
+                                .clickable {
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                    val clip = android.content.ClipData.newPlainText("Project Folder", project.resolvedFolder)
+                                    clipboard?.setPrimaryClip(clip)
+                                    android.widget.Toast.makeText(context, "Ruta copiada: ${project.resolvedFolder}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                         )
-                        ProviderBadge(project.resolvedProvider)
                     }
                 },
                 navigationIcon = {

@@ -25,6 +25,12 @@ interface ApiService {
     @DELETE("api/opencode/sessions/{id}")
     suspend fun deleteSession(@Path("id") id: String): Envelope<Map<String, Any>>
 
+    @POST("api/opencode/sessions/{id}/pin")
+    suspend fun pinSession(@Path("id") id: String): Envelope<PinResponse>
+
+    @POST("api/opencode/sessions/{id}/unpin")
+    suspend fun unpinSession(@Path("id") id: String): Envelope<PinResponse>
+
     @POST("api/projects/{id}/sessions")
     suspend fun linkSession(@Path("id") projectId: String, @Body body: LinkSessionRequest): Envelope<SessionRef>
 
