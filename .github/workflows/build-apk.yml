@@ -1,23 +1,24 @@
-# Build Aegis APK — pipeline F4 (backend blindado + APK debug/release + SAST)
+# Build Aegis APK — pipeline canónica (raíz del repo)
 #
-# ⚠️ ESPEJO: GitHub sólo ejecuta .github/workflows/ de la RAÍZ del repo.
-# El CANÓNICO es /.github/workflows/build-apk.yml (paths con prefijo Aegis/).
-# Si editas aquí, replica en la raíz — y viceversa.
+# IMPORTANTE: GitHub SÓLO lee .github/workflows/ de la RAÍZ del repo.
+# Este fichero es el CANÓNICO. El espejo Aegis/.github/workflows/build-apk.yml
+# sólo se activa si Aegis/ se publica como repo raíz — mantener sincronizados.
 #
-# Cadena (los jobs encadenados con `needs` se ejecutan en este orden):
-#   backend-checks ──► lint ──┬──► build-debug ──► build-release (condicional)
-#                             ├──► semgrep   (continue-on-error: ver nota)
-#                             └──► gitleaks  (continue-on-error: ver nota)
+# Cadena (jobs encadenados con `needs`):
+#   backend-checks ──► lint ──┬──► build-debug ──► build-release (siempre;
+#                             │                    firma real si hay keystore)
+#                             ├──► semgrep   (continue-on-error: primer ciclo)
+#                             └──► gitleaks  (continue-on-error: primer ciclo)
 #   build-debug ──► instrumented (SOLO workflow_dispatch + input `instrumented`)
 #
-# Notas F4:
-#  * Gradle queda FIJADO a 8.9 (AGP 8.7.3) — reproducibilidad, sin `gradle latest`.
-#  * semgrep/gitleaks van con `continue-on-error: true` mientras no haya un
-#    primer ciclo limpio: no bloquean el build, pero dejan el resultado visible
-#    en la pestaña de checks. Se retira la bandera cuando las dos corridras
-#    pasen sin hallazgos (acción F4 pendiente de primer ciclo).
-#  * `instrumented` es manual-only: un emulador cuesta varios minutos y no debe
-#    dispararse en cada push.
+# Notas F4/F5:
+#  * Gradle FIJADO a 8.9 (AGP 8.7.3). No hay gradle-wrapper en el repo
+#    (backlog), el pin se hace con gradle/actions/setup-gradle.
+#  * Node 24 = misma major que el dispositivo (v24.21.0); tests con
+#    --test-concurrency=1 (la suite es sensible a carga/E/S, ver backlog).
+#  * semgrep/gitleaks con continue-on-error hasta el primer ciclo limpio.
+#  * build-release: sin secreto KEYSTORE_BASE64, build.gradle.kts cae al
+#    signingConfig de debug (APK instalable, no debuggable) — el job NO falla.
 
 name: Build Aegis APK
 
@@ -37,62 +38,63 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1) Backend: sintaxis + contratos (idéntico a la F3 — 54 tests en verde)
+  # 1) Backend: sintaxis + contratos (47 tests en verde)
   # ---------------------------------------------------------------------------
   backend-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node 20
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: node --check (sintaxis de todos los .js)
-        # xargs -n1: fallo si ALGÚN .js no parsea (node --check sale != 0)
-        run: find backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check
-      - name: Contratos (node --test)
-        # glob sin comillas: lo expande el shell (portable Node 20+ y local)
+        # xargs -n1: falla si ALGÚN .js no parsea (node --check sale != 0)
+        run: find Aegis/backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check
+      - name: Contratos (node --test secuencial)
+        # Secuencial: la suite spawnea hubs reales y es sensible a contención
+        # de E/S en paralelo (flakiness observado, ver backlog F4)
         run: node --test --test-concurrency=1 tests/*.test.js
-        working-directory: backend
+        working-directory: Aegis/backend
 
   # ---------------------------------------------------------------------------
-  # 2) Lint estático (F4): sintaxis .sh, sin console.* en server.js, YAML válido
+  # 2) Lint estático: sintaxis .sh, sin console.* en server.js, YAML válido
   # ---------------------------------------------------------------------------
   lint:
     needs: backend-checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node 20
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: node --check (sintaxis de todos los .js)
-        run: find backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check
+        run: find Aegis/backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check
       - name: bash -n (sintaxis de los .sh de backend/ y app/)
-        # bash -n (no sh -n): los scripts de este árbol usan bashisms declarados
-        # en su shebang. `agents/**` queda FUERA de alcance (árbol aparte, bash-only
-        # y no gestionado por esta fase).
-        run: find backend app -name "*.sh" -print0 | xargs -0 -n1 bash -n
+        # agents/** fuera de alcance (árbol vendor)
+        run: find Aegis/backend Aegis/app -name "*.sh" -print0 | xargs -0 -n1 bash -n
       - name: "server.js sin console.* (A-7/F4: sólo el logger del hub)"
         run: |
-          if grep -nE 'console\.' backend/server.js; then
+          if grep -nE 'console\.' Aegis/backend/server.js; then
             echo "::error::server.js no puede usar console.* — usa createLogger (src/core/logger.js)"
             exit 1
           fi
           echo "OK: server.js sin console.*"
-      - name: YAML válido de los workflows
+      - name: YAML válido de los workflows (raíz + espejo Aegis)
         run: |
           python3 - <<'PY'
           import glob, sys
           import yaml
-          for f in sorted(glob.glob('.github/workflows/*.yml')):
+          files = sorted(glob.glob('.github/workflows/*.yml') + glob.glob('Aegis/.github/workflows/*.yml'))
+          assert files, 'no workflow files found'
+          for f in files:
               yaml.safe_load(open(f, encoding='utf-8'))
               print('OK', f)
           PY
 
   # ---------------------------------------------------------------------------
-  # 3) APK DEBUG (job `build` original, renombrado a `build-debug`)
+  # 3) APK DEBUG
   # ---------------------------------------------------------------------------
   build-debug:
     needs: [backend-checks, lint]
@@ -105,34 +107,35 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       - name: Setup Android SDK
+        # Con packages explícitos: sin ellos sdkmanager falla aceptando
+        # licencias de preview en este runner (regresión observada en run1)
         uses: android-actions/setup-android@v3
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
         with:
-          # A-6: Gradle fijado (AGP 8.7.3 -> Gradle 8.9). No hay gradle-wrapper
-          # en el repo (backlog), así que el pin se hace aquí para builds
-          # reproducibles en vez de gradle latest.
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
           gradle-version: '8.9'
       - name: Build Debug APK
         run: gradle assembleDebug
-        working-directory: app
-      - name: Upload APK
+        working-directory: Aegis/app
+      - name: Upload APK debug
         uses: actions/upload-artifact@v4
         with:
           name: aegis-debug
-          path: app/app/build/outputs/apk/debug/*.apk
+          path: Aegis/app/app/build/outputs/apk/debug/*.apk
           retention-days: 14
 
   # ---------------------------------------------------------------------------
-  # 4) APK RELEASE firmado — CONDICIONAL: sin secreto, los pasos se omiten
-  #    (el job no falla y no intenta firmar con un keystore inexistente).
+  # 4) APK RELEASE — siempre construye; firma real si hay keystore en secretos
+  #    (sin secreto: build.gradle.kts usa signingConfig de debug como fallback)
   # ---------------------------------------------------------------------------
   build-release:
     needs: build-debug
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Detectar keystore (guard)
+      - name: Detectar keystore (guard sólo del decode)
         id: ks
         env:
           # El secreto se pasa por env y NUNCA se imprime en el log
@@ -140,46 +143,47 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
-            echo "KEYSTORE_BASE64 presente: se firmará assembleRelease"
+            echo "KEYSTORE_BASE64 presente: se firmará con el keystore de release"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Sin secreto KEYSTORE_BASE64 — build-release omitido (usa el APK debug)"
+            echo "::notice::Sin secreto KEYSTORE_BASE64 — release firmado con la clave de debug (ver ADR-001 para rotación)"
           fi
       - name: Decodificar keystore
         if: steps.ks.outputs.present == 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        # Ruta esperada por app/app/build.gradle.kts: file("companion-release.keystore")
-        run: printf '%s' "$KEYSTORE_BASE64" | base64 -d > app/app/companion-release.keystore
+        # Ruta esperada por Aegis/app/app/build.gradle.kts: file("companion-release.keystore")
+        run: printf '%s' "$KEYSTORE_BASE64" | base64 -d > Aegis/app/app/companion-release.keystore
       - name: Set up JDK 17
-        if: steps.ks.outputs.present == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
       - name: Setup Android SDK
-        if: steps.ks.outputs.present == 'true'
+        # Con packages explícitos: sin ellos sdkmanager falla aceptando
+        # licencias de preview en este runner (regresión observada en run1)
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Setup Gradle
-        if: steps.ks.outputs.present == 'true'
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build Release APK (firmado)
-        if: steps.ks.outputs.present == 'true'
+      - name: Build Release APK
         env:
           # Nombres EXACTOS que lee build.gradle.kts (signingConfigs.release)
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: gradle assembleRelease
-        working-directory: app
+        working-directory: Aegis/app
       - name: Upload APK release
-        if: steps.ks.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: aegis-release
-          path: app/app/build/outputs/apk/release/*.apk
+          path: Aegis/app/app/build/outputs/apk/release/*.apk
           retention-days: 30
 
   # ---------------------------------------------------------------------------
@@ -214,8 +218,6 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 6) Smoke instrumentado — SOLO manual (workflow_dispatch + input boolean)
-  #    Fuentes androidTest (SetupWizardNavigationTest.kt) declaradas manual-only:
-  #    este job las deja listas para ejecutar a demanda sin coste por push.
   # ---------------------------------------------------------------------------
   instrumented:
     name: instrumented (smoke manual)
@@ -234,7 +236,7 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
       - name: Habilitar KVM (aceleración para el emulador)
@@ -250,7 +252,8 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: |
+            cd Aegis/app
             gradle assembleDebug
-            adb install -r app/app/build/outputs/apk/debug/*.apk
+            adb install -r app/build/outputs/apk/debug/*.apk
             adb shell monkey -p com.aegis.hub --throttle 300 -v 500
             adb uninstall com.aegis.hub || true
