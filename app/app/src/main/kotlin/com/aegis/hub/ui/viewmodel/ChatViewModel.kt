@@ -1,6 +1,7 @@
 package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import com.aegis.hub.ui.TurnNotifier
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.ApiClient
 import com.aegis.hub.data.AttachedFile
@@ -75,6 +76,12 @@ class ChatViewModel : ViewModel() {
     private var viewRefreshJob: Job? = null
     private var viewRefreshSessionId: String? = null
 
+    // Id del último mensaje del asistente cuyo turno ya se CERRÓ (info.time.streamed).
+    // El chat lo usa para dibujar el divisor de "respuesta final", de modo que se sabe
+    // cuándo terminó de verdad y no solo cuando llegó el último trozo de texto.
+    private val _finishedTurnId = MutableStateFlow<String?>(null)
+    val finishedTurnId: StateFlow<String?> = _finishedTurnId
+
     // FASE A-5 (anti doble envío): clave del envío actualmente en vuelo
     // ("proveedor|sesión|texto|nº archivos"). Si llega un segundo click o una
     // reentrada con el MISMO contenido antes de que termine el envío actual,
@@ -113,9 +120,17 @@ class ChatViewModel : ViewModel() {
 
     fun selectProvider(provider: String) {
         val p = provider.lowercase().trim()
-        // F6: en una sesión ya vinculada el proveedor de nacimiento es inamovible
-        if (_sessionProviderBound.value && p != _selectedProvider.value) return
+        // F6: en una sesión ya vinculada el proveedor de nacimiento es inamovible.
+        // PERO un chat recién creado está vacío, y atar el proveedor desde el primer
+        // segundo hacía que "nuevo chat" saliera siempre como antigravity y que tocar
+        // OpenCode no hiciera NADA, sin avisar. Mientras no haya mensajes se puede
+        // cambiar; a partir del primer mensaje queda fijo.
+        if (_sessionProviderBound.value && p != _selectedProvider.value && _messages.value.isNotEmpty()) {
+            _error.value = "El proveedor ya no se puede cambiar: el chat tiene mensajes. Crea un chat nuevo para usar $p."
+            return
+        }
         _selectedProvider.value = p
+        _sessionProviderBound.value = false   // aún vacío: sigue siendo elegible
         loadModels(p)
     }
 
@@ -191,7 +206,10 @@ class ChatViewModel : ViewModel() {
                     val r = api.getMessages(sessionId)
                     if (r.ok && r.data != null) {
                         val fresh = r.data.filterNot { it.isEmpty }
-                        if (fresh != _messages.value) _messages.value = fresh
+                        if (fresh != _messages.value) {
+                            _messages.value = fresh
+                            announceFinishedTurnIfAny(fresh)
+                        }
                     }
                 } catch (_: Exception) {
                     // Un fallo puntual de red no debe tumbar el refresco: el siguiente
@@ -208,6 +226,35 @@ class ChatViewModel : ViewModel() {
      * motivo de que el chat no se sincronizara en tiempo real: el poll moría nada
      * más abrirse y nunca completaba un ciclo.
      */
+    /**
+     * Detecta que la IA ha CERRADO su turno y lo avisa.
+     *
+     * "Cerrado" = el último mensaje del asistente trae `time.streamed`, que es la
+     * marca que pone OpenCode cuando el turno termina de verdad. Mientras el modelo
+     * sigue trabajando (tool calls) esa clave NO está, así que no se confunde un
+     * texto parcial con una respuesta terminada.
+     *
+     * Si el turno terminó justo ahora:
+     *  - se marca para que el chat dibuje el divisor de "respuesta final"
+     *  - y se lanza notificación, pero solo si la app está en segundo plano
+     *    (TurnNotifier lo comprueba con MainActivity.isForeground).
+     */
+    private fun announceFinishedTurnIfAny(fresh: List<Message>) {
+        val lastAssistant = fresh.lastOrNull { it.role == "assistant" && it.text.isNotBlank() } ?: return
+        val id = lastAssistant.info?.id ?: return
+        val closed = lastAssistant.info?.time?.containsKey("streamed") == true
+        if (!closed) return
+        if (id == _finishedTurnId.value) return   // ya anunciado, no repetir cada 2 s
+        _finishedTurnId.value = id
+
+        val title = _sessionTitle.value?.takeIf { it.isNotBlank() } ?: "Aegis"
+        TurnNotifier.notifyTurnFinished(
+            title = "$title · respuesta final",
+            preview = lastAssistant.text.take(160),
+            sessionId = _currentSessionId.value
+        )
+    }
+
     fun stopViewRefresh(ownerSessionId: String? = null) {
         if (ownerSessionId != null && viewRefreshSessionId != ownerSessionId) return
         viewRefreshJob?.cancel()

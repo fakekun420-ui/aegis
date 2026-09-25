@@ -53,6 +53,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // El ViewModel no tiene Context; se lo damos una vez para el aviso de
+        // "respuesta final" en la barra de notificaciones.
+        com.aegis.hub.ui.TurnNotifier.init(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
@@ -284,6 +287,23 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         const val PREF_WAKE = com.aegis.hub.data.VoicePreferences.PREFS_NAME
         const val KEY_WAKE_PHRASES = com.aegis.hub.data.VoicePreferences.KEY_WAKE_PHRASES
         val DEFAULT_WAKE = com.aegis.hub.data.VoicePreferences.DEFAULT_WAKE_PHRASES
+
+        // true solo mientras la Activity está visible. Lo consulta el ViewModel para
+        // decidir entre avisar DENTRO del chat (primer plano) o lanzar notificación
+        // a la barra (segundo plano). @Volatile porque lo escribe el hilo del UI y lo
+        // lee el hilo de un coroutine del ViewModel.
+        @Volatile
+        var isForeground: Boolean = false
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isForeground = false
     }
     fun getWakePhrases(): Array<String> = com.aegis.hub.data.VoicePreferences.getWakePhrases(this)
     fun saveWakePhrases(arr: Array<String>) = com.aegis.hub.data.VoicePreferences.saveWakePhrases(this, arr)

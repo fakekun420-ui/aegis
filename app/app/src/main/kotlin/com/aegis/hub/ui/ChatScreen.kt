@@ -77,6 +77,7 @@ fun ChatScreen(
     val selectedModel by vm.selectedModel.collectAsState()
     val selectedProvider by vm.selectedProvider.collectAsState()
     val sessionProviderBound by vm.sessionProviderBound.collectAsState()
+    val finishedTurnId by vm.finishedTurnId.collectAsState()
     val modelsLoading by vm.modelsLoading.collectAsState()
     val streamingText by vm.streamingText.collectAsState()
     val streamingTools by vm.streamingTools.collectAsState()
@@ -465,6 +466,17 @@ fun ChatScreen(
                             } else if (loading) {
                                 item(key = "typing_dots") {
                                     TerminalActivityCursor()
+                                }
+                            }
+
+                            // Divisor de "respuesta final": aparece cuando el turno del
+                            // asistente se ha cerrado de verdad (info.time.streamed), no
+                            // cuando simplemente llegó el último trozo de texto. En primer
+                            // plano este es el aviso; en segundo plano se lanza además la
+                            // notificación de la barra (TurnNotifier).
+                            if (finishedTurnId != null) {
+                                item(key = "turn_finished_${finishedTurnId}") {
+                                    TurnFinishedDivider()
                                 }
                             }
                         }
@@ -1280,4 +1292,40 @@ private fun resolveMainActivity(context: android.content.Context): com.aegis.hub
         ctx = ctx.baseContext
     }
     return null
+}
+
+/**
+ * Divisor que confirma que la IA terminó su turno.
+ *
+ * Se dibuja cuando el último mensaje del asistente trae `time.streamed`, que es la
+ * marca de cierre real de OpenCode. Distingue "llegó el último trozo de texto" de "ya
+ * no está trabajando", que era lo que el usuario no podía distinguir.
+ */
+@Composable
+private fun TurnFinishedDivider() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+        Text(
+            "  ✓ respuesta final  ",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Box(
+            Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+    }
 }
