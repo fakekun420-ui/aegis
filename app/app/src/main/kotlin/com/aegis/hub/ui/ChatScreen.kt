@@ -562,9 +562,21 @@ fun ChatScreen(
                     )
                 }
                 if (sessionProviderBound) {
+                    // El aviso solo tiene sentido si el proveedor está realmente
+                    // bloqueado. Con la regla nueva (cambiable hasta que el asistente
+                    // responda de verdad) un chat recién creado o uno cuyo motor falló
+                    // SÍ admite cambio, así que la advertencia de "crea un chat nuevo"
+                    // sería falsa.
+                    val hayRespuestaReal = messages.any {
+                        it.role == "assistant" && it.text.isNotBlank() &&
+                            !it.text.trimStart().startsWith("⚠️")
+                    }
                     Text(
-                        "Sesión ya vinculada: el proveedor de nacimiento se mantiene. " +
-                            "Para usar otro motor, crea un chat nuevo.",
+                        if (hayRespuestaReal)
+                            "El asistente ya respondió en este chat, así que el motor queda fijo. " +
+                                "Para usar otro, crea un chat nuevo."
+                        else
+                            "Todavía no hay respuestas de este motor: puedes cambiar de proveedor.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

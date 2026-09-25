@@ -121,16 +121,24 @@ class ChatViewModel : ViewModel() {
     fun selectProvider(provider: String) {
         val p = provider.lowercase().trim()
         // F6: en una sesión ya vinculada el proveedor de nacimiento es inamovible.
-        // PERO un chat recién creado está vacío, y atar el proveedor desde el primer
-        // segundo hacía que "nuevo chat" saliera siempre como antigravity y que tocar
-        // OpenCode no hiciera NADA, sin avisar. Mientras no haya mensajes se puede
-        // cambiar; a partir del primer mensaje queda fijo.
-        if (_sessionProviderBound.value && p != _selectedProvider.value && _messages.value.isNotEmpty()) {
-            _error.value = "El proveedor ya no se puede cambiar: el chat tiene mensajes. Crea un chat nuevo para usar $p."
+        // PERO atar el proveedor desde el primer segundo hacía dos cosas malas: "nuevo
+        // chat" salía siempre como antigravity, y si ese motor falla (Antigravity sin
+        // tokens) el chat quedaba inservible sin forma de cambiar de motor.
+        //
+        // Regla: se puede cambiar mientras el motor de nacimiento NO haya producido
+        // ninguna respuesta real. Se cuentan los mensajes del asistente cuyo texto no
+        // sea un aviso de error (⚠️): un chat de antigravity fallido solo tiene el
+        // mensaje del usuario y el aviso, y por tanto sigue siendo cambiable. En
+        // cuanto hay una respuesta de verdad, el historial pertenece a ese motor.
+        val tieneRespuestaReal = _messages.value.any {
+            it.role == "assistant" && it.text.isNotBlank() && !it.text.trimStart().startsWith("⚠️")
+        }
+        if (_sessionProviderBound.value && p != _selectedProvider.value && tieneRespuestaReal) {
+            _error.value = "El proveedor ya no se puede cambiar: el asistente ya respondió en este chat. Crea un chat nuevo para usar $p."
             return
         }
         _selectedProvider.value = p
-        _sessionProviderBound.value = false   // aún vacío: sigue siendo elegible
+        _sessionProviderBound.value = false   // aún sin respuesta: sigue siendo elegible
         loadModels(p)
     }
 
