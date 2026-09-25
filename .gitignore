@@ -30,5 +30,5 @@ backend/opencode.cjs
 backend/patch_main.py
 backend/patch_main_2.py
 
-# Submódulo o repositorio embebido
-agents/
+# Submódulo o repositorio embebido en la raíz
+/agents/
