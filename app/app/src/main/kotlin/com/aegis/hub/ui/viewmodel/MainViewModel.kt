@@ -33,6 +33,7 @@ class MainViewModel : ViewModel() {
     }
 
     fun clearError() { _error.value = null }
+    fun setError(msg: String?) { _error.value = msg }
 
     private val _deletedSessionIds = mutableSetOf<String>()
 
@@ -123,6 +124,39 @@ class MainViewModel : ViewModel() {
                 val resp = api.createProject(CreateProjectRequest(name, description.ifBlank { null }, provider = provider))
                 if (resp.ok) refreshProjects() else _error.value = resp.error?.message ?: resp.error?.code
             } catch (e: Exception) { _error.value = e.message }
+        }
+    }
+
+    /**
+     * Vincula una carpeta YA existente como proyecto.
+     *
+     * El nombre del proyecto es el de la carpeta, que es lo que el usuario elige en el
+     * gestor de archivos. Se delega la validación de la ruta al Hub, que exige que
+     * resuelva dentro de PROJECTS_ROOT y que la carpeta no esté ya reclamada.
+     */
+    fun linkFolderAsProject(folderPath: String, provider: String = "opencode") {
+        val folder = folderPath.trim().trimEnd('/')
+        if (folder.isBlank()) { _error.value = "Ruta de carpeta vacía"; return }
+        val name = folder.substringAfterLast('/').ifBlank { "Proyecto" }
+        viewModelScope.launch {
+            try {
+                val resp = api.createProject(
+                    CreateProjectRequest(
+                        name = name,
+                        description = "Carpeta vinculada: $name",
+                        provider = provider,
+                        folder = folder
+                    )
+                )
+                if (resp.ok) {
+                    refreshProjects()
+                    _error.value = null
+                } else {
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "No se pudo vincular la carpeta"
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error vincular carpeta"
+            }
         }
     }
 
@@ -289,10 +323,15 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    suspend fun createSessionForProject(projectId: String, title: String): String? {
+    suspend fun createSessionForProject(projectId: String, title: String, providerOverride: String? = null): String? {
         return try {
             val proj = _projects.value.find { it.id == projectId }
-            val provider = proj?.provider ?: "antigravity"
+            // providerOverride gana: desde la lista de chats no hay proyecto asociado
+            // (projectId = ""), así que sin esto TODOS los chats nuevos nacían como
+            // "antigravity" sin importar lo que el usuario hubiera elegido.
+            val provider = providerOverride?.takeIf { it.isNotBlank() }
+                ?: proj?.provider
+                ?: "antigravity"
             val effectiveProjectId = projectId.trim().ifBlank { null }
             val sid = createSessionViaHub(title, effectiveProjectId, provider)
             if (sid != null) {
@@ -327,6 +366,12 @@ class MainViewModel : ViewModel() {
                 }
                 else -> null
             }
-        } catch (_: Exception) { null }
+        } catch (e: Exception) {
+            // Antes devolvía null en silencio: el botón de nuevo chat no navegaba y el
+            // usuario no veía POR QUÉ. Ahora el motivo queda en _error, que ChatsScreen
+            // ya pinta.
+            _error.value = "No se pudo crear la sesión: ${e.message ?: e::class.simpleName}"
+            null
+        }
     }
 }

@@ -1,5 +1,8 @@
 package com.aegis.hub.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -77,6 +80,7 @@ fun ProjectsScreen(
     onBack: () -> Unit,
     onOpenProject: (String) -> Unit,
     onCreateProject: (String, String, String) -> Unit = { _, _, _ -> },
+    onLinkFolder: (String) -> Unit = { },
     onRenameProject: (String, String) -> Unit,
     onPatchProject: (String, String?, String?) -> Unit = { _, _, _ -> },
     onArchiveProject: (String) -> Unit = {},
@@ -86,6 +90,26 @@ fun ProjectsScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var showCreate by remember { mutableStateOf(false) }
+    // Selector "¿crear o vincular?" que aparece al pulsar + Nuevo proyecto.
+    var showModeChooser by remember { mutableStateOf(false) }
+    var pendingLinkError by remember { mutableStateOf<String?>(null) }
+
+    // Gestor de archivos del sistema (Storage Access Framework). Devuelve un content://,
+    // no una ruta, así que hay que traducirlo: para el almacenamiento externo el
+    // documentId tiene forma "primary:MiCarpeta" -> /sdcard/MiCarpeta, que es donde el
+    // Hub espera las carpetas (PROJECTS_ROOT = /sdcard/projects).
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val path = treeUriToFsPath(uri)
+        if (path == null) {
+            pendingLinkError = "No se pudo traducir la carpeta seleccionada. Elige una carpeta del almacenamiento interno."
+        } else {
+            pendingLinkError = null
+            onLinkFolder(path)
+        }
+    }
     var renameTarget by remember { mutableStateOf<Project?>(null) }
     var editTarget by remember { mutableStateOf<Project?>(null) }
     var archiveTarget by remember { mutableStateOf<Project?>(null) }
@@ -116,7 +140,7 @@ fun ProjectsScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { showCreate = true },
+                onClick = { showModeChooser = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = "Nuevo proyecto") },
                 text = { Text("+ Nuevo proyecto", fontWeight = FontWeight.Medium) },
                 shape = RoundedCornerShape(16.dp),
@@ -299,6 +323,40 @@ fun ProjectsScreen(
         }
     }
 
+    if (showModeChooser) {
+        AlertDialog(
+            onDismissRequest = { showModeChooser = false },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("¿Qué quieres hacer?", fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Crea un proyecto nuevo con su carpeta, o vincula una carpeta que ya exista en /sdcard/projects.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    pendingLinkError?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showModeChooser = false
+                    showCreate = true          // flujo ya existente: crea proyecto + carpeta
+                }) { Text("Crear nuevo proyecto", fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showModeChooser = false
+                    pendingLinkError = null
+                    folderPicker.launch(null)    // abre el gestor de archivos del sistema
+                }) { Text("Vincular carpeta") }
+            }
+        )
+    }
+
     if (showCreate) {
         var name by remember { mutableStateOf("") }
         var desc by remember { mutableStateOf("") }
@@ -388,4 +446,23 @@ fun ProjectsScreen(
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancelar") } }
         )
     }
+}
+
+/**
+ * Traduce el content:// que devuelve el selector de carpetas del sistema a una ruta real.
+ *
+ * Solo se soporta el almacenamiento externo primario, que es donde vive /sdcard/projects:
+ * el documentId tiene la forma "primary:MiCarpeta" y se traduce a /sdcard/MiCarpeta.
+ * Para otros volúmenes (tarjetas SD) se devuelve null y la UI lo dice, en vez de
+ * inventar una ruta que el Hub iba a rechazar.
+ */
+private fun treeUriToFsPath(uri: Uri): String? {
+    if (uri.authority != "com.android.externalstorage.documents") return null
+    val treeId = uri.pathSegments.firstOrNull() ?: return null
+    val decoded = Uri.decode(treeId)
+    val volume = decoded.substringBefore(':', missingDelimiterValue = "")
+    if (volume != "primary") return null
+    val rel = decoded.substringAfter(':', missingDelimiterValue = "").trim('/')
+    if (rel.isBlank()) return null
+    return "/sdcard/$rel"
 }

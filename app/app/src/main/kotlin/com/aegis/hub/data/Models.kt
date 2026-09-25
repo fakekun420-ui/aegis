@@ -50,7 +50,12 @@ data class Project(
 data class CreateProjectRequest(
     val name: String,
     val description: String? = null,
-    val provider: String? = "antigravity"
+    val provider: String? = "antigravity",
+    // Ruta de una carpeta YA existente bajo /sdcard/projects para vincularla como
+    // proyecto en vez de crear una carpeta nueva a partir del nombre. El backend la
+    // valida: debe resolver dentro de PROJECTS_ROOT (FOLDER_OUTSIDE_ROOT) y no puede
+    // pertenecer a otro proyecto activo (DUPLICATE_FOLDER).
+    val folder: String? = null
 )
 
 data class PatchProjectRequest(

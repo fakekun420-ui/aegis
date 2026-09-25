@@ -76,6 +76,7 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                 onBack = { navController.popBackStack() },
                 onOpenProject = { id -> navController.navigate("project/$id") },
                 onCreateProject = { name, desc, provider -> vm.createProject(name, desc, provider) },
+                onLinkFolder = { path -> vm.linkFolderAsProject(path) },
                 onRenameProject = { id, name -> vm.renameProject(id, name) },
                 onPatchProject = { id, name, desc -> vm.patchProject(id, name, desc) },
                 onArchiveProject = { id -> vm.archiveProject(id) },
@@ -150,9 +151,22 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                 onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) },
                 onCreateChatPlaceholder = {
                     scope.launch {
-                        val sid = vm.createSessionForProject("", "Chat ${System.currentTimeMillis() % 10000}")
+                        // Se pasa el proveedor que el usuario tenga elegido en el
+                        // compositor; sin esto el chat nacía siempre como antigravity.
+                        val wanted = draftVm.selectedProvider.value
+                        val sid = vm.createSessionForProject(
+                            "", "Chat ${System.currentTimeMillis() % 10000}", wanted
+                        )
                         if (!sid.isNullOrBlank()) {
                             navController.navigate(NavRoutes.chat(sid))
+                        } else {
+                            // Antes no había else: si la creación fallaba no pasaba nada
+                            // y el usuario solo veía que "el chat no se genera".
+                            // createSessionForProject ya deja el motivo en vm.error, y
+                            // ChatsScreen lo pinta; aquí solo se garantiza que exista.
+                            if (vm.error.value == null) {
+                                vm.setError("No se pudo crear el chat nuevo")
+                            }
                         }
                     }
                 },
