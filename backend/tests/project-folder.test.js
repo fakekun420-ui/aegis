@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import fs from "node:fs";
+import { tmpdir } from "node:os";
 import net from "node:net";
 
 const BACKEND_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -69,7 +70,15 @@ before(async () => {
     [join(BACKEND_DIR, "server.js"), "--port", String(port), "--opencode-port", "49374"],
     {
       cwd: BACKEND_DIR,
-      env: { ...process.env, AEGIS_RATE_LIMIT: "0", NODE_ENV: "test", PROJECTS_ROOT: PROJECTS_ROOT },
+      // AEGIS_PROJECTS_STORE aísla el REGISTRO en un temporal. Sin esto el test
+      // escribía sus proyectos de prueba en el projects.json real del usuario.
+      env: {
+        ...process.env,
+        AEGIS_RATE_LIMIT: "0",
+        NODE_ENV: "test",
+        PROJECTS_ROOT: PROJECTS_ROOT,
+        AEGIS_PROJECTS_STORE: join(tmpdir(), `aegis-test-store-${process.pid}-${port}.json`),
+      },
       stdio: ["ignore", "ignore", "pipe"]
     }
   );
