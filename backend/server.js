@@ -189,9 +189,25 @@ function argVal(name, fallback){
   return i !== -1 && process.argv[i+1] ? process.argv[i+1] : fallback;
 }
 const HUB_PORT = parseInt(process.env.HUB_PORT || argVal("--port","8765"), 10);
+
+// Un SOLO servidor de OpenCode: el que ya usa el TUI del CLI.
+//
+// Había DOS. El Hub apuntaba a :4096 (el que lanzaba keepalive) y el TUI se
+// conectaba al servicio registrado en :49374. Comparten la base de datos SQLite,
+// así que los mensajes se ven en ambos, pero el estado "este turno está corriendo"
+// vive en la MEMORIA de cada proceso: el CLI no veía los turnos que Aegis lanzaba
+// y el chat se leía como si no estuviera ejecutándose.
+//
+// Si hay un servicio registrado (service.json), ese manda. Se ignora el argumento
+// --opencode-port a propósito: keepalive puede estar trayendo un 4096 obsoleto
+// desde antes de esta unificación, y respetar ese valor reintroduciría el bug.
+// OPENCODE_PORT del entorno sigue teniendo prioridad máxima (para depurar).
+const OC_SERVICE_PORT = parseInt(process.env.AEGIS_OC_SERVICE_PORT || "49374", 10);
+const OC_HAS_SERVICE = fs.existsSync("/root/.config/opencode/service.json");
+const OC_ARG_PORT = parseInt(argVal("--opencode-port", "0"), 10) || 0;
 const OPENCODE_PORT = parseInt(
   process.env.OPENCODE_PORT ||
-  argVal("--opencode-port", fs.existsSync("/root/.config/opencode/service.json") ? "49374" : "4096"),
+    (OC_HAS_SERVICE ? OC_SERVICE_PORT : (OC_ARG_PORT || 4096)),
   10
 );
 const OPENCODE_HOST = process.env.OPENCODE_HOST || "127.0.0.1";
@@ -3334,6 +3350,9 @@ sanitizeSessionProviders();
 server.listen(HUB_PORT, "127.0.0.1", async ()=>{
   log.info(`[hub] listening http://127.0.0.1:${HUB_PORT} (loopback only)`);
   log.info(`  local  : http://127.0.0.1:${HUB_PORT}`);
+  if (OC_HAS_SERVICE && OC_ARG_PORT && OC_ARG_PORT !== OPENCODE_PORT) {
+    log.warn(`  puerto  : se IGNORA --opencode-port ${OC_ARG_PORT} y se usa el servicio registrado en ${OPENCODE_PORT} (un solo servidor, el que usa el CLI del opencode)`);
+  }
   log.info(`  proxy  : /opencode/* -> http://${OPENCODE_HOST}:${OPENCODE_PORT}`);
   log.info(`  api    : /api/status  /api/device/*`);
   log.info(`  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)`);

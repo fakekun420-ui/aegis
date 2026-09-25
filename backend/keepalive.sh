@@ -4,7 +4,7 @@
 # IMPORTANTE: este script debe correr en el mismo mount NS que opencode (host mnt 5294/5522), system init 4359 no ve /usr/bin/node
 HUB_DIR="/sdcard/projects/Aegis/backend"
 HUB_PORT="8765"
-OC_PORT="4096"
+OC_PORT="49374"   # unificado con el servicio que usa el CLI (antes 4096: dos servidores distintos, el CLI no veia los turnos en curso)
 OC_HOST="127.0.0.1"
 INTERVAL=10
 LOG="$HUB_DIR/keepalive.log"
