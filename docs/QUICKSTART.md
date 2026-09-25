@@ -1,4 +1,4 @@
-# QUICKSTART — de cero a producto (v1.0.0)
+# QUICKSTART — de cero a producto (v1.1.0)
 
 Guía completa de la primera vez: **instalar la APK → wizard de 6 pasos → verificar → usar**.
 Al final, troubleshooting y enlaces al resto de documentación.
@@ -201,4 +201,4 @@ Abre la app una vez (dispara `onCreate` de `CompanionService`) o reinstala con
 | [`../backend/docs/BACKEND_ARCHITECTURE.md`](../backend/docs/BACKEND_ARCHITECTURE.md) | Arquitectura del hub, keepalive, salud |
 | [`qa/QA_CHECKLIST.md`](qa/QA_CHECKLIST.md) | Checklist de aceptación reproducible |
 | [`audits/`](audits/) | Auditorías históricas (crónicas, no se reescriben) |
-| [`../CHANGELOG.md`](../CHANGELOG.md) | Qué cambió en v1.0.0 |
+| [`../CHANGELOG.md`](../CHANGELOG.md) | Qué cambió en v1.1.0 |

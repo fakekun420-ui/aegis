@@ -9,7 +9,7 @@
 
 Aegis is a self-contained AI orchestration platform running entirely from an Android device (POCO F3, Android 15, root Magisk, Ubuntu chroot), **with root secured by token and a self-service setup wizard**: install the APK, follow the 6-step wizard, and the device provisions itself (Ubuntu + Node + OpenCode + Antigravity + skills) with SHA256-verified downloads and rollback.
 
-**Estado: `v1.0.0` (2026-09-24)** — ver [CHANGELOG.md](CHANGELOG.md) · [Quickstart](docs/QUICKSTART.md) · [QA checklist](docs/qa/QA_CHECKLIST.md)
+**Estado: `v1.1.0` (2026-09-25)** — un solo servidor de OpenCode (`:49374`); ver [CHANGELOG](CHANGELOG.md) — ver [CHANGELOG.md](CHANGELOG.md) · [Quickstart](docs/QUICKSTART.md) · [QA checklist](docs/qa/QA_CHECKLIST.md)
 
 ![Build](https://github.com/fakekun420-ui/aegis/actions/workflows/build-apk.yml/badge.svg)
 
@@ -72,7 +72,7 @@ CI (`.github/workflows/build-apk.yml`): `backend-checks` · `lint` · `build-deb
 | Doc | Contenido |
 |---|---|
 | [docs/QUICKSTART.md](docs/QUICKSTART.md) | De cero a producto: APK → wizard → verificación → uso → troubleshooting |
-| [CHANGELOG.md](CHANGELOG.md) | v1.0.0: Added / Changed / Fixed / Security |
+| [CHANGELOG.md](CHANGELOG.md) | v1.1.0: Added / Changed / Fixed |
 | [docs/adr/ADR-001-security-model.md](docs/adr/ADR-001-security-model.md) | Modelo de seguridad y rotación del keystore |
 | [docs/adr/ADR-002-bootstrap-design.md](docs/adr/ADR-002-bootstrap-design.md) | Wizard idempotente/reanudable, SHA256 y rollback |
 | [docs/qa/QA_CHECKLIST.md](docs/qa/QA_CHECKLIST.md) | Aceptación reproducible por otra persona |

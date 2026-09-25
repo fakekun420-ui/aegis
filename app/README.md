@@ -38,7 +38,7 @@ Tras instalar: abre **Aegis** → `Activar accesibilidad` → habilita el servic
 Requiere JDK 17 + Android SDK. `gradle-wrapper.jar` se genera en CI; no necesitas commit binarios.
 
 - **Local** (si tienes SDK): desde `app/` → `gradle assembleDebug` / `assembleRelease`
-  (`versionName 1.0.0`, `versionCode` = `BUILD_NUMBER`/`GITHUB_RUN_NUMBER`, fallback local `2`).
+  (`versionName 1.1.0`, `versionCode` = `BUILD_NUMBER`/`GITHUB_RUN_NUMBER`, fallback local `2`).
 - **CI (recomendado)**: GitHub Actions `Build Aegis APK` → artifacts `aegis-debug` y `aegis-release`
   (release firmado con `KEYSTORE_BASE64` — rotación del keystore en `../docs/adr/ADR-001-security-model.md`).
 
