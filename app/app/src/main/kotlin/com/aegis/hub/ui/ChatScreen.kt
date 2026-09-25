@@ -438,12 +438,13 @@ fun ChatScreen(
                             state = listState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                // El compositor (bottomBar) ya sube con imePadding, pero
-                                // la lista de mensajes vive en el Box de contenido y
-                                // quedaba POR DEBAJO del teclado, tapando el final del
-                                // último mensaje. imePadding aquí recorta el área
-                                // visible al tamaño real disponible.
-                                .imePadding()
+                                // SIN imePadding() aquí a propósito: el bottomBar del Scaffold
+                                // ya lo aplica, y el Box de contenido ya recibe ese padding.
+                                // Ponerlo también en la lista cuenta el teclado DOS veces y
+                                // colapsaba la altura de la LazyColumn a 0: el chat desaparecía
+                                // mientras el teclado estaba abierto. El inset del teclado sí
+                                // se usa como clave del auto-scroll (más abajo), que es lo
+                                // que hace falta para que la lista vuelva al final.
                                 .background(MaterialTheme.colorScheme.background),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
