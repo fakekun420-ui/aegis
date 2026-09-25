@@ -14,7 +14,7 @@
 |---|---|
 | **Android app** `com.aegis.hub` | Jetpack Compose UI (Chat, Projects, Setup Wizard, Control Center, Skill Manager, Workspace, Workflows), voice (STT/TTS/wake word), accessibility service, root shell helper. |
 | **Hub (Node.js, zero npm deps)** | HTTP API on `127.0.0.1:8765`, token-gated; multiprovider orchestration (OpenCode + Antigravity, claudecode registered but inert), session/message management, bootstrap engine, device bridge endpoints. |
-| **opencode serve** | Local AI coding engine on `127.0.0.1:4096`, proxied by the hub. |
+| **opencode serve** | Local AI coding engine on `127.0.0.1:49374`, proxied by the hub. |
 | **CompanionService** | Foreground Android service exposing a loopback HTTP bridge on `127.0.0.1:8766` (accessibility actions, shell, launch, status) for the hub to drive the device UI. |
 | **keepalive.sh** | 10-second supervisor loop for hub + opencode, resistant to LMK/OOM; boots via Magisk `service.d` or the app. |
 | **Bootstrap engine** | 6-step idempotent, resumable, rollback-capable installer (preflight → ubuntu → node → opencode → antigravity → skills) driven by the in-app Setup Wizard. |
@@ -221,7 +221,7 @@ Downloads: SHA256 **mandatory** — no 64-hex hash ⇒ no download (`EMISSINGSHA
 - CompanionService :8766 validates the same token timing-safe (`MessageDigest.isEqual`) before executing anything; CORS allowlist `{http://localhost:8765, app://aegis}` only.
 
 ### 5.6 Supervision loop
-`keepalive.sh` (10s): probes `GET /api/health` (must contain `"server":"running"`) and `curl :4096`; restarts opencode `serve` only (never the TUI, never `server.js` — 4-way cmdline filters); restarts the hub with **A-7 backoff** (single failed probe → 4s backoff → "blip descartado"; two consecutive → restart). Lock file prevents duplicates; mount-NS contract: if `NODE_BIN` isn't executable in this namespace it exits 3 with "caller must export NODE_BIN" instead of pid-guessing loops. Boot path: Magisk `service.d-99-opencode-hub.sh` (~20–30s after /sdcard mounts, `nsenter -t 1 -m`) or the app's "Iniciar Sistema" button.
+`keepalive.sh` (10s): probes `GET /api/health` (must contain `"server":"running"`) and `curl :49374`; restarts opencode `serve` only (never the TUI, never `server.js` — 4-way cmdline filters); restarts the hub with **A-7 backoff** (single failed probe → 4s backoff → "blip descartado"; two consecutive → restart). Lock file prevents duplicates; mount-NS contract: if `NODE_BIN` isn't executable in this namespace it exits 3 with "caller must export NODE_BIN" instead of pid-guessing loops. Boot path: Magisk `service.d-99-opencode-hub.sh` (~20–30s after /sdcard mounts, `nsenter -t 1 -m`) or the app's "Iniciar Sistema" button.
 
 ---
 
@@ -331,7 +331,7 @@ cd Aegis/app && gradle assembleDebug           # no gradle wrapper committed yet
 | Var | Meaning |
 |---|---|
 | `HUB_PORT` / `--port` | hub port (default 8765) |
-| `OPENCODE_PORT` / `--opencode-port`, `OPENCODE_HOST` | opencode serve (default 4096) |
+| `OPENCODE_PORT` / `--opencode-port`, `OPENCODE_HOST` | opencode serve (default 49374) |
 | `AEGIS_RATE_LIMIT` / `AEGIS_RATE_LIMIT_N` | disable ("0") / cap (default 120 per min) |
 | `AEGIS_LOG_DIR`, `AEGIS_LOG_MAX_BYTES` | log sink (default `backend/logs`, 1MB rotation) |
 | `AEGIS_BOOTSTRAP_DRY`, `_STEP_DELAY_MS`, `_FAIL`, `_TEST_STEP`, `_TEST_ARTIFACT` | bootstrap test hooks |
@@ -343,7 +343,7 @@ cd Aegis/app && gradle assembleDebug           # no gradle wrapper committed yet
 
 ### Key ports & endpoints
 - **8765** hub (loopback only; `/api/*` + `/opencode/*` token-gated except `GET /api/health`; rate-limited; 404 JSON for unknown API paths).
-- **4096** opencode serve (proxied by the hub; never exposed directly in the URL space the app uses; upstream 502 hint tells you to start `opencode serve --port 4096 --hostname 0.0.0.0`).
+- **4096** opencode serve (proxied by the hub; never exposed directly in the URL space the app uses; upstream 502 hint tells you to start `opencode serve --port 49374 --hostname 0.0.0.0`).
 - **8766** CompanionService bridge (loopback, token timing-safe, CORS allowlist; routes `/status`, `/dump`, `/a11y`, `/shell`, `/launch`).
 
 ### State files (runtime)
@@ -390,7 +390,7 @@ cd Aegis/app && gradle assembleDebug           # no gradle wrapper committed yet
 30. **`UI_AUDIT_CLAUDE_STYLE.md` "Aprobado al 100%"** vs audit UX-06/DOC-02 (three visual identities, hardcoded GitHub hexes). Which stands?
 31. **Test-count drift**: 46 (CI mirror comment) / 47 (canonical workflow, docs, QA checklist) / 54 (actual). Also: mirror `Aegis/.github/workflows/build-apk.yml` vs canonical `/sdcard/projects/.github/workflows/build-apk.yml` differ (Node 20 vs 24, `--test-concurrency=1`, setup-gradle v3 vs v4, build-release conditional vs always) and are synced **manually** — should the mirror be deleted?
 32. **Device OS version**: Android 15 (README/QUICKSTART) vs Android 16 (UI_AUDIT). Also `AEGIS_BUILD_AND_QA.md` targets ADB serial `emulator-5554` while claiming a physical POCO F3 — which device did QA actually run on?
-33. **Keystore key size**: ADR-001 procedure says RSA 2048; I-3 says RSA 4096.
+33. **Keystore key size**: ADR-001 procedure says RSA 2048; I-3 says RSA 49374.
 34. **keepalive pattern claim**: CHANGELOG says legacy `opencode-companion` patterns were "not touched" while OPS-01/quick-win #11 said they had to be fixed — resolution not recorded.
 35. **Phase numbering**: `AEGIS_MASTER_PROMPT` 0–11 (with phase 7 reversed/deleted) vs audit F0–F7 / A-1…A-7 vs CHANGELOG F0–F5 — which registry is authoritative going forward? Note `AUDITORIA_INTEGRAL` still says "APROBADO AL 100%" for an app named "OpenCode Companion".
 36. **`backend/NOTES.md` upstream opencode issue** and **`SESSION_HANDOFF.md` pending UI items** (black text in session rows, missing 3-dot menu, drawer scroll refresh, no auto-scroll, raw markdown, visible `memory_context` block): were these superseded by later fixes, or still open? The handoff also leaves 4 unresolved decisions (managed-project vs root sessions, keep/disable injection, orphaned session entry, versionCode 25+ parity).

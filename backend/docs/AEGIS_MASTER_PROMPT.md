@@ -344,7 +344,7 @@ Crea `src/core/jobScheduler.js`:
 - Sistema simple de jobs recurrentes basado en `setInterval` y timestamps
 - Jobs predefinidos:
   - `graphify-watch`: cada 6 horas, si `graphify` está instalado, re-indexa proyectos que tuvieron cambios git recientes
-  - `health-check`: cada 5 minutos, verifica que OpenCode daemon (:4096) y otros servicios estén activos
+  - `health-check`: cada 5 minutos, verifica que OpenCode daemon (:49374) y otros servicios estén activos
   - `cleanup-zombies`: cada 30 minutos, limpia procesos zombie (reutilizando lógica de `AntigravityAdapter`)
 - Persistencia de jobs en `.hub/jobs.json` del workspace
 - Métodos: `start()`, `stop()`, `registerJob(id, interval, handler)`, `listJobs()`, `getLastRun(jobId)`

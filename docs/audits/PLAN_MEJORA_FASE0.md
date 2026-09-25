@@ -1,5 +1,9 @@
 # PLAN DE MEJORA — AEGIS · Fase 0 (Ataques de la Auditoría)
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 > Generado el 2026-09-23 combinando:
 > - 3 auditorías con agentes agency-agents → `docs/audits/AUDITORIA_BACKEND.md` (55 hallazgos), `AUDITORIA_FRONTEND.md` (62 hallazgos), `AUDITORIA_PROYECTO_Y_ROADMAP.md` (gap analysis + roadmap F0–F5)
 > - Mapa de conocimiento graphify v2026-09-23 → `graphify-out/graph.json` (**2530 nodos · 3975 aristas · 202 comunidades**, corpus 459 archivos)

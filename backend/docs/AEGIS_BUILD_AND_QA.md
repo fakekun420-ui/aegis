@@ -353,6 +353,10 @@ verification_level: strict
 
 # AEGIS QA REPORT — v1.0.0
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 ## Executive Summary
 [COMPLETAR CON RESUMEN DE RESULTADOS]
 

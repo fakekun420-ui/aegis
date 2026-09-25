@@ -1,5 +1,9 @@
 # ADR-001: Modelo de seguridad — root total con token, cero acceso sin él
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 **Estado:** Aceptada
 **Fecha:** 2026-09-23 (A-1, Fase 0) · blindado y verificada en F4 · documentada en F5
 **Decisores:** Fase 0 (auditoría backend 55 hallazgos + frontend 62) y F4

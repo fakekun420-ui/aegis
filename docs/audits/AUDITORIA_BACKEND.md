@@ -1,5 +1,9 @@
 # AUDITORÍA COMPLETA DEL BACKEND — PROYECTO AEGIS
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 **Fecha:** 2026-09-23
 **Alcance:** `/sdcard/projects/Aegis/backend/` — `server.js` (2553 líneas), `providers.js` (1648 líneas), `src/core/`, `src/adapters/`, `src/api/`, `src/agents/`, `src/skills/`, `src/plugins/content/`, scripts de operación y documentación (`BACKEND_ARCHITECTURE.md`, `FRONTEND_CONTRACT.md`, `AEGIS_QA.md`).
 **Excluido:** `graphify-out/`, `*.log`, `node_modules/`, carpeta `agents/` (vendor), `.git/`.

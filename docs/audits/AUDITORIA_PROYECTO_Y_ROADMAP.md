@@ -113,7 +113,7 @@ Flujo objetivo: **instalar APK → abrir → seguir menú de configuración → 
 │   │   ├─ rootCheck.js      → probe su/uid, guía de concesión (Magisk/KernelSU)    │
 │   │   ├─ chrootInstaller.js→ descarga ubuntu-base-*.tar.gz + SHA256 + proot/chroot│
 │   │   ├─ nodeInstaller.js  → descarga node aarch64 + checksum → node.bin          │
-│   │   ├─ opencodeInstaller.js → npm/binary + health :4096                         │
+│   │   ├─ opencodeInstaller.js → npm/binary + health :49374                         │
 │   │   └─ agyInstaller.js   → agy + artemis auth login --check                     │
 │   ├─ download.js       → streaming con % (bytes recibidos/totales), reanudable     │
 │   └─ setupRoutes.js    → GET state, POST run/:step, GET events (SSE), POST retry   │
@@ -129,7 +129,7 @@ Flujo objetivo: **instalar APK → abrir → seguir menú de configuración → 
 ### 5.2 Flujo first-run
 
 1. **Primer arranque** → `SetupViewModel` lee `setup_state.json`; si no existe → `SetupWizardScreen` (nunca se muestra dos veces salvo "Re-ejecutar setup").
-2. **Paso 0 · Diagnóstico**: `GET /api/setup/state` + `RootShell("id -u")` → checklist verde/rojo: root, chroot, node, opencode:4096, agy, artemis, skills.
+2. **Paso 0 · Diagnóstico**: `GET /api/setup/state` + `RootShell("id -u")` → checklist verde/rojo: root, chroot, node, opencode:49374, agy, artemis, skills.
 3. **Paso 1 · Root**: si `uid != 0` → instrucciones específicas por gestor (Magisk/KernelSU) + botón "Reintentar" (poll cada 2s, máx. 60s).
 4. **Paso 2 · Ubuntu**: descarga `ubuntu-base` con **SHA256 verificado**, extracción a `/data/local/chroot/ubuntu` (o `/sdcard/projects/.aegis-chroot`), montajes (`/sdcard/projects`, `/proc`, `/dev`), registro de ancla tipo `find-ubuntu.sh`.
 5. **Paso 3 · Node**: descarga node aarch64 → `node.bin` + `chmod 755` (reutiliza `stage-node.sh`).
@@ -181,7 +181,7 @@ Flujo objetivo: **instalar APK → abrir → seguir menú de configuración → 
 - **Entregables:**
   - Pasos de setup para `agy auth`, `artemis auth login` guiado, smoke test `POST /opencode/session/:id/message` con respuesta real.
   - SkillManager con allowlist + checksum (cierra H-14), `available` real desde catálogo, streaming de install ya existente conectado al wizard.
-  - `/api/setup/step/final-check`: health de 4096 + agy + a11y :8766 + 1 mensaje de prueba.
+  - `/api/setup/step/final-check`: health de 49374 + agy + a11y :8766 + 1 mensaje de prueba.
 - **Criterios de aceptación:** fresh install → primer mensaje de chat responde desde el wizard sin tocar nada más; skills `graphify` y `opencode-mem` instaladas y visibles en Skill Manager.
 - **Dependencias:** F2. **Riesgo:** credenciales de terceros no automatizables → deep-link + estado "acción manual requerida" explícito en el wizard.
 

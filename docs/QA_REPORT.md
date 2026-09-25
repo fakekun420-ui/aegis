@@ -14,6 +14,10 @@ The second pass QA audit of Aegis was executed. Following the hotfix branch depl
 
 # Test Results (v1.0.1)
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 | Test ID | Pantalla | Estado | Bugs Encontrados |
 |---------|----------|--------|-----------------|
 | TEST-01 | Navegación General | PASSED | - |

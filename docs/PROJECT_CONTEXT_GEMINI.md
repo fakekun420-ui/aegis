@@ -49,8 +49,8 @@ Aegis is composed of four cooperating runtime layers:
                     │ HTTP REST / Basic Auth         │ CLI spawn / stdio
 ┌───────────────────▼───────────────┐  ┌─────────────▼───────────────────┐
 │ OpenCode Serve Engine             │  │ Google Antigravity CLI (agy)    │
-│  - Local daemon on 127.0.0.1:4096 │  │  - Standalone binary v1.2.9     │
-│  - Port 4096 REST API v2          │  │  - Stdio stream-json protocol   │
+│  - Local daemon on 127.0.0.1:49374 │  │  - Standalone binary v1.2.9     │
+│  - Port 49374 REST API v2          │  │  - Stdio stream-json protocol   │
 │  - Workspace indexing & edits     │  │  - OAuth session authentication │
 └───────────────────────────────────┘  └─────────────────────────────────┘
                     ▲
@@ -58,7 +58,7 @@ Aegis is composed of four cooperating runtime layers:
 ┌───────────────────┴────────────────────────────────────────────────────┐
 │ Supervisor Layer: keepalive.sh                                         │
 │  - Magisk service.d-99-opencode-hub.sh / nohup daemon                  │
-│  - Probes :8765 /api/health & :4096; manages backoff & process recovery│
+│  - Probes :8765 /api/health & :49374; manages backoff & process recovery│
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -138,7 +138,7 @@ Aegis is composed of four cooperating runtime layers:
 | Engine | Execution Method | Protocol | Models Supported |
 |---|---|---|---|
 | **Google Antigravity** | Spawn standalone CLI ELF (`/root/.local/bin/agy`) | Stdio streaming JSON (`--output-format stream-json`) | `gemini-3.8-flash-high`, `gemini-3.8-pro`, `claude-3-7-sonnet` |
-| **OpenCode Engine** | Local HTTP daemon (`127.0.0.1:4096`) | REST API v2 (Basic auth with scraped password, cursor pagination, SSE/polling) | Free models (`zen-free`, `free`), paid models, custom API keys |
+| **OpenCode Engine** | Local HTTP daemon (`127.0.0.1:49374`) | REST API v2 (Basic auth with scraped password, cursor pagination, SSE/polling) | Free models (`zen-free`, `free`), paid models, custom API keys |
 | **Claude Code** | Inactive adapter (`ClaudeCodeAdapter.js`) | Stub registered in provider catalogue; inert | N/A |
 
 ### Build & CI/CD Pipeline
@@ -381,7 +381,7 @@ The Aegis roadmap is prioritized according to `PLAN_SIGUIENTES_ACCIONES.md` and 
 ### Immediate Next Actions (Phase I)
 1. **I-1: Release APK Distribution**: Download and verify `aegis-release` build artifact from GitHub Actions; ensure debug key fallback is documented.
 2. **I-2: Device QA Acceptance Execution**: Complete the 8 verification steps in `docs/qa/QA_CHECKLIST.md` on a physical POCO F3 device with timestamped screenshot evidence.
-3. **I-3: Release Keystore Creation**: Generate a production 4096-bit RSA keystore, base64-encode, and configure `KEYSTORE_BASE64` in GitHub repository secrets.
+3. **I-3: Release Keystore Creation**: Generate a production 49374-bit RSA keystore, base64-encode, and configure `KEYSTORE_BASE64` in GitHub repository secrets.
 4. **I-4: Security Tooling Promotion**: Triage Semgrep and Gitleaks findings in CI; promote scans from `continue-on-error: true` to blocking checks.
 5. **I-5: Branch Protection Rules**: Update repository branch protection rules to match renamed CI job `build-debug`.
 
@@ -484,6 +484,6 @@ curl -H "X-Aegis-Token: $TOKEN" http://127.0.0.1:8765/api/setup/final-check
 8. **Disputed QA Report (`QA_REPORT.md`)**:
    - Audit finding H-08 disputed `QA_REPORT.md` (v1.0.1) for claiming 100% passed tests with zero bugs without attached evidence. A formal clean-slate run of `QA_CHECKLIST.md` with physical screenshots remains open.
 9. **Keystore RSA Key Size**:
-   - ADR-001 specifies an RSA 2048-bit key for release APK signing, while roadmap item I-3 specifies RSA 4096-bit. Which key size is required for production builds?
+   - ADR-001 specifies an RSA 2048-bit key for release APK signing, while roadmap item I-3 specifies RSA 49374-bit. Which key size is required for production builds?
 10. **Tracking of `projects.json`**:
     - `Aegis/backend/projects.json` is tracked by git but frequently modified at runtime as user projects and sessions change. Should this file be moved to `.gitignore` and initialized from a template (`projects.json.example`)?

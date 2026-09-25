@@ -2,14 +2,14 @@
 
 **Version:** 1.2.0  
 **Target Clients:** Android App (`com.aegis.hub`, Jetpack Compose Material 3), Web Clients  
-**Target Backends:** Local Hub (`server.js`, port 8765), OpenCode Daemon (port 4096), Antigravity CLI (`agy`)  
+**Target Backends:** Local Hub (`server.js`, port 8765), OpenCode Daemon (port 49374), Antigravity CLI (`agy`)  
 **Status:** Canonical & Strictly Typed  
 
 ---
 
 ## 1. Overview & Communication Architecture
 
-The Aegis app interfaces with the backend hub at `http://127.0.0.1:8765` (or configured host), which routes requests dynamically to either **OpenCode** (native daemon on port 4096) or **Antigravity CLI** (`/root/.local/bin/agy`).
+The Aegis app interfaces with the backend hub at `http://127.0.0.1:8765` (or configured host), which routes requests dynamically to either **OpenCode** (native daemon on port 49374) or **Antigravity CLI** (`/root/.local/bin/agy`).
 
 ```
 ┌────────────────────────────┐
@@ -26,7 +26,7 @@ The Aegis app interfaces with the backend hub at `http://127.0.0.1:8765` (or con
        ▼              ▼
 ┌──────────────┐ ┌───────────────────┐
 │   OpenCode   │ │    Antigravity    │
-│ (Port 4096)  │ │ (/root/.local/bin/│
+│ (Port 49374)  │ │ (/root/.local/bin/│
 │              │ │  agy -p ... )     │
 └──────────────┘ └───────────────────┘
 ```

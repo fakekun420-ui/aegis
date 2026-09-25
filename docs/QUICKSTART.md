@@ -97,7 +97,7 @@ cooperativamente en cualquier checkpoint.
 Al terminar, la app muestra la tarjeta **"Verificación final"**:
 
 1. **Ejecutar verificación** → `GET /api/setup/final-check` (4 checks en paralelo, ≤2 s c/u):
-   - `OpenCode (proxy4096)` — sonda real a `127.0.0.1:4096`
+   - `OpenCode (proxy4096)` — sonda real a `127.0.0.1:49374`
    - `Antigravity/Artemis (agy + auth)` — binario + fichero OAuth (>0 B, sin leerlo)
    - `Servicio de accesibilidad (:8766)` — sonda a la app
    - `Instalación inicial (wizard)` — `phase == done`

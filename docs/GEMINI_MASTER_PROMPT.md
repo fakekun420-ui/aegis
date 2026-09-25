@@ -338,6 +338,10 @@ If Mimo cannot be launched as a sub-agent, write the following to `/sdcard/proje
 ```markdown
 # MIMO — Aegis Executor Prompt
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 > You are the **executor agent** for the Aegis project. Your model is Claude (Mimo). You work in parallel with Gemini (orchestrator). Both agents share `/sdcard/projects/Aegis/docs/agent-sync.json` as your coordination file.
 
 ## FIRST ACTIONS

@@ -1,5 +1,12 @@
 # Aegis — Mobile Development Hub
 
+> ⚠️ **Un solo servidor de OpenCode.** El Hub proxea a `:49374`, que es el servicio
+> registrado y el MISMO que usa el TUI del CLI. Antes había dos (`:4096` para el Hub y
+> `:49374` para el CLI): compartían la base de datos pero no el estado de turno en curso,
+> que vive en la memoria de cada proceso, así que el CLI no veía los turnos de Aegis.
+> `server.js` ignora `--opencode-port` a propósito y lo avisa con un WARN. **No lancés un
+> segundo `opencode serve` en otro puerto.**
+
 Aegis is a self-contained AI orchestration platform running entirely from an Android device (POCO F3, Android 15, root Magisk, Ubuntu chroot), **with root secured by token and a self-service setup wizard**: install the APK, follow the 6-step wizard, and the device provisions itself (Ubuntu + Node + OpenCode + Antigravity + skills) with SHA256-verified downloads and rollback.
 
 **Estado: `v1.0.0` (2026-09-24)** — ver [CHANGELOG.md](CHANGELOG.md) · [Quickstart](docs/QUICKSTART.md) · [QA checklist](docs/qa/QA_CHECKLIST.md)
@@ -10,14 +17,14 @@ Aegis is a self-contained AI orchestration platform running entirely from an And
 
 - **App**: Jetpack Compose Android app (`com.aegis.hub`) — Control Center, Project Workspace, Skill Manager, Workflow Runner, Chat and the **Setup Wizard** (bootstrap de 6 pasos + verificación final + smoke test).
 - **Hub**: Node.js orchestrator on **`127.0.0.1:8765`** (loopback only, `X-Aegis-Token` en todo `/api/*` y `/opencode/*`, rate-limit 429) with modular routers, workflow engine, agent system and skill manager.
-- **opencode**: daemon on **`127.0.0.1:4096`**, proxyado por el hub; la app sólo habla con el hub.
+- **opencode**: daemon on **`127.0.0.1:49374`**, proxyado por el hub; la app sólo habla con el hub.
 - **Agents**: Specialized AI agents (Research, Architect, Auditor) operating via artifact-driven communication.
 - **Skills**: Graphify, opencode-mem, y un motor de skills con **allowlist** verificada por hash.
 - **Workflows**: YAML DAG-based workflow engine for autonomous multi-agent pipelines.
 - **Supervisión**: `keepalive.sh` sondea `GET /api/health` cada 10 s y relanza lo caído (hook Magisk `service.d`).
 
 ```
-app (Kotlin)  ──X-Aegis-Token──►  hub Node 127.0.0.1:8765  ──►  opencode 127.0.0.1:4096
+app (Kotlin)  ──X-Aegis-Token──►  hub Node 127.0.0.1:8765  ──►  opencode 127.0.0.1:49374
       │                                   │
       └──── CompanionService :8766 ◄──────┘  (a11y/TTS/STT, loopback)
 ```
@@ -47,7 +54,7 @@ node --check server.js   # (o find backend -name "*.js" -not -path "*/node_modul
 # cp projects.json.example projects.json
 
 # hub manual (NO hacerlo si ya corre el de producción en :8765)
-sh start-hub.sh          # opencode serve :4096 + hub :8765
+sh start-hub.sh          # opencode serve :49374 + hub :8765
 ```
 
 CI (`.github/workflows/build-apk.yml`): `backend-checks` · `lint` · `build-debug` · `build-release` (condicional a secrets) · `semgrep`/`gitleaks` no bloqueantes · `instrumented` manual.

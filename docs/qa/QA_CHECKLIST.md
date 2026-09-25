@@ -1,5 +1,9 @@
 # QA — Checklist de aceptación v1.0.0
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 Checklist **reproducible por otra persona**, en un dispositivo real. Cada caso tiene pasos,
 resultado esperado y casilla. Marca `[x]` sólo cuando lo hayas ejecutado **tú** y anota fecha +
 dispositivo en la tabla final.

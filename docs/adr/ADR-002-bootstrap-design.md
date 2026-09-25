@@ -1,5 +1,9 @@
 # ADR-002: Diseño del bootstrap — wizard idempotente y reanudable con rollback
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 **Estado:** Aceptada
 **Fecha:** 2026-09-23 (F1 checks + F2 motor) · verificada en F3/F4 · documentada en F5
 **Decisores:** Fase 0 (roadmap F1/F2) y equipos de backend/app

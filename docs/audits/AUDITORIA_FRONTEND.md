@@ -1,5 +1,9 @@
 # AUDITORÍA DE FRONTEND ANDROID — Aegis Companion
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 > **Fecha:** 2026-09-23 · **Alcance:** `Aegis/app/` (~7.165 líneas Kotlin + Gradle/Manifest/res/assets/docs) + contrato `backend/docs/FRONTEND_CONTRACT.md` vs código real de `backend/`.
 > **Método:** 5 personalidades de `agency-agents` aplicadas en paralelo — *Mobile App Builder, Frontend Developer, UI Designer, UX Architect, Accessibility Auditor*.
 > **Modo:** solo lectura — **no se ha modificado código**.

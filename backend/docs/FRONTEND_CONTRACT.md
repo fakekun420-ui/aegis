@@ -2,7 +2,7 @@
 
 **Version:** 1.3.0  
 **Target Clients:** Android App (`com.aegis.hub`, Jetpack Compose Material 3), Web Clients  
-**Target Backends:** Local Hub (`server.js`, port 8765), OpenCode Daemon (port 4096), Antigravity CLI (`agy`)  
+**Target Backends:** Local Hub (`server.js`, port 8765), OpenCode Daemon (port 49374), Antigravity CLI (`agy`)  
 **Status:** Canonical & Strictly Typed  
 **Changelog 1.3.0 (A-3):** standard envelope + health/skills contracts + 404 JSON — see §7.  
 
@@ -10,7 +10,7 @@
 
 ## 1. Overview & Communication Architecture
 
-The Aegis app interfaces with the backend hub at `http://127.0.0.1:8765` (or configured host), which routes requests dynamically to either **OpenCode** (native daemon on port 4096) or **Antigravity CLI** (`/root/.local/bin/agy`).
+The Aegis app interfaces with the backend hub at `http://127.0.0.1:8765` (or configured host), which routes requests dynamically to either **OpenCode** (native daemon on port 49374) or **Antigravity CLI** (`/root/.local/bin/agy`).
 
 ```
 ┌────────────────────────────┐
@@ -27,7 +27,7 @@ The Aegis app interfaces with the backend hub at `http://127.0.0.1:8765` (or con
        ▼              ▼
 ┌──────────────┐ ┌───────────────────┐
 │   OpenCode   │ │    Antigravity    │
-│ (Port 4096)  │ │ (/root/.local/bin/│
+│ (Port 49374)  │ │ (/root/.local/bin/│
 │              │ │  agy -p ... )     │
 └──────────────┘ └───────────────────┘
 ```
@@ -389,7 +389,7 @@ Router: `backend/src/api/setupRoutes.js` (`createSetupHandler({opencodeAdapter, 
 - How each check is resolved:
   | id | Resolution | `ok` | `manual` | `fail` |
   |---|---|---|---|---|
-  | `opencode` | `GET http://127.0.0.1:4096/global/health` (same probe as `GET /api/health`, remaining budget of the 2 s); if down → `opencode --version` binary fallback | serve reachable | binary installed but serve down → detail says how to start it | neither serve nor binary |
+  | `opencode` | `GET http://127.0.0.1:49374/global/health` (same probe as `GET /api/health`, remaining budget of the 2 s); if down → `opencode --version` binary fallback | serve reachable | binary installed but serve down → detail says how to start it | neither serve nor binary |
   | `antigravity` | `fs.existsSync` on the `agy` candidates + `fs.statSync(...).size > 0` on `~/.gemini/antigravity-cli/antigravity-oauth-token` (**token content is never read or logged**) | `agy` + OAuth file >0 B | `agy` present but no session → detail carries the exact interactive login command | `agy` missing → detail carries the official installer `curl -fsSL https://antigravity.google/cli/install.sh \| bash` |
   | `a11y` | TCP `connect 127.0.0.1:8766` (CompanionService bridge; 1.5 s socket timeout) | accepts connection | — | `ECONNREFUSED`/timeout → detail **"Abre la app y concede accesibilidad (…)"** |
   | `bootstrap` | `state.phase` (bootstrap wizard state) | `done` | `running` → "instalación en curso" | any other phase (`idle`/`paused`/`failed`) |
@@ -398,7 +398,7 @@ Router: `backend/src/api/setupRoutes.js` (`createSetupHandler({opencodeAdapter, 
 
 - **Success (200):** `{ "ok": true, "data": { "ok": true, "reply": "<texto REAL del modelo>" } }` — `reply` is the model's actual first text part (usually `PONG`), **never fabricated**.
 - **Failure:** standard error envelope with `error.code = "SMOKE_FAILED"` and an honest message; HTTP status tells the failure class: `502` provider down / no session, `504` timeout (>60 s or empty answer), `500` hub-side surprise.
-- Mechanics: reuses the hub's real machinery — `probeOpencodeHealth()` (2 s) then `OpencodeAdapter.createSession`/`listSessions`/`sendMessage` against `127.0.0.1:4096`. It keeps a dedicated session titled **`aegis:smoke-test`** (reused across calls; recreated if OpenCode no longer lists it) and sends `"Responde exclusivamente: PONG"` with a hard **60 s** `AbortController` budget. Concurrent calls share one in-flight promise (single-flight). Async: nothing blocks the event loop, and the response is skipped if the client/hub closed the connection meanwhile.
+- Mechanics: reuses the hub's real machinery — `probeOpencodeHealth()` (2 s) then `OpencodeAdapter.createSession`/`listSessions`/`sendMessage` against `127.0.0.1:49374`. It keeps a dedicated session titled **`aegis:smoke-test`** (reused across calls; recreated if OpenCode no longer lists it) and sends `"Responde exclusivamente: PONG"` with a hard **60 s** `AbortController` budget. Concurrent calls share one in-flight promise (single-flight). Async: nothing blocks the event loop, and the response is skipped if the client/hub closed the connection meanwhile.
 
 ### 8.3. `POST /api/setup/auth/antigravity`
 

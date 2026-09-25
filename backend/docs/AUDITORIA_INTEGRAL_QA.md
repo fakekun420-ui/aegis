@@ -2,7 +2,7 @@
 **App:** OpenCode Companion  
 **Fecha:** 2026-09-21  
 **Dispositivo:** Xiaomi Poco F3 (alioth) — Android 15 (crDroid), Ubuntu Chroot aarch64 en Termux con Root  
-**Entorno de Pruebas:** Artemis Accessibility Bridge (`:8766`), Hub Gateway (`:8765`), OpenCode Serve (`:4096`), Antigravity CLI (`agy`), Root Shell (`nsenter` mnt `[4026534359]` / `[4026535552]`)  
+**Entorno de Pruebas:** Artemis Accessibility Bridge (`:8766`), Hub Gateway (`:8765`), OpenCode Serve (`:49374`), Antigravity CLI (`agy`), Root Shell (`nsenter` mnt `[4026534359]` / `[4026535552]`)  
 **Commits Auditados:**
 - [`7192d7e`](https://github.com/fakekun420-ui/opencode-companion/commit/7192d7e): *feat: 4 bugs fixes, multiprovider dynamic selector, SSE wizard streaming, and Pony-Tail context system*
 - [`5a1480b`](https://github.com/fakekun420-ui/opencode-companion/commit/5a1480b): *feat: fix 5 critical discrepancies (strict orphan chats, silent pony-tail system prompt, terminal wizard canvas, plan/build agent toggle, and instant delete)*

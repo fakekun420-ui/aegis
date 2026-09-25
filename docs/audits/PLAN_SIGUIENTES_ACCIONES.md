@@ -1,5 +1,9 @@
 # PLAN DE SIGUIENTES ACCIONES — Aegis v1.0.0
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 > Generado el 2026-09-24 tras ejecutar el plan completo de acciones siguientes
 > (operativo + F3 + F4 + F5 + backlog) con push a `origin/main` y mapa graphify
 > actualizado. Este documento es la foto del cierre + la cola de trabajo priorizada.
@@ -52,7 +56,7 @@
 |---|---|---|
 | **I-1** | **Descargar el APK de GitHub** | `gh run download 35949619707 -n aegis-release -R fakekun420-ui/aegis` (o pestaña Actions → run → Artifacts). `aegis-release` = no debuggable (firmado con debug-key hasta que haya keystore); `aegis-debug` para desarrollo. |
 | **I-2** | **QA de dispositivo (F5 aceptación)** | Seguir `docs/qa/QA_CHECKLIST.md`: instalación limpia ≤25 min → corte WiFi → retry → checksum→rollback → 2º arranque sin wizard → verificación final "PONG" → 403 sin token. Casillas `[ ]` → `[x]` con capturas. |
-| **I-3** | **Protege el keystore de release** (opcional pero recomendado) | Genera fuera del árbol: `keytool -genkeypair -v -keystore aegis-release.keystore -alias aegis -keyalg RSA -keysize 4096 -validity 10000`; sube secretos: `gh secret set KEYSTORE_BASE64 -R fakekun420-ui/aegis < <(base64 -w0 aegis-release.keystore)` + `KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD`. Guarda la contraseña en tu gestor (nunca en el repo). El próximo run firmará `aegis-release` de verdad (rotación A-6.2/ADR-001). |
+| **I-3** | **Protege el keystore de release** (opcional pero recomendado) | Genera fuera del árbol: `keytool -genkeypair -v -keystore aegis-release.keystore -alias aegis -keyalg RSA -keysize 49374 -validity 10000`; sube secretos: `gh secret set KEYSTORE_BASE64 -R fakekun420-ui/aegis < <(base64 -w0 aegis-release.keystore)` + `KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD`. Guarda la contraseña en tu gestor (nunca en el repo). El próximo run firmará `aegis-release` de verdad (rotación A-6.2/ADR-001). |
 | **I-4** | Revisar el **primer ciclo de semgrep/gitleaks** | Si sale limpio → quitar `continue-on-error: true` de ambos jobs (F4 pendiente). |
 | **I-5** | Branch protection (si la usas) | Si tenías regla exigiendo el check `build` → actualízala a `build-debug` (F4 lo renombró). Sin regla, no hace falta nada. |
 

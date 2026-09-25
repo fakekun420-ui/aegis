@@ -1,5 +1,12 @@
 # Arquitectura del Backend: Aegis Hub (OpenCode & Antigravity)
 
+> ⚠️ **Un solo servidor de OpenCode.** El Hub proxea a `:49374`, que es el servicio
+> registrado y el MISMO que usa el TUI del CLI. Antes había dos (`:4096` para el Hub y
+> `:49374` para el CLI): compartían la base de datos pero no el estado de turno en curso,
+> que vive en la memoria de cada proceso, así que el CLI no veía los turnos de Aegis.
+> `server.js` ignora `--opencode-port` a propósito y lo avisa con un WARN. **No lancés un
+> segundo `opencode serve` en otro puerto.**
+
 **Versión:** 2.0.0  
 **Host Runtime:** Node.js v24 (Linux aarch64, POCO F3 "Alioth" / KernelSU)  
 **Puertos Principales:** Hub API (`8765`), OpenCode Daemon (`4096`), Android Accessibility Bridge (`8766`)  
@@ -9,7 +16,7 @@
 
 ## 1. Resumen Ejecutivo y Topología del Sistema
 
-El **Aegis Hub** actúa como el núcleo de orquestación local y proxy inteligente entre los clientes frontend (Aplicación Android Jetpack Compose `com.aegis.hub` y clientes web) y los motores de IA para desarrollo de software: **OpenCode** (daemon HTTP en puerto 4096) y **Google Antigravity CLI** (`/root/.local/bin/agy`).
+El **Aegis Hub** actúa como el núcleo de orquestación local y proxy inteligente entre los clientes frontend (Aplicación Android Jetpack Compose `com.aegis.hub` y clientes web) y los motores de IA para desarrollo de software: **OpenCode** (daemon HTTP en puerto 49374) y **Google Antigravity CLI** (`/root/.local/bin/agy`).
 
 ### 1.1 Diagrama de Arquitectura de Alto Nivel
 
@@ -29,12 +36,12 @@ flowchart TD
     end
 
     subgraph Providers["Execution Providers"]
-        OCAdapter["OpencodeAdapter<br/>(HTTP Serve Proxy :4096)"]
+        OCAdapter["OpencodeAdapter<br/>(HTTP Serve Proxy :49374)"]
         AGYAdapter["AntigravityAdapter<br/>(agy CLI print/json mode)"]
     end
 
     subgraph External["External System & Daemons"]
-        OCDaemon["OpenCode Daemon<br/>(:4096)"]
+        OCDaemon["OpenCode Daemon<br/>(:49374)"]
         AGYBinary["Antigravity Engine<br/>(/root/.local/bin/agy)"]
         A11y["CompanionService / A11y Bridge<br/>(:8766)"]
         Brain["Antigravity Brain<br/>(/root/.gemini/antigravity-cli/brain)"]
@@ -54,7 +61,7 @@ flowchart TD
     AGYAdapter -.->|parse transcript.jsonl| Brain
 
     Health -.->|probe :8766| A11y
-    Health -.->|probe :4096| OCDaemon
+    Health -.->|probe :49374| OCDaemon
     Health -.->|exec --version| AGYBinary
 
     OCAdapter --> Normalizer
@@ -69,7 +76,7 @@ flowchart TD
 La arquitectura implementa el patrón **Adapter** a través de `BaseProviderAdapter`, desacoplando completamente el protocolo de transporte de cada motor de IA.
 
 ### 2.1 `OpencodeAdapter` (Modo HTTP Serve)
-- **Protocolo:** Comunicación directa vía `http.request` hacia `127.0.0.1:4096`.
+- **Protocolo:** Comunicación directa vía `http.request` hacia `127.0.0.1:49374`.
 - **Adaptación de Payloads:** OpenCode requiere estrictamente un array de `parts: [{ type: "text", text: "..." }]`. Si el cliente envía `text` plano o archivos adjuntos (`files` con base64), el adaptador los transforma transparentemente en bloques `parts` tipados.
 - **Inyección de Contexto del Sistema:** Si se provee `projectId`, el adaptador inyecta dinámicamente un bloque de cabecera con:
   - Instrucciones personalizadas del proyecto (`project.instructions`).
@@ -215,7 +222,7 @@ El endpoint `/api/system/health` ofrece visibilidad completa sobre los subsistem
 - **`a11ySocket`:** Sonda HTTP activa a `http://127.0.0.1:8766/status` verificando el estado del `CompanionService` y la reparación reactiva de accesibilidad.
 - **`agy`:** Validación de presencia de `/root/.local/bin/agy`, permisos de ejecución y verificación de respuesta vía `agy --version`.
 - **`permissions`:** Comprobación en tiempo real de escritura en `/tmp` y `/sdcard/projects/Aegis/backend`, verificación de UID root (`uid === 0`) y namespace actual.
-- **`opencode`:** Sonda HTTP hacia `http://127.0.0.1:4096/global/health` reportando disponibilidad y versión.
+- **`opencode`:** Sonda HTTP hacia `http://127.0.0.1:49374/global/health` reportando disponibilidad y versión.
 
 ---
 
@@ -223,4 +230,4 @@ El endpoint `/api/system/health` ofrece visibilidad completa sobre los subsistem
 
 - **Gestión de Bloqueo:** Utiliza `/sdcard/projects/Aegis/backend/keepalive.lock` para prevenir instancias duplicadas.
 - **Protección de Sesiones TUI:** Distingue rigurosamente entre procesos de OpenCode TUI interactivos en terminales virtuales (`tty_nr !== 0`, pts) y el modo daemon (`tty_nr === 0`), garantizando que los reinicios del hub nunca cierren la sesión manual del desarrollador.
-- **Recuperación Automática:** Cada 10 segundos evalúa la disponibilidad de OpenCode (`:4096`) y del Hub (`:8765`), relanzando de forma limpia los procesos caídos.
+- **Recuperación Automática:** Cada 10 segundos evalúa la disponibilidad de OpenCode (`:49374`) y del Hub (`:8765`), relanzando de forma limpia los procesos caídos.

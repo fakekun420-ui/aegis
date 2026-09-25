@@ -1,5 +1,9 @@
 # QA Test Scripts — Aegis Execution Guide (POCO F3)
 
+> 📄 **Documento histórico (snapshot).** Describe el estado del proyecto en el momento
+> en que se escribió y **no se mantiene al día**. Para el estado actual ver
+> `CHANGELOG.md`, `docs/ARCHITECTURE.md` y `backend/.ponytail.md`.
+
 This document contains automated and reproducible physical validation scripts for each of the 8 acceptance cases defined in `docs/qa/QA_CHECKLIST.md`.
 
 ---

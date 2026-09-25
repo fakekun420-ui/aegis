@@ -5,7 +5,7 @@ App Android (`com.aegis.hub`) del **Aegis Mobile Development Hub**: hub web + vo
 > Documentación de lanzamiento: [`../docs/QUICKSTART.md`](../docs/QUICKSTART.md) · Contrato app ↔ hub: [`docs/FRONTEND_CONTRACT.md`](docs/FRONTEND_CONTRACT.md)
 
 ## Qué hace
-- **Hub web (8765)**: proxy a `opencode serve :4096` + `/api/device/*`. No necesita APK.
+- **Hub web (8765)**: proxy a `opencode serve :49374` + `/api/device/*`. No necesita APK.
   Arranque: `sh /sdcard/projects/Aegis/backend/start-hub.sh` (el hub hace bind a `127.0.0.1` — ver ADR-001).
 - **App Aegis (8766)**: `AccessibilityService` (click por texto/id, tap, back/home, dump) + `SpeechRecognizer`/`TTS` nativos (sin restricción HTTPS) + `su` shell.
 - **Wizard de bootstrap**: 6 pasos idempotentes/reanudables con verificación SHA256 y rollback (ver ADR-002).
