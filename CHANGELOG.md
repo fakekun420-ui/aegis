@@ -2,6 +2,31 @@
 
 Todo notable de Aegis se documenta aquí. Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [1.1.0] — 2026-09-25
+
+Cierre de la sesión de estabilización: el Hub y el CLI hablaban con **dos servidores de OpenCode distintos**, lo que rompía la sincronización y hacía que los turnos se cortaran. Todo lo de esta versión sale de ese diagnóstico y de lo que se destapó al arreglarlo.
+
+### Fixed
+- **Un solo servidor de OpenCode (raíz de la falta de sincronización).** El Hub proxaba a `:4096` (lanzado por `keepalive`) mientras el TUI del CLI usaba el servicio registrado en `:49374`. Comparten la base de datos SQLite, pero el estado *"este turno está en curso"* vive en la **memoria de cada proceso**, así que el CLI no veía los turnos lanzados desde Aegis y el chat se leía "como si no estuviera corriendo". `server.js` prioriza el servicio registrado e **ignora `--opencode-port`** con un `WARN` explícito; `keepalive.sh` pasa a `OC_PORT=49374`. Verificado en uso real por el usuario. **No reintroducir un segundo `opencode serve` en otro puerto.**
+- **Cinco timeouts de socket por inactividad eliminados.** Estaban hardcodeados a 120/130/125 s en el proxy (ambos paths) y en `handleRequest`. Durante un turno agéntico no circula ni un byte, así que destruían la conexión a mitad de turno y la píldora "Enviando…" se quedaba cargando para siempre, con reintentos en bucle. Todos se derivan ahora de `AEGIS_TURN_TIMEOUT_MS` (600 s) y el guard explícito queda como red de seguridad posterior, para que el error que ve el cliente sea un 502 legible y no un corte mudo. Medido: de **HTTP 000 / 125 s / 0 bytes** a **HTTP 200 / 11,4 s / 10.888 bytes**.
+- **El chat no se actualizaba solo.** `load()` llamaba a `getMessages` una vez y no volvía a preguntar: el único poll vivía dentro de `sendMessage` y se cancelaba al acabar el turno. Mientras el usuario solo miraba un chat no había actualización, y tenía que salir y reentrar, o enviar otro mensaje, para ver los cambios. Nuevo `startViewRefresh()` con refresh cada 2 s, con **propiedad de sesión** en el `DisposableEffect`: sin ella, el `onDispose` de la pantalla anterior mataba el poll de la nueva (Compose no garantiza el orden).
+- **Al abrir un chat se veía el primer mensaje.** El auto-scroll calculaba `messages.size + 1` para sumar un ítem "live" que todavía no existía, `animateScrollToItem` lanzaba `IndexOutOfBounds` y el `catch (_: Exception) {}` lo tragaba en silencio, dejando la lista en el índice 0. Ahora usa el conteo real de `listState.layoutInfo`, reintenta y hace salto instantáneo al final.
+- **El teclado tapaba la última parte del mensaje.** `imePadding()` faltaba en la lista de mensajes. (Primer intento de arreglo lo duplicó —el `bottomBar` ya lo aplicaba— y collapsedó la lista a altura 0, haciendo desaparecer el chat; revertido dejando solo el inset como clave del scroll.)
+- **El chat nuevo no se creaba, en silencio.** `if (!sid.isNullOrBlank())` sin `else`, más un `catch (_: Exception) { null }`: si fallaba no pasaba nada y no había forma de saber por qué. Ahora el motivo llega a `vm.error` y se muestra.
+- **El proveedor siempre era `antigravity`.** `createSessionForProject("")` no encontraba proyecto y caía siempre en el fallback, ignorando la elección del usuario. Además `selectProvider` hacía un `return` mudo al estar la sesión vinculada: ahora el proveedor es cambiable mientras el chat esté vacío y, cuando ya no puede, explica por qué.
+- **El registro de proyectos estaba lleno de basura.** `PROJECTS_STORE_FILE` estaba hardcodeado, así que `node --test` en local escribía proyectos de prueba en el `projects.json` real. Ahora es configurable con `AEGIS_PROJECTS_STORE`; verificado con md5 idéntico antes y después de la suite.
+- **Ponytail global duplicado y corrupto.** El Hub inyectaba su propia copia de `pony-tail-global.md` (54 líneas, con una ruta inexistente y datos obsoletos) en vez del canónico. Eso consumía la mitad de su presupuesto de 24 KB por sesión. Retirada a cuarentena; la capa global la entrega `~/.config/opencode/AGENTS.md`, symlink al canónico.
+
+### Added
+- **Aviso de respuesta final.** Se usa `info.time.streamed`, la marca con la que OpenCode cierra el turno de verdad, para distinguir "llegó el último trozo de texto" de "la IA ya no está trabajando". En primer plano se dibuja un divisor "✓ respuesta final" en el chat.
+- **Notificación en la barra de notificaciones** al llegar la respuesta final, **solo si la app está en segundo plano** (`MainActivity.isForeground`). Sin sonido, con `PendingIntent` inmutable que abre la sesión correcta, y el `SecurityException` se come a propósito si el usuario no concedió `POST_NOTIFICATIONS`: la notificación es un extra y no debe tumbar el refresco.
+- **Vincular carpeta existente como proyecto.** Al pulsar "+ Nuevo proyecto" se pregunta entre **crear** y **vincular**. Al vincular se abre el gestor de archivos del sistema y la carpeta se registra como proyecto tomando **el nombre de la carpeta** como nombre. `POST /api/projects` acepta `folder`, con contención estricta en `PROJECTS_ROOT` (`FOLDER_OUTSIDE_ROOT`) y rechazo de carpeta ya reclamada (`DUPLICATE_FOLDER`) — sin esa validación, un body con `/data` sería path traversal arbitrario.
+- **Sincronización de proyectos preexistentes.** Los 6 proyectos que ya estaban en `/sdcard/projects` se registrean adoptando su carpeta real (incluido `Petite Raw`, sin crear la duplicada `petite-raw`), con `.hub/project.json` y `.ponytail.md` generados.
+
+### Changed
+- **Versión a 1.1.0** (`versionName`). `versionCode` sigue auto-incrementándose por `GITHUB_RUN_NUMBER`, así que cada build de CI es único.
+- **Grafo de Graphify actualizado** a 1743 nodos / 3623 aristas, health check sin aristas colgantes, incluyendo el código de esta versión.
+
 ## [Unreleased]
 
 ### Added
