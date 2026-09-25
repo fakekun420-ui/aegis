@@ -32,3 +32,8 @@ backend/patch_main_2.py
 
 # Submódulo o repositorio embebido en la raíz
 /agents/
+
+# Backups de seguridad creados por el agente antes de refactorizar.
+# No deben acabar en el repo: son copias completas de ficheros ya versionados.
+*.bak
+*.bak-pre-*
