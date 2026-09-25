@@ -172,12 +172,21 @@ class ChatViewModel : ViewModel() {
         viewRefreshJob?.cancel()
         viewRefreshSessionId = sessionId
         viewRefreshJob = viewModelScope.launch {
+            var streamingSince = 0
             while (isActive) {
                 delay(2000)
                 if (_currentSessionId.value != sessionId) break
                 // Durante un envío hay otro poll corriendo; no competimos con él.
                 if (pollingJob?.isActive == true) continue
-                if (!_streamingText.value.isNullOrBlank()) continue
+                // El stream manda mientras hay texto en vivo, pero con un tope: si el
+                // stream se queda a medias y _streamingText no vuelve a vaciarse, este
+                // `continue` convertiría el refresco en un no-op PERMANENTE. Pasados
+                // 6s de texto vivo dejamos de refugiarnos en el stream.
+                if (!_streamingText.value.isNullOrBlank() && streamingSince < 6) {
+                    streamingSince++
+                    continue
+                }
+                if (streamingSince > 0) streamingSince = 0
                 try {
                     val r = api.getMessages(sessionId)
                     if (r.ok && r.data != null) {
@@ -192,11 +201,17 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun stopViewRefresh() {
+    /**
+     * Detiene el refresco. [ownerSessionId] da propiedad del job: sin él, el
+     * `onDispose` de la pantalla ANTERIOR puede ejecutarse DESPUÉS de que el
+     * `LaunchedEffect` de la nueva ya arrancó el suyo, y lo mataba. Ese era el
+     * motivo de que el chat no se sincronizara en tiempo real: el poll moría nada
+     * más abrirse y nunca completaba un ciclo.
+     */
+    fun stopViewRefresh(ownerSessionId: String? = null) {
+        if (ownerSessionId != null && viewRefreshSessionId != ownerSessionId) return
         viewRefreshJob?.cancel()
         viewRefreshJob = null
-        // Se limpia el id a propósito: si no, al volver a entrar en el MISMO chat
-        // load() vería sessionId == viewRefreshSessionId y no reiniciaría el refresco.
         viewRefreshSessionId = null
     }
 

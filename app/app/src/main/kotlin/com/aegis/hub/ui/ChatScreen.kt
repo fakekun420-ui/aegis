@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -92,7 +93,10 @@ fun ChatScreen(
     // El ViewModel suele estar scoped a la Activity, así que onCleared NO se dispara
     // al navegar a otro chat: el refresco seguiría preguntando al Hub en segundo plano.
     DisposableEffect(sessionId) {
-        onDispose { vm.stopViewRefresh() }
+        // Se pasa sessionId para que este cleanup solo pare SU propio refresco: el
+        // onDispose de la pantalla anterior puede correr después de que la nueva ya
+        // arrancó el suyo, y sin esta propiedad lo mataba (no sincronizaba en vivo).
+        onDispose { vm.stopViewRefresh(sessionId) }
     }
 
     // Auto-scroll on new messages / loading / streaming tools or text changes.
@@ -101,9 +105,15 @@ fun ChatScreen(
     // MISMO mensaje (poll o streaming) el tamaño no cambiaba, el efecto no se relanzaba
     // y la lista se quedaba anclada a un mensaje anterior en vez de seguir la respuesta
     // más reciente.
+    // Altura del teclado. Se usa como clave del auto-scroll para que, al abrirse o
+    // cerrarse el teclado, la lista vuelva a dejar visible el final: sin esto el
+    // teclado tapaba la última parte del mensaje.
+    val density = LocalDensity.current
+    val imeInset = WindowInsets.ime.getBottom(density)
+
     val lastMsgId = messages.lastOrNull()?.info?.id
     val lastMsgTextLen = messages.lastOrNull()?.text?.length ?: 0
-    LaunchedEffect(messages.size, loading, streamingText, streamingTools, lastMsgId, lastMsgTextLen) {
+    LaunchedEffect(messages.size, loading, streamingText, streamingTools, lastMsgId, lastMsgTextLen, imeInset) {
         // El conteo REAL de items ya compuestos (listState.layoutInfo), no un cálculo
         // a ciegas. Antes se usaba `messages.size + 1` para sumar el item "live", que
         // Todavía puede no existir en la primera pasada: animateScrollToItem lanzaba
@@ -428,6 +438,12 @@ fun ChatScreen(
                             state = listState,
                             modifier = Modifier
                                 .fillMaxSize()
+                                // El compositor (bottomBar) ya sube con imePadding, pero
+                                // la lista de mensajes vive en el Box de contenido y
+                                // quedaba POR DEBAJO del teclado, tapando el final del
+                                // último mensaje. imePadding aquí recorta el área
+                                // visible al tamaño real disponible.
+                                .imePadding()
                                 .background(MaterialTheme.colorScheme.background),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
