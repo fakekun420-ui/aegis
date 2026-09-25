@@ -937,9 +937,17 @@ export class AntigravityAdapter extends BaseProviderAdapter {
           if (lines.length === 0) continue;
           const first = JSON.parse(lines[0]);
           createdAt = first.created_at || null;
-          if (first.content) {
-            const cleaned = this._cleanPromptContent(first.content);
-            if (cleaned) title = cleaned.slice(0, 60);
+          // Se recorren las primeras entradas buscando la primera que dé un título
+          // usable, en vez de asumir que es lines[0]. La primera línea puede ser un
+          // marcador de sistema o un ERROR_MESSAGE vacío (Antigravity sin tokens), y
+          // en ese caso el título se quedaba en el fallback "Antigravity: <id>" o, peor,
+          // en un texto sin limpiar.
+          for (const l of lines.slice(0, 8)) {
+            let entry;
+            try { entry = JSON.parse(l); } catch { continue; }
+            if (!entry || entry.type === "ERROR_MESSAGE" || !entry.content) continue;
+            const cleaned = this._cleanPromptContent(entry.content);
+            if (cleaned) { title = cleaned.slice(0, 60); break; }
           }
           const last = JSON.parse(lines[lines.length - 1]);
           updatedAt = last.created_at || createdAt;
@@ -1039,6 +1047,14 @@ export class AntigravityAdapter extends BaseProviderAdapter {
     str = str.replace(/<memory_context>[\s\S]*?<\/memory_context>/gi, "").trim();
     str = str.replace(/<ADDITIONAL_METADATA>[\s\S]*?<\/ADDITIONAL_METADATA>/gi, "").trim();
     str = str.replace(/<USER_SETTINGS_CHANGE>[\s\S]*?<\/USER_SETTINGS_CHANGE>/gi, "").trim();
+    // Tags <USER_REQUEST> residuales: el <SYSTEM_INSTRUCTION> inyectado puede
+    // contener una apertura o un cierre que rompe el match laxo de arriba, y
+    // entonces el tag se cuela en el texto. Con eso el título de la sesión salía
+    // literalmente "<USER_REQUEST>\nHola, dale detalles...". Se quitan en cualquier
+    // orden y se normalizan los saltos de línea, porque un título en una sola línea
+    // no debe llevarlos dentro.
+    str = str.replace(/<\/?USER_REQUEST>/gi, "").trim();
+    str = str.replace(/[ \t]*\n[ \t]*/g, " ").replace(/[ \t]{2,}/g, " ").trim();
     return str.trim();
   }
 
@@ -1096,6 +1112,42 @@ export class AntigravityAdapter extends BaseProviderAdapter {
         try {
           const item = JSON.parse(lineStr);
           const isUser = item.source === "USER_EXPLICIT" || item.type === "USER_INPUT";
+
+          // ERROR_MESSAGE: Antigravity escribe aquí sus fallos (típicamente
+          // "failed to get ... token" cuando la cuenta no tiene tokens). Antes se
+          // descartaba en silencio y el usuario veía un chat VACÍO, sin ninguna pista
+          // de por qué el modelo no contestaba. Se surfacea como mensaje del
+          // asistente para que la app pueda mostrarlo.
+          if (item.type === "ERROR_MESSAGE") {
+            flushAssistantTurn();
+            const errText = this._cleanPromptContent(item.content || item.message || "")
+              .trim();
+            if (errText) {
+              const createdTime = item.created_at ? new Date(item.created_at).getTime() : Date.now();
+              messages.push(
+                normalizeMessage({
+                  role: "assistant",
+                  text: `⚠️ Antigravity no pudo responder: ${errText}`,
+                  info: {
+                    id: `msg_agy_${sessionId}_err_${messages.length}`,
+                    role: "assistant",
+                    time: { created: createdTime },
+                    timestamp: createdTime,
+                    status: "SENT",
+                    deliveryStatus: "SENT"
+                  },
+                  parts: [
+                    {
+                      id: `prt_err_${messages.length}`,
+                      type: "text",
+                      text: `⚠️ Antigravity no pudo responder: ${errText}`,
+                    },
+                  ],
+                })
+              );
+            }
+            continue;
+          }
 
           if (isUser) {
             flushAssistantTurn();
