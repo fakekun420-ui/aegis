@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.*
 import okhttp3.MediaType.Companion.toMediaType
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -25,8 +27,6 @@ class MainViewModel : ViewModel() {
     private val _loadingSessions = MutableStateFlow(false)
     val loadingSessions: StateFlow<Boolean> = _loadingSessions
 
-    init { refreshAll() }
-
     fun refreshAll() {
         refreshProjects()
         refreshSessions()
@@ -36,21 +36,69 @@ class MainViewModel : ViewModel() {
 
     private val _deletedSessionIds = mutableSetOf<String>()
 
+    private val PROJECTS_RETRY_DELAYS_MS = listOf(1_000L, 2_000L, 4_000L)
+
+    // F8: backoff de reintentos para la lista de proyectos. La carga original ocurre UNA vez
+    // (init{refreshAll}); con un hub que se reinicia solo (keepalive) o con el token todavía
+    // no legible en frío, esa única carga fallaba y la lista quedaba vacía hasta que alguien
+    // creaba/borraba un proyecto (las únicas rutas que llamaban refreshProjects). Máximo 3
+    // reintentos: 1s + 2s + 4s; un refresco explícito (entrada a la ventana, pull-to-refresh,
+    // mutación) reinicia el contador y cancela el reintento pendiente.
+    private var projectsRetryJob: Job? = null
+    private var projectsRetries = 0
+
+    // Declarado DESPUÉS de las propiedades que usa: en Kotlin los init blocks y los
+    // initializers se ejecutan en orden de declaración, y con Dispatchers.Main.immediate
+    // el cuerpo de refreshProjects() puede correr de forma síncrona dentro de refreshAll().
+    init { refreshAll() }
+
     fun refreshProjects() {
+        projectsRetries = 0
+        projectsRetryJob?.cancel()
+        projectsRetryJob = null
+        loadProjects()
+    }
+
+    private fun loadProjects() {
         viewModelScope.launch {
             _loadingProjects.value = true
+            var retrying = false
             try {
                 val resp = api.getProjects()
                 if (resp.ok && resp.data != null) {
+                    projectsRetries = 0
                     _projects.value = resp.data.map { proj ->
                         if (proj.sessions != null) {
                             proj.copy(sessions = proj.sessions.filter { it.sessionId !in _deletedSessionIds })
                         } else proj
                     }
-                } else _error.value = resp.error ?: "getProjects failed"
-            } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
-            finally { _loadingProjects.value = false }
+                } else {
+                    _error.value = resp.error ?: "getProjects failed"
+                    retrying = scheduleProjectsRetry()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error de red"
+                retrying = scheduleProjectsRetry()
+            } finally {
+                // Si queda un reintento programado se mantiene el spinner: el estado vacío
+                // ("No tienes proyectos aún — crea el primero") sería mentira mientras el
+                // hub no responde.
+                if (!retrying) _loadingProjects.value = false
+            }
         }
+    }
+
+    /** Programa el siguiente intento (backoff 1s/2s/4s). true = queda algún intento pendiente. */
+    private fun scheduleProjectsRetry(): Boolean {
+        if (projectsRetries >= PROJECTS_RETRY_DELAYS_MS.size) return false
+        val waitMs = PROJECTS_RETRY_DELAYS_MS[projectsRetries]
+        projectsRetries++
+        projectsRetryJob?.cancel()
+        projectsRetryJob = viewModelScope.launch {
+            delay(waitMs)
+            loadProjects()
+        }
+        return true
     }
 
     fun refreshSessions() {

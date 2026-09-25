@@ -62,6 +62,13 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
             )
         }
         composable(NavRoutes.PROJECTS) {
+            // F8: refrescar la lista al ENTRAR en la ventana de Proyectos — paridad con F6
+            // en Chats (AppNavHost CHATS). La carga de init { refreshAll() } ocurre UNA sola
+            // vez: si falla en el arranque en frío (hub aún levantándose / 403 del token),
+            // _projects se quedaba vacía "para siempre" y sólo se llenaba al crear o borrar
+            // un proyecto, porque refreshProjects() sólo se invocaba tras mutaciones.
+            // Con esto la ventana siempre muestra el estado vivo del hub.
+            LaunchedEffect(Unit) { vm.refreshProjects() }
             ProjectsScreen(
                 projects = projects,
                 isLoading = vm.loadingProjects.collectAsState().value,
