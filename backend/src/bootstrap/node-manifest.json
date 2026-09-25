@@ -1,0 +1,10 @@
+{
+  "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-arm64.tar.gz",
+  "sha256": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5",
+  "fileName": "node-v24.21.0-linux-arm64.tar.gz",
+  "target": ".aegis/node",
+  "arch": "arm64",
+  "source": "SHA256 oficial obtenido 2026-09-23 de https://nodejs.org/dist/v24.21.0/SHASUMS256.txt (línea '724282c3…  node-v24.21.0-linux-arm64.tar.gz')",
+  "fallbackProot": "Vía proot: si el rootfs destino sólo es accesible vía proot (sin chroot/unshare), extrae este tarball dentro del rootfs (target <rootfs>/usr/local con --strip-components=1) y ejecuta los comandos posteriores como `proot -r <rootfs> -0 -b /dev -b /proc /usr/local/bin/node ...`. steps.js expone el modo detectado (chroot/unshare/proot) en el detail del paso ubuntu.",
+  "notes": "Node v24.21.0 linux-arm64 (misma versión que ejecuta el hub en el dispositivo). Si no hay binario node usable en el host, run('node') instala este tarball en $AEGIS_NODE_DIR o <target> (o reutiliza backend/node.bin de stage-node.sh si ya existe). Regla F2: sin 64 hex de sha256 NO se descarga nada."
+}

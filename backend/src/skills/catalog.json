@@ -1,0 +1,14 @@
+[
+  {
+    "id": "graphify",
+    "name": "graphify",
+    "description": "Convierte archivos en grafo de conocimiento (GraphRAG)"
+  },
+  {
+    "id": "opencode-mem",
+    "name": "opencode-mem",
+    "description": "Memoria persistente para OpenCode",
+    "version": "2.26.0",
+    "sha256": "0182f1afce5a5769c3a790febc2fbf3f89bd6ca6e938717135173c3029076558"
+  }
+]

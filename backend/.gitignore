@@ -1,0 +1,12 @@
+node.bin
+opencode.cjs
+.aegis_token
+# FASE F1 — estado persistente del wizard de bootstrap (generado, no versionar)
+bootstrap-state.json
+# FASE A-7 — higiene de archivos raíz: parches one-shot YA aplicados sobre MainActivity.kt
+# (RootShell.exec) y utilidades locales sueltas. No commitear; NO borrar del disco.
+patch_main.py
+patch_main_2.py
+copy_facebook_post.sh
+projects.json
+# (*.log ya cubierto por .gitignore raíz: `*.log` y `keepalive.log` — ver /sdcard/projects/.gitignore)

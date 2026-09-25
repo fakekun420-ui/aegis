@@ -1,0 +1,34 @@
+node_modules/
+*.log
+hub.log
+opencode.log
+backend/logs/
+*.tmp
+tmp/
+.opencode-mem/
+app/app/.gradle/
+app/app/build/
+app/build/
+app/local.properties
+*.keystore
+*.jks
+.idea/
+*.iml
+keepalive.lock
+keepalive.log
+ui-state.json
+**/graphify-out/
+*.apk
+
+# Archivos de runtime
+backend/projects.json
+backend/.aegis_token
+backend/bootstrap-state.json
+backend/ui-state.json
+backend/node.bin
+backend/opencode.cjs
+backend/patch_main.py
+backend/patch_main_2.py
+
+# Submódulo o repositorio embebido
+agents/

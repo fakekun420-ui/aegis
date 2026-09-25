@@ -1,0 +1,19 @@
+{
+  "defaultProvider": "antigravity",
+  "providers": [
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "type": "serve",
+      "description": "OpenCode local HTTP serve mode (port 4096)",
+      "enabled": true
+    },
+    {
+      "id": "antigravity",
+      "name": "Antigravity",
+      "type": "cli",
+      "description": "Google Antigravity CLI (agy)",
+      "enabled": true
+    }
+  ]
+}

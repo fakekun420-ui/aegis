@@ -1,0 +1,12 @@
+{
+  "name": "aegis-hub",
+  "version": "1.0.0",
+  "description": "Hub web + voz + bridge ROOT para opencode en POCO F3 / crDroid 15. Base para la app Aegis.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js --port 8765 --opencode-port 4096",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {}
+}

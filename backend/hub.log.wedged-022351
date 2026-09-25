@@ -1,0 +1,1435 @@
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 25603  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: no session (ownership none) — not auto-launching on startup; use POST /api/system/start when none
+  sessionOwnership: none (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[opencode] listModels fetch error: fetch failed
+[opencode] listModels fetch error: fetch failed
+[provider-mgr] listSessions error for opencode: connect ECONNREFUSED 127.0.0.1:4096
+[opencode] listModels fetch error: fetch failed
+[system] POST /api/system/start — sessionOwnership none, invoking keepalive + opencode ensure (host namespace)
+[session] persisted companion-owned pid 28573 port 4096
+[session] clearing stale companion meta pid 28573 (dead)
+[hub] creating session via opencode (title: companion:36892, project: mu6e90j5-fvgrx7)
+[hub] routing message for session ses_f3f027485ffeC10AWQQDH0HxX5 to provider opencode (project: mu6e90j5-fvgrx7)
+[hub] creating session via antigravity (title: companion:Opencode Companion:13392, project: mua4gydb-wgcwk9)
+[hub] routing message for session agy_muaeosm3_da17l9eh to provider antigravity (project: mua4gydb-wgcwk9)
+[antigravity] executing agy for session agy_muaeosm3_da17l9eh (convId: new)...
+[antigravity] Process 30529 exceeded hard 90s timeout. Killing group with SIGTERM...
+[hub] sendMessage error for agy_muaeosm3_da17l9eh: Antigravity CLI execution timed out after 90s
+[antigravity] Escalating to SIGKILL for process group 30529...
+[hub] routing message for session ses_f3fafc39affeq9hAnhTJc3xs77 to provider opencode (project: mu6e90j5-fvgrx7)
+[hub] creating session via opencode (title: companion:Kaesoft:69642, project: mu98ad63-s1svqt)
+[hub] routing message for session ses_f3ef43902ffelAWXBNB41uYeVf to provider opencode (project: mu6e90j5-fvgrx7)
+[hub] creating session via opencode (title: companion:Kaesoft:99618, project: mu98ad63-s1svqt)
+[hub] routing message for session ses_f3eea9c2affeJKwawTRVVYf96d to provider opencode (project: mu98ad63-s1svqt)
+[hub] SIGTERM — cierre limpio (keepalive relanza)
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 12931  node v24.21.0  keepAlive 125s (multimodal streaming)
+[opencode] listModels fetch error: This operation was aborted
+[hub] creating session via antigravity (title: Test Agy QA Session, project: mu6e90j5-fvgrx7)
+[hub] creating session via antigravity (title: Test Agy Route Intercept, project: mu6e90j5-fvgrx7)
+[hub] routing message for session agy_muaiwngj_mq4t87k5 to provider antigravity (project: mu6e90j5-fvgrx7, streaming: true)
+[antigravity] executing agy for session agy_muaiwngj_mq4t87k5 (convId: new, streaming: true)...
+[hub] creating session via antigravity (title: companion:85851, project: mu6e90j5-fvgrx7)
+[hub] routing message for session agy_muajdj1m_pq7mee22 to provider antigravity (project: mu6e90j5-fvgrx7, streaming: true)
+[antigravity] executing agy for session agy_muajdj1m_pq7mee22 (convId: new, streaming: true)...
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 19041  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"1.18.31","raw":{"healthy":true,"version":"1.18.31"}} pids=19011 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[hub] routing message for session agy_muajdj1m_pq7mee22 to provider opencode (project: mu6e90j5-fvgrx7, streaming: true)
+[hub] routing message for session agy_muajdj1m_pq7mee22 to provider opencode (project: mu6e90j5-fvgrx7, streaming: undefined)
+[hub] routing message for session agy_muajdj1m_pq7mee22 to provider antigravity (project: mu6e90j5-fvgrx7, streaming: true)
+[antigravity] executing agy for session agy_muajdj1m_pq7mee22 (convId: 7125314e-1759-4613-baf8-2f1892c66503, streaming: true)...
+[hub] routing message for session agy_muajdj1m_pq7mee22 to provider antigravity (project: mu6e90j5-fvgrx7, streaming: true)
+[antigravity] executing agy for session agy_muajdj1m_pq7mee22 (convId: 7125314e-1759-4613-baf8-2f1892c66503, streaming: true)...
+[hub] routing message for session agy_muajdj1m_pq7mee22 to provider antigravity (project: mu6e90j5-fvgrx7, streaming: true)
+[antigravity] executing agy for session agy_muajdj1m_pq7mee22 (convId: 7125314e-1759-4613-baf8-2f1892c66503, streaming: true)...
+[hub] clientError Error: read ECONNRESET
+[hub] creating session via antigravity (title: companion:96407, project: mu6e90j5-fvgrx7)
+[hub] routing message for session agy_muajx1mm_fiffz625 to provider antigravity (project: mu6e90j5-fvgrx7, streaming: true)
+[antigravity] executing agy for session agy_muajx1mm_fiffz625 (convId: new, streaming: true)...
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/53e9a33c-1754-4aa1-aa1d-7bd11deff1d2
+[hub] SIGTERM — cierre limpio (keepalive relanza)
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 13154  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"1.18.31","raw":{"healthy":true,"version":"1.18.31"}} pids=19011 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[hub] creating session via opencode (title: Test Loose Chat Strict, project: none)
+[hub] routing message for session ses_f3e4c6224ffeJYpGqu0uE4AOKJ to provider opencode (project: none, mode: build, streaming: undefined)
+[hub] creating session via antigravity (title: Test AGY Delete Session, project: none)
+[hub] creating session via opencode (title: companion:31334, project: none)
+[hub] routing message for session ses_f3e4b6f43ffeajin5ugDT5KH4M to provider opencode (project: none, mode: build, streaming: true)
+[hub] routing message for session ses_f3e4b6f43ffeajin5ugDT5KH4M to provider opencode (project: none, mode: build, streaming: undefined)
+[hub] routing message for session ses_f3e4b6f43ffeajin5ugDT5KH4M to provider opencode (project: none, mode: build, streaming: true)
+[hub] routing message for session ses_f3e4b6f43ffeajin5ugDT5KH4M to provider opencode (project: none, mode: build, streaming: undefined)
+[hub] routing message for session ses_f3e4b6f43ffeajin5ugDT5KH4M to provider antigravity (project: none, mode: plan, streaming: true)
+[antigravity] executing agy for session ses_f3e4b6f43ffeajin5ugDT5KH4M (convId: new, streaming: true)...
+[hub] routing message for session ses_f3e4b6f43ffeajin5ugDT5KH4M to provider antigravity (project: none, mode: plan, streaming: true)
+[antigravity] executing agy for session ses_f3e4b6f43ffeajin5ugDT5KH4M (convId: 2da7930d-0bc3-498c-a97a-4877ccb0844c, streaming: true)...
+[hub] routing message for session ses_f3e4b6f43ffeajin5ugDT5KH4M to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session ses_f3e4b6f43ffeajin5ugDT5KH4M (convId: 2da7930d-0bc3-498c-a97a-4877ccb0844c, streaming: true)...
+[hub] routing message for session ses_f3e4b6f43ffeajin5ugDT5KH4M to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session ses_f3e4b6f43ffeajin5ugDT5KH4M (convId: 2da7930d-0bc3-498c-a97a-4877ccb0844c, streaming: true)...
+[hub] routing message for session ses_f3e4b6f43ffeajin5ugDT5KH4M to provider antigravity (project: none, mode: plan, streaming: true)
+[antigravity] executing agy for session ses_f3e4b6f43ffeajin5ugDT5KH4M (convId: 2da7930d-0bc3-498c-a97a-4877ccb0844c, streaming: true)...
+[hub] routing message for session 2da7930d-0bc3-498c-a97a-4877ccb0844c to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session 2da7930d-0bc3-498c-a97a-4877ccb0844c (convId: 2da7930d-0bc3-498c-a97a-4877ccb0844c, streaming: true)...
+[hub] routing message for session 2da7930d-0bc3-498c-a97a-4877ccb0844c to provider antigravity (project: none, mode: plan, streaming: true)
+[antigravity] executing agy for session 2da7930d-0bc3-498c-a97a-4877ccb0844c (convId: 2da7930d-0bc3-498c-a97a-4877ccb0844c, streaming: true)...
+[hub] routing message for session 2da7930d-0bc3-498c-a97a-4877ccb0844c to provider antigravity (project: none, mode: plan, streaming: true)
+[antigravity] executing agy for session 2da7930d-0bc3-498c-a97a-4877ccb0844c (convId: 2da7930d-0bc3-498c-a97a-4877ccb0844c, streaming: true)...
+[hub] creating session via antigravity (title: companion:Proyecto PonyTail QA:84855, project: muajisy5-tv99vf)
+[hub] routing message for session agy_mualztby_5ww2v8e4 to provider antigravity (project: muajisy5-tv99vf, mode: build, streaming: true)
+[antigravity] executing agy for session agy_mualztby_5ww2v8e4 (convId: new, streaming: true)...
+[hub] SIGTERM — cierre limpio (keepalive relanza)
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 11079  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"1.18.31","raw":{"healthy":true,"version":"1.18.31"}} pids=19011 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[hub] creating session via antigravity (title: Session To Delete Immediately, project: none)
+[hub] creating session via opencode (title: companion:91906, project: none)
+[hub] routing message for session ses_f3e22d663ffeybVO5oLS7ydAPX to provider opencode (project: none, mode: plan, streaming: true)
+[hub] routing message for session ses_f3e22d663ffeybVO5oLS7ydAPX to provider opencode (project: none, mode: plan, streaming: undefined)
+[hub] routing message for session ses_f3e22d663ffeybVO5oLS7ydAPX to provider antigravity (project: none, mode: plan, streaming: true)
+[antigravity] executing agy for session ses_f3e22d663ffeybVO5oLS7ydAPX (convId: new, streaming: true)...
+[hub] creating session via antigravity (title: Test Delete UI Badge AGY, project: none)
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/2da7930d-0bc3-498c-a97a-4877ccb0844c
+[hub] routing message for session 1d3df7b5-1397-4101-915b-3fb03e39022d to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session 1d3df7b5-1397-4101-915b-3fb03e39022d (convId: 1d3df7b5-1397-4101-915b-3fb03e39022d, streaming: true)...
+[hub] creating session via opencode (title: Chat 1810, project: none)
+[hub] routing message for session ses_f3e1dcdbbffeFLkgkE1cm6a1Au to provider opencode (project: none, mode: plan, streaming: true)
+[hub] routing message for session ses_f3e1dcdbbffeFLkgkE1cm6a1Au to provider opencode (project: none, mode: plan, streaming: undefined)
+[hub] routing message for session ses_f3e1dcdbbffeFLkgkE1cm6a1Au to provider opencode (project: none, mode: plan, streaming: true)
+[hub] routing message for session ses_f3e1dcdbbffeFLkgkE1cm6a1Au to provider opencode (project: none, mode: plan, streaming: undefined)
+[hub] routing message for session ses_f3e1dcdbbffeFLkgkE1cm6a1Au to provider opencode (project: none, mode: plan, streaming: true)
+[hub] routing message for session ses_f3e1dcdbbffeFLkgkE1cm6a1Au to provider opencode (project: none, mode: plan, streaming: undefined)
+[hub] creating session via opencode (title: Chat 6788, project: none)
+[hub] routing message for session ses_f3e1cf6fbffed0MTj8Q2qq0R3P to provider opencode (project: none, mode: plan, streaming: true)
+[hub] routing message for session ses_f3e1cf6fbffed0MTj8Q2qq0R3P to provider opencode (project: none, mode: plan, streaming: undefined)
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/204fcbc9-0d99-4bf6-a975-fd5031433f91
+[hub] creating session via opencode (title: companion:Agencia de Marketing:98649, project: mu6e90j5-fvgrx7)
+[hub] routing message for session ses_f3e150070ffeYDaV13hK3nXmbv to provider opencode (project: mu6e90j5-fvgrx7, mode: build, streaming: true)
+[hub] routing message for session ses_f3e150070ffeYDaV13hK3nXmbv to provider opencode (project: mu6e90j5-fvgrx7, mode: build, streaming: undefined)
+[hub] SIGTERM — cierre limpio (keepalive relanza)
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 28377  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"1.18.31","raw":{"healthy":true,"version":"1.18.31"}} pids=19011 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[hub] creating session via antigravity (title: untitled, project: none)
+[hub] SIGTERM — cierre limpio (keepalive relanza)
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 30923  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"1.18.31","raw":{"healthy":true,"version":"1.18.31"}} pids=19011 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[hub] creating session via antigravity (title: untitled, project: none)
+[hub] creating session via antigravity (title: untitled, project: none)
+[hub] routing message for session agy_muaoaihp_5fcufh27 to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session agy_muaoaihp_5fcufh27 (convId: new, streaming: true)...
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/3fecadb2-42ed-4432-8c49-f2dae225b350
+[hub] creating session via antigravity (title: Chat 1595, project: none)
+[hub] routing message for session agy_muaoqrmw_gm5o6yd4 to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session agy_muaoqrmw_gm5o6yd4 (convId: new, streaming: true)...
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/61fc19ce-fc1f-4f6c-9ff7-a19eeb44b6e2
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/13b36772-7e24-40b9-898a-199ecce3fd16
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/8dec5966-c832-46b4-bd1e-b9ef0e7d354a
+[hub] creating session via antigravity (title: companion:Petite Raw:5309, project: muaox5lr-eru8gb)
+[hub] routing message for session agy_muaox9z7_ymaw91yq to provider antigravity (project: muaox5lr-eru8gb, mode: plan, streaming: true)
+[antigravity] executing agy for session agy_muaox9z7_ymaw91yq (convId: new, streaming: true)...
+[hub] creating session via antigravity (title: companion:Petite Raw:3332, project: muaox5lr-eru8gb)
+[hub] routing message for session agy_muaozdm5_s06mr1sj to provider antigravity (project: muaox5lr-eru8gb, mode: plan, streaming: true)
+[antigravity] executing agy for session agy_muaozdm5_s06mr1sj (convId: new, streaming: true)...
+[antigravity] Process 12375 exceeded hard 90s timeout. Killing group with SIGTERM...
+[hub] sendMessage error for agy_muaozdm5_s06mr1sj: Antigravity CLI execution timed out after 90s
+[hub] unhandledRejection ReferenceError: isStream is not defined
+    at Server.<anonymous> (file:///sdcard/projects/opencode-companion/server.js:1056:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+[antigravity] Escalating to SIGKILL for process group 12375...
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 10402  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"1.18.31","raw":{"healthy":true,"version":"1.18.31"}} pids=19011 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[hub] creating session via antigravity (title: Chat 4876, project: none)
+[hub] routing message for session agy_muasfxu2_nyhm2cdd to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session agy_muasfxu2_nyhm2cdd (convId: new, streaming: true)...
+[hub] clientError Error: read ECONNRESET
+[hub] creating session via antigravity (title: companion:Opencode Companion:36809, project: mua4gydb-wgcwk9)
+[hub] routing message for session agy_muasijwx_tacnpgwh to provider antigravity (project: mua4gydb-wgcwk9, mode: plan, streaming: true)
+[antigravity] executing agy for session agy_muasijwx_tacnpgwh (convId: new, streaming: true)...
+[hub] routing message for session agy_muasijwx_tacnpgwh to provider antigravity (project: mua4gydb-wgcwk9, mode: plan, streaming: true)
+[antigravity] executing agy for session agy_muasijwx_tacnpgwh (convId: fccc1cc7-a31d-489a-8fed-c23d706160d5, streaming: true)...
+[hub] routing message for session agy_muasijwx_tacnpgwh to provider antigravity (project: mua4gydb-wgcwk9, mode: plan, streaming: true)
+[antigravity] executing agy for session agy_muasijwx_tacnpgwh (convId: fccc1cc7-a31d-489a-8fed-c23d706160d5, streaming: true)...
+[hub] routing message for session agy_muasijwx_tacnpgwh to provider antigravity (project: mua4gydb-wgcwk9, mode: plan, streaming: true)
+[antigravity] executing agy for session agy_muasijwx_tacnpgwh (convId: fccc1cc7-a31d-489a-8fed-c23d706160d5, streaming: true)...
+[hub] sendMessage error for agy_muasijwx_tacnpgwh: Antigravity exited with code 1: error: invalid model selection (--model "gemini-3.8-flash-high" --effort ""): model gemini-3.8-flash-high is not recognized as a known model or custom model in settings
+[hub] unhandledRejection ReferenceError: isStream is not defined
+    at Server.<anonymous> (file:///sdcard/projects/opencode-companion/server.js:1056:7)
+[hub] routing message for session agy_muasijwx_tacnpgwh to provider antigravity (project: mua4gydb-wgcwk9, mode: plan, streaming: undefined)
+[antigravity] executing agy for session agy_muasijwx_tacnpgwh (convId: fccc1cc7-a31d-489a-8fed-c23d706160d5, streaming: false)...
+[hub] routing message for session agy_muasijwx_tacnpgwh to provider antigravity (project: mua4gydb-wgcwk9, mode: build, streaming: true)
+[antigravity] executing agy for session agy_muasijwx_tacnpgwh (convId: fccc1cc7-a31d-489a-8fed-c23d706160d5, streaming: true)...
+[hub] SIGTERM — cierre limpio (keepalive relanza)
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 22386  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"1.18.31","raw":{"healthy":true,"version":"1.18.31"}} pids=19011 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : http://192.168.191.168:8765  |  http://192.168.191.255:8765
+
+[hub] creating session via antigravity (title: Nuevo chat, project: none)
+[hub] routing message for session agy_mubtwxr2_rgejv65j to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session agy_mubtwxr2_rgejv65j (convId: new, streaming: true)...
+[hub] routing message for session agy_mubtwxr2_rgejv65j to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session agy_mubtwxr2_rgejv65j (convId: 1e97bb7a-bc4e-47cf-bcdb-8c37992146db, streaming: true)...
+[hub] routing message for session agy_mubtwxr2_rgejv65j to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session agy_mubtwxr2_rgejv65j (convId: 1e97bb7a-bc4e-47cf-bcdb-8c37992146db, streaming: true)...
+[hub] creating session via antigravity (title: Chat 8737, project: none)
+[hub] creating session via antigravity (title: Nuevo chat, project: none)
+[hub] routing message for session agy_mubx12xy_3everdjs to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session agy_mubx12xy_3everdjs (convId: new, streaming: true)...
+[hub] routing message for session agy_mubx12xy_3everdjs to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session agy_mubx12xy_3everdjs (convId: c416825d-bb57-4fd6-a8b9-6e3e28550a37, streaming: true)...
+[hub] routing message for session agy_mubx12xy_3everdjs to provider antigravity (project: none, mode: plan, streaming: true)
+[antigravity] executing agy for session agy_mubx12xy_3everdjs (convId: c416825d-bb57-4fd6-a8b9-6e3e28550a37, streaming: true)...
+[hub] routing message for session agy_mubx12xy_3everdjs to provider antigravity (project: none, mode: plan, streaming: true)
+[antigravity] executing agy for session agy_mubx12xy_3everdjs (convId: c416825d-bb57-4fd6-a8b9-6e3e28550a37, streaming: true)...
+[hub] routing message for session 1e97bb7a-bc4e-47cf-bcdb-8c37992146db to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session 1e97bb7a-bc4e-47cf-bcdb-8c37992146db (convId: 1e97bb7a-bc4e-47cf-bcdb-8c37992146db, streaming: true)...
+[antigravity] Process 15730 exceeded hard 90s timeout. Killing group with SIGTERM...
+[hub] sendMessage error for 1e97bb7a-bc4e-47cf-bcdb-8c37992146db: Antigravity CLI execution timed out after 90s
+[hub] unhandledRejection ReferenceError: isStream is not defined
+    at Server.<anonymous> (file:///sdcard/projects/opencode-companion/server.js:1056:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+[antigravity] Escalating to SIGKILL for process group 15730...
+[hub] routing message for session 1e97bb7a-bc4e-47cf-bcdb-8c37992146db to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session 1e97bb7a-bc4e-47cf-bcdb-8c37992146db (convId: 1e97bb7a-bc4e-47cf-bcdb-8c37992146db, streaming: true)...
+[hub] routing message for session 1e97bb7a-bc4e-47cf-bcdb-8c37992146db to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session 1e97bb7a-bc4e-47cf-bcdb-8c37992146db (convId: 1e97bb7a-bc4e-47cf-bcdb-8c37992146db, streaming: true)...
+[hub] routing message for session 1e97bb7a-bc4e-47cf-bcdb-8c37992146db to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session 1e97bb7a-bc4e-47cf-bcdb-8c37992146db (convId: 1e97bb7a-bc4e-47cf-bcdb-8c37992146db, streaming: true)...
+[hub] SIGTERM — cierre limpio (keepalive relanza)
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 24281  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"1.18.31","raw":{"healthy":true,"version":"1.18.31"}} pids=19011 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 24672  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"1.18.31","raw":{"healthy":true,"version":"1.18.31"}} pids=19011 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+[hub] puerto 8765 ocupado — deja el existente y salgo con 0
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 27192  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: no session (ownership none) — not auto-launching on startup; use POST /api/system/start when none
+  sessionOwnership: none (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[opencode] listModels fetch error: Unexpected token '<', "<!doctype "... is not valid JSON
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 5551  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: no session (ownership none) — not auto-launching on startup; use POST /api/system/start when none
+  sessionOwnership: none (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[opencode] listModels fetch error: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] SIGTERM — cierre limpio (keepalive relanza)
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 31159  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"v2","raw":"<!doctype html>\n<html lang=\"en\" style=\"background-color: var(--v2-ba pids=28570 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[opencode] listModels fetch error: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:2498:50)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:2498:50)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] creating session via antigravity (title: Chat 9177, project: none)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[opencode] listModels fetch error: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] routing message for session agy_mudi7mei_ruve2ey9 to provider antigravity (project: none, mode: build, streaming: true)
+[antigravity] executing agy for session agy_mudi7mei_ruve2ey9 (convId: new, streaming: true)...
+[hub] creating session via antigravity (title: Chat 1437, project: none)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/ed8f444b-168f-4e64-8c19-e832ab542c77
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/0adc77f9-68a1-4e32-8e03-d012d3a287c4
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/7cd5e3ec-156e-4696-ae9e-7ff5f72135e8
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[antigravity] purged brain directory: /root/.gemini/antigravity-cli/brain/fccc1cc7-a31d-489a-8fed-c23d706160d5
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] creating session via antigravity (title: companion:Aegis:41109, project: mua4gydb-wgcwk9)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[hub] routing message for session agy_mudia0re_p4xb4kqi to provider antigravity (project: mua4gydb-wgcwk9, mode: build, streaming: true)
+[antigravity] executing agy for session agy_mudia0re_p4xb4kqi (convId: new, streaming: true)...
+[antigravity] Process 17691 exceeded hard 90s timeout. Killing group with SIGTERM...
+[hub] sendMessage error for agy_mudia0re_p4xb4kqi: Antigravity CLI execution timed out after 90s
+[hub] routing message for session agy_mudia0re_p4xb4kqi to provider antigravity (project: mua4gydb-wgcwk9, mode: build, streaming: undefined)
+[antigravity] executing agy for session agy_mudia0re_p4xb4kqi (convId: new, streaming: false)...
+[antigravity] Escalating to SIGKILL for process group 17691...
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[antigravity] Process 17971 exceeded hard 90s timeout. Killing group with SIGTERM...
+[hub] sendMessage error for agy_mudia0re_p4xb4kqi: Antigravity CLI execution timed out after 90s
+[antigravity] Escalating to SIGKILL for process group 17971...
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] routing message for session d42665b3-83f0-43fe-856d-c6edf89c5046 to provider antigravity (project: mua4gydb-wgcwk9, mode: build, streaming: true)
+[antigravity] executing agy for session d42665b3-83f0-43fe-856d-c6edf89c5046 (convId: d42665b3-83f0-43fe-856d-c6edf89c5046, streaming: true)...
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] clientError Error: read ECONNRESET
+[hub] unhandledRejection Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the client
+    at ServerResponse.writeHead (node:_http_server:411:11)
+    at send (file:///sdcard/projects/Aegis/backend/server.js:485:7)
+    at json (file:///sdcard/projects/Aegis/backend/server.js:488:32)
+    at Server.<anonymous> (file:///sdcard/projects/Aegis/backend/server.js:1729:12)
+    at Server.emit (node:events:514:28)
+    at parserOnIncoming (node:_http_server:1293:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 19246  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"v2","raw":"<!doctype html>\n<html lang=\"en\" style=\"background-color: var(--v2-ba pids=19221 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[opencode] listModels fetch error: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+
+[opencode-companion] hub listening http://0.0.0.0:8765
+  local  : http://127.0.0.1:8765
+  proxy  : /opencode/* -> http://127.0.0.1:4096
+  api    : /api/status  /api/device/*
+  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)
+  pid    : 27067  node v24.21.0  keepAlive 125s (multimodal streaming)
+  opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"v2","raw":"<!doctype html>\n<html lang=\"en\" style=\"background-color: var(--v2-ba pids=27036 — not launching (non-destructive)
+  sessionOwnership: termux-native (hub startup)
+  LAN    : (no se detectó IP, usa el IP de WiFi en Ajustes > Acerca del teléfono)
+
+[opencode] listModels fetch error: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[provider-mgr] listSessions error for opencode: Failed to parse OpenCode sessions: Unexpected token '<', "<!doctype "... is not valid JSON
+[hub] SIGTERM — cierre limpio (keepalive relanza)
+[2026-09-23T23:13:51.902Z] [INFO] [hub] [hub] listening http://127.0.0.1:8765 (loopback only) {}
+[2026-09-23T23:13:51.909Z] [INFO] [hub]   local  : http://127.0.0.1:8765 {}
+[2026-09-23T23:13:51.909Z] [INFO] [hub]   proxy  : /opencode/* -> http://127.0.0.1:4096 {}
+[2026-09-23T23:13:51.909Z] [INFO] [hub]   api    : /api/status  /api/device/* {}
+[2026-09-23T23:13:51.909Z] [INFO] [hub]   session: /api/system/status (ownership)  /api/system/session-info (pid/uptime) {}
+[2026-09-23T23:13:51.909Z] [INFO] [hub]   pid    : 3523  node v24.21.0  keepAlive 125s (multimodal streaming) {}
+[2026-09-23T23:13:51.909Z] [INFO] [hub]   motor  : jobScheduler started (1 jobs) + eventBus logger suscrito a 7 eventos {}
+[2026-09-23T23:13:51.909Z] [INFO] [hub] hub startup {"port":8765,"bind":"127.0.0.1","routers":["skills","projects","jobs","agents","workflows","content"],"jobs":["companion-meta-sweep"],"proxy":"127.0.0.1:4096","pid":3523,"node":"v24.21.0"}
+[2026-09-23T23:13:51.942Z] [INFO] [hub]   opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"v2","raw":"<!doctype html>\n<html lang=\"en\" style=\"background-color: var(--v2-ba pids=27036 — not launching (non-destructive) {}
+[2026-09-23T23:13:51.943Z] [INFO] [hub]   sessionOwnership: termux-native (hub startup) {}
+[2026-09-23T23:13:52.065Z] [INFO] [hub]   LAN    : inaccesible — el hub solo escucha en 127.0.0.1 (IPs detectadas: 192.168.1.14, 192.168.1.255, 192.168.28.139, 192.168.28.255) {}
+[opencode] listModels fetch error: Unexpected token '<', "<!doctype "... is not valid JSON
+[2026-09-23T23:14:06.010Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:14:20.146Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:14:34.335Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:14:48.527Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:15:02.691Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:15:16.852Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:15:30.990Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:15:45.126Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:15:59.281Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:16:13.428Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:16:27.944Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:16:41.879Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:16:56.014Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:17:10.171Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:17:24.291Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:17:38.413Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:17:52.524Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:18:06.664Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:18:20.880Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:18:35.054Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:18:49.204Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:19:03.379Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:19:17.530Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:19:31.676Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:19:45.838Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:20:00.043Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:20:14.173Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:20:28.349Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:20:42.538Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:20:56.681Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:21:10.819Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:21:24.960Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:21:39.108Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:21:53.274Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:22:07.398Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:22:21.626Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:22:35.814Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:22:50.027Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:23:04.252Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:23:18.488Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:23:32.694Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:23:46.887Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:24:01.084Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:24:15.255Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:24:29.387Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:24:43.549Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:24:57.719Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:25:11.976Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:25:25.990Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:25:40.191Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:25:54.428Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:26:08.566Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:26:22.728Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:26:36.850Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:26:50.963Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:27:05.177Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:27:19.376Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:27:33.634Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:27:47.780Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:28:01.978Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:28:16.187Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:28:30.302Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:28:44.478Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:28:58.697Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:29:12.805Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:29:26.980Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:29:41.121Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:29:55.330Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:30:09.484Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:30:23.629Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:30:37.795Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:30:51.944Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:31:06.147Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:31:20.343Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:31:34.513Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:31:48.685Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:32:02.918Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:32:17.140Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:32:31.300Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:32:45.452Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:32:59.717Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:33:13.898Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:33:28.148Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:33:42.322Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:33:56.523Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:34:10.742Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:34:24.901Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:34:39.164Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:34:53.331Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:35:07.491Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:35:21.630Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:35:35.845Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:35:50.006Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:36:04.220Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:36:18.453Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:36:32.609Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:36:46.828Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:37:01.025Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:37:15.172Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:37:29.325Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:37:43.578Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:37:57.746Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:38:11.930Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:38:26.135Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:38:40.278Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:38:54.525Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:39:08.702Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:39:23.008Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:39:37.220Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:39:51.497Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:40:05.620Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:40:19.799Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:40:34.001Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:40:48.160Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:41:02.382Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:41:16.568Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:41:30.818Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:41:44.950Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:41:59.138Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:42:13.321Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:42:27.444Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:42:41.724Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:42:55.939Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:43:10.110Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:43:24.293Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:43:38.451Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:43:52.700Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:44:06.930Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:44:21.118Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:44:35.326Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:44:49.520Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:45:03.678Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:45:17.898Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:45:32.058Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:45:46.222Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:46:00.395Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:46:14.564Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:46:28.752Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:46:42.927Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:46:57.148Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:47:11.324Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:47:25.558Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:47:39.728Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:47:53.875Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:48:08.063Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:48:22.283Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:48:36.420Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:48:50.606Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:49:04.821Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:49:19.036Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:49:33.209Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:49:47.418Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:50:01.551Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:50:15.780Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:50:29.945Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:50:44.158Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:50:58.402Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:51:12.595Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:51:26.650Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:51:40.869Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:51:55.111Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:52:09.313Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:52:23.464Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:52:37.634Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:52:51.969Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:53:06.088Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:53:20.322Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:53:34.457Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:53:48.692Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:54:02.923Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:54:03.668Z] [INFO] [hub] [hub] SIGTERM — cierre limpio (keepalive relanza) {}
+[2026-09-23T23:54:04.830Z] [INFO] [hub] [hub] listening http://127.0.0.1:8765 (loopback only) {}
+[2026-09-23T23:54:04.831Z] [INFO] [hub]   local  : http://127.0.0.1:8765 {}
+[2026-09-23T23:54:04.831Z] [INFO] [hub]   proxy  : /opencode/* -> http://127.0.0.1:4096 {}
+[2026-09-23T23:54:04.831Z] [INFO] [hub]   api    : /api/status  /api/device/* {}
+[2026-09-23T23:54:04.831Z] [INFO] [hub]   session: /api/system/status (ownership)  /api/system/session-info (pid/uptime) {}
+[2026-09-23T23:54:04.831Z] [INFO] [hub]   pid    : 19977  node v24.21.0  keepAlive 125s (multimodal streaming) {}
+[2026-09-23T23:54:04.831Z] [INFO] [hub]   motor  : jobScheduler started (1 jobs) + eventBus logger suscrito a 7 eventos {}
+[2026-09-23T23:54:04.831Z] [INFO] [hub] hub startup {"port":8765,"bind":"127.0.0.1","routers":["skills","projects","jobs","agents","workflows","content"],"jobs":["companion-meta-sweep"],"proxy":"127.0.0.1:4096","pid":19977,"node":"v24.21.0"}
+[2026-09-23T23:54:04.863Z] [INFO] [hub]   opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"v2","raw":"<!doctype html>\n<html lang=\"en\" style=\"background-color: var(--v2-ba pids=27036 — not launching (non-destructive) {}
+[2026-09-23T23:54:04.864Z] [INFO] [hub]   sessionOwnership: termux-native (hub startup) {}
+[2026-09-23T23:54:04.979Z] [INFO] [hub]   LAN    : inaccesible — el hub solo escucha en 127.0.0.1 (IPs detectadas: 192.168.1.14, 192.168.1.255) {}
+[opencode] listModels fetch error: Unexpected token '<', "<!doctype "... is not valid JSON
+[2026-09-23T23:54:17.142Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:54:31.314Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:54:45.447Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:54:59.640Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:55:13.785Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:55:28.039Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:55:42.180Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:55:56.446Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:56:10.638Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:56:24.806Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:56:39.007Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:56:53.222Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:57:07.462Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:57:21.609Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:57:35.920Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:57:49.992Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:58:04.158Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:58:18.451Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:58:32.626Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:58:46.859Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:59:01.115Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:59:15.234Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:59:29.378Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:59:43.603Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-23T23:59:57.783Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:00:11.973Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:00:26.201Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:00:40.346Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:00:54.575Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:01:08.727Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:01:23.028Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:01:37.253Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:01:51.453Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:02:05.698Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:02:19.891Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:02:34.094Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:02:48.249Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:03:02.451Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:03:16.560Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:03:30.753Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:03:44.989Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:03:59.192Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:04:13.448Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:04:27.785Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:04:42.056Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:04:56.231Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:05:10.440Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:05:24.550Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:05:38.676Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:05:52.871Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:06:07.065Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:06:21.190Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:06:35.353Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:06:49.479Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:07:03.665Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:07:17.819Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:07:31.984Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:07:46.190Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:08:00.341Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:08:14.564Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:08:28.725Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:08:42.875Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:08:57.043Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:09:11.189Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:09:25.349Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:09:39.547Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:09:53.734Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:10:07.919Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:10:22.041Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:10:36.193Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:10:50.358Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:11:04.539Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:11:18.661Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:11:32.857Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:11:46.984Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:12:01.111Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:12:15.317Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:12:29.473Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:12:43.613Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:12:57.785Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:13:11.970Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:13:26.125Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:13:40.299Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:13:54.410Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:14:08.547Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:14:22.724Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:14:36.972Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:14:51.094Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:15:05.341Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:15:19.596Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:15:33.701Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:15:47.886Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:16:02.036Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:16:16.263Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:16:30.463Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:16:44.574Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:16:58.755Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:17:12.916Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:17:27.043Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:17:41.311Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:17:55.461Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:18:09.643Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:18:23.837Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:18:38.068Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:18:52.206Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:19:06.417Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:19:20.563Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:19:34.759Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:19:48.919Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:20:03.110Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:20:17.296Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:20:31.460Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:20:45.613Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:20:59.761Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:21:13.947Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:21:28.124Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:21:42.335Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:21:56.436Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:22:10.594Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:22:24.711Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:22:38.878Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:22:53.039Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:23:07.220Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:23:21.386Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:23:35.540Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:23:49.686Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:24:03.828Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:24:17.994Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:24:32.171Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:24:46.354Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:25:00.507Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:25:14.658Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:25:28.826Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:25:42.960Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:25:57.145Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:26:11.326Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:26:25.496Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:26:39.681Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:26:53.824Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:27:08.007Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:27:22.208Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:27:36.416Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:27:50.618Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:28:04.819Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:28:19.074Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:28:33.322Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:28:47.576Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:29:01.742Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:29:15.967Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:29:30.206Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:29:44.422Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:29:58.738Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:30:12.963Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:30:27.189Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:30:41.398Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:30:55.622Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:31:09.847Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:31:24.140Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:31:38.332Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:31:52.582Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:32:06.819Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:32:21.055Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:32:35.309Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:32:49.604Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:33:03.749Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:33:17.904Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:33:32.054Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:33:46.287Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:34:00.541Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:34:14.654Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:34:28.795Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:34:43.056Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:34:57.306Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:35:11.461Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:35:25.631Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:35:39.826Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:35:54.100Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:36:08.343Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:36:22.513Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:36:36.791Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:36:51.022Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:37:05.200Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:37:19.411Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:37:33.654Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:37:47.910Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:38:02.066Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:38:16.224Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:38:30.384Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:38:44.581Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:38:58.759Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:39:12.946Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:39:27.174Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:39:41.362Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:39:55.633Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:40:09.760Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:40:23.929Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:40:38.086Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:40:52.330Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:41:06.462Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:41:20.666Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:41:34.848Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:41:49.044Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:42:03.211Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:42:17.415Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:42:31.650Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:42:45.787Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:42:59.939Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:43:14.112Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:43:28.307Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:43:42.477Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:43:56.662Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:44:10.840Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:44:25.047Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:44:39.231Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:44:53.399Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:45:07.582Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:45:21.773Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:45:35.961Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:45:50.159Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:46:04.337Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:46:18.501Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:46:32.711Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:46:46.878Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:47:01.151Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:47:15.406Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:47:29.626Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:47:43.791Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:47:57.940Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:48:12.142Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:48:26.381Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:48:40.570Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:48:54.832Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:49:09.067Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:49:23.216Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:49:37.515Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:49:51.761Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:50:05.942Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:50:20.184Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:50:34.410Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:50:48.673Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:51:02.842Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:51:16.968Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:51:31.149Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:51:45.404Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:51:59.597Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:52:13.886Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:52:28.132Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:52:42.379Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:52:56.562Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:53:10.703Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:53:24.947Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:53:39.179Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:53:53.356Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:54:07.593Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:54:21.884Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:54:36.001Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:54:50.206Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:55:04.456Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:55:18.556Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:55:32.798Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:55:46.977Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:56:01.235Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:56:15.404Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:56:29.612Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:56:43.888Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:56:58.012Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:57:12.177Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:57:26.411Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:57:40.535Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:57:54.713Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:58:08.926Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:58:23.164Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:58:37.447Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:58:51.616Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:59:05.787Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:59:20.008Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:59:34.120Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T00:59:48.332Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:00:02.509Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:00:16.683Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:00:30.937Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:00:45.037Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:00:59.194Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:01:13.360Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:01:27.590Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:01:41.765Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:01:55.954Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:02:10.183Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:02:24.610Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:02:38.772Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:02:52.920Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:03:07.071Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:03:21.291Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:03:35.590Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:03:49.867Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:04:03.960Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:04:18.162Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:04:32.490Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:04:46.603Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:05:00.748Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:05:14.917Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:05:29.134Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:05:43.316Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:05:57.461Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:06:11.705Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:06:25.889Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:06:40.055Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:06:54.271Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:07:08.451Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:07:22.837Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:07:36.840Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:07:51.035Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:08:05.144Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:08:19.340Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:08:33.484Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:08:47.729Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:09:01.897Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:09:16.045Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:09:30.276Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:09:44.461Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:09:58.634Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:10:12.842Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:10:27.030Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:10:41.187Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:10:55.416Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:11:09.546Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:11:23.758Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:11:37.909Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:11:52.086Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:12:06.333Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:12:20.495Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:12:34.671Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:12:48.908Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:13:03.161Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:13:17.356Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:13:31.543Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:13:45.726Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:13:59.908Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:14:14.094Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:14:28.299Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:14:42.538Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:14:56.678Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:15:10.852Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:15:25.059Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:15:39.217Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:15:53.462Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:16:07.787Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:16:21.862Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:16:36.737Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:16:50.299Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:17:04.561Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:17:18.733Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:17:32.963Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:17:47.266Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:18:01.338Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:18:15.547Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:18:29.754Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:18:43.973Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:18:58.207Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:19:12.405Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:19:26.585Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:19:40.810Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:19:42.862Z] [INFO] [hub] [hub] SIGTERM — cierre limpio (keepalive relanza) {}
+[2026-09-24T01:19:44.030Z] [INFO] [hub] [hub] listening http://127.0.0.1:8765 (loopback only) {}
+[2026-09-24T01:19:44.032Z] [INFO] [hub]   local  : http://127.0.0.1:8765 {}
+[2026-09-24T01:19:44.032Z] [INFO] [hub]   proxy  : /opencode/* -> http://127.0.0.1:4096 {}
+[2026-09-24T01:19:44.032Z] [INFO] [hub]   api    : /api/status  /api/device/* {}
+[2026-09-24T01:19:44.032Z] [INFO] [hub]   session: /api/system/status (ownership)  /api/system/session-info (pid/uptime) {}
+[2026-09-24T01:19:44.032Z] [INFO] [hub]   pid    : 4956  node v24.21.0  keepAlive 125s (multimodal streaming) {}
+[2026-09-24T01:19:44.032Z] [INFO] [hub]   motor  : jobScheduler started (1 jobs) + eventBus logger suscrito a 7 eventos {}
+[2026-09-24T01:19:44.032Z] [INFO] [hub] hub startup {"port":8765,"bind":"127.0.0.1","routers":["skills","projects","jobs","agents","workflows","content"],"jobs":["companion-meta-sweep"],"proxy":"127.0.0.1:4096","pid":4956,"node":"v24.21.0"}
+[2026-09-24T01:19:44.065Z] [INFO] [hub]   opencode: existing termux-native session detected — health OK {"up":true,"healthy":true,"version":"v2","raw":"<!doctype html>\n<html lang=\"en\" style=\"background-color: var(--v2-ba pids=27036 — not launching (non-destructive) {}
+[2026-09-24T01:19:44.065Z] [INFO] [hub]   sessionOwnership: termux-native (hub startup) {}
+[2026-09-24T01:19:44.186Z] [INFO] [hub]   LAN    : inaccesible — el hub solo escucha en 127.0.0.1 (IPs detectadas: 192.168.1.14, 192.168.1.255) {}
+[opencode] listModels fetch error: Unexpected token '<', "<!doctype "... is not valid JSON
+[2026-09-24T01:19:54.985Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:20:09.176Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:20:23.406Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:20:37.545Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:20:51.771Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:21:05.902Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:21:20.092Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:21:34.261Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:21:48.423Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:22:02.629Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:22:16.768Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:22:30.938Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:22:45.141Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:22:59.270Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:23:13.454Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:23:27.610Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:23:41.781Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:23:55.973Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:24:10.121Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:24:24.313Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:24:38.431Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:24:52.618Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:25:06.833Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:25:21.031Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:25:35.229Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:25:49.346Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:26:03.505Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:26:17.676Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:26:31.915Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:26:46.103Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:27:00.241Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:27:14.412Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:27:28.594Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:27:42.817Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:27:56.986Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:28:11.161Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:28:25.306Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:28:39.494Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:28:53.658Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:29:07.827Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:29:21.994Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:29:36.246Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:29:50.381Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:30:04.600Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:30:18.763Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:30:32.967Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:30:47.165Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:31:01.341Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:31:15.585Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:31:29.757Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:31:43.877Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:31:58.029Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:32:12.198Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:32:26.439Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:32:40.605Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:32:54.784Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:33:09.080Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:33:23.226Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:33:37.393Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:33:51.584Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:34:05.804Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:34:19.957Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:34:34.131Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:34:48.317Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:35:02.462Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:35:16.687Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:35:30.823Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:35:45.064Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:35:59.202Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:36:13.393Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:36:27.538Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:36:41.703Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:36:55.916Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:37:10.135Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:37:24.323Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:37:38.567Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:37:52.703Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:38:06.902Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:38:21.081Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:38:35.268Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+file:///sdcard/projects/Aegis/backend/src/core/storage.js:20
+const PROJECTS_STORE_FILE = path.join(__dirname, "..", "..", "projects.json");
+                                      ^
+
+ReferenceError: __dirname is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and '/sdcard/projects/Aegis/backend/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///sdcard/projects/Aegis/backend/src/core/storage.js:20:39
+    at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+    at async node:internal/modules/esm/loader:647:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.21.0
+[2026-09-24T01:39:03.643Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:39:17.866Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:39:32.062Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:39:46.261Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:40:00.395Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:40:14.543Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:40:28.695Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:40:42.932Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:40:57.113Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:41:11.256Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:41:25.443Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:41:39.611Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:41:53.808Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:42:07.953Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:42:22.155Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:42:36.350Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:42:50.541Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:43:04.680Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:43:18.897Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:43:33.065Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:43:47.198Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:44:01.392Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:44:15.513Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:44:29.716Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:44:43.931Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:44:58.114Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:45:12.298Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:45:26.478Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:45:40.661Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:45:54.855Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:46:09.086Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:46:23.221Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:46:37.421Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:46:51.704Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:47:05.840Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:47:20.038Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:47:34.247Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:47:48.421Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:48:02.622Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:48:16.775Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:48:30.912Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:48:45.133Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:48:59.309Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:49:13.496Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:49:27.721Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:49:41.894Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:49:56.090Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:50:10.304Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:50:24.474Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:50:38.650Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:50:52.798Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:51:06.995Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:51:21.203Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:51:35.425Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:51:49.634Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:52:03.847Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:52:18.003Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:52:32.223Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:52:46.450Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:53:00.647Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:53:14.915Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:53:29.119Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:53:43.313Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:53:57.549Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:54:11.766Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:54:25.921Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:54:40.116Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:54:54.319Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:55:08.482Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:55:22.627Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:55:36.811Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:55:51.027Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:56:05.199Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:56:19.388Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:56:33.599Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:56:47.812Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:57:01.945Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:57:16.078Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:57:30.261Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:57:44.439Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:57:58.641Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:58:12.883Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:58:27.063Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:58:41.275Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:58:55.447Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:59:09.615Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:59:23.829Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:59:38.060Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T01:59:52.227Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:00:06.359Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:00:20.513Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:00:34.744Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:00:48.941Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:01:03.033Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:01:17.165Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:01:31.354Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:01:45.480Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:01:59.623Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:02:13.826Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:02:28.027Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:02:42.218Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:02:56.447Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:03:10.634Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:03:24.804Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:03:38.998Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:03:53.184Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:04:07.351Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:04:21.509Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:04:35.769Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:04:49.953Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:05:04.095Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:05:18.285Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:05:32.488Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:05:46.639Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:06:00.836Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:06:14.977Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:06:29.191Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:06:43.429Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:06:57.512Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:07:11.696Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:07:25.889Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:07:40.062Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:07:54.254Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:08:08.410Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:08:22.591Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:08:36.766Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:08:51.001Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:09:05.196Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:09:19.400Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:09:33.591Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:09:47.758Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:10:01.999Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:10:16.042Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:10:30.227Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:10:44.391Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:10:58.622Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:11:12.760Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:11:26.981Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:11:41.110Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:11:55.312Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:12:09.508Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:12:23.707Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:12:37.940Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:12:52.147Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:13:06.327Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:13:20.575Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:13:34.687Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:13:48.817Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:14:03.033Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:14:17.158Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:14:31.363Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:14:45.549Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:14:59.713Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:15:13.914Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:15:28.056Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:15:42.289Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:15:56.420Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:16:10.634Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:16:24.765Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:16:38.913Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:16:53.050Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:17:11.247Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:17:25.425Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:17:39.617Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:17:53.810Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
+[2026-09-24T02:17:54.167Z] [INFO] [hub] [hub] SIGTERM — cierre limpio (keepalive relanza) {}
+[2026-09-24T02:18:11.942Z] [ERROR] [hub] [hub] puerto 8765 ocupado — deja el existente y salgo con 0 {}
