@@ -89,6 +89,12 @@ fun ChatScreen(
         vm.load(sessionId, sessionProvider)
     }
 
+    // El ViewModel suele estar scoped a la Activity, así que onCleared NO se dispara
+    // al navegar a otro chat: el refresco seguiría preguntando al Hub en segundo plano.
+    DisposableEffect(sessionId) {
+        onDispose { vm.stopViewRefresh() }
+    }
+
     // Auto-scroll on new messages / loading / streaming tools or text changes.
     // Se observan también el id y la LONGITUD del último mensaje: antes la clave era
     // solo `messages.size`, de modo que cuando el asistente seguía escribiendo sobre el
@@ -98,11 +104,31 @@ fun ChatScreen(
     val lastMsgId = messages.lastOrNull()?.info?.id
     val lastMsgTextLen = messages.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(messages.size, loading, streamingText, streamingTools, lastMsgId, lastMsgTextLen) {
-        val hasLive = streamingText != null || streamingTools.isNotEmpty() || (loading && messages.isNotEmpty())
-        val totalCount = messages.size + (if (hasLive) 1 else 0)
-        if (totalCount > 0) {
-            delay(50)
-            try { listState.animateScrollToItem(totalCount - 1) } catch (_: Exception) {}
+        // El conteo REAL de items ya compuestos (listState.layoutInfo), no un cálculo
+        // a ciegas. Antes se usaba `messages.size + 1` para sumar el item "live", que
+        // Todavía puede no existir en la primera pasada: animateScrollToItem lanzaba
+        // IndexOutOfBounds y el `catch (_: Exception) {}` lo tragaba en silencio,
+        // dejando la lista clavada en el índice 0 — al abrir un chat se veía el
+        // PRIMER mensaje en lugar del más reciente.
+        //
+        // Se reintenta unas pocas veces porque el efecto corre ANTES de que el
+        // LazyColumn recomponga con los mensajes nuevos.
+        var intentos = 0
+        while (intentos < 8) {
+            val total = listState.layoutInfo.totalItemsCount
+            if (total > 0) {
+                val last = total - 1
+                if (intentos == 0) {
+                    // Salto instantáneo al final absoluto; animateScrollToItem
+                    // interpolaba desde arriba y a menudo no llegaba.
+                    listState.scrollToItem(last, Int.MAX_VALUE)
+                } else {
+                    listState.animateScrollToItem(last)
+                }
+                return@LaunchedEffect
+            }
+            intentos++
+            delay(80)
         }
     }
 

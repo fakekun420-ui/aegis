@@ -67,6 +67,14 @@ class ChatViewModel : ViewModel() {
 
     private var pollingJob: Job? = null
 
+    // Refresco CONTINUO mientras el chat está abierto. Antes solo existía el poll de
+    // envío (pollingJob), que se cancela al terminar el turno: mientras el usuario
+    // merely miraba un chat no había ninguna actualización, y tenía que salir y
+    // volver a entrar o enviar otro mensaje para ver cambios. Es un job aparte a
+    // propósito, para no chocar con el poll de envío.
+    private var viewRefreshJob: Job? = null
+    private var viewRefreshSessionId: String? = null
+
     // FASE A-5 (anti doble envío): clave del envío actualmente en vuelo
     // ("proveedor|sesión|texto|nº archivos"). Si llega un segundo click o una
     // reentrada con el MISMO contenido antes de que termine el envío actual,
@@ -148,8 +156,64 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Refresco periódico mientras el chat está visible.
+     *
+     * Antes de este cambio la pantalla solo cargaba los mensajes UNA vez al abrir
+     * (en [load]) y no volvía a preguntar nunca: cualquier respuesta que llegara
+     * después —por el Hub, por el CLI o por otro cliente— no se veía hasta que el
+     * usuario salía y reentraba, o enviaba otro mensaje.
+     *
+     * No pisa [_streamingText]: mientras hay texto en vivo del asistente la lista la
+     * manda el propio stream, y un refresh de medio segundo antes podría hacer parpadear
+     * la pantalla. Tampoco toca [_loading] ni [_error] para no tumbar la UI.
+     */
+    private fun startViewRefresh(sessionId: String) {
+        viewRefreshJob?.cancel()
+        viewRefreshSessionId = sessionId
+        viewRefreshJob = viewModelScope.launch {
+            while (isActive) {
+                delay(2000)
+                if (_currentSessionId.value != sessionId) break
+                // Durante un envío hay otro poll corriendo; no competimos con él.
+                if (pollingJob?.isActive == true) continue
+                if (!_streamingText.value.isNullOrBlank()) continue
+                try {
+                    val r = api.getMessages(sessionId)
+                    if (r.ok && r.data != null) {
+                        val fresh = r.data.filterNot { it.isEmpty }
+                        if (fresh != _messages.value) _messages.value = fresh
+                    }
+                } catch (_: Exception) {
+                    // Un fallo puntual de red no debe tumbar el refresco: el siguiente
+                    // ciclo reintenta solo.
+                }
+            }
+        }
+    }
+
+    fun stopViewRefresh() {
+        viewRefreshJob?.cancel()
+        viewRefreshJob = null
+        // Se limpia el id a propósito: si no, al volver a entrar en el MISMO chat
+        // load() vería sessionId == viewRefreshSessionId y no reiniciaría el refresco.
+        viewRefreshSessionId = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopViewRefresh()
+    }
+
     fun load(sessionId: String, provider: String? = null) {
         pollingJob?.cancel()
+        if (sessionId.isBlank()) {
+            stopViewRefresh()
+        } else if (viewRefreshSessionId != sessionId) {
+            // startViewRefresh cancela el job anterior por su cuenta, así que recargar
+            // la misma sesión tampoco deja el refresco muerto.
+            startViewRefresh(sessionId)
+        }
         val prov = (provider ?: if (sessionId.isBlank() || sessionId.startsWith("agy_")) "antigravity" else "opencode").lowercase().trim()
         _selectedProvider.value = prov
         // F6: sólo una sesión existente queda vinculada al proveedor de nacimiento;
