@@ -195,7 +195,7 @@ const OPENCODE_PORT = parseInt(
   10
 );
 const OPENCODE_HOST = process.env.OPENCODE_HOST || "127.0.0.1";
-const PROJECTS_ROOT = "/sdcard/projects";
+const PROJECTS_ROOT = process.env.PROJECTS_ROOT || "/sdcard/projects";
 const UI_STATE_FILE = path.join(__dirname, "ui-state.json");
 const SKILLS_ROOT = path.join(__dirname, "skills");
 const SUMMARIES_DIR = path.join(__dirname, "summaries");

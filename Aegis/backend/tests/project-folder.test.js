@@ -8,7 +8,7 @@ import net from "node:net";
 
 const BACKEND_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 const TOKEN_FILE = join(BACKEND_DIR, ".aegis_token");
-const PROJECTS_ROOT = "/sdcard/projects";
+const PROJECTS_ROOT = process.env.PROJECTS_ROOT || (fs.existsSync("/sdcard/projects") ? "/sdcard/projects" : join(BACKEND_DIR, "..", ".."));
 
 let child = null;
 let port = 0;
@@ -69,7 +69,7 @@ before(async () => {
     [join(BACKEND_DIR, "server.js"), "--port", String(port), "--opencode-port", "49374"],
     {
       cwd: BACKEND_DIR,
-      env: { ...process.env, AEGIS_RATE_LIMIT: "0", NODE_ENV: "test" },
+      env: { ...process.env, AEGIS_RATE_LIMIT: "0", NODE_ENV: "test", PROJECTS_ROOT: PROJECTS_ROOT },
       stdio: ["ignore", "ignore", "pipe"]
     }
   );
