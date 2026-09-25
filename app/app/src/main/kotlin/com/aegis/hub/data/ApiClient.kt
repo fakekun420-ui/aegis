@@ -43,10 +43,25 @@ object ApiClient {
         .setLenient()
         .create()
 
+    /**
+     * Tope de inactividad del cliente para esperar la respuesta del Hub.
+     *
+     * El Hub mantiene la conexión abierta durante TODO el turno agéntico (el modelo
+     * llama a herramientas, lee ficheros y ejecuta comandos), y no emite ni un byte
+     * mientras eso ocurre. Con 90s el readTimeout de OkHttp —que es de INACTIVIDAD,
+     * se reinicia con cada byte— abortaba la petición a mitad de turno y la píldora
+     * "Enviando..." se quedaba cargando para siempre.
+     *
+     * El Hub responde con un 502 limpio a los 600s (AEGIS_TURN_TIMEOUT_MS), así que
+     * el cliente debe aguantar MÁS que eso para llegar a leer ese error en vez de
+     * cortar antes por su cuenta. 660s deja 60s de margen.
+     */
+    private val TURN_TIMEOUT_SECONDS = 660L
+
     private val okHttp = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS)
-        .writeTimeout(90, TimeUnit.SECONDS)
+        .readTimeout(TURN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(TURN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .addInterceptor(authInterceptor)
         .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
         .build()
