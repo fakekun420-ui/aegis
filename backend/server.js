@@ -427,17 +427,17 @@ function buildSkillsContext(projectId) {
   if (!skills.length) return "";
   return skills.map(s => `### Skill: ${s.name} [${s.scope}]\n${s.content}`).join("\n\n---\n\n");
 }
+// El ponytail GLOBAL ya no se lee aqui: lo entrega OpenCode a TODAS las sesiones
+// por su propio mecanismo, `~/.config/opencode/AGENTS.md` -> ese mismo archivo.
+// (V2 acepta el campo `instructions` en config pero NO lo resuelve, asi que
+// AGENTS.md es el unico mecanismo que cubre el 100% de las sesiones.)
+// Reinyectarlo duplicaria ~12KB por sesion del hub y consumiria el presupuesto de
+// 24KB de buildSystemContextBlock, desplazando el contexto especifico de proyecto
+// que solo el hub puede ensamblar. Aqui queda unicamente la capa por proyecto.
+const PONYTAIL_GLOBAL_FILE = "/sdcard/projects/ponytail-global.md";
+
 function loadPonyTailContext(projectId) {
   const blocks = [];
-  const globalFile = path.join(__dirname, "context", "pony-tail-global.md");
-  if (fs.existsSync(globalFile)) {
-    try {
-      const globalContent = fs.readFileSync(globalFile, "utf8");
-      blocks.push(globalContent.trim());
-    } catch (e) {
-      log.warn("[ponytail] failed reading pony-tail-global.md", { err: e.message });
-    }
-  }
 
   if (projectId) {
     try {
@@ -458,7 +458,7 @@ function loadPonyTailContext(projectId) {
 
   if (blocks.length > 0) {
     blocks.push(
-      "<!-- PONY-TAIL DIRECTIVE -->\n*Instrucción de Sistema:* Cuando alcances un hito, refactorización o funcionalidad relevante 100% verificada en este proyecto, debes actualizar automáticamente el archivo `.ponytail.md` en la raíz del proyecto para registrar los avances. Tienes estrictamente prohibido modificar el archivo global `pony-tail-global.md`."
+      `<!-- PONY-TAIL DIRECTIVE -->\n*Instrucción de Sistema:* Cuando alcances un hito, refactorización o funcionalidad relevante 100% verificada en este proyecto, debes actualizar automáticamente el archivo \`.ponytail.md\` en la raíz del proyecto para registrar los avances. Tienes estrictamente prohibido modificar, borrar o sobreescribir el archivo global \`${PONYTAIL_GLOBAL_FILE}\`: se entrega automáticamente a todas las sesiones vía \`~/.config/opencode/AGENTS.md\`.`
     );
   }
 
@@ -758,10 +758,9 @@ async function proxyWithInjection(req, resRaw, originalBodyBuf) {
       }
     } catch {}
   }
-  // Do NOT fallback to UI_STATE.projectId — sessions created outside a project must remain strictly loose
-  if (!projectId && !fs.existsSync(path.join(__dirname, "context", "pony-tail-global.md"))) {
-    return modified ? Buffer.from(JSON.stringify(parsed)) : null;
-  }
+  // Do NOT fallback to UI_STATE.projectId — sessions created outside a project must remain strictly loose.
+  // No pre-guard on the global ponytail file: that layer is delivered by AGENTS.md, not from
+  // here. The `!block` check below is now the single authoritative "nothing to inject" condition.
   let block = buildSystemContextBlock(projectId);
   if (!block) return modified ? Buffer.from(JSON.stringify(parsed)) : null;
   // Defensive sanitization: remove control chars that break JSON/provider validation, keep \n \r \t
