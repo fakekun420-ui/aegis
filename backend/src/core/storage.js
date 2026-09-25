@@ -19,7 +19,11 @@ const log = createLogger("storage");
 
 // projects.json — raíz backend/ (mismo path que resuelven server.js y providers.js)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECTS_STORE_FILE = path.join(__dirname, "..", "..", "projects.json");
+// Mismo override que server.js: los tests aíslan el store para no escribir en el
+// projects.json real del usuario (ver nota en server.js).
+const PROJECTS_STORE_FILE = process.env.AEGIS_PROJECTS_STORE
+  ? path.resolve(process.env.AEGIS_PROJECTS_STORE)
+  : path.join(__dirname, "..", "..", "projects.json");
 
 // ==========================================
 // FileMutex — Per-file exclusive async execution queue

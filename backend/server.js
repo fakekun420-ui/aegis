@@ -218,7 +218,13 @@ function saveUiState() {
 // Schema per spec (1): { id, name, description, createdAt, archivedAt, sessions:[{sessionId,title,createdAt,lastUsed,summary}], skills:[], linkedProjects:[] }
 // Stored at /sdcard/projects/Aegis/backend/projects.json ; soft delete via archivedAt timestamp.
 // Envelope: all /api/projects routes return {ok:true,data:...} or {ok:false,error:...} (spec 6).
-const PROJECTS_STORE_FILE = path.join(__dirname, "projects.json");
+// El store es configurable para que los tests NUNCA escriban en el projects.json real:
+// antes estaba hardcodeado y `node --test` en local insertaba proyectos de prueba
+// ("Test Auto Folder ...", "1") en el registro del usuario. Los tests ya aíslan
+// PROJECTS_ROOT, pero no el store, que es lo que realmente se ensuciaba.
+const PROJECTS_STORE_FILE = process.env.AEGIS_PROJECTS_STORE
+  ? path.resolve(process.env.AEGIS_PROJECTS_STORE)
+  : path.join(__dirname, "projects.json");
 
 // BACKLOG (F0-F2, unificación): loadProjectsStore se MOVIO a src/core/storage.js
 // (fuente única — antes existía también en providers.js). Misma firma, misma
@@ -295,6 +301,7 @@ function validateProjectPayload(body, isCreate) {
   if (body.skills !== undefined && !Array.isArray(body.skills)) return "skills must be array";
   if (body.linkedProjects !== undefined && !Array.isArray(body.linkedProjects)) return "linkedProjects must be array";
   if (body.directory !== undefined && body.directory !== null && typeof body.directory !== "string") return "directory must be string";
+  if (body.folder !== undefined && body.folder !== null && typeof body.folder !== "string") return "folder must be string";
   if (body.provider !== undefined && !["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim())) {
     return "invalid provider — must be 'opencode' or 'antigravity'";
   }
@@ -1947,8 +1954,35 @@ async function handleRequest(req, res){
         if (store.projects.some(p => !p.archivedAt && p.name.toLowerCase() === normName.toLowerCase())) {
           throw new Error(`DUPLICATE_NAME: project name "${normName}" already exists`);
         }
-        const safeFolderName = normName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]/g, "");
-        const folderPath = path.join(PROJECTS_ROOT, safeFolderName);
+        // Carpeta a adoptar. "Vincular carpeta" permite registrar un proyecto sobre un
+        // directorio YA existente en /sdcard/projects en vez de crear uno nuevo con el
+        // nombre saneado. Sin esto, "Petite Raw" creaba la carpeta "petite-raw" y
+        // duplicaba el proyecto en vez de adopts la original.
+        //
+        // SEGURIDAD: la ruta debe resolver DENTRO de PROJECTS_ROOT. Sin esta
+        // contención, un body con ../../etc o /data lo convertiría en path traversal
+        // arbitrario (lectura y escritura de .hub/project.json y .ponytail.md).
+        let folderPath;
+        const requested = (body.folder ?? body.directory);
+        if (requested !== undefined && requested !== null && String(requested).trim() !== "") {
+          const raw = String(requested).trim();
+          const resolved = path.resolve(raw);
+          const rootResolved = path.resolve(PROJECTS_ROOT);
+          if (resolved !== rootResolved && !resolved.startsWith(rootResolved + path.sep)) {
+            throw new Error(`FOLDER_OUTSIDE_ROOT: "${raw}" está fuera de ${PROJECTS_ROOT}`);
+          }
+          if (fs.existsSync(resolved) && !fs.statSync(resolved).isDirectory()) {
+            throw new Error(`FOLDER_NOT_A_DIRECTORY: "${raw}"`);
+          }
+          // Una carpeta no puede pertenecer a dos proyectos: el Hub mostraría el mismo
+          // contenido dos veces y los .ponytail.md de ambos colisionarían.
+          const claimed = store.projects.find(p => !p.archivedAt && p.folder && path.resolve(p.folder) === resolved);
+          if (claimed) throw new Error(`DUPLICATE_FOLDER: la carpeta ya pertenece al proyecto "${claimed.name}"`);
+          folderPath = resolved;
+        } else {
+          const safeFolderName = normName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]/g, "");
+          folderPath = path.join(PROJECTS_ROOT, safeFolderName);
+        }
         const ponyTailPath = path.join(folderPath, ".ponytail.md");
         createdProj = {
           id: genProjectId(),
