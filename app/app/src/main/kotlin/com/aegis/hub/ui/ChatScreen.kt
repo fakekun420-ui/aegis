@@ -562,35 +562,26 @@ fun ChatScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     FilterChip(
                         selected = selectedProvider == "opencode",
-                        enabled = !sessionProviderBound,
                         onClick = { vm.selectProvider("opencode") },
                         label = { Text("OpenCode Zen") },
                         shape = RoundedCornerShape(10.dp)
                     )
                     FilterChip(
                         selected = selectedProvider == "antigravity",
-                        enabled = !sessionProviderBound,
                         onClick = { vm.selectProvider("antigravity") },
                         label = { Text("Antigravity") },
                         shape = RoundedCornerShape(10.dp)
                     )
                 }
                 if (sessionProviderBound) {
-                    // El aviso solo tiene sentido si el proveedor está realmente
-                    // bloqueado. Con la regla nueva (cambiable hasta que el asistente
-                    // responda de verdad) un chat recién creado o uno cuyo motor falló
-                    // SÍ admite cambio, así que la advertencia de "crea un chat nuevo"
-                    // sería falsa.
-                    val hayRespuestaReal = messages.any {
-                        it.role == "assistant" && it.text.isNotBlank() &&
-                            !it.text.trimStart().startsWith("⚠️")
-                    }
+                    // El proveedor ya NO está bloqueado: los chips están siempre
+                    // activos y, al elegir otro motor, se crea una sesión nueva y se
+                    // navega a ella (el proveedor vive en el prefijo del id, así que
+                    // esta sesión no se puede re-etiquetar). El aviso solo explica que
+                    // el cambio no reescribe este chat.
                     Text(
-                        if (hayRespuestaReal)
-                            "El asistente ya respondió en este chat, así que el motor queda fijo. " +
-                                "Para usar otro, crea un chat nuevo."
-                        else
-                            "Todavía no hay respuestas de este motor: puedes cambiar de proveedor.",
+                        "El motor está ligado a esta sesión. Al elegir otro se abrirá un " +
+                            "chat nuevo con ese motor; este se conserva tal cual.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
