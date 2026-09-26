@@ -97,6 +97,13 @@ class ChatViewModel : ViewModel() {
     //
     // Antes se deducía de `time.completed`, que cierra el MENSAJE: por eso el divisor
     // saltaba tras cada `bash` con exit 0. Ahora la señal es el evento de ejecución.
+    // true SOLO mientras el POST sigue en vuelo. Distingue "se esta enviando" de
+    // "el servidor ya lo acepto y el modelo esta trabajando": antes se encendia
+    // _loading de golpe, asi que "Enviando..." y "Generando respuesta..." salian
+    // juntos y no se podia saber en que fase estabas.
+    private val _sendingInFlight = MutableStateFlow(false)
+    val sendingInFlight: StateFlow<Boolean> = _sendingInFlight
+
     private val _turnBusy = MutableStateFlow(false)
     val turnBusy: StateFlow<Boolean> = _turnBusy
     private val _turnOver = MutableStateFlow(false)
@@ -654,6 +661,7 @@ class ChatViewModel : ViewModel() {
                 _streamingText.value = ""
                 _streamingTools.value = emptyList()
 
+                _sendingInFlight.value = true
                 try {
                     val streamReq = okhttp3.Request.Builder()
                         .url("http://127.0.0.1:8765/api/opencode/sessions/$targetSessionId/message?stream=true")
@@ -668,6 +676,28 @@ class ChatViewModel : ViewModel() {
                     sseResp = withContext(Dispatchers.IO) { ApiClient.rawOkHttp.newCall(streamReq).execute() }
                     val resp = sseResp
                     sseRequestAccepted = resp?.isSuccessful == true
+
+                    // ---- CONFIRMACION DE RECEPCION ----
+                    // El POST ha vuelto: el servidor tiene el mensaje. A partir de aqui
+                    // "Enviando..." desaparece y empieza "Generando respuesta...". Antes
+                    // el mensaje seguia en PENDING hasta que terminaba TODO el stream, que
+                    // puede tardar minutos, y no habia forma de saber si lo habia
+                    // recibido o no.
+                    _sendingInFlight.value = false
+                    if (sseRequestAccepted) {
+                        _messages.value = _messages.value.map {
+                            if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
+                        }
+                    } else {
+                        // El servidor RECHAZO el mensaje. Se pinta el motivo real (cuota
+                        // agotada, quota, error de proveedor...) en vez de un generico.
+                        val crudo = try { resp?.errorBody?.string() } catch (_: Exception) { null }
+                        val motivo = parseDeliveryError(crudo)
+                        _error.value = motivo
+                        _messages.value = _messages.value.map {
+                            if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
+                        }
+                    }
                     if (resp != null && resp.isSuccessful && resp.body != null) {
                         val reader = resp.body!!.charStream().buffered()
                         val sb = java.lang.StringBuilder()
@@ -839,10 +869,16 @@ class ChatViewModel : ViewModel() {
                         if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
                     }
                     _error.value = "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
+                    _messages.value = _messages.value.map {
+                        if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
+                    }
                 }
             } finally {
                 _streamingText.value = null
                 _loading.value = false
+                // Red de seguridad: si el POST semurio por una excepcion antes de
+                // tocar el flag, "Enviando..." se quedaria colgado para siempre.
+                _sendingInFlight.value = false
                 pollingJob?.cancel()
                 inFlightSendKey = null // A-5: libera la guarda anti doble envío al terminar
             }
@@ -879,3 +915,30 @@ class ChatViewModel : ViewModel() {
         } catch (_: Exception) { null }
     }
 }
+
+    /**
+     * Saca el motivo real de un cuerpo de error del Hub.
+     *
+     * El Hub responde `{ok:false, error:{code, message}}` y providers.js YA mete ahi
+     * el motivo accionable ("Antigravity no tiene cuota disponible (cuota agotada)",
+     * o el final de stderr de agy). Antes la app se tragaba el cuerpo y pintaba un
+     * error generico, losing justo la informacion que dice si fue cuota, 429 o token.
+     */
+    private fun parseDeliveryError(crudo: String?): String {
+        if (crudo.isNullOrBlank()) return "El servidor no acepto el mensaje"
+        val txt = crudo.trim()
+        return try {
+            val env = org.json.JSONObject(txt)
+            val err = env.optJSONObject("error")
+            val msg = err?.optString("message")?.takeIf { it.isNotBlank() }
+                ?: env.optString("message").takeIf { it.isNotBlank() }
+            val code = err?.optString("code")?.takeIf { it.isNotBlank() }
+            when {
+                msg != null && code != null -> "$code: $msg"
+                msg != null -> msg
+                else -> txt.take(300)
+            }
+        } catch (_: Exception) {
+            txt.take(300)
+        }
+    }

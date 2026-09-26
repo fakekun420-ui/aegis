@@ -78,6 +78,7 @@ fun ChatScreen(
     val messages by vm.messages.collectAsState()
     val sessionTitle by vm.sessionTitle.collectAsState()
     val loading by vm.loading.collectAsState()
+    val sendingInFlight by vm.sendingInFlight.collectAsState()
     val error by vm.error.collectAsState()
     val models by vm.models.collectAsState()
     val selectedModel by vm.selectedModel.collectAsState()
@@ -498,14 +499,19 @@ fun ChatScreen(
                                     is ChatRow.Cierre -> TurnFinishedDivider()
                                 }
                             }
-                            if (streamingText != null || streamingTools.isNotEmpty()) {
-                                item(key = "streaming_live") {
-                                    TerminalStreamingTurn(streamingText ?: "", streamingTools)
-                                }
-                            } else if (loading) {
-                                item(key = "typing_dots") {
-                                    TerminalActivityCursor()
-                                }
+                            // Fases separadas. Antes `loading` se activaba al empezar a
+                            // enviar, asi que "Enviando..." (pildora del mensaje) y
+                            // "Generando respuesta..." salian JUNTOS y no se podia saber
+                            // en que punto estabas. Ahora son excluyentes: el envio en
+                            // vuelo manda, y al llegar el ack HTTP toma el relevo la
+                            // fila de generacion.
+                            when {
+                                sendingInFlight -> item(key = "sending_live") { SendingRow() }
+                                streamingText != null || streamingTools.isNotEmpty() ->
+                                    item(key = "streaming_live") {
+                                        TerminalStreamingTurn(streamingText ?: "", streamingTools)
+                                    }
+                                loading -> item(key = "typing_dots") { TerminalActivityCursor() }
                             }
 
                             // Formulario / pregunta pendiente. El TUI del CLI la
@@ -1625,5 +1631,28 @@ private fun buildChatRows(messages: List<Message>, turnOver: Boolean): List<Chat
         if (isFinalResponseOf(messages, index, turnOver)) {
             add(ChatRow.Cierre(msg.info?.id ?: "idx_$index"))
         }
+    }
+}
+
+/**
+ * "Enviando…" a pantalla completa, para la fase en la que el POST sigue en vuelo.
+ *
+ * Es la Fase 1 de las dos: termina en cuanto el servidor devuelve el ack, que es
+ * justo el momento en que el mensaje se marca como entregado y la pildora del
+ * mensaje desaparece. A partir de ahi se muestra "Generando respuesta…".
+ */
+@Composable
+private fun SendingRow() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        CircularProgressIndicator(modifier = Modifier.height(14.dp).width(14.dp), strokeWidth = 2.dp)
+        Text(
+            "Enviando…",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
