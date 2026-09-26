@@ -2,6 +2,54 @@
 
 Todo notable de Aegis se documenta aquí. Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [1.1.1] - 2026-09-26
+
+### Arreglado
+- **Formularios respondibles desde la app.** Las preguntas de herramientas solo se
+  podían responder desde el TUI del CLI. Ahora Aegis las muestra como tarjeta con
+  opciones táctiles y las contesta. Rutas nuevas en el Hub (el proxy generico
+  `/opencode/*` devuelve 401: no anade el Basic de OpenCode, que solo vive en
+  `providers.js`):
+  - `GET  /api/forms[?sessionId=]`
+  - `POST /api/forms/:sessionId/:formId/reply`  body `{"answer":{"<campo>":"<valor>"}}`
+- **El cuerpo del reply no llevaba la clave `answer`.** El `@Body` estaba tipado como
+  `Map<String, Map<String, String>>` y la llamada mandaba `{...}` a pelo; el Hub exige
+  `body.answer` y devolvia 400 `INVALID_ANSWER` en cada toque.
+- **Retrofit no admite el `Map` anidado.** Kotlin lo aceptaba pero en ejecucion
+  reventaba con `Parameter type must not include a type variable or wildcard`. La
+  tarjeta se pintaba perfecta y el toque fallaba: el peor tipo de fallo, porque en la
+  lista de mensajes todo parecia correcto y el build estaba VERDE. Sustituido por
+  `data class FormReplyBody(val answer: Map<String, String>)`.
+- **El divisor de "respuesta final" se dibujaba en el sitio equivocado.** Flotaba al
+  final de la lista en cuanto existia un turno cerrado en el historial
+  (`if (finishedTurnId != null)`), y `finishedTurnId` se fijaba una vez y nunca se
+  limpiaba. De ahi los dos sintomas: el divisor aparecia encima de "Trabajando en
+  ello…" de un turno nuevo, y caia despues de un mensaje que no era el final.
+- **`time.completed` no significa "turno terminado", significa "mensaje cerrado".**
+  Un mensaje puede llevarlo con un `bash` todavia en `running` (el divisor salia con
+  la herramienta en "ejecutando…") o con un formulario pendiente.
+- **El poll consultaba los mensajes antes que los formularios**, juzgando el cierre
+  del turno con el estado de preguntas de dos ciclos atras.
+
+### Cambiado
+- El divisor se emite **anclado a su mensaje** (`isFinalResponseOf`): asistente +
+  `completed` + ninguna herramienta `running` + lo siguiente es un mensaje del
+  usuario o no hay nada. Sobrevive a recargar la sesion y no depende de estado global.
+- `turnIsReallyFinished()` aplica la misma regla de tres condiciones al indicador
+  "Trabajando en ello…" y a la notificacion, anadiendo que un formulario pendiente
+  significa que el agente sigue trabajando.
+- `buildChatRows()` construye una lista heterogenea `ChatRow` (Mensaje | Cierre) para
+  poder intercalar el divisor: `item()` no se puede llamar desde dentro de
+  `itemsIndexed`, y `remember` tampoco desde el `content` del `LazyColumn`.
+- El poll consulta los formularios **antes** que los mensajes.
+
+### Verificado en el dispositivo (versionCode 150)
+- Encuesta real "Motor favorito" (4 opciones) con la tarjeta pintada, sin error.
+- Un toque responde de verdad: la encuesta paso de 1 pendiente a 0 y el agente
+  contesto "¡Gracias! OpenCode es tu motor favorito."
+- Con un `bash` en "ejecutando…": aparece "Trabajando en ello…" y NO el divisor.
+- Con el turno cerrado: el divisor aparece en su sitio, y no hay indicador a la vez.
+
 ## [1.1.0] — 2026-09-25
 
 Cierre de la sesión de estabilización: el Hub y el CLI hablaban con **dos servidores de OpenCode distintos**, lo que rompía la sincronización y hacía que los turnos se cortaran. Todo lo de esta versión sale de ese diagnóstico y de lo que se destapó al arreglarlo.
