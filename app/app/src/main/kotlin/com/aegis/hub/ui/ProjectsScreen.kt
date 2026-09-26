@@ -456,9 +456,43 @@ fun ProjectsScreen(
  * Para otros volúmenes (tarjetas SD) se devuelve null y la UI lo dice, en vez de
  * inventar una ruta que el Hub iba a rechazar.
  */
+/**
+ * Traduce un content:// del SAF a una ruta del sistema de ficheros.
+ *
+ * BUG QUE ARREGLA (2026-09-26): se usaba `pathSegments.firstOrNull()`, que en una URI
+ * de ARBOL devuelve el literal "tree", no el documentId. OpenDocumentTree devuelve
+ *
+ *   content://com.android.externalstorage.documents/tree/primary%3Aprojects%2FX
+ *                                            [0]=tree   [1]=primary:projects/X
+ *
+ * Asi que volume salia "tree" (sin ':'), volume != "primary" y la funcion devolvia
+ * null SIEMPRE: "Vincular carpeta" no registraba nada y no llegaba a llamar al Hub.
+ *
+ * Ahora se busca el segmento que de verdad lleva el documentId (el que contiene ':'
+ * y no es un literal de navigational), y se aceptan las autoridades de almacenamiento
+ * externo y de Descargas. El volumen `primary` se traduce a /sdcard, que es donde el
+ * Hub espera las carpetas (PROJECTS_ROOT = /sdcard/projects).
+ */
 private fun treeUriToFsPath(uri: Uri): String? {
-    if (uri.authority != "com.android.externalstorage.documents") return null
-    val treeId = uri.pathSegments.firstOrNull() ?: return null
+    val authority = uri.authority ?: return null
+
+    // Downloads: primary:Download/sub -> /sdcard/Download/sub
+    if (authority == "com.android.providers.downloads.documents") {
+        val treeId = uri.pathSegments.firstOrNull { it.contains(':') } ?: return null
+        val decoded = Uri.decode(treeId)
+        val rel = decoded.substringAfter(':', missingDelimiterValue = "").trim('/')
+        if (rel.isBlank()) return null
+        return "/sdcard/$rel"
+    }
+
+    if (authority != "com.android.externalstorage.documents") return null
+
+    // El documentId NO es necesariamente el primer segmento: en las URIs de arbol es
+    // el segundo (el primero es "tree"). Se busca el que lleva el ':' del volumen.
+    val treeId = uri.pathSegments.firstOrNull { seg ->
+        seg.contains(':') && seg != "tree" && seg != "document" && seg != "root"
+    } ?: return null
+
     val decoded = Uri.decode(treeId)
     val volume = decoded.substringBefore(':', missingDelimiterValue = "")
     if (volume != "primary") return null
