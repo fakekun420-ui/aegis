@@ -139,9 +139,40 @@ fun ChatScreen(
     val density = LocalDensity.current
     val imeInset = WindowInsets.ime.getBottom(density)
 
+    // ---- SCROLL QUE NO ROBA LA NAVEGACION ----
+    // El efecto de mas abajo saltaba SIEMPRE al ultimo item, este donde estuvieras.
+    // Leyendo historia hacia arriba, en cuanto llegaba algo nuevo (el poll cada 2 s, un
+    // token del stream) la lista te arrastraba al final y perdias el sitio.
+    //
+    // `followOutput` = "el usuario esta abajo, seguile". En cuanto sube a releer historia
+    // se pone a false y la lista deja de saltarle al final; el boton con la flecha es la
+    // salida manual. Se reinicia por sesion porque al ABRIR un chat siempre se quiere
+    // el mensaje mas reciente.
+    var followOutput by remember(sessionId) { mutableStateOf(true) }
+    val atBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.totalItemsCount - 1
+            last <= 0 || (info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= last
+        }
+    }
+    val scope = rememberCoroutineScope()
+
+    // Observa donde esta el scroll: si el ultimo item visible deja de ser el ultimo, el
+    // usuario subio a historia y hay que dejar de arrastrarlo.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
+            .collect { lastVisible ->
+                val total = listState.layoutInfo.totalItemsCount
+                if (total > 0) followOutput = lastVisible >= total - 1
+            }
+    }
+
     val lastMsgId = messages.lastOrNull()?.info?.id
     val lastMsgTextLen = messages.lastOrNull()?.text?.length ?: 0
-    LaunchedEffect(messages.size, loading, streamingText, streamingTools, lastMsgId, lastMsgTextLen, imeInset) {
+    LaunchedEffect(messages.size, loading, streamingText, streamingTools, lastMsgId, lastMsgTextLen, imeInset, followOutput) {
+        // El usuario esta leyendo historia: no se le mueve la lista.
+        if (!followOutput) return@LaunchedEffect
         // El conteo REAL de items ya compuestos (listState.layoutInfo), no un cálculo
         // a ciegas. Antes se usaba `messages.size + 1` para sumar el item "live", que
         // Todavía puede no existir en la primera pasada: animateScrollToItem lanzaba
@@ -538,6 +569,27 @@ fun ChatScreen(
 
                         }
                     }
+                }
+            }
+            // Boton "ir al mas reciente", al estilo del chat que se le打 de ejemplo: solo
+            // aparece cuando NO estas abajo, y tocarlo devuelve el control sin haber tenido
+            // que saltarte el historial mientras leias.
+            if (!atBottom) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        followOutput = true
+                        scope.launch {
+                            val last = listState.layoutInfo.totalItemsCount - 1
+                            if (last >= 0) listState.animateScrollToItem(last)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 96.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ) {
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Ir al mensaje más reciente")
                 }
             }
             if (sttError != null) {
