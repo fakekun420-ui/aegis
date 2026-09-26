@@ -524,7 +524,7 @@ fun ChatScreen(
                             items(filas, key = { it.key }) { fila ->
                                 when (fila) {
                                     is ChatRow.Mensaje -> TerminalConsoleTurn(
-                                        message = fila.message,
+                                        msg = fila.message,
                                         sendingInFlight = sendingInFlight,
                                         onRetry = { vm.retryMessage(fila.message, sessionId) }
                                     )
