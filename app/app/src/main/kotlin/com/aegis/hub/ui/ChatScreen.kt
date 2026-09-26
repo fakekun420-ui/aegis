@@ -1342,10 +1342,13 @@ private fun resolveMainActivity(context: android.content.Context): com.aegis.hub
 /**
  * Divisor que confirma que la IA terminó su turno.
  *
- * Se dibuja cuando el último mensaje del asistente trae `time.completed`, que es la
- * marca de cierre real de TURNO en OpenCode. Distingue "llegó el último trozo de
- * texto" de "ya no está trabajando", que era lo que el usuario no podía distinguir
- * (con `time.streamed` el divisor saltaba a mitad de turno).
+ * Ya NO se dibuja "cuando el último mensaje del asistente trae `time.completed`": se
+ * dibuja ANCLADO a un mensaje concreto, el último de su turno, y solo si además no le
+ * queda ninguna herramienta corriendo detrás (ver `isFinalResponseOf`).
+ *
+ * `time.completed` por sí solo no marca el cierre del TURNO, sino el del MENSAJE: con
+ * esa suposición el divisor saltaba a mitad de turno, o se quedaba pegado al final de
+ * la lista mientras el agente ya estaba en el turno siguiente.
  */
 @Composable
 private fun TurnFinishedDivider() {
