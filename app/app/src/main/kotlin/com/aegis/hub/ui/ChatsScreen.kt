@@ -39,6 +39,9 @@ import com.aegis.hub.util.relativeTime
 fun ChatsScreen(
     sessions: List<OpencodeSession>,
     projects: List<Project>,
+    // Sesiones con un turno en curso. Cada una lleva un circulo girando, para poder ver
+    // de un vistazo cuales siguen trabajando SIN abrir cada chat.
+    inflightIds: Set<String> = emptySet(),
     isLoading: Boolean = false,
     error: String? = null,
     onBack: () -> Unit,
@@ -201,6 +204,16 @@ fun ChatsScreen(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
+                                                // Circulo de "ejecutando": el vigilante del Hub
+                                                // sabe si esa conversacion tiene un turno vivo
+                                                // (session.execution.started sin terminar).
+                                                if (sess.resolvedId in inflightIds) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(11.dp),
+                                                        strokeWidth = 1.6.dp,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
                                                 if (sess.pinned) {
                                                     Icon(
                                                         Icons.Outlined.PushPin,

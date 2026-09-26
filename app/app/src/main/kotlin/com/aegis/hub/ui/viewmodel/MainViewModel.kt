@@ -51,7 +51,55 @@ class MainViewModel : ViewModel() {
     // Declarado DESPUÉS de las propiedades que usa: en Kotlin los init blocks y los
     // initializers se ejecutan en orden de declaración, y con Dispatchers.Main.immediate
     // el cuerpo de refreshProjects() puede correr de forma síncrona dentro de refreshAll().
-    init { refreshAll() }
+    // Ids de las sesiones con un turno EN CURSO ahora mismo. Lo mantiene el vigilante
+    // del Hub a partir de los eventos session.execution.* de OpenCode, asi que
+    // funciona igual si el turno se lanzo desde la app o desde el CLI.
+    private val _inflightIds = MutableStateFlow<Set<String>>(emptySet())
+    val inflightIds: StateFlow<Set<String>> = _inflightIds
+    private var inflightJob: Job? = null
+
+    init {
+        refreshAll()
+        startInflightPolling()
+    }
+
+    /**
+     * Consulta periodica de las sesiones ocupadas.
+     *
+     * Es O(1) en el Hub (las tiene en memoria, no pregunta a OpenCode), asi que puede
+     * ir cada 3 s sin coste apreciable. Es lo que permite poner el circulo de
+     * "ejecutando" en la lista de chats: sin esto no hay forma de saber, desde fuera
+     * del chat abierto, que una conversacion sigue trabajando.
+     */
+    private fun startInflightPolling() {
+        inflightJob?.cancel()
+        inflightJob = viewModelScope.launch {
+            while (isActive) {
+                try {
+                    val r = api.getInflight()
+                    if (r.ok && r.data != null) {
+                        // Solo las que NO han terminado: un turnOver es historia, no una
+                        // sesion ocupada, y dejarlas marcadas seria mentiroso.
+                        _inflightIds.value = r.data.filter { !it.turnOver }.mapNotNull { it.id }.toSet()
+                    }
+                } catch (_: Exception) {
+                    // Fallo puntual de red: el siguiente ciclo reintenta solo.
+                }
+                delay(3000)
+            }
+        }
+    }
+
+    fun refreshInflightNow() {
+        viewModelScope.launch {
+            try {
+                val r = api.getInflight()
+                if (r.ok && r.data != null) {
+                    _inflightIds.value = r.data.filter { !it.turnOver }.mapNotNull { it.id }.toSet()
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     fun refreshProjects() {
         projectsRetries = 0
