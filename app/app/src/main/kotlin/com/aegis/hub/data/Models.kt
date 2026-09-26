@@ -461,8 +461,27 @@ data class PendingForm(
     val fields: List<FormField>? = null
 ) {
     val firstField: FormField? get() = fields?.firstOrNull()
+
     /** Valor exacto a enviar en el cuerpo del reply. */
     fun optionValue(opt: FormOption): String = opt.value ?: opt.label.orEmpty()
+
+    val allFields: List<FormField> get() = fields.orEmpty().filter { !it.key.isNullOrBlank() }
+
+    /** Campos que se pueden contestar con un toque, es decir, los que traen opciones. */
+    val optionFields: List<FormField> get() = allFields.filter { !it.options.isNullOrEmpty() }
+
+    /**
+     * Campos SIN opciones: no hay nada que tocar, solo se pueden rellenar escribiendo.
+     *
+     * Importa porque `POST .../reply` RESUELVE el formulario entero con lo que le
+     * mandes: un POST con un solo campo descarta el resto en silencio (medido con un
+     * formulario real de 3 campos — se respondió q0 y q1/q2 se perdieron). Por eso la
+     * UI tiene que juntarlo todo antes de enviar, y avisar de lo que se va a dejar fuera.
+     */
+    val freeFields: List<FormField> get() = allFields.filter { it.options.isNullOrEmpty() }
+
+    /** ¿Un solo toque basta? Solo cuando hay una única pregunta contestable. */
+    val isOneTap: Boolean get() = optionFields.size == 1 && freeFields.isEmpty()
 }
 
 /**

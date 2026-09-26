@@ -59,7 +59,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 import com.aegis.hub.data.FormField
-import com.aegis.hub.data.FormOption
 import com.aegis.hub.data.PendingForm
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -525,7 +524,7 @@ fun ChatScreen(
                                     PendingFormCard(
                                         form = form,
                                         busy = replyingForm,
-                                        onAnswer = { opt -> vm.answerForm(form, opt) }
+                                        onAnswer = { respuestas -> vm.answerForm(form, respuestas) }
                                     )
                                 }
                             }
@@ -1392,78 +1391,159 @@ private fun TurnFinishedDivider() {
  * Tarjeta de un formulario / pregunta pendiente de una herramienta.
  *
  * El TUI del CLI la pintaba como un menú de flechas + Enter. Aquí se responde con un
- * toque, que es justo lo que faltaba para no depender del CLI. Muestra la pregunta, su
- * detalle y cada opción con su descripción, para que la elección no sea a ciegas.
+ * toque, que es justo lo que faltaba para no depender del CLI.
+ *
+ * MULTIPREGUNTA — dos casos, a propósito:
+ *
+ *  - **Una sola pregunta:** un toque envía y listo. Es el caso frecuente y no debe
+ *    costar un segundo toque de confirmación.
+ *  - **Varias preguntas:** cada toque solo ELIGE, y se accumulates hasta que esté todo
+ *    marcado; luego un botón envía el mapa entero. No se puede enviar al vuelo porque
+ *    `POST .../reply` resuelve el formulario entero con lo que llegue: mandar una sola
+ *    respuesta descarta las demás en silencio (medido con un formulario real de 3
+ *    campos — se mandó q0 y q1/q2 se perdieron sin aviso).
  */
 @Composable
 private fun PendingFormCard(
     form: PendingForm,
     busy: Boolean,
-    onAnswer: (FormOption) -> Unit
+    onAnswer: (Map<String, String>) -> Unit
 ) {
-    val field = form.firstField ?: return
     val accent = MaterialTheme.colorScheme.primary
+    val contestables = form.optionFields
+    if (contestables.isEmpty()) {
+        // Sin una sola opción no hay nada que tocar. Se dice en vez de pintar botones
+        // que no podrían hacer nada.
+        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Filled.HelpOutline, contentDescription = "Pregunta pendiente", tint = accent)
+                Text(
+                    form.title ?: "Confirmación necesaria",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Text(
+                "Esta pregunta no trae opciones: respóndela escribiéndola en el chat.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
+
+    // Key por id de formulario: sobrevive a los refrescos de 2 s, que reconstruyen la
+    // lista de pendientes, y se reinicia solo si el formulario cambia.
+    var elegidas by remember(form.id) { mutableStateOf<Map<String, String>>(emptyMap()) }
+
+    val completas = contestables.count { elegidas.containsKey(it.key) }
+    val todoMarcado = completas == contestables.size
+
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                Icons.Filled.HelpOutline,
-                contentDescription = "Pregunta pendiente",
-                tint = accent
-            )
+            Icon(Icons.Filled.HelpOutline, contentDescription = "Pregunta pendiente", tint = accent)
             Text(
-                field.title ?: form.title ?: "Confirmación necesaria",
+                form.title ?: "Confirmación necesaria",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
         }
-        val detail = field.description
-        if (!detail.isNullOrBlank()) {
-            Text(
-                detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        val options = field.options
-        if (options.isNullOrEmpty()) {
-            // Sin opciones es un campo libre: no hay nada que tocar aquí, se informa
-            // en vez de pintar un botón que no haría nada.
-            Text(
-                "Esta pregunta no trae opciones: respóndela escribiéndola en el chat.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            options.forEach { opt ->
-                val label = opt.label ?: opt.value.orEmpty()
-                Card(
-                    onClick = { if (!busy) onAnswer(opt) },
-                    enabled = !busy,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.outlinedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+
+        contestables.forEachIndexed { indice, field ->
+            val key = field.key.orEmpty()
+            val elegida = elegidas[key]
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    buildString {
+                        if (contestables.size > 1) append("${indice + 1}. ")
+                        append(field.title ?: "Pregunta")
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                val detail = field.description
+                if (!detail.isNullOrBlank() && detail != field.title) {
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                ) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(label, style = MaterialTheme.typography.bodyMedium)
-                        val d = opt.description
-                        if (!d.isNullOrBlank()) {
-                            Text(
-                                d,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                }
+                field.options.orEmpty().forEach { opt ->
+                    val valor = form.optionValue(opt)
+                    val marcada = elegida == valor
+                    Card(
+                        onClick = {
+                            if (!busy) {
+                                if (form.isOneTap) {
+                                    onAnswer(mapOf(key to valor))
+                                } else {
+                                    elegidas = elegidas + (key to valor)
+                                }
+                            }
+                        },
+                        enabled = !busy,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = if (marcada) {
+                                accent.copy(alpha = 0.16f)
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            }
+                        )
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(opt.label ?: valor, style = MaterialTheme.typography.bodyMedium)
+                            val d = opt.description
+                            if (!d.isNullOrBlank()) {
+                                Text(
+                                    d,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
+            }
+        }
+
+        if (form.freeFields.isNotEmpty()) {
+            Text(
+                "⚠ ${form.freeFields.size} pregunta(s) no traen opciones y se descartarán al enviar.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        if (!form.isOneTap) {
+            Button(
+                onClick = { onAnswer(elegidas) },
+                enabled = !busy && todoMarcado,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (form.freeFields.isEmpty())
+                        "Enviar respuestas ($completas/${contestables.size})"
+                    else
+                        "Enviar solo $completas de ${form.allFields.size} respuestas"
+                )
+            }
+            if (!todoMarcado) {
+                Text(
+                    "Marca las ${contestables.size} preguntas para poder enviar.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

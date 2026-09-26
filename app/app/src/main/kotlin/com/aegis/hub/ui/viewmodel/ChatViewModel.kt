@@ -354,25 +354,31 @@ class ChatViewModel : ViewModel() {
     /**
      * Responde un formulario pendiente.
      *
-     * El cuerpo es `{ "answer": { "<clave del campo>": "<valor de la opción>" } }`. Un
-     * formulario puede traer VARIOS campos, y OpenCode entrega varios formularios en la
-     * misma respuesta; aquí se contesta el que el usuario ha tocado.
+     * IMPORTANTE — por qué recibe el mapa COMPLETO y no una sola opción:
+     * `POST /api/session/:id/form/:fid/reply` resuelve el formulario entero con lo que
+     * le llegue. Comprobado contra un formulario real de 3 campos: enviando solo `q0`
+     * respondió `{"replied":true}` y el formulario desapareció de la lista, con `q1` y
+     * `q2` descartados en silencio. No hay accumulates ni "enviar parcial" que luego
+     * se pueda completar: o mandas todas las preguntas o pierdes el resto.
+     *
+     * El cuerpo es `{ "answer": { "<clave del campo>": "<valor de la opción>" } }`. La
+     * clave "answer" es obligatoria; el Hub la exige y devuelve 400 sin ella.
      */
-    fun answerForm(form: PendingForm, option: FormOption) {
+    fun answerForm(form: PendingForm, answers: Map<String, String>) {
         val sid = _currentSessionId.value.orEmpty()
         val fid = form.id.orEmpty()
-        val field = form.firstField ?: return
-        val key = field.key.orEmpty()
-        if (sid.isBlank() || fid.isBlank() || key.isBlank()) {
+        if (sid.isBlank() || fid.isBlank()) {
             _error.value = "No se puede responder: formulario incompleto"
+            return
+        }
+        if (answers.isEmpty()) {
+            _error.value = "No hay respuestas que enviar"
             return
         }
         viewModelScope.launch {
             _replyingForm.value = true
             try {
-                // El cuerpo es {"answer": {"<clave>": "<valor>"}}: la clave "answer" es
-                // obligatoria, el servidor la exige y devuelve 400 sin ella.
-                val resp = api.replyForm(sid, fid, FormReplyBody(answer = mapOf(key to form.optionValue(option))))
+                val resp = api.replyForm(sid, fid, FormReplyBody(answer = answers))
                 if (resp.ok) {
                     _error.value = null
                     // Se quita de inmediato para que la UI no repita el botón; el
