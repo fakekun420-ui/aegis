@@ -1,6 +1,7 @@
 package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import com.aegis.hub.data.FormReplyBody
 import com.aegis.hub.data.PendingForm
 import com.aegis.hub.data.FormOption
 import com.aegis.hub.data.FormField
@@ -358,7 +359,7 @@ class ChatViewModel : ViewModel() {
             try {
                 // El cuerpo es {"answer": {"<clave>": "<valor>"}}: la clave "answer" es
                 // obligatoria, el servidor la exige y devuelve 400 sin ella.
-                val resp = api.replyForm(sid, fid, mapOf("answer" to mapOf(key to form.optionValue(option))))
+                val resp = api.replyForm(sid, fid, FormReplyBody(answer = mapOf(key to form.optionValue(option))))
                 if (resp.ok) {
                     _error.value = null
                     // Se quita de inmediato para que la UI no repita el botón; el

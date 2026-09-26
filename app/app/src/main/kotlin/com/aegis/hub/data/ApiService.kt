@@ -177,6 +177,6 @@ interface ApiService {
     suspend fun replyForm(
         @Path("sessionId") sessionId: String,
         @Path("formId") formId: String,
-        @Body body: Map<String, Map<String, String>>
+        @Body body: FormReplyBody
     ): Envelope<Map<String, Any>>
 }

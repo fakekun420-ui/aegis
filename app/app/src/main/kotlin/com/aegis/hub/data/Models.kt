@@ -464,3 +464,14 @@ data class PendingForm(
     /** Valor exacto a enviar en el cuerpo del reply. */
     fun optionValue(opt: FormOption): String = opt.value ?: opt.label.orEmpty()
 }
+
+/**
+ * Cuerpo de POST /api/forms/:sessionId/:formId/reply.
+ *
+ * OJO: esto NO puede ser `Map<String, Map<String, String>>`. Kotlin lo acepta, pero
+ * Retrofit falla EN EJECUCIÓN con "Parameter type must not include a type variable or
+ * wildcard" al no poder construir el converter para un genérico anidado. La tarjeta se
+ * pintaba bien y el toque reventaba, que es el peor fallo posible: parecía funcionar.
+ * Con una clase concreta, Gson la serializa sin problemas.
+ */
+data class FormReplyBody(val answer: Map<String, String>)
