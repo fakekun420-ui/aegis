@@ -274,10 +274,10 @@ class ChatViewModel : ViewModel() {
     /**
      * Detecta que la IA ha CERRADO su turno y lo avisa.
      *
-     * "Cerrado" = el último mensaje del asistente trae `time.streamed`, que es la
-     * marca que pone OpenCode cuando el turno termina de verdad. Mientras el modelo
-     * sigue trabajando (tool calls) esa clave NO está, así que no se confunde un
-     * texto parcial con una respuesta terminada.
+     * "Cerrado" = el último mensaje del asistente trae `time.completed`, que es la
+     * marca que pone OpenCode cuando el TURNO termina. Ojo: `time.streamed` NO
+     * sirve, esa solo indica que un segmento de texto dejó de crecer, y en un
+     * turno agéntico ocurre varias veces antes de que el turno acabe.
      *
      * Si el turno terminó justo ahora:
      *  - se marca para que el chat dibuje el divisor de "respuesta final"
@@ -285,9 +285,19 @@ class ChatViewModel : ViewModel() {
      *    (TurnNotifier lo comprueba con MainActivity.isForeground).
      */
     private fun announceFinishedTurnIfAny(fresh: List<Message>) {
-        val lastAssistant = fresh.lastOrNull { it.role == "assistant" && it.text.isNotBlank() } ?: return
+        val lastAssistant = fresh.lastOrNull { it.role == "assistant" } ?: return
         val id = lastAssistant.info?.id ?: return
-        val closed = lastAssistant.info?.time?.containsKey("streamed") == true
+        // La marca de cierre real es `completed`, NO `streamed`.
+        //
+        // `streamed` significa "este segmento de texto dejó de crecer", y en un turno
+        // agéntico eso pasa varias veces: el modelo escribe, llama a una herramienta,
+        // sigue escribiendo. Con `streamed` el divisor saltaba a mitad de turno, que es
+        // justo lo que reportó el usuario.
+        //
+        // Medido sobre un turno real:
+        //   streamed=S completed=C  -> turno terminado
+        //   streamed=S completed=-  -> turno en curso (segmento cerrado, sigue trabajando)
+        val closed = lastAssistant.info?.time?.containsKey("completed") == true
         if (!closed) return
         if (id == _finishedTurnId.value) return   // ya anunciado, no repetir cada 2 s
         _finishedTurnId.value = id

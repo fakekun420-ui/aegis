@@ -484,7 +484,7 @@ fun ChatScreen(
                             }
 
                             // Divisor de "respuesta final": aparece cuando el turno del
-                            // asistente se ha cerrado de verdad (info.time.streamed), no
+                            // asistente se ha cerrado de verdad (info.time.completed), no
                             // cuando simplemente llegó el último trozo de texto. En primer
                             // plano este es el aviso; en segundo plano se lanza además la
                             // notificación de la barra (TurnNotifier).
@@ -1314,9 +1314,10 @@ private fun resolveMainActivity(context: android.content.Context): com.aegis.hub
 /**
  * Divisor que confirma que la IA terminó su turno.
  *
- * Se dibuja cuando el último mensaje del asistente trae `time.streamed`, que es la
- * marca de cierre real de OpenCode. Distingue "llegó el último trozo de texto" de "ya
- * no está trabajando", que era lo que el usuario no podía distinguir.
+ * Se dibuja cuando el último mensaje del asistente trae `time.completed`, que es la
+ * marca de cierre real de TURNO en OpenCode. Distingue "llegó el último trozo de
+ * texto" de "ya no está trabajando", que era lo que el usuario no podía distinguir
+ * (con `time.streamed` el divisor saltaba a mitad de turno).
  */
 @Composable
 private fun TurnFinishedDivider() {
