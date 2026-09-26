@@ -691,7 +691,7 @@ class ChatViewModel : ViewModel() {
                     } else {
                         // El servidor RECHAZO el mensaje. Se pinta el motivo real (cuota
                         // agotada, quota, error de proveedor...) en vez de un generico.
-                        val crudo = try { resp?.errorBody?.string() } catch (_: Exception) { null }
+                        val crudo = try { resp?.errorBody()?.string() } catch (_: Exception) { null }
                         val motivo = parseDeliveryError(crudo)
                         _error.value = motivo
                         _messages.value = _messages.value.map {

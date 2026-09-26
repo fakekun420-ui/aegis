@@ -156,7 +156,6 @@ fun ChatScreen(
             last <= 0 || (info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= last
         }
     }
-    val scope = rememberCoroutineScope()
 
     // Observa donde esta el scroll: si el ultimo item visible deja de ser el ultimo, el
     // usuario subio a historia y hay que dejar de arrastrarlo.
