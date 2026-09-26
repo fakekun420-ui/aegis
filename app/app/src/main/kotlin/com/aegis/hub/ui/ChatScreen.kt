@@ -66,7 +66,10 @@ fun ChatScreen(
     onBack: () -> Unit,
     onVoice: () -> Unit = {},
     showTopBar: Boolean = sessionId.isNotBlank(),
-    sessionProvider: String? = null
+    sessionProvider: String? = null,
+    // Al cambiar de motor se crea una sesión nueva (el proveedor es el prefijo del
+    // id) y hay que navegar a ella. La app lo inyecta; si es null no navega.
+    onNavigateToSession: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val messages by vm.messages.collectAsState()
@@ -78,6 +81,17 @@ fun ChatScreen(
     val selectedProvider by vm.selectedProvider.collectAsState()
     val sessionProviderBound by vm.sessionProviderBound.collectAsState()
     val finishedTurnId by vm.finishedTurnId.collectAsState()
+    val pendingSessionNav by vm.pendingSessionNav.collectAsState()
+
+    // Cambiar de motor crea una sesión nueva en el destino (el proveedor vive en el
+    // prefijo del id) y aquí se navega a ella.
+    LaunchedEffect(pendingSessionNav) {
+        val target = pendingSessionNav
+        if (!target.isNullOrBlank()) {
+            vm.consumePendingNav()
+            onNavigateToSession?.invoke(target)
+        }
+    }
     val modelsLoading by vm.modelsLoading.collectAsState()
     val streamingText by vm.streamingText.collectAsState()
     val streamingTools by vm.streamingTools.collectAsState()

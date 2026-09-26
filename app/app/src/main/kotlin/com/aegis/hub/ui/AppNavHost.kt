@@ -193,7 +193,17 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                 vm = chatVm,
                 onBack = { navController.popBackStack() },
                 onVoice = { navController.navigate(NavRoutes.voice(sid)) },
-                sessionProvider = prov
+                sessionProvider = prov,
+                onNavigateToSession = { nuevo ->
+                    // Cambiar de motor abre una sesión nueva: se quita la actual del
+                    // stack para que "atrás" no devuelva al chat del motor viejo, y se
+                    // empuja la nueva con launchSingleTop para no apilar repetidos si
+                    // el usuario alterna varias veces.
+                    navController.popBackStack(NavRoutes.CHATS, inclusive = false)
+                    navController.navigate(NavRoutes.chat(nuevo)) {
+                        launchSingleTop = true
+                    }
+                }
             )
         }
         composable(NavRoutes.VOICE, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->

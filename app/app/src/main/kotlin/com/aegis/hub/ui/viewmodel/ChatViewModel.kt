@@ -82,6 +82,14 @@ class ChatViewModel : ViewModel() {
     private val _finishedTurnId = MutableStateFlow<String?>(null)
     val finishedTurnId: StateFlow<String?> = _finishedTurnId
 
+    // Cuando se cambia de motor hay que crear una sesión nueva (el proveedor vive en
+    // el prefijo del id). Este estado lleva la id recién creada para que ChatScreen
+    // navegue a ella; se consume una sola vez.
+    private val _pendingSessionNav = MutableStateFlow<String?>(null)
+    val pendingSessionNav: StateFlow<String?> = _pendingSessionNav
+
+    fun consumePendingNav() { _pendingSessionNav.value = null }
+
     // FASE A-5 (anti doble envío): clave del envío actualmente en vuelo
     // ("proveedor|sesión|texto|nº archivos"). Si llega un segundo click o una
     // reentrada con el MISMO contenido antes de que termine el envío actual,
@@ -120,25 +128,49 @@ class ChatViewModel : ViewModel() {
 
     fun selectProvider(provider: String) {
         val p = provider.lowercase().trim()
-        // F6: en una sesión ya vinculada el proveedor de nacimiento es inamovible.
-        // PERO atar el proveedor desde el primer segundo hacía dos cosas malas: "nuevo
-        // chat" salía siempre como antigravity, y si ese motor falla (Antigravity sin
-        // tokens) el chat quedaba inservible sin forma de cambiar de motor.
+        if (p == _selectedProvider.value) return
+
+        // El proveedor NO es una etiqueta: el Hub lo deriva del prefijo del id de
+        // sesión (agy_ -> antigravity, ses_ -> opencode, ver _conventionProvider en
+        // providers.js). Por eso cambiar el chip en un chat existente NO podía
+        // funcionar: un id agy_ se enruta SIEMPRE a antigravity, diga lo que diga la
+        // app. La Sesión vive en el espacio de conversación de su motor.
         //
-        // Regla: se puede cambiar mientras el motor de nacimiento NO haya producido
-        // ninguna respuesta real. Se cuentan los mensajes del asistente cuyo texto no
-        // sea un aviso de error (⚠️): un chat de antigravity fallido solo tiene el
-        // mensaje del usuario y el aviso, y por tanto sigue siendo cambiable. En
-        // cuanto hay una respuesta de verdad, el historial pertenece a ese motor.
+        // Así que cambiar de motor implica una sesión NUEVA en el motor destino. Si
+        // el usuario elige otro, se crea y se navega a ella; el chat viejo queda
+        // intacto. Esto era lo que faltaba cuando solo se desbloqueaba el chip: la
+        // app dejaba cambiar y luego no llegaba ninguna respuesta.
+        val sid = _currentSessionId.value.orEmpty()
+        val sessionProvider = when {
+            sid.startsWith("agy_") -> "antigravity"
+            sid.startsWith("ses_") -> "opencode"
+            else -> null
+        }
+        if (sessionProvider != null && sessionProvider != p) {
+            viewModelScope.launch {
+                _error.value = null
+                val ns = createNewSession(p)
+                if (ns.isNullOrBlank()) {
+                    _error.value = "No se pudo crear un chat de $p."
+                } else {
+                    _pendingSessionNav.value = ns
+                }
+            }
+            return
+        }
+
+        // Mismo motor (o sesión aún sin prefijo): aquí sí se puede recolocar, y solo
+        // mientras no haya respuesta real — en cuanto el asistente contesta, el
+        // historial pertenece a ese motor y se queda fijo.
         val tieneRespuestaReal = _messages.value.any {
             it.role == "assistant" && it.text.isNotBlank() && !it.text.trimStart().startsWith("⚠️")
         }
-        if (_sessionProviderBound.value && p != _selectedProvider.value && tieneRespuestaReal) {
-            _error.value = "El proveedor ya no se puede cambiar: el asistente ya respondió en este chat. Crea un chat nuevo para usar $p."
+        if (_sessionProviderBound.value && tieneRespuestaReal) {
+            _error.value = "El asistente ya respondió en este chat, así que el motor queda fijo. Para usar otro, crea un chat nuevo."
             return
         }
         _selectedProvider.value = p
-        _sessionProviderBound.value = false   // aún sin respuesta: sigue siendo elegible
+        _sessionProviderBound.value = false
         loadModels(p)
     }
 
