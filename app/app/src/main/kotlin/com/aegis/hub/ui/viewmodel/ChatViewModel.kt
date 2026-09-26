@@ -248,8 +248,13 @@ class ChatViewModel : ViewModel() {
                         val fresh = r.data.filterNot { it.isEmpty }
                         if (fresh != _messages.value) {
                             _messages.value = fresh
-                            announceFinishedTurnIfAny(fresh)
                         }
+                        // Se comprueba el cierre SIEMPRE, no solo cuando la lista cambia.
+                        // El propio flujo de envío ya dejó _messages al día, así que en
+                        // el primer poll tras el turno la lista es idéntica y el aviso
+                        // se habría quedado sin disparar. announceFinishedTurnIfAny es
+                        // idempotente: ignora el turno ya anunciado.
+                        announceFinishedTurnIfAny(fresh)
                     }
                 } catch (_: Exception) {
                     // Un fallo puntual de red no debe tumbar el refresco: el siguiente
@@ -666,6 +671,13 @@ class ChatViewModel : ViewModel() {
                     val synced = syncResp.data.filterNot { it.isEmpty }
                     if (synced.isNotEmpty()) {
                         _messages.value = synced
+                        // El aviso de "respuesta final" SOLO se llamaba desde el poll de
+                        // refresco, y ese poll se salta mientras hay un envío activo
+                        // (`pollingJob?.isActive == true` -> continue). O sea que el
+                        // aviso no se disparaba NUNCA al enviar desde la app, que es
+                        // justo cuando tiene que pasar. Se llama también aquí, al
+                        // cerrar el turno del propio envío.
+                        announceFinishedTurnIfAny(synced)
                     }
                 }
             } catch (e: Exception) {
