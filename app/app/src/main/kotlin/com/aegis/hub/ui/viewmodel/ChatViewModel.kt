@@ -691,8 +691,14 @@ class ChatViewModel : ViewModel() {
                     } else {
                         // El servidor RECHAZO el mensaje. Se pinta el motivo real (cuota
                         // agotada, quota, error de proveedor...) en vez de un generico.
-                        val crudo = try { resp?.errorBody()?.string() } catch (_: Exception) { null }
-                        val motivo = parseDeliveryError(crudo)
+                        // Se lee `body` y no `errorBody`: en este OkHttp (4.12) el
+                        // identificador no resuelve como propiedad ni como metodo, y en la
+                        // rama de rechazo el stream no se va a leer, asi que consumir el
+                        // cuerpo aqui no molesta. El codigo HTTP se añade al motivo para
+                        // poder distinguir 429 (cuota) de 400/500.
+                        val codigo = resp?.code
+                        val crudo = try { resp?.body?.string() } catch (_: Exception) { null }
+                        val motivo = parseDeliveryError(crudo) + " (HTTP ${codigo ?: "?"})"
                         _error.value = motivo
                         _messages.value = _messages.value.map {
                             if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
