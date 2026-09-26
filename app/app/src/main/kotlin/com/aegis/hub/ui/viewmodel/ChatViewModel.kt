@@ -356,7 +356,9 @@ class ChatViewModel : ViewModel() {
         viewModelScope.launch {
             _replyingForm.value = true
             try {
-                val resp = api.replyForm(sid, fid, mapOf(key to form.optionValue(option)))
+                // El cuerpo es {"answer": {"<clave>": "<valor>"}}: la clave "answer" es
+                // obligatoria, el servidor la exige y devuelve 400 sin ella.
+                val resp = api.replyForm(sid, fid, mapOf("answer" to mapOf(key to form.optionValue(option))))
                 if (resp.ok) {
                     _error.value = null
                     // Se quita de inmediato para que la UI no repita el botón; el

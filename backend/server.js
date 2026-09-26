@@ -2862,7 +2862,12 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         return json(res, 502, fail("FORM_REPLY_FAILED",
           `OpenCode respondió ${r.status}${r.text ? `: ${String(r.text).slice(0, 160)}` : ""}`));
       }
-      return json(res, 200, ok(r.json ?? { replied: true }));
+      // Se garantiza un objeto de primer nivel: la app deserializa esto como
+      // Map<String, Any> y una lista o un escalar harían fallar a Gson.
+      const payload = (r.json && typeof r.json === "object" && !Array.isArray(r.json))
+        ? r.json
+        : { replied: true, result: r.json ?? null };
+      return json(res, 200, ok(payload));
     } catch (e) {
       log.warn("[forms] reply error", { err: e.message });
       return json(res, 500, fail("FORM_REPLY_ERROR", e.message));
