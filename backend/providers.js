@@ -102,7 +102,18 @@ export function normalizeMessage(raw, sessionId = "", index = 0) {
       id,
       role,
       timestamp,
-      time: { created: timestamp },
+      // Se conserva el objeto `time` ORIGINAL en lugar de reconstruirlo con solo
+      // `created`. OpenCode marca el cierre real de un turno con `time.streamed`
+      // (y `completed`), y la app lo usa para dibujar el separador "respuesta
+      // final" y lanzar la notificación en segundo plano. Al tirar esas claves,
+      // la app veía SIEMPRE time={created} y el aviso no se disparaba nunca, por
+      // muy correcto que fuera el resto del flujo.
+      time: (() => {
+        const src = (raw.info && raw.info.time) || raw.time;
+        const t = src && typeof src === "object" ? { ...src } : {};
+        if (t.created == null) t.created = timestamp;
+        return t;
+      })(),
       status,
       deliveryStatus: status
     },
