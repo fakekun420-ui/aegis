@@ -910,7 +910,7 @@ function proxyToOpencode(req, res){
     clearTimeout(guard);
     log.error('[proxy] error', { err: e.message });
     if(!res.headersSent) {
-      try { json(res, 502, { error:"opencode unreachable", detail:String(e), hint:`opencode serve debe estar corriendo en ${OPENCODE_HOST}:${OPENCODE_PORT}. Ejecuta: opencode serve --service  (ó "opencode service start" / "opencode service restart"). Usa --service y NO --port: un serve sin --service no se registra, el CLI choca con EADDRINUSE y /api/info le responde 401.` }); } catch(_){}
+      try { json(res, 502, { error:"opencode unreachable", detail:String(e), hint:`opencode serve debe estar corriendo en ${OPENCODE_HOST}:${OPENCODE_PORT}. Ejecuta: opencode serve --port ${OPENCODE_PORT} --hostname 0.0.0.0  ó  opencode web --port ${OPENCODE_PORT} --hostname 0.0.0.0` }); } catch(_){}
     } else try{ res.end(); }catch(_){}
   });
   req.on('error', e => { clearTimeout(guard); log.error('[proxy] req error', { err: e.message }); try { pr.destroy(); } catch (_) {} });
@@ -1864,11 +1864,7 @@ async function handleRequest(req, res){
       const r1 = await shellExecRaw(`nohup sh /sdcard/projects/Aegis/backend/keepalive.sh > /sdcard/projects/Aegis/backend/keepalive.log 2>&1 & echo keepalive_pid=$!`, 8000, 1024*1024);
       steps.push(`keepalive.sh: ${r1.stdout.trim().slice(0,300)} ${r1.stderr.trim().slice(0,200)}`);
       // Direct launch fallback — also only when none; persist companion-owned meta so future probes classify correctly
-      // --service (no --port/--hostname): debe ser el servicio GESTIONADO. Un serve
-      // "ajeno" no se registra, el CLI no lo ve, choca con EADDRINUSE y además el
-      // CLI no conoce su contraseña Basic rotada por arranque -> /api/info 401 ->
-      // "Timed out waiting for the background service to start". Ver keepalive.sh.
-      const r2 = await shellExecRaw(`HOME=/root nohup opencode serve --service >> /sdcard/projects/Aegis/backend/opencode.log 2>&1 & echo opencode_direct_pid=$!`, 8000, 1024*1024);
+      const r2 = await shellExecRaw(`nohup opencode serve --port ${OPENCODE_PORT} --hostname 0.0.0.0 >> /sdcard/projects/Aegis/backend/opencode.log 2>&1 & echo opencode_direct_pid=$!`, 8000, 1024*1024);
       steps.push(`opencode direct: ${r2.stdout.trim().slice(0,300)} ${r2.stderr.trim().slice(0,200)}`);
       // Extract pid from "opencode_direct_pid=12345" and persist as companion-owned
       const m = r2.stdout.match(/opencode_direct_pid=(\d+)/);

@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# keepalive loop para hub 8765 + opencode 49374 — resiste simple_lmk / oom y caídas por proxy
+# keepalive loop para hub 8765 + opencode 4096 — resiste simple_lmk / oom y caídas por proxy
 # uso: sh keepalive.sh &  (se auto-backgroundiza)  o  su -c "sh /sdcard/projects/Aegis/backend/keepalive.sh"
 # IMPORTANTE: este script debe correr en el mismo mount NS que opencode (host mnt 5294/5522), system init 4359 no ve /usr/bin/node
 HUB_DIR="/sdcard/projects/Aegis/backend"
@@ -118,19 +118,7 @@ while true; do
     # leer el DB real (/root/.local/share/opencode/opencode.db, 2.1GB, 18 sesiones).
     # Sin HOME, XDG cae a /.local/share (DB fresca 249KB) y TODAS las sesiones
     # vinculadas devuelven "Session not found" (bug: chats vacíos en la app).
-    #
-    # --service (OBLIGATORIO, no usar --port/--hostname aquí): el puerto 49374 lo
-    # toma el servicio gestionado (default de este build = 49374, ver
-    # `opencode service get`). Sin --service NO se escribe la entrada en el registro
-    # de servicios, y entonces el CLI (`service.ensure`) cree que no hay servidor,
-    # intenta spawnar el suyo y choca: "Managed service port 49374 ... already in use"
-    # -> "Timed out waiting for the background service to start".
-    # Además serve v2 genera una contraseña Basic ALEATORIA en cada arranque y la
-    # loguea como "server password ..."; el CLI solo la conoce si el servidor es
-    # gestionado (el Hub la scrapea de opencode.log, server.js F6). Con un serve
-    # "ajeno", /api/info responde 401 y la sonda de readiness nunca queda verde.
-    # El filtro de muerte de más abajo ya ignora los daemons --service (condición 4).
-    HOME=/root nohup "$OPENCODE_BIN" serve --service >> "$HUB_DIR/opencode.log" 2>&1 &
+    HOME=/root nohup "$OPENCODE_BIN" serve --port "$OC_PORT" --hostname 0.0.0.0 >> "$HUB_DIR/opencode.log" 2>&1 &
     echo "  opencode pid $! lanzado ($OPENCODE_BIN)" >> "$LOG"
     sleep 4
   fi

@@ -76,7 +76,7 @@ class ChatViewModel : ViewModel() {
     private var viewRefreshJob: Job? = null
     private var viewRefreshSessionId: String? = null
 
-    // Id del último mensaje del asistente cuyo turno ya se CERRÓ (info.time.streamed).
+    // Id del último mensaje del asistente cuyo turno ya se CERRÓ (info.time.completed).
     // El chat lo usa para dibujar el divisor de "respuesta final", de modo que se sabe
     // cuándo terminó de verdad y no solo cuando llegó el último trozo de texto.
     private val _finishedTurnId = MutableStateFlow<String?>(null)
