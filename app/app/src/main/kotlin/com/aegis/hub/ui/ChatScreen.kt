@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -474,19 +474,23 @@ fun ChatScreen(
                             // data classes con igual contenido colisionaban y crasheaban el
                             // LazyColumn con "Key was already used". Fallback por índice
                             // solo para mensajes aún sin id del servidor.
-                            itemsIndexed(messages, key = { index, msg -> msg.info?.id ?: "msg_$index" }) { index, msg ->
-                                TerminalConsoleTurn(msg, onRetry = {
-                                    vm.retryMessage(msg, sessionId)
-                                })
-                                // El divisor va ANCLADO a su mensaje, no flotando al
-                                // final de la lista. Antes se dibujaba al final en
-                                // cuanto había un turno cerrado en el historial, así que
-                                // aparecía DESPUÉS de un turno nuevo que aún trabajaba:
-                                // de ahí "respuesta final" pegado a "trabajando en ello".
-                                if (isFinalResponseOf(messages, index)) {
-                                    item(key = "turn_finished_${msg.info?.id ?: index}") {
-                                        TurnFinishedDivider()
-                                    }
+                            // El divisor va ANCLADO a su mensaje, no flotando al final
+                            // de la lista. Antes se dibujaba al final en cuanto había un
+                            // turno cerrado en el historial, así que aparecía DESPUÉS de
+                            // un turno nuevo que aún trabajaba: de ahí "respuesta final"
+                            // pegado a "trabajando en ello".
+                            //
+                            // Para poder intercalar el divisor hay que construir una lista
+                            // de filas de dos tipos: `item()` no se puede llamar desde
+                            // dentro de `itemsIndexed` (Kotlin lo rechaza por el receptor
+                            // implícito), pero `items()` sobre una lista heterogénea sí.
+                            val filas = remember(messages) { buildChatRows(messages) }
+                            items(filas, key = { it.key }) { fila ->
+                                when (fila) {
+                                    is ChatRow.Mensaje -> TerminalConsoleTurn(fila.message, onRetry = {
+                                        vm.retryMessage(fila.message, sessionId)
+                                    })
+                                    is ChatRow.Cierre -> TurnFinishedDivider()
                                 }
                             }
                             if (streamingText != null || streamingTools.isNotEmpty()) {
@@ -1507,4 +1511,28 @@ private fun isFinalResponseOf(messages: List<Message>, index: Int): Boolean {
     if (msg.parts.orEmpty().any { it.state?.status == "running" }) return false
     val next = messages.getOrNull(index + 1) ?: return true
     return next.role == "user"
+}
+
+/** Una fila de la lista del chat: un mensaje, o el divisor que cierra un turno. */
+private sealed interface ChatRow {
+    val key: String
+
+    data class Mensaje(val index: Int, val message: Message) : ChatRow {
+        // Fallback por ÍNDICE, nunca por hashCode(): dos data classes con igual
+        // contenido colisionaban y reventaban el LazyColumn con "Key was already used".
+        override val key: String get() = message.info?.id ?: "msg_$index"
+    }
+
+    data class Cierre(val msgId: String) : ChatRow {
+        override val key: String get() = "turn_finished_$msgId"
+    }
+}
+
+private fun buildChatRows(messages: List<Message>): List<ChatRow> = buildList {
+    messages.forEachIndexed { index, msg ->
+        add(ChatRow.Mensaje(index, msg))
+        if (isFinalResponseOf(messages, index)) {
+            add(ChatRow.Cierre(msg.info?.id ?: "idx_$index"))
+        }
+    }
 }
