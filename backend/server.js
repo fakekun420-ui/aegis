@@ -2893,6 +2893,35 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     return json(res, 200, ok(out));
   }
 
+  // GET /api/sessions/:id/model — modelo REAL con el que esta trabajando la sesion.
+  //
+  // Por que existe: el usuario elegia un modelo en Aegis (p. ej. space-bunny-free) y al
+  // salir y volver a entrar le volvia el default. La eleccion NO se perdia: OpenCode la
+  // tiene en el objeto de sesion,
+  //
+  //   model = { id: "space-bunny-free", providerID: "opencode", variant: "default" }
+  //
+  // y la app sencillamente no la pedia. Esto es ademas la fuente que cubre el cambio de
+  // modelo hecho DESDE EL CLI, porque el CLI escribe en el mismo sitio.
+  //
+  // Devuelve {id, providerID, variant} o null si la sesion no tiene modelo fijado.
+  if (pathname.match(/^\/api\/sessions\/([^\/]+)\/model$/) && req.method === "GET") {
+    const sid = sanitizeProjectId(decodeURIComponent(pathname.match(/^\/api\/sessions\/([^\/]+)\/model$/)[1]));
+    if (!isValidId(sid)) return invalidId(res, "session", sid);
+    try {
+      const r = await opencodeAdapter._v2(`/api/session/${encodeURIComponent(sid)}`, { timeoutMs: 8000 });
+      if (!r.ok) return json(res, 502, fail("SESSION_MODEL_UNAVAILABLE", `OpenCode respondió ${r.status}`));
+      const ses = (r.json && (r.json.data || r.json)) || {};
+      const m = ses.model;
+      return json(res, 200, ok(m && typeof m === "object"
+        ? { id: m.id ?? null, providerID: m.providerID ?? null, variant: m.variant ?? null }
+        : null));
+    } catch (e) {
+      log.warn("[session-model] error", { err: e.message });
+      return json(res, 200, ok(null));
+    }
+  }
+
   // GET /api/projects/:id/summary — read summary (optional fetch helper)
   // BACKLOG F0-F2 (bug preexistente, hallazgo F4): el regex original NO tenía grupo
   // de captura => m[1] === undefined => id literal "undefined" => 404 SIEMPRE, hasta

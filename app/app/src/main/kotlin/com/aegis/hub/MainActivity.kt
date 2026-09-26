@@ -31,6 +31,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import com.aegis.hub.ui.AppNavHost
 import com.aegis.hub.ui.NavRoutes
+import com.aegis.hub.data.AppContext
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
@@ -53,6 +54,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Los ViewModel necesitan leer preferencias (p. ej. el modelo por sesión) y no
+        // llevan Context en el constructor a propósito. Se les da el de aplicación aquí.
+        AppContext.init(applicationContext)
         // El ViewModel no tiene Context; se lo damos una vez para el aviso de
         // "respuesta final" en la barra de notificaciones.
         com.aegis.hub.ui.TurnNotifier.init(this)

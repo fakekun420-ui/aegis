@@ -2,7 +2,9 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.aegis.hub.data.FormReplyBody
+import com.aegis.hub.data.AppContext
 import com.aegis.hub.data.InflightSession
+import com.aegis.hub.data.ModelPreferences
 import com.aegis.hub.data.PendingForm
 import com.aegis.hub.data.FormOption
 import com.aegis.hub.data.FormField
@@ -48,11 +50,11 @@ class ChatViewModel : ViewModel() {
     private val _selectedModel = MutableStateFlow<String?>("gemini-3.8-flash-high")
     val selectedModel: StateFlow<String?> = _selectedModel
 
-    // Modelo elegido POR SESION. El usuario se quejaba de que al salir del chat y
-    // volver a entrar el modelo se le cambiaba solo (eligio "Space Bunny Free" y le
-    // aparecio "LongCat"). `_selectedModel` es estado volátil del ViewModel y se
-    // reinicia al recrearse, asi que sin esto la eleccion se pierde al navegar.
-    private val modelBySession = mutableMapOf<String, String>()
+    // El modelo ya NO se guarda en un mapa del ViewModel: ese mapa muria con el
+    // ViewModel, que esta scopeado a la entrada de navegacion, y por eso no arreglaba
+    // nada. Ahora vive en SharedPreferences (ModelPreferences) y además se consulta al
+    // servidor, que es la fuente autoritativa. Ver la nota de `load()`.
+    private var currentSessionForModel: String = ""
 
     private val _selectedProvider = MutableStateFlow<String>("antigravity")
     val selectedProvider: StateFlow<String> = _selectedProvider
@@ -166,10 +168,61 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Recupera el modelo de una sesión, en orden de autoridad decreciente.
+     *
+     * 1. **El servidor.** OpenCode guarda el modelo de cada sesión en su objeto de sesión
+     *    (`model = {id, providerID, variant}`) y ahí escribe TANTO la app como el CLI.
+     *    Es la única fuente que cubre el requisito completo: "cada sesión recuerda su
+     *    modelo hasta que se cambie a mano, desde el CLI o desde Aegis". La app nunca lo
+     *    preguntaba, por eso el modelo se perdía al reentrar.
+     *  2. **SharedPreferences**, por si el servidor no tiene modelo fijado (sesión recién
+     *    creada) o no responde.
+     *  3. La última elección global, para un chat nuevo (sessionId en blanco).
+     *  4. Default SOLO en Antigravity, que es el único proveedor donde existe.
+     *
+     * Nada de esto sustituye al usuario por un `first()` de la lista: un modelo
+     * desconocido se deja como está, para que la elección sea siempre explícita.
+     */
+    private fun restoreModelFor(sessionId: String, provider: String) {
+        viewModelScope.launch {
+            val ctx = runCatching { AppContext.require() }.getOrNull()
+
+            if (sessionId.isNotBlank()) {
+                runCatching {
+                    val r = api.getSessionModel(sessionId)
+                    val fromServer = r.data?.id
+                    if (r.ok && !fromServer.isNullOrBlank()) {
+                        if (_selectedModel.value != fromServer) _selectedModel.value = fromServer
+                        runCatching { ModelPreferences.setModel(ctx!!, sessionId, fromServer) }
+                        return@runCatching
+                    }
+                }.onFailure {
+                    android.util.Log.w("AegisChat", "No se pudo leer el modelo de $sessionId: ${it.message}")
+                }
+                val saved = runCatching { ctx?.let { ModelPreferences.modelFor(it, sessionId) } }.getOrNull()
+                if (!saved.isNullOrBlank()) {
+                    if (_selectedModel.value != saved) _selectedModel.value = saved
+                    return
+                }
+            }
+
+            val last = runCatching { ctx?.let { ModelPreferences.lastModel(it) } }.getOrNull()
+            if (!last.isNullOrBlank() && _selectedModel.value.isNullOrBlank()) {
+                _selectedModel.value = last
+            }
+            if (_selectedModel.value.isNullOrBlank() && provider == "antigravity") {
+                _selectedModel.value = "gemini-3.8-flash-high"
+            }
+        }
+    }
+
     fun selectModel(modelId: String?) {
         _selectedModel.value = modelId
-        val sid = _currentSessionId.value
-        if (!sid.isNullOrBlank() && !modelId.isNullOrBlank()) modelBySession[sid] = modelId
+        if (modelId.isNullOrBlank()) return
+        // Se persiste por sesión Y como "última elección" (que es lo que usarán los chats
+        // nuevos). Es lo que evita que un chat nuevo vuelva al default.
+        runCatching { ModelPreferences.setModel(AppContext.require(), currentSessionForModel, modelId) }
     }
 
     fun selectProvider(provider: String) {
@@ -351,15 +404,18 @@ class ChatViewModel : ViewModel() {
     /**
      * Detecta que la IA ha CERRADO su turno y lo avisa.
      *
-     * "Cerrado" = el último mensaje del asistente trae `time.completed`, que es la
-     * marca que pone OpenCode cuando el TURNO termina. Ojo: `time.streamed` NO
-     * sirve, esa solo indica que un segmento de texto dejó de crecer, y en un
-     * turno agéntico ocurre varias veces antes de que el turno acabe.
+     * "Cerrado" NO se deduce de `info.time.completed`: ese campo cierra el MENSAJE y se
+     * cumple tras cada `bash` con exit 0, aunque el agente siga trabajando. La condición
+     * vive en `turnIsReallyFinished()` y sale del vigilante
+     * (`session.execution.succeeded`). Ver `docs/adr/ADR-003-turn-final-signal.md`.
      *
      * Si el turno terminó justo ahora:
      *  - se marca para que el chat dibuje el divisor de "respuesta final"
      *  - y se lanza notificación, pero solo si la app está en segundo plano
      *    (TurnNotifier lo comprueba con MainActivity.isForeground).
+     *
+     * Divisor y notificación comparten esta función y la misma guarda, así que no
+     * pueden desincronizarse: es exactamente el mismo disparo.
      */
     /**
      * ¿Ha terminado DE VERDAD el turno del asistente?
@@ -372,20 +428,31 @@ class ChatViewModel : ViewModel() {
      *  1. Hay una herramienta en estado `running` (p. ej. un `bash`): el agente aún
      *     espera su salida.
      *  2. Hay un formulario pendiente: el agente está esperando a la persona.
+     */    /**
+     * Actualiza el indicador de "trabajando" y lanza el aviso de fin de turno UNA vez.
+     *
+     * La condición NO la decide esta función sino `turnIsReallyFinished()`, que se apoya
+     * solo en los eventos `session.execution.*` del vigilante. Aquí solo se应用到 la
+     * dedup: un mismo turno no debe de avisar cada 2 s.
      */
     private fun turnIsReallyFinished(messages: List<Message>): Boolean {
-        // El vigilante manda. Un formulario pendiente significa que el agente esta
-        // esperando a la persona, asi que el turno NO ha terminado.
+        // Un formulario pendiente significa que el agente esta esperando a la persona,
+        // asi que el turno NO ha terminado.
         if (_pendingForms.value.isNotEmpty()) return false
         if (_turnBusy.value) return false
         if (_turnOver.value) return true
-        // Sin datos del vigilante todavia (arranque, o sesion de otro proveedor):
-        // se cae a la heuristica anterior para no dejar la UI muda.
-        val last = messages.lastOrNull { it.role == "assistant" } ?: return false
-        if (last.info?.time?.containsKey("completed") != true) return false
-        if (last.parts.orEmpty().any { it.state?.status == "running" }) return false
-        return true
+        if (!warnedNoWatcher) {
+            warnedNoWatcher = true
+            android.util.Log.w(
+                "AegisChat",
+                "Sin datos del vigilante para ${_currentSessionId.value}: se asume turno EN CURSO. " +
+                "Si el vigilante se perdio, el divisor y la notificacion no saldran hasta el siguiente turno."
+            )
+        }
+        return false
     }
+
+    private var warnedNoWatcher = false
 
     private fun announceFinishedTurnIfAny(fresh: List<Message>) {
         val lastAssistant = fresh.lastOrNull { it.role == "assistant" } ?: return
@@ -474,11 +541,15 @@ class ChatViewModel : ViewModel() {
         // F6: sólo una sesión existente queda vinculada al proveedor de nacimiento;
         // los chats nuevos pueden cambiar libremente de motor.
         _sessionProviderBound.value = sessionId.isNotBlank()
-        // Restaura la eleccion del usuario para ESTA sesion antes de tocar nada.
-        modelBySession[sessionId]?.let { _selectedModel.value = it }
+        currentSessionForModel = sessionId
+        // El default solo se aplica si el proveedor es ANTIGRAVITY: "gemini-3.8-flash-high"
+        // no existe en la lista de OpenCode (470 modelos, el primero es longcat-2.5-
+        // preview-free), así que ponerlo en una sesión `ses_*` dejaba el compositor sin
+        // ningún radio marcado y hacía que la lista lo sustituyera por el primero.
         if (_selectedModel.value.isNullOrBlank()) {
-            _selectedModel.value = "gemini-3.8-flash-high"
+            _selectedModel.value = if (prov == "antigravity") "gemini-3.8-flash-high" else null
         }
+        restoreModelFor(sessionId, prov)
         if (sessionId.isBlank()) {
             _sessionTitle.value = "Nuevo chat"
             loadModels(prov)

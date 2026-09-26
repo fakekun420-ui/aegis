@@ -185,4 +185,17 @@ interface ApiService {
     // desde el CLI, que no pasan por el Hub.
     @GET("api/sessions/inflight")
     suspend fun getInflight(): Envelope<List<InflightSession>>
+
+    // Modelo real con el que trabaja una sesión. La fuente autoritativa: OpenCode la
+    // tiene en el objeto de sesión, así que también refleja un cambio hecho desde el
+    // CLI. Devuelve {id, providerID, variant} o null si no hay modelo fijado.
+    @GET("api/sessions/{id}/model")
+    suspend fun getSessionModel(@Path("id") sessionId: String): Envelope<SessionModelRef?>
 }
+
+/** Referencia de modelo que devuelve el Hub para una sesión. */
+data class SessionModelRef(
+    val id: String? = null,
+    val providerID: String? = null,
+    val variant: String? = null
+)

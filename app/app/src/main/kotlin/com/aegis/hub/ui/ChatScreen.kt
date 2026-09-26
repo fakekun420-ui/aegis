@@ -364,8 +364,16 @@ fun ChatScreen(
         },
         bottomBar = {
             Column(modifier = Modifier.navigationBarsPadding().imePadding()) {
+                // El chip NUNCA cae al id crudo: si el modelo elegido no está en la lista
+                // se muestra como no disponible en vez de imprimir "gemini-3.8-flash-high"
+                // como si fuera un nombre de modelo. Antes ese fallback hacía que el chip
+                // pareciera correcto mientras ningún radio podía marcarse.
                 val modelDisplayName = models.find { it.id == selectedModel }?.name
-                    ?: if (!selectedModel.isNullOrBlank()) selectedModel!! else "Gemini 3.8 Flash (High)"
+                    ?: when {
+                        selectedModel.isNullOrBlank() && !modelsLoading -> "Elige un modelo"
+                        selectedModel.isNullOrBlank() -> "Cargando modelos…"
+                        else -> "No disponible: $selectedModel"
+                    }
 
                 UnifiedFloatingComposer(
                     text = composerText,
