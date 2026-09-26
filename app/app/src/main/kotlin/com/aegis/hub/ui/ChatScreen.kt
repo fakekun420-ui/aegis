@@ -93,7 +93,7 @@ fun ChatScreen(
     // no es un contexto @Composable, y llamar a `remember` dentro de él no compila
     // ("@Composable invocations can only happen from the context of a @Composable
     // function"). El divisor de fin de turno se intercala entre los mensajes aquí.
-    val filas = remember(messages) { buildChatRows(messages) }
+    val filas = remember(messages, turnOver) { buildChatRows(messages, turnOver) }
 
     // Cambiar de motor crea una sesión nueva en el destino (el proveedor vive en el
     // prefijo del id) y aquí se navega a ella.
@@ -1619,7 +1619,7 @@ private sealed interface ChatRow {
     }
 }
 
-private fun buildChatRows(messages: List<Message>): List<ChatRow> = buildList {
+private fun buildChatRows(messages: List<Message>, turnOver: Boolean): List<ChatRow> = buildList {
     messages.forEachIndexed { index, msg ->
         add(ChatRow.Mensaje(index, msg))
         if (isFinalResponseOf(messages, index, turnOver)) {
