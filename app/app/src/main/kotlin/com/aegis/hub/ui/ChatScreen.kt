@@ -89,6 +89,12 @@ fun ChatScreen(
     val turnInProgress by vm.turnInProgress.collectAsState()
     val replyingForm by vm.replyingForm.collectAsState()
 
+    // Las filas se calculan AQUÍ y no dentro del `content` del LazyColumn: ese lambda
+    // no es un contexto @Composable, y llamar a `remember` dentro de él no compila
+    // ("@Composable invocations can only happen from the context of a @Composable
+    // function"). El divisor de fin de turno se intercala entre los mensajes aquí.
+    val filas = remember(messages) { buildChatRows(messages) }
+
     // Cambiar de motor crea una sesión nueva en el destino (el proveedor vive en el
     // prefijo del id) y aquí se navega a ella.
     LaunchedEffect(pendingSessionNav) {
@@ -484,7 +490,6 @@ fun ChatScreen(
                             // de filas de dos tipos: `item()` no se puede llamar desde
                             // dentro de `itemsIndexed` (Kotlin lo rechaza por el receptor
                             // implícito), pero `items()` sobre una lista heterogénea sí.
-                            val filas = remember(messages) { buildChatRows(messages) }
                             items(filas, key = { it.key }) { fila ->
                                 when (fila) {
                                     is ChatRow.Mensaje -> TerminalConsoleTurn(fila.message, onRetry = {
