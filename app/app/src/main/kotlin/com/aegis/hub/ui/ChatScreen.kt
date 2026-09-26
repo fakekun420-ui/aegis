@@ -84,7 +84,6 @@ fun ChatScreen(
     val selectedModel by vm.selectedModel.collectAsState()
     val selectedProvider by vm.selectedProvider.collectAsState()
     val sessionProviderBound by vm.sessionProviderBound.collectAsState()
-    val finishedTurnId by vm.finishedTurnId.collectAsState()
     val pendingSessionNav by vm.pendingSessionNav.collectAsState()
     val pendingForms by vm.pendingForms.collectAsState()
     val turnInProgress by vm.turnInProgress.collectAsState()
@@ -475,10 +474,20 @@ fun ChatScreen(
                             // data classes con igual contenido colisionaban y crasheaban el
                             // LazyColumn con "Key was already used". Fallback por índice
                             // solo para mensajes aún sin id del servidor.
-                            itemsIndexed(messages, key = { index, msg -> msg.info?.id ?: "msg_$index" }) { _, msg ->
+                            itemsIndexed(messages, key = { index, msg -> msg.info?.id ?: "msg_$index" }) { index, msg ->
                                 TerminalConsoleTurn(msg, onRetry = {
                                     vm.retryMessage(msg, sessionId)
                                 })
+                                // El divisor va ANCLADO a su mensaje, no flotando al
+                                // final de la lista. Antes se dibujaba al final en
+                                // cuanto había un turno cerrado en el historial, así que
+                                // aparecía DESPUÉS de un turno nuevo que aún trabajaba:
+                                // de ahí "respuesta final" pegado a "trabajando en ello".
+                                if (isFinalResponseOf(messages, index)) {
+                                    item(key = "turn_finished_${msg.info?.id ?: index}") {
+                                        TurnFinishedDivider()
+                                    }
+                                }
                             }
                             if (streamingText != null || streamingTools.isNotEmpty()) {
                                 item(key = "streaming_live") {
@@ -512,16 +521,6 @@ fun ChatScreen(
                                 }
                             }
 
-                            // Divisor de "respuesta final": aparece cuando el turno del
-                            // asistente se ha cerrado de verdad (info.time.completed), no
-                            // cuando simplemente llegó el último trozo de texto. En primer
-                            // plano este es el aviso; en segundo plano se lanza además la
-                            // notificación de la barra (TurnNotifier).
-                            if (finishedTurnId != null) {
-                                item(key = "turn_finished_${finishedTurnId}") {
-                                    TurnFinishedDivider()
-                                }
-                            }
                         }
                     }
                 }
@@ -1484,4 +1483,25 @@ private fun TurnInProgressRow() {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+/**
+ * ¿Este mensaje de asistente es el cierre real de un turno?
+ *
+ * Se exige todo lo siguiente, y el último punto es el que faltaba antes:
+ *
+ *  - es un mensaje del asistente con `info.time.completed` (el mensaje se cerró);
+ *  - NO tiene ninguna herramienta en estado `running` (si la tiene, el agente sigue
+ *    esperando su salida y el turno no ha terminado);
+ *  - y a continuación viene un mensaje del usuario, o no viene nada. Si lo siguiente
+ *    es OTRO mensaje del asistente, ambos son el mismo turno y aquí no se corta: por
+ *    eso el divider soltaba en medio.
+ */
+private fun isFinalResponseOf(messages: List<Message>, index: Int): Boolean {
+    val msg = messages[index]
+    if (msg.role != "assistant") return false
+    if (msg.info?.time?.containsKey("completed") != true) return false
+    if (msg.parts.orEmpty().any { it.state?.status == "running" }) return false
+    val next = messages.getOrNull(index + 1) ?: return true
+    return next.role == "user"
 }

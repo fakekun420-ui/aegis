@@ -261,6 +261,18 @@ class ChatViewModel : ViewModel() {
                     continue
                 }
                 if (streamingSince > 0) streamingSince = 0
+                // Formularios pendientes. Va PRIMERO y en su propio try: un fallo al
+                // listarlos no debe impedir refrescar la conversación, y el estado de
+                // las preguntas tiene que estar fresco ANTES de juzgar si el turno
+                // terminó, porque un agente esperando respuesta sigue trabajando.
+                try {
+                    val fr = api.getPendingForms(sessionId)
+                    if (fr.ok && fr.data != null) _pendingForms.value = fr.data
+                } catch (_: Exception) {
+                    // Un fallo puntual de red no debe tumbar el refresco: el siguiente
+                    // ciclo reintenta solo.
+                }
+
                 try {
                     val r = api.getMessages(sessionId)
                     if (r.ok && r.data != null) {
@@ -276,16 +288,6 @@ class ChatViewModel : ViewModel() {
                         announceFinishedTurnIfAny(fresh)
                     }
                 } catch (_: Exception) {
-                }
-
-                // Formularios pendientes. Va FUERA del try de mensajes para que un
-                // fallo al listarlos no impida refrescar la conversación, y al revés.
-                try {
-                    val fr = api.getPendingForms(sessionId)
-                    if (fr.ok && fr.data != null) _pendingForms.value = fr.data
-                } catch (_: Exception) {
-                    // Un fallo puntual de red no debe tumbar el refresco: el siguiente
-                    // ciclo reintenta solo.
                 }
             }
         }
@@ -311,22 +313,33 @@ class ChatViewModel : ViewModel() {
      *  - y se lanza notificación, pero solo si la app está en segundo plano
      *    (TurnNotifier lo comprueba con MainActivity.isForeground).
      */
+    /**
+     * ¿Ha terminado DE VERDAD el turno del asistente?
+     *
+     * `time.completed` por sí solo NO basta, y esa era la causa de los dos síntoma que
+     * reportó el usuario (divisor saltando a mitad y "trabajando en ello" pegado al
+     * divisor). Un mensaje del asistente puede llevar `completed` mientras el turno
+     * sigue vivo, porque lo que se cierra es ESE mensaje, no el turno:
+     *
+     *  1. Hay una herramienta en estado `running` (p. ej. un `bash`): el agente aún
+     *     espera su salida.
+     *  2. Hay un formulario pendiente: el agente está esperando a la persona.
+     */
+    private fun turnIsReallyFinished(messages: List<Message>): Boolean {
+        val last = messages.lastOrNull { it.role == "assistant" } ?: return false
+        if (last.info?.time?.containsKey("completed") != true) return false
+        val toolViva = last.parts.orEmpty().any { it.state?.status == "running" }
+        if (toolViva) return false
+        if (_pendingForms.value.isNotEmpty()) return false
+        return true
+    }
+
     private fun announceFinishedTurnIfAny(fresh: List<Message>) {
         val lastAssistant = fresh.lastOrNull { it.role == "assistant" } ?: return
         val id = lastAssistant.info?.id ?: return
-        // La marca de cierre real es `completed`, NO `streamed`.
-        //
-        // `streamed` significa "este segmento de texto dejó de crecer", y en un turno
-        // agéntico eso pasa varias veces: el modelo escribe, llama a una herramienta,
-        // sigue escribiendo. Con `streamed` el divisor saltaba a mitad de turno, que es
-        // justo lo que reportó el usuario.
-        //
-        // Medido sobre un turno real:
-        //   streamed=S completed=C  -> turno terminado
-        //   streamed=S completed=-  -> turno en curso (segmento cerrado, sigue trabajando)
-        val closed = lastAssistant.info?.time?.containsKey("completed") == true
-        _turnInProgress.value = !closed
-        if (!closed) return
+        val finished = turnIsReallyFinished(fresh)
+        _turnInProgress.value = !finished
+        if (!finished) return
         if (id == _finishedTurnId.value) return   // ya anunciado, no repetir cada 2 s
         _finishedTurnId.value = id
 
