@@ -539,14 +539,23 @@ fun ChatScreen(
                             // anadido una SendingRow() aqui y el usuario reporto que se
                             // veian las DOS a la vez: duplicaba un indicador que ya
                             // existia.
-                            if (streamingText != null || streamingTools.isNotEmpty()) {
-                                item(key = "streaming_live") {
-                                    TerminalStreamingTurn(streamingText ?: "", streamingTools)
-                                }
-                            } else if (loading && !sendingInFlight) {
-                                // Nunca junto a la pildora de envio: son las dos fases
-                                // del mismo ciclo, excluyentes por construccion.
-                                item(key = "typing_dots") { TerminalActivityCursor() }
+                            // Fases del ciclo, excluyentes por construccion.
+                            //
+                            // El `when` tiene que cubrir las TRES ramas, no solo la
+                            // segunda: al empezar a enviar, `_streamingText` vale "" (no
+                            // null), asi que `streamingText != null` es CIERTO y la fila
+                            // de streaming se pintaba igual. Y como por dentro escribe
+                            // "Generando respuesta..." cuando el texto va vacio, salia
+                            // junto a la pildora "Enviando...". Por eso el arreglo
+                            // anterior, que solo condicionaba la rama de `loading`,
+                            // parecio funcionar y seguia mostrando los dos a la vez.
+                            when {
+                                sendingInFlight -> Unit
+                                streamingText != null || streamingTools.isNotEmpty() ->
+                                    item(key = "streaming_live") {
+                                        TerminalStreamingTurn(streamingText ?: "", streamingTools)
+                                    }
+                                loading -> item(key = "typing_dots") { TerminalActivityCursor() }
                             }
 
                             // Formulario / pregunta pendiente. El TUI del CLI la
