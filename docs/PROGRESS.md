@@ -1,4 +1,16 @@
 # Aegis — Agent Progress Log
+
+> 📄 **Documento histórico (log de orquestación).** Registra las tareas que ejecutaron
+> los agentes Gemini/Mimo hasta 2026-09-25 y **no se mantiene al día**. Para el estado
+> actual ver `CHANGELOG.md`, `README.md` y `backend/.ponytail.md`.
+>
+> **Lo que se hizo después del 2026-09-25 (trabajo directo, sin orquestador):** el
+> "final del final" del divisor de respuesta (`session.execution.*`, ver
+> `docs/adr/ADR-003-turn-final-signal.md`), formularios respondibles desde la app
+> multi-pregunta, separación de fases "Enviando"/"Generando" con confirmación de
+> recepción, navegación del historial sin perder la posición, círculo de "ejecutando"
+> en la lista de chats, y el arreglo de "Vincular carpeta". Todo con su entrada en
+> `CHANGELOG.md` [1.1.2] y su commit individual.
 Generated: 2026-09-25T12:00:00Z
 Orchestrator: Gemini (Antigravity)
 Executor: Mimo (Claude via subagent) — mode: subagent

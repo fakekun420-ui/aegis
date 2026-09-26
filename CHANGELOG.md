@@ -2,6 +2,82 @@
 
 Todo notable de Aegis se documenta aquí. Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [1.1.2] - 2026-09-26
+
+Estado del "final del final", las fases de envio, la navegacion del historial, el
+estado de ejecucion de los chats y el arreglo de "Vincular carpeta".
+
+### Anadido
+- **Vigilante de ejecuciones en el Hub.** Se suscribe al stream de eventos de
+  OpenCode (`GET /api/event`) y sigue `session.execution.started` /
+  `session.execution.<fin>` mas `session.inbox.delivered`. Nuevo endpoint
+  `GET /api/sessions/inflight` (`?ids=1` devuelve solo los ids ocupados, O(1), sin
+  consultar a OpenCode).
+- **Indicador de "trabajando en ello…"** mientras el agente tiene un turno vivo.
+- **Boton flotante con flecha hacia abajo** para volver al mensaje mas reciente.
+- **Circulo de "ejecutando"** en cada chat que sigue trabajando, en la lista de
+  chats. Funciona igual si el turno se lanzo desde la app o desde el CLI.
+- **Encuestas multi-pregunta.** La tarjeta pinta todos los campos numerados y
+  marca la elegida. Con una sola pregunta, un toque envia; con varias, cada toque
+  elige y un boton "Enviar respuestas (n/N)" manda el mapa entero.
+- **Fases "Enviando" / "Generando" separadas**, y confirmacion de recepcion: el
+  mensaje pasa a entregado en cuanto el POST vuelve, no al acabar el stream.
+
+### Arreglado
+- **El divisor "respuesta final" saltaba a mitad de turno.** Se apoyaba en
+  `info.time.completed`, que cierra el MENSAJE, no el turno: un mensaje del
+  asistente lo lleva en cuanto su segmento termina, o sea justo despues de cada
+  `bash` con exit 0, aunque el agente siga trabajando. Ahora depende de
+  `session.execution.succeeded`, el unico evento que significa "no va a hacer nada
+  mas hasta que le hables". Verificado en caliente: una sesion con un
+  `bash sleep 25` aparece ocupada en las cinco muestras (t+5..t+25) y se libera al
+  terminar.
+- **Las respuestas de una encuesta se perdian en silencio.** `POST
+  /api/session/:id/form/:fid/reply` RESUELVE el formulario entero con lo que
+  llegue: mandando solo `q0` de un formulario de 3 campos, los otros dos se
+  perdieron sin aviso. No hay acumula ni envio parcial. La app ahora junta todas
+  las respuestas antes de enviar, y si hay campos sin opciones avisa de cuantos se
+  van a descartar y lo dice en la etiqueta del boton.
+- **El cuerpo del reply no llevaba la clave `answer`**, que el Hub exige
+  (`400 INVALID_ANSWER` en cada toque), y **Retrofit no admite `Map<String,
+  Map<String, String>>` como `@Body`**: Kotlin lo aceptaba pero en ejecucion
+  reventaba con `Parameter type must not include a type variable or wildcard`.
+  La tarjeta se pintaba perfecta y el toque fallaba, con el build en verde.
+  Sustituido por `data class FormReplyBody`.
+- **"Enviando…" y "Generando respuesta…" salian a la vez.** Dos motivos, ambos
+  corregidos: (1) se anadio una fila de envio que duplicaba la pila que ya vivia
+  bajo el mensaje; (2) la fase de envio se guardaba en `info.status`, un campo del
+  MENSAJE, y hay tres sitios que reemplazan la lista entera por la del servidor
+  (los dos polls y la sincronizacion final), asi que cualquier carrera entre el
+  poll y el ack la hacia volver a PENDING. Ahora se lee de `sendingInFlight`,
+  estado dedicado que ningun poll toca: las dos fases son excluyentes por
+  construccion.
+- **El scroll no roba la navegacion.** El efecto de auto-scroll saltaba SIEMPRE al
+  ultimo item, este donde estuvieras; leyendo historia, cualquier contenido nuevo
+  te arrastraba al final. Ahora `followOutput` deja de seguir cuando el usuario
+  sube, y se reinicia por sesion para que al abrir un chat siga yendo al mas
+  reciente.
+- **"Vincular carpeta" no vinculaba nada.** `treeUriToFsPath()` usaba
+  `uri.pathSegments.firstOrNull()`, pero `OpenDocumentTree` devuelve una URI DE
+  ARBOL donde ese segmento es el literal `"tree"`, no el documentId. Sin `:` no
+  habia volumen, la funcion devolvia null SIEMPRE, `onLinkFolder` no se llamaba y
+  no llegaba ni un POST al Hub. Ademas se acepta la autoridad de Descargas.
+- **El error de envio era generico.** `parseDeliveryError()` lee el cuerpo
+  `{ok:false,error:{code,message}}` del Hub, que ya trae el motivo accionable de
+  `providers.js` ("Antigravity no tiene cuota disponible (cuota agotada)", o el
+  final de stderr de agy), y se anade el codigo HTTP para distinguir 429 de 400/500.
+  Antes se tragaba el cuerpo y se perdia justo esa informacion.
+- **`isFinalResponseOf` se movio a una lista de filas** (`buildChatRows`), porque
+  `item()` no se puede llamar desde el `content` de `itemsIndexed` y `remember`
+  tampoco desde el del `LazyColumn`.
+
+### Verificado en el dispositivo (versionCode 159)
+- Encuesta real de 3 campos rellenada por API con valores NO primeros
+  (`q0=Sevilla, q1=42, q2=Verde`) y el modelo los devolvio integros y con su
+  clave: "Ciudad: Sevilla, Numero: 42, Color: Verde".
+- El "final del final" con el vigilante de ejecuciones midiendo en caliente.
+- Los formularios respondibles con un toque, con la tarjeta pintada y sin error.
+
 ## [1.1.1] - 2026-09-26
 
 ### Arreglado

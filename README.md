@@ -9,7 +9,25 @@
 
 Aegis is a self-contained AI orchestration platform running entirely from an Android device (POCO F3, Android 15, root Magisk, Ubuntu chroot), **with root secured by token and a self-service setup wizard**: install the APK, follow the 6-step wizard, and the device provisions itself (Ubuntu + Node + OpenCode + Antigravity + skills) with SHA256-verified downloads and rollback.
 
-**Estado: `v1.1.0` (2026-09-25)** — un solo servidor de OpenCode (`:49374`); ver [CHANGELOG](CHANGELOG.md) — ver [CHANGELOG.md](CHANGELOG.md) · [Quickstart](docs/QUICKSTART.md) · [QA checklist](docs/qa/QA_CHECKLIST.md)
+**Estado: `v1.1.2` (2026-09-26)** — un solo servidor de OpenCode (`:49374`), formularios respondibles desde la app, y el estado de ejecución real de los turnos.
+
+Lo nuevo en `1.1.x`:
+
+- **El "final del final".** El divisor de "✓ respuesta final" ya no salta tras cada
+  `bash`: depende de `session.execution.succeeded`, el evento que emite el propio
+  OpenCode cuando el agente de verdad ha terminado y espera. Antes se apoyaba en
+  `info.time.completed`, que cierra el *mensaje*, no el turno. Ver
+  [ADR-003](docs/adr/ADR-003-turn-final-signal.md).
+- **Formularios respondibles desde la app**, incluida una encuesta de varias
+  preguntas. Antes solo se podían contestar desde el TUI del CLI, con flechas.
+- **Fases "Enviando" → "Generando" separadas**, con confirmación de que el servidor
+  recibió el mensaje y el motivo real si lo rechaza (cuota de Antigravity, 429…).
+- **El scroll deja de robar la navegación** al releer el historial, con botón para
+  volver al mensaje más reciente.
+- **Círculo de "ejecutando"** en los chats que siguen trabajando, y funciona igual si
+  el turno se lanzó desde la app o desde el CLI.
+
+→ [CHANGELOG](CHANGELOG.md) · [Quickstart](docs/QUICKSTART.md) · [QA checklist](docs/qa/QA_CHECKLIST.md)
 
 ![Build](https://github.com/fakekun420-ui/aegis/actions/workflows/build-apk.yml/badge.svg)
 
