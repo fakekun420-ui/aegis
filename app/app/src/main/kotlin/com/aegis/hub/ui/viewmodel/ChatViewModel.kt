@@ -1,6 +1,9 @@
 package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import com.aegis.hub.data.PendingForm
+import com.aegis.hub.data.FormOption
+import com.aegis.hub.data.FormField
 import com.aegis.hub.ui.TurnNotifier
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.ApiClient
@@ -75,6 +78,21 @@ class ChatViewModel : ViewModel() {
     // propósito, para no chocar con el poll de envío.
     private var viewRefreshJob: Job? = null
     private var viewRefreshSessionId: String? = null
+
+    // Formularios / preguntas de herramientas pendientes de esta sesión. El TUI del
+    // CLI los pintaba y solo se podían responder con flechas + Enter; desde Aegis no
+    // había forma de verlos ni contestarlos. Se consultan en el mismo refresco y se
+    // responden con un toque.
+    // El turno del asistente sigue en curso: el último mensaje del asistente NO trae
+    // `time.completed`. Permite pintar "trabajando en ello" mientras ocurre, y que el
+    // divisor de "respuesta final" aparezca solo cuando de verdad termina.
+    private val _turnInProgress = MutableStateFlow(false)
+    val turnInProgress: StateFlow<Boolean> = _turnInProgress
+
+    private val _pendingForms = MutableStateFlow<List<PendingForm>>(emptyList())
+    val pendingForms: StateFlow<List<PendingForm>> = _pendingForms
+    private val _replyingForm = MutableStateFlow(false)
+    val replyingForm: StateFlow<Boolean> = _replyingForm
 
     // Id del último mensaje del asistente cuyo turno ya se CERRÓ (info.time.completed).
     // El chat lo usa para dibujar el divisor de "respuesta final", de modo que se sabe
@@ -257,6 +275,14 @@ class ChatViewModel : ViewModel() {
                         announceFinishedTurnIfAny(fresh)
                     }
                 } catch (_: Exception) {
+                }
+
+                // Formularios pendientes. Va FUERA del try de mensajes para que un
+                // fallo al listarlos no impida refrescar la conversación, y al revés.
+                try {
+                    val fr = api.getPendingForms(sessionId)
+                    if (fr.ok && fr.data != null) _pendingForms.value = fr.data
+                } catch (_: Exception) {
                     // Un fallo puntual de red no debe tumbar el refresco: el siguiente
                     // ciclo reintenta solo.
                 }
@@ -298,6 +324,7 @@ class ChatViewModel : ViewModel() {
         //   streamed=S completed=C  -> turno terminado
         //   streamed=S completed=-  -> turno en curso (segmento cerrado, sigue trabajando)
         val closed = lastAssistant.info?.time?.containsKey("completed") == true
+        _turnInProgress.value = !closed
         if (!closed) return
         if (id == _finishedTurnId.value) return   // ya anunciado, no repetir cada 2 s
         _finishedTurnId.value = id
@@ -308,6 +335,42 @@ class ChatViewModel : ViewModel() {
             preview = lastAssistant.text.take(160),
             sessionId = _currentSessionId.value
         )
+    }
+
+    /**
+     * Responde un formulario pendiente.
+     *
+     * El cuerpo es `{ "answer": { "<clave del campo>": "<valor de la opción>" } }`. Un
+     * formulario puede traer VARIOS campos, y OpenCode entrega varios formularios en la
+     * misma respuesta; aquí se contesta el que el usuario ha tocado.
+     */
+    fun answerForm(form: PendingForm, option: FormOption) {
+        val sid = _currentSessionId.value.orEmpty()
+        val fid = form.id.orEmpty()
+        val field = form.firstField ?: return
+        val key = field.key.orEmpty()
+        if (sid.isBlank() || fid.isBlank() || key.isBlank()) {
+            _error.value = "No se puede responder: formulario incompleto"
+            return
+        }
+        viewModelScope.launch {
+            _replyingForm.value = true
+            try {
+                val resp = api.replyForm(sid, fid, mapOf(key to form.optionValue(option)))
+                if (resp.ok) {
+                    _error.value = null
+                    // Se quita de inmediato para que la UI no repita el botón; el
+                    // siguiente refresco confirma que OpenCode ya no lo lista.
+                    _pendingForms.value = _pendingForms.value.filterNot { it.id == fid }
+                } else {
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "No se pudo enviar la respuesta"
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error al enviar la respuesta"
+            } finally {
+                _replyingForm.value = false
+            }
+        }
     }
 
     fun stopViewRefresh(ownerSessionId: String? = null) {

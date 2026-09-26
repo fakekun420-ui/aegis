@@ -166,4 +166,17 @@ interface ApiService {
 
     @POST("api/setup/auth/antigravity")
     suspend fun runAuthGuide(): Response<AuthGuideResponse>
+
+    // ===== Formularios / preguntas de herramientas =====
+    // El proxy generico /opencode/* devuelve 401 (no anade el Basic de OpenCode),
+    // asi que el Hub expone rutas propias con auth. Ver server.js /api/forms.
+    @GET("api/forms")
+    suspend fun getPendingForms(@Query("sessionId") sessionId: String?): Envelope<List<PendingForm>>
+
+    @POST("api/forms/{sessionId}/{formId}/reply")
+    suspend fun replyForm(
+        @Path("sessionId") sessionId: String,
+        @Path("formId") formId: String,
+        @Body body: Map<String, Map<String, String>>
+    ): Envelope<Map<String, Any>>
 }

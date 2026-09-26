@@ -434,3 +434,33 @@ data class AuthGuideResponse(
     val data: AuthGuideData?,
     val error: BootstrapError? = null
 )
+
+// ===== Formularios / preguntas de herramientas (GET /api/forms) =====
+// Cuando una herramienta lanza una pregunta, el TUI del CLI la pinta y se responde
+// con flechas + Enter. Estos modelos permiten que Aegis la muestre y la conteste
+// con un toque, sin depender del CLI.
+data class FormOption(
+    val value: String? = null,
+    val label: String? = null,
+    val description: String? = null
+)
+
+data class FormField(
+    val key: String? = null,
+    val title: String? = null,
+    val description: String? = null,
+    val type: String? = null,
+    val options: List<FormOption>? = null,
+    val custom: Boolean? = null
+)
+
+data class PendingForm(
+    val id: String? = null,
+    val sessionID: String? = null,
+    val title: String? = null,
+    val fields: List<FormField>? = null
+) {
+    val firstField: FormField? get() = fields?.firstOrNull()
+    /** Valor exacto a enviar en el cuerpo del reply. */
+    fun optionValue(opt: FormOption): String = opt.value ?: opt.label.orEmpty()
+}

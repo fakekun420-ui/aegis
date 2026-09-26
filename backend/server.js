@@ -2814,6 +2814,61 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     return json(res, 200, ok(models));
   }
 
+  // GET /api/forms (and /api/opencode/forms) — formularios/preguntas PENDIENTES.
+  //
+  // Cuando una herramienta lanza una pregunta al usuario, el TUI del CLI la pinta y
+  // se responde con flechas + Enter. Desde Aegis no había forma de verla NI de
+  // contestarla: el proxy generico /opencode/* devuelve 401 porque no anade el Basic
+  // de OpenCode (esa auth solo vive en providers.js), asi que hacen falta rutas
+  // propias que usen opencodeAdapter._v2().
+  //
+  // ?sessionId filtra por sesion. Sin filtro devuelve todos los pendientes.
+  if ((pathname === "/api/forms" || pathname === "/api/opencode/forms") && req.method === "GET") {
+    try {
+      const r = await opencodeAdapter._v2("/api/form", { timeoutMs: 12000 });
+      if (!r.ok) return json(res, 502, fail("FORMS_UNAVAILABLE", `OpenCode respondió ${r.status}`));
+      const j = r.json || {};
+      const all = Array.isArray(j.data) ? j.data : [];
+      const want = url.searchParams.get("sessionId");
+      const forms = want ? all.filter((f) => f && f.sessionID === want) : all;
+      return json(res, 200, ok(forms));
+    } catch (e) {
+      log.warn("[forms] list error", { err: e.message });
+      return json(res, 200, ok([]));
+    }
+  }
+
+  // POST /api/forms/:sessionId/:formId/reply — responder un formulario.
+  // Cuerpo: { "answer": { "<fieldKey>": "<valor de la opcion>" } }
+  if (pathname.match(/^\/api\/forms\/([^\/]+)\/([^\/]+)\/reply$/) && req.method === "POST") {
+    const m = pathname.match(/^\/api\/forms\/([^\/]+)\/([^\/]+)\/reply$/);
+    const sid = m[1];
+    const fid = m[2];
+    if (!isValidId(sid) || !isValidId(fid)) {
+      return json(res, 400, fail("INVALID_ID", "sessionId o formId inválido"));
+    }
+    try {
+      const raw = await readJsonBody(req, 256 * 1024);
+      const body = JSON.parse(raw || "{}");
+      if (!body.answer || typeof body.answer !== "object") {
+        return json(res, 400, fail("INVALID_ANSWER", "body.answer debe ser un objeto {campo: valor}"));
+      }
+      const r = await opencodeAdapter._v2(`/api/session/${sid}/form/${fid}/reply`, {
+        method: "POST",
+        body: { answer: body.answer },
+        timeoutMs: 20000,
+      });
+      if (!r.ok) {
+        return json(res, 502, fail("FORM_REPLY_FAILED",
+          `OpenCode respondió ${r.status}${r.text ? `: ${String(r.text).slice(0, 160)}` : ""}`));
+      }
+      return json(res, 200, ok(r.json ?? { replied: true }));
+    } catch (e) {
+      log.warn("[forms] reply error", { err: e.message });
+      return json(res, 500, fail("FORM_REPLY_ERROR", e.message));
+    }
+  }
+
   // GET /api/projects/:id/summary — read summary (optional fetch helper)
   // BACKLOG F0-F2 (bug preexistente, hallazgo F4): el regex original NO tenía grupo
   // de captura => m[1] === undefined => id literal "undefined" => 404 SIEMPRE, hasta

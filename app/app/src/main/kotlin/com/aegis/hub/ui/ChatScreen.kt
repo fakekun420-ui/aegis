@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -57,6 +58,9 @@ import com.aegis.hub.ui.viewmodel.ChatViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
+import com.aegis.hub.data.FormField
+import com.aegis.hub.data.FormOption
+import com.aegis.hub.data.PendingForm
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +86,9 @@ fun ChatScreen(
     val sessionProviderBound by vm.sessionProviderBound.collectAsState()
     val finishedTurnId by vm.finishedTurnId.collectAsState()
     val pendingSessionNav by vm.pendingSessionNav.collectAsState()
+    val pendingForms by vm.pendingForms.collectAsState()
+    val turnInProgress by vm.turnInProgress.collectAsState()
+    val replyingForm by vm.replyingForm.collectAsState()
 
     // Cambiar de motor crea una sesión nueva en el destino (el proveedor vive en el
     // prefijo del id) y aquí se navega a ella.
@@ -480,6 +487,28 @@ fun ChatScreen(
                             } else if (loading) {
                                 item(key = "typing_dots") {
                                     TerminalActivityCursor()
+                                }
+                            }
+
+                            // Formulario / pregunta pendiente. El TUI del CLI la
+                            // pintaba y solo se podia contestar con flechas + Enter;
+                            // aqui se responde con un toque.
+                            // "Trabajando en ello": solo mientras el turno NO ha
+                            // cerrado. Cierra el ciclo con el divisor "respuesta final",
+                            // que aparece al terminar.
+                            if (turnInProgress) {
+                                item(key = "turn_in_progress") {
+                                    TurnInProgressRow()
+                                }
+                            }
+
+                            pendingForms.forEach { form ->
+                                item(key = "form_${form.id}") {
+                                    PendingFormCard(
+                                        form = form,
+                                        busy = replyingForm,
+                                        onAnswer = { opt -> vm.answerForm(form, opt) }
+                                    )
                                 }
                             }
 
@@ -1344,6 +1373,115 @@ private fun TurnFinishedDivider() {
                 .weight(1f)
                 .height(1.dp)
                 .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+    }
+}
+
+/**
+ * Tarjeta de un formulario / pregunta pendiente de una herramienta.
+ *
+ * El TUI del CLI la pintaba como un menú de flechas + Enter. Aquí se responde con un
+ * toque, que es justo lo que faltaba para no depender del CLI. Muestra la pregunta, su
+ * detalle y cada opción con su descripción, para que la elección no sea a ciegas.
+ */
+@Composable
+private fun PendingFormCard(
+    form: PendingForm,
+    busy: Boolean,
+    onAnswer: (FormOption) -> Unit
+) {
+    val field = form.firstField ?: return
+    val accent = MaterialTheme.colorScheme.primary
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Filled.HelpOutline,
+                contentDescription = "Pregunta pendiente",
+                tint = accent
+            )
+            Text(
+                field.title ?: form.title ?: "Confirmación necesaria",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        val detail = field.description
+        if (!detail.isNullOrBlank()) {
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        val options = field.options
+        if (options.isNullOrEmpty()) {
+            // Sin opciones es un campo libre: no hay nada que tocar aquí, se informa
+            // en vez de pintar un botón que no haría nada.
+            Text(
+                "Esta pregunta no trae opciones: respóndela escribiéndola en el chat.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            options.forEach { opt ->
+                val label = opt.label ?: opt.value.orEmpty()
+                Card(
+                    onClick = { if (!busy) onAnswer(opt) },
+                    enabled = !busy,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.outlinedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                        val d = opt.description
+                        if (!d.isNullOrBlank()) {
+                            Text(
+                                d,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Indicador de "trabajando en ello".
+ *
+ * Es el complementario del divisor "✓ respuesta final": mientras el turno sigue
+ * abierto (el último mensaje del asistente no trae `time.completed`) se ve esto; al
+ * cerrarse, aparece el divisor. Así siempre se sabe en qué fase está la ejecución.
+ */
+@Composable
+private fun TurnInProgressRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.height(14.dp).width(14.dp),
+            strokeWidth = 2.dp
+        )
+        Text(
+            "Trabajando en ello…",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
