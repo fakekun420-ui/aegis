@@ -3455,9 +3455,36 @@ const inflightSessions = new Map();   // sessionId -> epoch ms
 const deliveredInbox = new Map();    // sessionId -> epoch ms del ultimo inbox.delivered
 let execWatcher = null;
 
-function markBusy(sid) { if (sid) inflightSessions.set(sid, Date.now()); }
+// Ventana de gracia al terminar un turno.
+//
+// El reporte del usuario: "el circulo de carga a veces desaparece pero el chat sigue
+// ejecutando". Midiendo el stream de eventos NO hay eventos de ejecucion intermedios
+// (solo started y succeeded), asi que la causa no es un evento mal clasificado: es el
+// HUECO entre una ejecucion que termina y la siguiente que arranca. Durante ese hueco
+// la sesion no esta ocupada en el mapa y el circulo se apaga aunque el turno siga.
+//
+// Asi que el fin de turno NO es inmediato: se agenda y se cancela si llega un `started`
+// antes. Cubre a la vez las dos cosas que el usuario quiere unidas — el circulo y el
+// divisor "respuesta final" — porque ambos leen de este mismo registro.
+const TURN_END_GRACE_MS = 5000;
+const pendingIdle = new Map();
+
+function markBusy(sid) {
+  if (!sid) return;
+  inflightSessions.set(sid, Date.now());
+  const t = pendingIdle.get(sid);
+  if (t) { clearTimeout(t); pendingIdle.delete(sid); }
+}
 function markIdle(sid) {
-  if (sid) { inflightSessions.delete(sid); deliveredInbox.set(sid, Date.now()); }
+  if (!sid) return;
+  if (pendingIdle.has(sid)) return;
+  const t = setTimeout(() => {
+    pendingIdle.delete(sid);
+    inflightSessions.delete(sid);
+    deliveredInbox.set(sid, Date.now());
+  }, TURN_END_GRACE_MS);
+  if (t.unref) t.unref();
+  pendingIdle.set(sid, t);
 }
 function isTurnOver(sid) {
   if (!sid) return false;
@@ -3506,7 +3533,9 @@ function startExecutionWatcher(adapter) {
   // Red de seguridad: si se pierde un 'ended', la sesion no puede quedar ocupada para siempre.
   const sweep = setInterval(() => {
     const cut = Date.now() - 15 * 60 * 1000;
-    for (const [sid, since] of inflightSessions) if (since < cut) inflightSessions.delete(sid);
+    for (const [sid, since] of inflightSessions) {
+      if (since < cut && !pendingIdle.has(sid)) inflightSessions.delete(sid);
+    }
   }, 30000);
   if (sweep.unref) sweep.unref();
   execWatcher = { stop() { stopped = true; clearInterval(sweep); } };
