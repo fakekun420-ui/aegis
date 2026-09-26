@@ -179,4 +179,10 @@ interface ApiService {
         @Path("formId") formId: String,
         @Body body: FormReplyBody
     ): Envelope<Map<String, Any>>
+
+    // Estado de ejecucion de las sesiones. Lo decide el vigilante del Hub a partir de
+    // los eventos session.execution.* de OpenCode; cubre tambien los turnos lanzados
+    // desde el CLI, que no pasan por el Hub.
+    @GET("api/sessions/inflight")
+    suspend fun getInflight(): Envelope<List<InflightSession>>
 }

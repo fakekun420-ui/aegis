@@ -86,6 +86,7 @@ fun ChatScreen(
     val pendingSessionNav by vm.pendingSessionNav.collectAsState()
     val pendingForms by vm.pendingForms.collectAsState()
     val turnInProgress by vm.turnInProgress.collectAsState()
+    val turnOver by vm.turnOver.collectAsState()
     val replyingForm by vm.replyingForm.collectAsState()
 
     // Las filas se calculan AQUÍ y no dentro del `content` del LazyColumn: ese lambda
@@ -1578,24 +1579,29 @@ private fun TurnInProgressRow() {
 }
 
 /**
- * ¿Este mensaje de asistente es el cierre real de un turno?
+ * ¿Este mensaje del asistente es el cierre real de un turno?
  *
- * Se exige todo lo siguiente, y el último punto es el que faltaba antes:
+ * Dos casos, y el segundo es el que se estaba fallando:
  *
- *  - es un mensaje del asistente con `info.time.completed` (el mensaje se cerró);
- *  - NO tiene ninguna herramienta en estado `running` (si la tiene, el agente sigue
- *    esperando su salida y el turno no ha terminado);
- *  - y a continuación viene un mensaje del usuario, o no viene nada. Si lo siguiente
- *    es OTRO mensaje del asistente, ambos son el mismo turno y aquí no se corta: por
- *    eso el divider soltaba en medio.
+ *  - **No es el último mensaje** y detrás viene uno del usuario: ese turno está
+ *    cerrado por historia, el divisor se queda ahí.
+ *  - **Es el último mensaje**: solo se marca si el agente ha parado de verdad
+ *    (`turnOver`, que viene de `session.execution.*`). Antes se exigía
+ *    `info.time.completed`, pero eso cierra el MENSAJE y se cumple tras cada `bash`
+ *    con exit 0 aunque el agente siga trabajando — de ahí que el divisor saltaba a
+ *    mitad de turno, que es justo lo que se quiso evitar.
  */
-private fun isFinalResponseOf(messages: List<Message>, index: Int): Boolean {
+private fun isFinalResponseOf(messages: List<Message>, index: Int, turnOver: Boolean): Boolean {
     val msg = messages[index]
     if (msg.role != "assistant") return false
-    if (msg.info?.time?.containsKey("completed") != true) return false
-    if (msg.parts.orEmpty().any { it.state?.status == "running" }) return false
-    val next = messages.getOrNull(index + 1) ?: return true
-    return next.role == "user"
+    val next = messages.getOrNull(index + 1)
+    // Si despues viene un mensaje del usuario, ese turno esta cerrado por historia:
+    // el divisor se queda, es el cierre real de aquello.
+    if (next != null) return next.role == "user"
+    // Es el ULTIMO mensaje: aqui solo se marca si el agente ha parado de verdad
+    // (session.execution.*). Antes se exigia `time.completed`, que se cumple tras cada
+    // `bash` con exit 0 aunque siga trabajando, y por eso saltaba a mitad de turno.
+    return turnOver
 }
 
 /** Una fila de la lista del chat: un mensaje, o el divisor que cierra un turno. */
@@ -1616,7 +1622,7 @@ private sealed interface ChatRow {
 private fun buildChatRows(messages: List<Message>): List<ChatRow> = buildList {
     messages.forEachIndexed { index, msg ->
         add(ChatRow.Mensaje(index, msg))
-        if (isFinalResponseOf(messages, index)) {
+        if (isFinalResponseOf(messages, index, turnOver)) {
             add(ChatRow.Cierre(msg.info?.id ?: "idx_$index"))
         }
     }

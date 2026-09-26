@@ -2,6 +2,7 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.aegis.hub.data.FormReplyBody
+import com.aegis.hub.data.InflightSession
 import com.aegis.hub.data.PendingForm
 import com.aegis.hub.data.FormOption
 import com.aegis.hub.data.FormField
@@ -89,6 +90,17 @@ class ChatViewModel : ViewModel() {
     // divisor de "respuesta final" aparezca solo cuando de verdad termina.
     private val _turnInProgress = MutableStateFlow(false)
     val turnInProgress: StateFlow<Boolean> = _turnInProgress
+
+    // Estado REAL de ejecucion, segun el vigilante del Hub (session.execution.*).
+    // `_turnBusy` = hay un turno en marcha. `_turnOver` = ese turno acaba de terminar
+    // de verdad, o sea que el agente no va a hacer nada mas hasta que le hables.
+    //
+    // Antes se deducía de `time.completed`, que cierra el MENSAJE: por eso el divisor
+    // saltaba tras cada `bash` con exit 0. Ahora la señal es el evento de ejecución.
+    private val _turnBusy = MutableStateFlow(false)
+    val turnBusy: StateFlow<Boolean> = _turnBusy
+    private val _turnOver = MutableStateFlow(false)
+    val turnOver: StateFlow<Boolean> = _turnOver
 
     private val _pendingForms = MutableStateFlow<List<PendingForm>>(emptyList())
     val pendingForms: StateFlow<List<PendingForm>> = _pendingForms
@@ -261,6 +273,22 @@ class ChatViewModel : ViewModel() {
                     continue
                 }
                 if (streamingSince > 0) streamingSince = 0
+                // Estado de ejecucion (session.execution.*). Es lo que decide si el
+                // turno ha terminado de verdad, asi que va PRIMERO. O(1): el Hub lo
+                // tiene en memoria, no consulta a OpenCode.
+                try {
+                    val ex = api.getInflight()
+                    if (ex.ok && ex.data != null) {
+                        val sid = sessionId
+                        // El vigilante manda UNA fila por sesion: busy si no ha
+                        // terminado, turnOver si acaba de terminar.
+                        val mine = ex.data.firstOrNull { it.id == sid }
+                        _turnBusy.value = mine != null && !mine.turnOver
+                        _turnOver.value = mine != null && mine.turnOver
+                    }
+                } catch (_: Exception) {
+                }
+
                 // Formularios pendientes. Va PRIMERO y en su propio try: un fallo al
                 // listarlos no debe impedir refrescar la conversación, y el estado de
                 // las preguntas tiene que estar fresco ANTES de juzgar si el turno
@@ -326,11 +354,16 @@ class ChatViewModel : ViewModel() {
      *  2. Hay un formulario pendiente: el agente está esperando a la persona.
      */
     private fun turnIsReallyFinished(messages: List<Message>): Boolean {
+        // El vigilante manda. Un formulario pendiente significa que el agente esta
+        // esperando a la persona, asi que el turno NO ha terminado.
+        if (_pendingForms.value.isNotEmpty()) return false
+        if (_turnBusy.value) return false
+        if (_turnOver.value) return true
+        // Sin datos del vigilante todavia (arranque, o sesion de otro proveedor):
+        // se cae a la heuristica anterior para no dejar la UI muda.
         val last = messages.lastOrNull { it.role == "assistant" } ?: return false
         if (last.info?.time?.containsKey("completed") != true) return false
-        val toolViva = last.parts.orEmpty().any { it.state?.status == "running" }
-        if (toolViva) return false
-        if (_pendingForms.value.isNotEmpty()) return false
+        if (last.parts.orEmpty().any { it.state?.status == "running" }) return false
         return true
     }
 

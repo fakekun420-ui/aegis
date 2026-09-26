@@ -494,3 +494,17 @@ data class PendingForm(
  * Con una clase concreta, Gson la serializa sin problemas.
  */
 data class FormReplyBody(val answer: Map<String, String>)
+
+/**
+ * Estado de ejecucion de una sesion (GET /api/sessions/inflight).
+ *
+ * Lo lleva el vigilante del Hub, que se suscribe al stream de eventos de OpenCode.
+ * `turnOver` es la unica senal fiable de "el agente termino TODO y esta esperando":
+ * `info.time.completed` solo dice que el mensaje se cerro, y eso pasa despues de
+ * cada `bash` con exit 0 aunque el agente siga trabajando.
+ */
+data class InflightSession(
+    val id: String? = null,
+    val since: Long? = null,
+    val turnOver: Boolean = false
+)
