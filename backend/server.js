@@ -2874,6 +2874,25 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     }
   }
 
+  // GET /api/sessions/inflight — estado de ejecucion de las sesiones.
+  //   ?ids=1 -> solo los ids ocupados (O(1), sin consultar OpenCode)
+  //   sin    -> [{id, since, turnOver}] para las que el vigilante conoce
+  // Lo consume la app para: el circulo de "ejecutando" en la lista de chats, el
+  // divisor "respuesta final" (solo cuando turnOver), y confirmar la entrega.
+  if ((pathname === "/api/sessions/inflight" || pathname === "/api/opencode/sessions/inflight") && req.method === "GET") {
+    const onlyIds = url.searchParams.get("ids") === "1";
+    const now = Date.now();
+    const live = [...inflightSessions.entries()].filter(([, t]) => now - t < 15 * 60 * 1000);
+    if (onlyIds) return json(res, 200, ok(live.map(([id]) => id)));
+    const seen = new Set(live.map(([id]) => id));
+    const out = live.map(([id, since]) => ({ id, since, turnOver: false }));
+    for (const [sid, since] of deliveredInbox) {
+      if (seen.has(sid)) continue;
+      if (now - since < 15 * 60 * 1000) out.push({ id: sid, since, turnOver: true });
+    }
+    return json(res, 200, ok(out));
+  }
+
   // GET /api/projects/:id/summary — read summary (optional fetch helper)
   // BACKLOG F0-F2 (bug preexistente, hallazgo F4): el regex original NO tenía grupo
   // de captura => m[1] === undefined => id literal "undefined" => 404 SIEMPRE, hasta
@@ -3411,6 +3430,88 @@ function sanitizeSessionProviders() {
 }
 sanitizeSessionProviders();
 
+// =====================================================================
+// EJECUCIONES EN VUELO + FIN REAL DE TURNO
+// =====================================================================
+// Un vigilante se suscribe al stream de eventos de OpenCode (`GET /api/event`) y
+// sigue `session.execution.*` e `session.inbox.delivered`.
+//
+// POR QUE NO INFERIRLO DE `time.completed`: ese campo cierra el MENSAJE, no el turno.
+// Un mensaje del asistente lleva `completed` en cuanto su segmento termina, o sea
+// justo despues de cada `bash` con exit 0, aunque el agente vaya a seguir trabajando.
+// De ahi que el divisor "respuesta final" saltaba a mitad. El evento
+// `session.execution.succeeded` es el unico que significa de verdad "no va a hacer
+// nada mas hasta que le hables".
+//
+// Y no se puede llevar la cuenta desde el Hub al aceptar el prompt, porque los turnos
+// del CLI entran a OpenCode SIN pasar por aqui. El stream ve los dos.
+//
+// Payloads reales (build 36228701460, 2026-09-26):
+//   session.execution.started   -> {"sessionID":"ses_..."}
+//   session.execution.succeeded -> {"sessionID":"ses_..."}
+//   session.inbox.enqueued      -> {"inboxID","sessionID","item"}
+//   session.inbox.delivered     -> {"sessionID","inboxID"}
+const inflightSessions = new Map();   // sessionId -> epoch ms
+const deliveredInbox = new Map();    // sessionId -> epoch ms del ultimo inbox.delivered
+let execWatcher = null;
+
+function markBusy(sid) { if (sid) inflightSessions.set(sid, Date.now()); }
+function markIdle(sid) {
+  if (sid) { inflightSessions.delete(sid); deliveredInbox.set(sid, Date.now()); }
+}
+function isTurnOver(sid) {
+  if (!sid) return false;
+  if (inflightSessions.has(sid)) return false;
+  const since = deliveredInbox.get(sid);
+  return typeof since === "number";
+}
+
+function startExecutionWatcher(adapter) {
+  if (execWatcher) return;
+  let stopped = false;
+  const connect = () => {
+    if (stopped) return;
+    let auth = {};
+    try { auth = adapter._authHeader ? adapter._authHeader() : {}; } catch (_) {}
+    const req = http.request(`http://${OPENCODE_HOST}:${OPENCODE_PORT}/api/event`,
+      { headers: { Accept: "text/event-stream", ...auth } }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); setTimeout(connect, 5000); return; }
+      log.info("[exec] vigilante conectado a /api/event");
+      let buf = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        buf += chunk;
+        if (buf.length > 1048576) buf = buf.slice(-4096);
+        let nl;
+        while ((nl = buf.indexOf("\n")) !== -1) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line.startsWith("data:")) continue;
+          let ev;
+          try { ev = JSON.parse(line.slice(5).trim()); } catch (_) { continue; }
+          const sid = ev && ev.data && ev.data.sessionID;
+          if (!sid) continue;
+          if (ev.type === "session.execution.started") markBusy(sid);
+          else if (typeof ev.type === "string" && ev.type.startsWith("session.execution.")) markIdle(sid);
+        }
+      });
+      const again = () => { if (!stopped) setTimeout(connect, 3000); };
+      res.on("end", again);
+      res.on("error", again);
+    });
+    req.on("error", () => { if (!stopped) setTimeout(connect, 5000); });
+    req.end();
+  };
+  connect();
+  // Red de seguridad: si se pierde un 'ended', la sesion no puede quedar ocupada para siempre.
+  const sweep = setInterval(() => {
+    const cut = Date.now() - 15 * 60 * 1000;
+    for (const [sid, since] of inflightSessions) if (since < cut) inflightSessions.delete(sid);
+  }, 30000);
+  if (sweep.unref) sweep.unref();
+  execWatcher = { stop() { stopped = true; clearInterval(sweep); } };
+}
+
 server.listen(HUB_PORT, "127.0.0.1", async ()=>{
   log.info(`[hub] listening http://127.0.0.1:${HUB_PORT} (loopback only)`);
   log.info(`  local  : http://127.0.0.1:${HUB_PORT}`);
@@ -3418,6 +3519,11 @@ server.listen(HUB_PORT, "127.0.0.1", async ()=>{
     log.warn(`  puerto  : se IGNORA --opencode-port ${OC_ARG_PORT} y se usa el servicio registrado en ${OPENCODE_PORT} (un solo servidor, el que usa el CLI del opencode)`);
   }
   log.info(`  proxy  : /opencode/* -> http://${OPENCODE_HOST}:${OPENCODE_PORT}`);
+  // A-2: vigilante de ejecuciones. Da el "final del final" del turno, el estado de
+  // ejecucion para la lista de chats y la confirmacion de entrega del mensaje. Un
+  // fallo aqui NUNCA debe impedir que el hub levante.
+  try { startExecutionWatcher(opencodeAdapter); }
+  catch (e) { log.warn("[exec] vigilante no arranca", { err: e.message }); }
   log.info(`  api    : /api/status  /api/device/*`);
   log.info(`  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)`);
   log.info(`  pid    : ${process.pid}  node ${process.version}  keepAlive 125s (multimodal streaming)`);
