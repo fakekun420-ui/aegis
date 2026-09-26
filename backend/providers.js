@@ -1568,11 +1568,33 @@ export class AntigravityAdapter extends BaseProviderAdapter {
       });
       p.stderr.on("data", (c) => (stderr += c));
 
-      // 90 second hard timeout guard with escalation
+      // Hard timeout guard con escalada. El valor viene de AEGIS_AGY_TIMEOUT_MS y, si
+      // no se fija, de AEGIS_TURN_TIMEOUT_MS (600s) — antes estaba en 90s fijos, que
+      // mataban un turno agéntico legítimo y ademas，配 el motivo se perdía.
+      const agyTimeoutMs = (() => {
+        const a = Number(process.env.AEGIS_AGY_TIMEOUT_MS);
+        if (a > 0) return a;
+        const t = Number(process.env.AEGIS_TURN_TIMEOUT_MS);
+        return t > 0 ? t : 600000;
+      })();
+
+      // Fallo rápido: si agy escribe en stderr que no hay cuota/tokens, no esperamos al
+      // timeout. Antes la app se quedaba 90s "pensando" y luego recibía un timeout
+      // genérico, sin la causa real. Se traduce al español que ve el usuario.
+      const quotaHint = (() => {
+        const s = (stderr || "").toLowerCase();
+        if (!s) return null;
+        if (s.includes("quota") || s.includes("quota_exceeded")) return "Antigravity no tiene cuota disponible (cuota agotada).";
+        if (s.includes("rate limit") || s.includes("429") || s.includes("rate_limit")) return "Antigravity está limitando por tasa (429). Espera unos minutos.";
+        if (s.includes("invalid_grant") || s.includes("401") || s.includes("unauthorized")) return "La sesión de Antigravity no está autenticada. Vuelve a iniciar sesión en Antigravity.";
+        if (s.includes("token") && (s.includes("expired") || s.includes("invalid"))) return "El token de Antigravity caducó o no es válido.";
+        return null;
+      })();
+
       const timer = setTimeout(() => {
         if (isDone) return;
         isDone = true;
-        log.warn(`[antigravity] Process ${p.pid} exceeded hard 90s timeout. Killing group with SIGTERM...`);
+        log.warn(`[antigravity] Process ${p.pid} exceeded hard ${Math.round(agyTimeoutMs / 1000)}s timeout. Killing group with SIGTERM...`);
         killGroup(p, "SIGTERM");
         const killTimer = setTimeout(() => {
           try {
@@ -1583,8 +1605,28 @@ export class AntigravityAdapter extends BaseProviderAdapter {
         killTimer.unref();
 
         if (p.pid) this.activeProcesses.delete(p.pid);
-        reject(new Error("Antigravity CLI execution timed out after 90s"));
-      }, 90000);
+        // Se incluye el final de stderr: es donde agy explica por qué se quedó colgado
+        // (cuota, 429, token caducado). Antes se descartaba y el usuario solo veía
+        // "timed out", sin ninguna pista accionable.
+        const tail = (stderr || "").trim().split("\n").filter(Boolean).slice(-3).join(" ").slice(0, 300);
+        const motivo = quotaHint
+          || (tail ? `agy dijo: ${tail}` : "sin salida de error");
+        reject(new Error(
+          `Antigravity CLI timed out tras ${Math.round(agyTimeoutMs / 1000)}s (${motivo})`
+        ));
+      }, agyTimeoutMs);
+
+      // Si el stderr ya dice que no hay cuota, se aborta en el acto.
+      if (quotaHint) {
+        try {
+          isDone = true;
+          clearTimeout(timer);
+          killGroup(p, "SIGTERM");
+          if (p.pid) this.activeProcesses.delete(p.pid);
+        } catch (_) {}
+        reject(new Error(quotaHint));
+        return;
+      }
 
       // Manage abort signal from client connection drop
       if (opts.signal) {
