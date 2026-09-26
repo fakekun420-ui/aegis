@@ -48,6 +48,12 @@ class ChatViewModel : ViewModel() {
     private val _selectedModel = MutableStateFlow<String?>("gemini-3.8-flash-high")
     val selectedModel: StateFlow<String?> = _selectedModel
 
+    // Modelo elegido POR SESION. El usuario se quejaba de que al salir del chat y
+    // volver a entrar el modelo se le cambiaba solo (eligio "Space Bunny Free" y le
+    // aparecio "LongCat"). `_selectedModel` es estado volátil del ViewModel y se
+    // reinicia al recrearse, asi que sin esto la eleccion se pierde al navegar.
+    private val modelBySession = mutableMapOf<String, String>()
+
     private val _selectedProvider = MutableStateFlow<String>("antigravity")
     val selectedProvider: StateFlow<String> = _selectedProvider
 
@@ -162,6 +168,8 @@ class ChatViewModel : ViewModel() {
 
     fun selectModel(modelId: String?) {
         _selectedModel.value = modelId
+        val sid = _currentSessionId.value
+        if (!sid.isNullOrBlank() && !modelId.isNullOrBlank()) modelBySession[sid] = modelId
     }
 
     fun selectProvider(provider: String) {
@@ -232,7 +240,12 @@ class ChatViewModel : ViewModel() {
                 val resp = api.getModels(prov)
                 if (resp.ok && resp.data != null && resp.data.isNotEmpty()) {
                     _models.value = resp.data
-                    if (_selectedModel.value == null || _models.value.none { it.id == _selectedModel.value }) {
+                    // Antes, si el modelo elegido no venia en la lista, se sustituia en
+                    // SILENCIO por `resp.data.first()`: el usuario tenia "Space Bunny
+                    // Free" y le aparecia "LongCat" sin explicación. Ahora solo se rellena
+                    // cuando no hay nada elegido; si hay eleccion, se respeta aunque la
+                    // lista no la traiga (puede ser un modelo filtrado o de otro motor).
+                    if (_selectedModel.value.isNullOrBlank()) {
                         val defaultHigh = resp.data.find { it.id == "gemini-3.8-flash-high" }
                         _selectedModel.value = defaultHigh?.id ?: resp.data.first().id
                     }
@@ -461,6 +474,8 @@ class ChatViewModel : ViewModel() {
         // F6: sólo una sesión existente queda vinculada al proveedor de nacimiento;
         // los chats nuevos pueden cambiar libremente de motor.
         _sessionProviderBound.value = sessionId.isNotBlank()
+        // Restaura la eleccion del usuario para ESTA sesion antes de tocar nada.
+        modelBySession[sessionId]?.let { _selectedModel.value = it }
         if (_selectedModel.value.isNullOrBlank()) {
             _selectedModel.value = "gemini-3.8-flash-high"
         }
