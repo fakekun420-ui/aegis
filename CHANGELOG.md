@@ -50,6 +50,21 @@ Todo notable de Aegis se documenta aquí. Formato basado en [Keep a Changelog](h
 - Con un `bash` en "ejecutando…": aparece "Trabajando en ello…" y NO el divisor.
 - Con el turno cerrado: el divisor aparece en su sitio, y no hay indicador a la vez.
 
+### Verificacion del viaje completo (multi-pregunta)
+
+Comprobado de punta a punta, no solo que el formulario desaparezca:
+
+1. Formulario real de 3 campos (`frm_0dcd9707`), rellenado por API con la misma ruta
+   que usa la app y con valores **a proposito no primeros** para que se note cualquier
+   desalineacion de claves: `q0=Sevilla, q1=42, q2=Verde`.
+2. Se le pide al modelo que repita lo que recibio.
+3. Responde: `Sevilla,42,Verde` -> "Ciudad: Sevilla, Numero: 42, Color: Verde".
+
+Las tres respuestas llegan al modelo con su clave correcta. Importante: no se puede
+verificar leyendo el `output` de la herramienta `question`, porque OpenCode 2.0.14 lo
+deja a `null` (la respuesta no se persiste ahi), asi que la unica prueba valida es
+preguntarle al modelo.
+
 ## [1.1.0] — 2026-09-25
 
 Cierre de la sesión de estabilización: el Hub y el CLI hablaban con **dos servidores de OpenCode distintos**, lo que rompía la sincronización y hacía que los turnos se cortaran. Todo lo de esta versión sale de ese diagnóstico y de lo que se destapó al arreglarlo.
