@@ -203,7 +203,7 @@ class ChatViewModel : ViewModel() {
                 val saved = runCatching { ctx?.let { ModelPreferences.modelFor(it, sessionId) } }.getOrNull()
                 if (!saved.isNullOrBlank()) {
                     if (_selectedModel.value != saved) _selectedModel.value = saved
-                    return
+                    return@launch
                 }
             }
 
