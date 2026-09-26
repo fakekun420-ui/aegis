@@ -78,6 +78,7 @@ fun ChatScreen(
     val messages by vm.messages.collectAsState()
     val sessionTitle by vm.sessionTitle.collectAsState()
     val loading by vm.loading.collectAsState()
+    val sendingInFlight by vm.sendingInFlight.collectAsState()
     val error by vm.error.collectAsState()
     val models by vm.models.collectAsState()
     val selectedModel by vm.selectedModel.collectAsState()
@@ -522,9 +523,11 @@ fun ChatScreen(
                             // implícito), pero `items()` sobre una lista heterogénea sí.
                             items(filas, key = { it.key }) { fila ->
                                 when (fila) {
-                                    is ChatRow.Mensaje -> TerminalConsoleTurn(fila.message, onRetry = {
-                                        vm.retryMessage(fila.message, sessionId)
-                                    })
+                                    is ChatRow.Mensaje -> TerminalConsoleTurn(
+                                        message = fila.message,
+                                        sendingInFlight = sendingInFlight,
+                                        onRetry = { vm.retryMessage(fila.message, sessionId) }
+                                    )
                                     is ChatRow.Cierre -> TurnFinishedDivider()
                                 }
                             }
@@ -540,7 +543,9 @@ fun ChatScreen(
                                 item(key = "streaming_live") {
                                     TerminalStreamingTurn(streamingText ?: "", streamingTools)
                                 }
-                            } else if (loading) {
+                            } else if (loading && !sendingInFlight) {
+                                // Nunca junto a la pildora de envio: son las dos fases
+                                // del mismo ciclo, excluyentes por construccion.
                                 item(key = "typing_dots") { TerminalActivityCursor() }
                             }
 
@@ -735,13 +740,34 @@ private fun FileRow(name: String, mime: String, tint: androidx.compose.ui.graphi
 }
 
 @Composable
-private fun TerminalConsoleTurn(msg: Message, onRetry: (() -> Unit)? = null) {
+private fun TerminalConsoleTurn(
+    msg: Message,
+    sendingInFlight: Boolean = false,
+    onRetry: (() -> Unit)? = null
+) {
     val isUser = msg.role == "user"
     val raw = msg.text
     val stripped = msg.strippedText()
     val isMem = msg.isMemoryContext()
     val displayContent = stripped.ifBlank { raw }.trim()
-    val deliveryStatus = msg.info?.deliveryStatus ?: if (isUser) MessageDeliveryStatus.SENT else null
+
+    // La fase de ENVIO se lee de `sendingInFlight`, no de `info.status`.
+    //
+    // Motivo: `info.status` es un campo del MENSAJE, y hay tres sitios que
+    // reemplazan la lista entera por la del servidor (los dos polls y la
+    // sincronizacion final). Cada uno de ellos pisa el estado local, asi que
+    // cualquier carrera entre el poll y el ack dejaba la pildora en PENDING otra
+    // vez, con "Generando respuesta..." debajo: los dos indicadores a la vez, que
+    // es justo lo que reporto el usuario. `sendingInFlight` es estado dedicado,
+    // global y que ningun poll toca, asi que las dos fases quedan excluyentes por
+    // construccion y no por suerte.
+    //
+    // ERROR si sigue mandando el mensaje: eso si es estado real del servidor y hay
+    // que conservarlo.
+    val deliveryStatus = when {
+        isUser && sendingInFlight -> MessageDeliveryStatus.PENDING
+        else -> msg.info?.deliveryStatus ?: if (isUser) MessageDeliveryStatus.SENT else null
+    }
 
     val files = msg.fileParts()
     val images = msg.imageParts()
