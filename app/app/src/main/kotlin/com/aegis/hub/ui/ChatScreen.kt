@@ -53,6 +53,7 @@ import androidx.core.content.ContextCompat
 import com.aegis.hub.data.AttachedFile
 import com.aegis.hub.data.LiveToolExecution
 import com.aegis.hub.data.Message
+import com.aegis.hub.data.MessagePart
 import com.aegis.hub.data.MessageDeliveryStatus
 import com.aegis.hub.ui.viewmodel.ChatViewModel
 import kotlinx.coroutines.delay
