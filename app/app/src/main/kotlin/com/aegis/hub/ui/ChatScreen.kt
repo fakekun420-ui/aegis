@@ -541,7 +541,7 @@ fun ChatScreen(
                                     is ChatRow.Mensaje -> TerminalConsoleTurn(
                                         msg = fila.message,
                                         sendingInFlight = sendingInFlight,
-                                        onRetry = { vm.retryMessage(fila.message, sessionId) }
+                                        onRetry = { vm.retryMessage(fila.message, sessionId) },
                                         onLoadPart = { partId, done -> vm.loadPartFull(partId, null, done) }
                                     )
                                     is ChatRow.Cierre -> TurnFinishedDivider()
