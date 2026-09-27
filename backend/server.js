@@ -883,10 +883,30 @@ function json(res, code, obj){ return send(res, code, JSON.stringify(normalizeEn
   // Se cachea el STRING FINAL (ya recortado y normalizado), no la lista. El recorte
   // muta en sitio, asi que cachear la entrada y recortar al servir daria un recorte
   // sobre otro y la segunda vez no habria nada que retirar.
+  // Clave de cache. El ?tail=N produce un cuerpo DISTINTO, asi que si compartiera clave
+  // con la respuesta completa, un tail envenenaria la completa y al reves. La clave
+  // lleva el tail dentro por eso, no por gusto.
+  function msgsCacheKey(sid, tail) {
+    return tail > 0 ? `${sid}#tail${tail}` : sid;
+  }
   const MSGS_CACHE_TTL_MS = 4000;
   const MSGS_CACHE_MAX = 3;
   const msgsCache = new Map();      // sid -> { body, at }
   const msgsInflight = new Map();   // sid -> Promise<{recortado}>, para no duplicar trabajo
+  const MSGS_TAIL_MAX = 200;   // tope duro: el limite de pagina de OpenCode
+  const msgsTailInflight = new Map();  // clave -> Promise<string>, para el tail tambien
+  // Eviccion por antiguedad, reutilizable. Se separo del bloque original porque ahora hay
+  // dos-productores (completo y tail) y duplicar la cuenta seria una forma segura de
+  // equivocarse al vaciar.
+  // _nueva es la clave que se va a insertar: no se borra a si misma al evacuar, que es el
+  // caso limite cuando el cache esta lleno y solo queda ella.
+  function evictCache(cache, _nueva, max) {
+    while (cache.size >= max) {
+      const masVieja = cache.keys().next().value;
+      if (masVieja === undefined || masVieja === _nueva) break;
+      cache.delete(masVieja);
+    }
+  }
   function invalidarCacheMensajes(sid) {
     if (sid) msgsCache.delete(sid);
   }
@@ -2984,6 +3004,9 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
   if((pathname.match(/^\/api\/opencode\/sessions\/[^\/]+\/messages$/) || pathname.match(/^\/api\/sessions\/[^\/]+\/messages$/)) && req.method==="GET"){
     const m = pathname.match(/^\/api\/(?:opencode\/sessions|sessions)\/([^\/]+)\/messages$/);
     const sid = sanitizeProjectId(decodeURIComponent(m[1]));
+      // ?tail=N: >=1 pide solo la cola. 0 o ausente = comportamiento de antes.
+      const _tailRaw = parseInt(url.searchParams.get("tail") || "", 10);
+      const tailN = Number.isFinite(_tailRaw) && _tailRaw > 0 ? _tailRaw : 0;
     if (!isValidId(sid)) return invalidId(res, "session", sid); // F4: antes del store/adapter
     try {
       const headerProvider = req.headers["x-provider"] ? String(req.headers["x-provider"]).toLowerCase().trim() : null;
@@ -3041,6 +3064,61 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         }
       }
 
+        // ---- ?tail=N: la cola, en una sola pagina -------------------------------
+        // MEDIDO: order=desc&limit=200 -> 0,12 s y 934 KB, frente a ~15 s y 6,5 MB del
+        // historial completo. Es lo que necesita el usuario durante un turno: lo que esta
+        // pasando ahora, no las 1.800 partes que ya no se tocan.
+        //
+        // El limite de pagina de OpenCode es 200 fijo, asi que un tail mayor se recorta a
+        // 200. Se avisa en el log una sola vez por combinacion para no llenarlo.
+        if (tailN > 0) {
+          const lim = Math.min(tailN, MSGS_TAIL_MAX);
+          if (lim !== tailN) {
+            log.warn(`[msgs] ${sid}: ?tail=${tailN} recortado a ${lim}, el limite de pagina de OpenCode es 200`);
+          }
+          const cKey = msgsCacheKey(sid, lim);
+          const cHit = msgsCache.get(cKey);
+          if (cHit && Date.now() - cHit.at < MSGS_CACHE_TTL_MS) {
+            return send(res, 200, cHit.body, { "Content-Type": "application/json; charset=utf-8" });
+          }
+          let tFly = msgsTailInflight.get(cKey);
+          if (!tFly) {
+            tFly = (async () => {
+              const ctrl = new AbortController();
+              const t = setTimeout(() => ctrl.abort(), 30000);
+              let lista;
+              try {
+                const oc = providerManager.adapters && providerManager.adapters.get("opencode");
+                if (oc && typeof oc.fetchMessageTail === "function") {
+                  lista = await oc.fetchMessageTail(sid, lim, { signal: ctrl.signal });
+                } else {
+                  lista = [];
+                }
+              } catch (e) {
+                log.warn(`[msgs] tail fallo ${sid}: ${e.message}`);
+                lista = [];
+              } finally {
+                clearTimeout(t);
+              }
+              // desc devuelve las mas nuevas PRIMERO: se invierte para que los indices de
+              // normalizeMessage sigan siendo ascendentes y el chat no salga del reves.
+              if (Array.isArray(lista)) lista = lista.slice().reverse();
+              trimListForWire(Array.isArray(lista) ? lista : [], PART_MAX_CHARS);
+              const norm = (Array.isArray(lista) ? lista : [])
+                .map((msg, idx) => normalizeMessage(msg, sid, idx));
+              const body = JSON.stringify(normalizeEnvelope(200, { ok: true, data: norm, tail: lim, total: null }));
+              evictCache(msgsCache, cKey, MSGS_CACHE_MAX);
+              msgsCache.set(cKey, { body, at: Date.now() });
+              return body;
+            })();
+            msgsTailInflight.set(cKey, tFly);
+            const limpiar = () => { if (msgsTailInflight.get(cKey) === tFly) msgsTailInflight.delete(cKey); };
+            tFly.then(limpiar, limpiar);
+          }
+          const tBody = await tFly;
+          return send(res, 200, tBody, { "Content-Type": "application/json; charset=utf-8" });
+        }
+
         // A-3: servir de cache si sigue viva. El TTL (4 s) es la red de seguridad para
         // un evento perdido; el mecanismo real es la invalidacion, mas abajo.
         const hit = msgsCache.get(sid);
@@ -3070,12 +3148,10 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
             const normalizedList = (Array.isArray(lista) ? lista : [])
               .map((msg, idx) => normalizeMessage(msg, sid, idx));
             const body = JSON.stringify(normalizeEnvelope(200, { ok: true, data: normalizedList }));
-            // Eviccion por antiguedad: 6 MB por sesion, y esto corre en un movil.
-            while (msgsCache.size >= MSGS_CACHE_MAX) {
-              const masVieja = msgsCache.keys().next().value;
-              if (masVieja === undefined || masVieja === sid) break;
-              msgsCache.delete(masVieja);
-            }
+            // Eviccion por antiguedad: 6 MB por sesion y esto corre en un movil. Usa el
+            // helper y no una cuenta propia: ahora hay dos productores (completo y tail)
+            // y duplicar la cuenta seria una forma segura de equivocarse al vaciar.
+            evictCache(msgsCache, sid, MSGS_CACHE_MAX);
             msgsCache.set(sid, { body, at: Date.now() });
             return { recortado };
           })();

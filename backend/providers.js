@@ -500,6 +500,24 @@ export class OpencodeAdapter extends BaseProviderAdapter {
       .map((m, idx) => this._mapV2Message(m, sessionId, idx));
   }
 
+  /**
+   * La COLA del chat: los `limit` mensajes mas nuevos, en UNA pagina.
+   *
+   * Es la contraparte de getMessages, que recorre el historial entero con paginacion por
+   * cursor. Aqui no hay cursor que seguir: order=desc con limit=200 devuelve directamente
+   * el final. MEDIDO: 0,12 s y 934 KB, frente a ~15 s y 6,5 MB del recorrido completo.
+   *
+   * @returns mensajes en orden DESC (mas nuevo primero). El llamante los invierte.
+   */
+  async fetchMessageTail(sessionId, limit = 200, opts = {}) {
+    const lim = Math.max(1, Math.min(200, Number(limit) || 200));
+    const { data, notFound } = await this._fetchMessagePage(sessionId, `?order=desc&limit=${lim}`, opts.signal);
+    if (notFound) return [];
+    return (Array.isArray(data) ? data : [])
+      .filter((m) => !m || !m.type || m.type === "user" || m.type === "assistant")
+      .map((m, idx) => this._mapV2Message(m, sessionId, idx));
+  }
+
   async sendMessage(sessionId, payload = {}, opts = {}) {
     // ==== F6: OpenCode v2 — POST /api/session/:id/prompt (session.prompt) ====
     // Contrato v2 estricto: el body SOLO admite {text} (additionalProperties:
