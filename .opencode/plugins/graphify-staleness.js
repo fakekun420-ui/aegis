@@ -124,12 +124,23 @@ function findPython(root) {
       return r.status === 0 ? (r.stdout || "").trim() : ""
     } catch { return "" }
   }
+  // `command -v "$1"` con el valor en $1 en vez de interpolado en el texto del script.
+  // Antes era sh(`command -v ${p}`), que meteía `p` DENTRO de la linea de comandos, y
+  // `p` no es de fiar: sale del shebang del binario graphify o del fichero
+  // <root>/graphify-out/.graphify_python, ambos dentro de rutas que escribe el agente.
+  // Un "python3; lo que sea" ahi se ejecutaba como shell.
+  const shWithArg = (script, arg) => {
+    try {
+      const r = spawnSync("sh", ["-c", script, "sh", arg], { encoding: "utf8", timeout: 20000 })
+      return r.status === 0 ? (r.stdout || "").trim() : ""
+    } catch { return "" }
+  }
   const usable = (p) => {
     if (!p) return false
     try {
       if (statSync(p).mode & 0o111) return true
     } catch { /* no existe */ }
-    return sh(`command -v ${p}`) === p
+    return shWithArg('command -v "$1"', p) === p
   }
   let py = sh("command -v graphify")
   if (py) {
@@ -147,10 +158,14 @@ function findPython(root) {
       if (usable(c)) py = c
     }
   }
+  // Aqui `cand` viene de un array LITERAL, asi que interpolarlo no era un agujero: son
+  // "python3" y "python". Aun asi se pasa por shWithArg para no dejar dos estilos
+  # distintos en el mismo bloque, y para que anadir un candidto de verdad (una ruta leida
+  // de algun sitio) no introduzca una inyeccion sin que se note en la revision.
   for (const cand of ["python3", "python"]) {
     if (py) break
-    if (sh(`command -v ${cand}`) !== cand) continue
-    if (sh(`${cand} -c 'import graphify.detect' && echo ok`) === "ok") py = cand
+    if (shWithArg('command -v "$1"', cand) !== cand) continue
+    if (shWithArg('"$1" -c "import graphify.detect" && echo ok', cand) === "ok") py = cand
   }
   toolchain = py
   return py
@@ -177,6 +192,13 @@ function check(root) {
   const t0 = Date.now()
   let r
   try {
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
+    // Falso positivo. Esto es execve con un ARRAY de argumentos y sin shell: `root` va
+    // como un argumento literal, asi que un valor con espacios, comillas o punto y coma
+    // se transmite tal cual y no se interpreta. La regla marca cualquier valor que
+    // llegue a child_process desde un argumento de funcion, sin distinguir si hay shell
+    // detras. El caso con shell de verdad estaba en findPython(), y ese si se ha
+    // arreglado de verdad.
     r = spawnSync(py, [checker, "--root", root, "--json"], { encoding: "utf8", timeout: 300000 })
   } catch (e) {
     return { state: "error", why: String(e) }
