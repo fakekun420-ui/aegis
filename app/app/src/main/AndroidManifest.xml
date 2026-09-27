@@ -12,6 +12,28 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions"/>
     <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions"/>
+
+    <!-- ===== Almacenamiento: para dejar de usar root =====
+         Sin esto, con el almacenamiento con ámbito de Android 11+, la app NO puede leer
+         /sdcard/projects/Aegis/backend/.aegis_token por ninguna vía que no sea root, y
+         paraConseguirlo hacía `su -c cat` en cada petición (la caché duraba 2 s y los
+         polls son de 1,5 s): un prompt de root cada 1,5 segundos.
+
+         MANAGE_EXTERNAL_STORAGE es el permiso que realmente da acceso a todo
+         /sdcard. NO se concede con un diálogo normal: hay que abrir Ajustes →
+         "Acceso a todos los archivos", y por eso la app lanza ese intent explícitamente
+         (ver MainActivity → ensureAllFilesAccess). Read/Write se declaran con
+         maxSdkVersion="32" porque desde Android 13 están obsoletos y el sistema ya no
+         concede nada con ellos: se dejan solo para instalaciones antigas. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Cámara: la app ya expone captura de imagen en el compositor. -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission"/>
     <!-- ROOT vía su, no necesita permiso declarado -->
 

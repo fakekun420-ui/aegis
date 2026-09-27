@@ -3,7 +3,9 @@ package com.aegis.hub
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.Bundle
 import android.provider.Settings
 import android.speech.RecognizerIntent
@@ -51,6 +53,24 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private val reqContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()){ ok ->
         if(ok) toast("Contactos concedidos") else toast("Contactos denegados — WhatsApp por nombre no funcionará")
     }
+    private val reqCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()){ ok ->
+        if(ok) toast("Cámara concedida") else toast("Cámara denegada — no se podrán adjuntar fotos")
+    }
+
+    // registerForActivityResult DEBE registrarse antes de que la actividad llegue a
+    // STARTED, si no lanza IllegalStateException. Antes se llamaba aquí dentro, desde
+    // ensurePermissions() (que corre en onCreate), y en el mejor de los casos se perdía
+    // el resultado: la app pedía notificaciones y nunca se enteraba de la respuesta.
+    private val reqNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()){ ok ->
+        if(ok) toast("Notificaciones concedidas") else toast("Notificaciones denegadas — no avisaré al terminar cada turno")
+    }
+
+    /**
+     * ¿Se ha concedido ya "Acceso a todos los archivos"? Se recuerda para poder avisar
+     * SOLO en el instante en que el usuario vuelve de Ajustes y lo ha concedido, en
+     * lugar de soltar un toast en cada onResume.
+     */
+    private var allFilesWarned = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -303,6 +323,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     override fun onResume() {
         super.onResume()
         isForeground = true
+        // El usuario acaba de volver de Ajustes → "Acceso a todos los archivos". Si ya
+        // está concedido, TokenProvider dejó de necesitar root en la siguiente lectura
+        // del token (60 s de caché como mucho). Avisamos solo en la transición.
+        if (hasAllFilesAccess() && !allFilesWarned) {
+            allFilesWarned = true
+            toast("Acceso al almacenamiento concedido: ya no hace falta root")
+        }
     }
 
     override fun onPause() {
@@ -384,7 +411,50 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
         if(Build.VERSION.SDK_INT >= 33){
             if(ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED){
-                registerForActivityResult(ActivityResultContracts.RequestPermission()){}.launch(Manifest.permission.POST_NOTIFICATIONS)
+                reqNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        if(ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED){
+            reqCamera.launch(Manifest.permission.CAMERA)
+        }
+        // El almacenamiento es el permiso que de verdad importa: sin él la app no puede
+        // leer el token del Hub y cae a `su -c cat` en cada petición.
+        ensureAllFilesAccess()
+    }
+
+    /** ¿La app puede leer/escribir libremente en almacenamiento compartido? */
+    private fun hasAllFilesAccess(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
+
+    /**
+     * Pide "Acceso a todos los archivos" (MANAGE_EXTERNAL_STORAGE).
+     *
+     * A diferencia de los demás, este permiso NO se concede con un diálogo normal:
+     * Android obliga a sending al usuario a Ajustes. Por eso se abre la pantalla
+     * concreta de nuestra app con ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, y no
+     * un intent genérico, que dejaría al usuario perdido en un listado.
+     *
+     * Si el usuario lo deniega, la app NO se rompe: TokenProvider cae a su respaldo con
+     * root (ver data/TokenProvider.kt → fetchToken). Solo se pierde la comodidad de no
+     * pedir root.
+     */
+    private fun ensureAllFilesAccess() {
+        if (hasAllFilesAccess()) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+            )
+            allFilesWarned = true   // ya avisamos de lo que hace falta; no repetir en onResume
+        } catch (e: Exception) {
+            // Algunas ROMs (y las pruebas instrumentadas) no tienen esa pantalla.
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            } catch (_: Exception) {
+                // Sin acceso a esa pantalla: se sigue con el respaldo por root.
             }
         }
     }

@@ -87,14 +87,17 @@ fun ChatScreen(
     val pendingSessionNav by vm.pendingSessionNav.collectAsState()
     val pendingForms by vm.pendingForms.collectAsState()
     val turnInProgress by vm.turnInProgress.collectAsState()
-    val turnOver by vm.turnOver.collectAsState()
+    // El divisor usa la MISMA decisión que la notificación (vm.turnFinished), no el
+    // turnOver crudo del vigilante: leer dos señales distintas es lo que hacía que el
+    // aviso saliera tras cada bash mientras el divisor no aparecía nunca.
+    val turnFinished by vm.turnFinished.collectAsState()
     val replyingForm by vm.replyingForm.collectAsState()
 
     // Las filas se calculan AQUÍ y no dentro del `content` del LazyColumn: ese lambda
     // no es un contexto @Composable, y llamar a `remember` dentro de él no compila
     // ("@Composable invocations can only happen from the context of a @Composable
     // function"). El divisor de fin de turno se intercala entre los mensajes aquí.
-    val filas = remember(messages, turnOver) { buildChatRows(messages, turnOver) }
+    val filas = remember(messages, turnFinished) { buildChatRows(messages, turnFinished) }
 
     // Cambiar de motor crea una sesión nueva en el destino (el proveedor vive en el
     // prefijo del id) y aquí se navega a ella.
@@ -1691,7 +1694,7 @@ private fun TurnInProgressRow() {
  *    con exit 0 aunque el agente siga trabajando — de ahí que el divisor saltaba a
  *    mitad de turno, que es justo lo que se quiso evitar.
  */
-private fun isFinalResponseOf(messages: List<Message>, index: Int, turnOver: Boolean): Boolean {
+private fun isFinalResponseOf(messages: List<Message>, index: Int, turnFinished: Boolean): Boolean {
     val msg = messages[index]
     if (msg.role != "assistant") return false
     val next = messages.getOrNull(index + 1)
@@ -1701,7 +1704,7 @@ private fun isFinalResponseOf(messages: List<Message>, index: Int, turnOver: Boo
     // Es el ULTIMO mensaje: aqui solo se marca si el agente ha parado de verdad
     // (session.execution.*). Antes se exigia `time.completed`, que se cumple tras cada
     // `bash` con exit 0 aunque siga trabajando, y por eso saltaba a mitad de turno.
-    return turnOver
+    return turnFinished
 }
 
 /** Una fila de la lista del chat: un mensaje, o el divisor que cierra un turno. */
@@ -1719,10 +1722,10 @@ private sealed interface ChatRow {
     }
 }
 
-private fun buildChatRows(messages: List<Message>, turnOver: Boolean): List<ChatRow> = buildList {
+private fun buildChatRows(messages: List<Message>, turnFinished: Boolean): List<ChatRow> = buildList {
     messages.forEachIndexed { index, msg ->
         add(ChatRow.Mensaje(index, msg))
-        if (isFinalResponseOf(messages, index, turnOver)) {
+        if (isFinalResponseOf(messages, index, turnFinished)) {
             add(ChatRow.Cierre(msg.info?.id ?: "idx_$index"))
         }
     }

@@ -1489,6 +1489,25 @@ async function handleRequest(req, res){
           "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS,
           "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS"
         }));
+        // SIN ESTO el cliente no se enteraba de nada hasta el final del turno.
+        //
+        // En Node, `writeHead()` NO vuelca los bytes al socket: la respuesta queda
+        // "corked" hasta el primer `write()` o el `end()`. Y el primer `write()` de
+        // esta ruta ocurre dentro de onChunk, que el adaptador de OpenCode solo invoca
+        // UNA VEZ, cuando el turno ya ha terminado (providers.js, la llamada a onChunk
+        // esta dentro de `if (complete)`). O sea que los headers llegaban al cliente en
+        // el mismo instante que el final del turno, no al aceptarse el prompt.
+        //
+        // Medido en hub.log: 3 min 15 s entre "prompt accepted" y el primer byte.
+        // Por eso la píldora "Enviando…" se quedaba minutos con el mensaje ya
+        // recibido, y el usuario lo perceives como "el envío tarda mucho".
+        res.flushHeaders();
+        // Y se manda un evento explícito, para que el cliente marque el ack por
+        // CONTRATO y no por sincronismo: el turno arrancó, aunque todavía no haya
+        // texto que enseñar.
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ type: "accepted" })}\n\n`);
+        }
       }
 
       log.info(`[hub] routing message for session ${sid} to provider ${adapter.id} (project: ${pId || "none"}, mode: ${agentMode}, streaming: ${isStream})`);

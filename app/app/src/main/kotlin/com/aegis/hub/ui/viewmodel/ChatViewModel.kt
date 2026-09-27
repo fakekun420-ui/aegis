@@ -117,6 +117,15 @@ class ChatViewModel : ViewModel() {
     val turnBusy: StateFlow<Boolean> = _turnBusy
     private val _turnOver = MutableStateFlow(false)
     val turnOver: StateFlow<Boolean> = _turnOver
+    // La MISMA decisión que alimenta la notificación, expuesta para el divisor.
+    //
+    // Antes el divisor leía el `turnOver` CRUDO del vigilante, y la notificación leía
+    // `turnIsReallyFinished()`, que además tiene respaldo por los mensajes. Eran dos
+    // señales distintas y divergían: la notificación saltaba tras cada `bash` (el
+    // respaldo daba el turno por terminado) mientras el divisor no aparecía (turnOver
+    // en false). Ahora hay UNA sola decisión y los dos la consumen.
+    private val _turnFinished = MutableStateFlow(false)
+    val turnFinished: StateFlow<Boolean> = _turnFinished
 
     private val _pendingForms = MutableStateFlow<List<PendingForm>>(emptyList())
     val pendingForms: StateFlow<List<PendingForm>> = _pendingForms
@@ -474,6 +483,7 @@ class ChatViewModel : ViewModel() {
         val id = lastAssistant.info?.id ?: return
         val finished = turnIsReallyFinished(fresh)
         _turnInProgress.value = !finished
+        _turnFinished.value = finished
         if (!finished) return
         if (id == _finishedTurnId.value) return   // ya anunciado, no repetir cada 2 s
         _finishedTurnId.value = id
@@ -758,6 +768,8 @@ class ChatViewModel : ViewModel() {
                 // servidor. En ese caso la vía clásica de respaldo NO debe reenviar el
                 // mensaje final (antes: una excepción en L402 reenviaba en L410 = doble envío).
                 var sseRequestAccepted = false
+                // El Hub puede mandar `accepted` y luego, si el POST falló, `error`.
+                var ackReceived = false
                 var sseResp: okhttp3.Response? = null
                 _streamingText.value = ""
                 _streamingTools.value = emptyList()
@@ -817,6 +829,23 @@ class ChatViewModel : ViewModel() {
                                     val jsonObj = com.google.gson.JsonParser.parseString(dataStr).asJsonObject
                                     val type = if (jsonObj.has("type")) jsonObj.get("type").asString else ""
                                     when (type) {
+                                        // El Hub lo emite justo después del flushHeaders: el
+                                        // prompt está dentro. Antes el ack dependía de que
+                                        // la respuesta HTTP volviera, y con el bug de cork
+                                        // del Hub eso no ocurría hasta el FINAL del turno, así
+                                        // que "Enviando…" duraba minutos. Ahora el relevo
+                                        // entre fases lo marca un evento explícito.
+                                        "accepted" -> {
+                                            if (!ackReceived) {
+                                                ackReceived = true
+                                                _sendingInFlight.value = false
+                                                _messages.value = _messages.value.map {
+                                                    if (it.info?.id == tempMsgId) {
+                                                        it.withStatus(MessageDeliveryStatus.SENT)
+                                                    } else it
+                                                }
+                                            }
+                                        }
                                         "chunk" -> {
                                             if (jsonObj.has("text")) {
                                                 val chunk = jsonObj.get("text").asString
@@ -872,6 +901,24 @@ class ChatViewModel : ViewModel() {
                                                     )
                                                 } else it
                                             }
+                                        }
+                                        // El Hub emite `error` (server.js, rama de error
+                                        // del stream). Antes no había rama para ella: caía en
+                                        // el catch silencioso, el stream se cerraba, y como
+                                        // `sseRequestAccepted` ya valía true el reenvío de
+                                        // seguridad NO se disparaba. Resultado: el turno se
+                                        // paraba sin mensaje de error para el usuario.
+                                        "error" -> {
+                                            val detalle = jsonObj.optString("error")
+                                                .ifBlank { jsonObj.optString("message") }
+                                            _error.value = detalle.ifBlank { "El turno falló" }
+                                            _messages.value = _messages.value.map {
+                                                if (it.info?.id == tempMsgId) {
+                                                    it.withStatus(MessageDeliveryStatus.ERROR)
+                                                } else it
+                                            }
+                                            messageDelivered = true
+                                            pollingJob?.cancel()
                                         }
                                         "done" -> {
                                             val msgObj = jsonObj.getAsJsonObject("message")
