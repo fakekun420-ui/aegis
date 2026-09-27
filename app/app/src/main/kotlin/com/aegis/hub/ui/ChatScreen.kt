@@ -60,6 +60,7 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 import com.aegis.hub.data.FormField
 import com.aegis.hub.data.PendingForm
+import com.aegis.hub.data.PendingPermission
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1522,7 +1523,6 @@ private fun TurnFinishedDivider() {
  *    respuesta descarta las demás en silencio (medido con un formulario real de 3
  *    campos — se mandó q0 y q1/q2 se perdieron sin aviso).
  */
-@Composable
 /**
  * Tarjeta de permiso pendiente: el equivalente móvil del diálogo "Permission required"
  * del TUI del CLI. Antes no existía y por eso Aegis se quedaba "trabajando" para
@@ -1533,6 +1533,7 @@ private fun TurnFinishedDivider() {
  * implícito: "rechazar" también cancela el resto de permisos de la sesión, y "permitir
  * siempre" solo persiste si el servidor propuso reglas (si no, es idéntico a "una vez").
  */
+@Composable
 private fun PendingPermissionCard(
     permission: PendingPermission,
     busy: Boolean,
@@ -1620,6 +1621,7 @@ private fun PendingPermissionCard(
     }
 }
 
+@Composable
 private fun PendingFormCard(
     form: PendingForm,
     busy: Boolean,
