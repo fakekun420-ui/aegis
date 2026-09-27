@@ -2884,12 +2884,14 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     const now = Date.now();
     const live = [...inflightSessions.entries()].filter(([, t]) => now - t < 15 * 60 * 1000);
     if (onlyIds) return json(res, 200, ok(live.map(([id]) => id)));
-    const seen = new Set(live.map(([id]) => id));
-    // `seen` = ultimo instante en el que se vio CUALQUIER evento de la sesion. Es lo que
-    // permite al cliente distinguir "turno en marcha" de "registro que se quedo pegado"
-    // porque el vigilante perdio el `succeeded` al reconectar.
+    // `lastSeenAt` = ultimo instante en el que se vio CUALQUIER evento de la sesion. Es
+    // lo que permite al cliente distinguir "turno en marcha" de "registro que se quedo
+    // pegado" porque el vigilante perdio el `succeeded` al reconectar.
+    //
+    // (Antes esto era un Set con .get(), que no existe: el endpoint lanzaba TypeError y
+    // devolvia 500, el poll del cliente se lo tragaba y se quedaba con el estado viejo.)
     const out = live.map(([id, since]) => ({
-      id, since, turnOver: false, lastSeen: (seen.get(id) || since),
+      id, since, turnOver: false, lastSeen: lastSeenAt.get(id) ?? since,
     }));
     for (const [sid, since] of deliveredInbox) {
       if (seen.has(sid)) continue;
@@ -3485,8 +3487,9 @@ sanitizeSessionProviders();
 //   session.execution.succeeded -> {"sessionID":"ses_..."}
 //   session.inbox.enqueued      -> {"inboxID","sessionID","item"}
 //   session.inbox.delivered     -> {"sessionID","inboxID"}
-const inflightSessions = new Map();   // sessionId -> epoch ms
-const deliveredInbox = new Map();    // sessionId -> epoch ms del ultimo inbox.delivered
+const inflightSessions = new Map();   // sessionId -> epoch ms de inicio del turno
+const lastSeenAt = new Map();        // sessionId -> epoch ms del ULTIMO evento visto
+const deliveredInbox = new Map();    // sessionId -> epoch ms del ultimo cierre
 let execWatcher = null;
 
 // Ventana de gracia al terminar un turno.
@@ -3506,6 +3509,7 @@ const pendingIdle = new Map();
 function markBusy(sid) {
   if (!sid) return;
   inflightSessions.set(sid, Date.now());
+  lastSeenAt.set(sid, Date.now());
   const t = pendingIdle.get(sid);
   if (t) { clearTimeout(t); pendingIdle.delete(sid); }
 }
@@ -3515,7 +3519,7 @@ function markBusy(sid) {
 // Se usa para distinguir un turno en marcha de un registro que se quedo pegado.
 function touchSession(sid) {
   if (!sid) return;
-  inflightSessions.set(sid, Date.now());
+  lastSeenAt.set(sid, Date.now());
 }
 function markIdle(sid) {
   if (!sid) return;
@@ -3523,6 +3527,7 @@ function markIdle(sid) {
   const t = setTimeout(() => {
     pendingIdle.delete(sid);
     inflightSessions.delete(sid);
+    lastSeenAt.delete(sid);
     deliveredInbox.set(sid, Date.now());
   }, TURN_END_GRACE_MS);
   if (t.unref) t.unref();
