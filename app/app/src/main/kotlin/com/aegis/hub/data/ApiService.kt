@@ -55,6 +55,12 @@ interface ApiService {
     @GET("api/opencode/sessions/{id}/messages")
     suspend fun getMessages(@Path("id") sessionId: String): Envelope<List<Message>>
 
+    // La COLA del chat: los [tail] mensajes mas nuevos, en una sola pagina.
+    // MEDIDO en el Hub: ?tail=200 -> 0,27 s y 774 KB, frente a 15,63 s y 6,6 MB del
+    // historial entero (1.730 mensajes). El refresco periodico va con esto, y fusiona.
+    @GET("api/opencode/sessions/{id}/messages")
+    suspend fun getMessagesTail(@Path("id") sessionId: String, @Query("tail") tail: Int): Envelope<List<Message>>
+
     // Parte ENTERA de un mensaje (texto y binario). La lista de mensajes viaja ligera
     // porque el Hub retira las data URI; esto es lo que se pide al desplegar una.
     @GET("api/sessions/{sessionId}/part")

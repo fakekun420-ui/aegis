@@ -344,6 +344,50 @@ class ChatViewModel : ViewModel() {
      * manda el propio stream, y un refresh de medio segundo antes podría hacer parpadear
      * la pantalla. Tampoco toca [_loading] ni [_error] para no tumbar la UI.
      */
+    /**
+     * Fusiona una cola de mensajes con la lista que ya se esta viendo.
+     *
+     * Hace falta porque las llamadas existentes hacen `_messages.value = fresh`, un
+     * REPLACE, y con un tail un replace se comeria el historial: el usuario veria 200
+     * mensajes de golpe. Aqui se clava por id de mensaje:
+     *
+     * - los ids que ya estaban se sustituyen EN SU SITIO, no al final. Asi el texto
+     *   parcial del asistente se actualiza donde lo esta leyendo el usuario y la lista
+     *   no salta, que es lo que hacia que la pantalla parpadeara al leer.
+     * - los ids nuevos se anaden al final, en el orden del tail (que es ascendente).
+     * - los mensajes sin id no se pueden clavar, asi que se descartan del tail. Antes se
+     *   perdia todo el historial; ahora se pierde un caso degenerado.
+     */
+    // Tope de pagina de OpenCode: pedir mas de 200 no daria mas, y el Hub avisaria
+    // por log. 200 es lo que hace falta para cubrir un turno largo.
+    private val TAIL_POLL = 200
+
+    private fun mergeTail(actual: List<Message>, cola: List<Message>): List<Message> {
+        if (cola.isEmpty()) return actual
+        val porId = HashMap<String, Message>()
+        cola.forEach { m -> m.info?.id?.let { porId[it] = m } }
+        if (porId.isEmpty()) return actual
+        val vistos = HashSet<String>()
+        val fusion = ArrayList<Message>(actual.size + cola.size)
+        for (m in actual) {
+            val id = m.info?.id
+            if (id != null && porId.containsKey(id)) {
+                fusion.add(porId.getValue(id))
+                vistos.add(id)
+            } else {
+                fusion.add(m)
+            }
+        }
+        for (m in cola) {
+            val id = m.info?.id ?: continue
+            if (id !in vistos) {
+                fusion.add(m)
+                vistos.add(id)
+            }
+        }
+        return fusion
+    }
+
     private fun startViewRefresh(sessionId: String) {
         viewRefreshJob?.cancel()
         viewRefreshSessionId = sessionId
@@ -407,9 +451,27 @@ class ChatViewModel : ViewModel() {
                 }
 
                 try {
-                    val r = api.getMessages(sessionId)
-                    if (r.ok && r.data != null) {
-                        val fresh = r.data.filterNot { it.isEmpty }
+                    // Solo la COLA: 0,27 s contra los 15,63 s del historial entero, medidos
+                    // en el Hub. Y se fusiona con lo que ya se ve, porque un REPLACE aqui
+                    // se comeria el historial (200 mensajes de golpe).
+                    //
+                    // Si la peticion falla se cae al historial completo, para que un fallo
+                    // puntual del camino rapido no deje la pantalla congelada. Es un GET de
+                    // 15 s, pero solo cuando el rapido ya ha fallado.
+                    var fresh: List<Message>? = null
+                    try {
+                        val cola = api.getMessagesTail(sessionId, TAIL_POLL)
+                        if (cola.ok && cola.data != null) {
+                            fresh = mergeTail(_messages.value, cola.data.filterNot { it.isEmpty })
+                        }
+                    } catch (_: Exception) {
+                        // Idem: el siguiente ciclo reintenta por el camino rapido.
+                    }
+                    if (fresh == null) {
+                        val r = api.getMessages(sessionId)
+                        if (r.ok && r.data != null) fresh = r.data.filterNot { it.isEmpty }
+                    }
+                    if (fresh != null) {
                         if (fresh != _messages.value) {
                             _messages.value = fresh
                         }
