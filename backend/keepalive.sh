@@ -61,12 +61,32 @@ echo "[keepalive] loop iniciado $(date) pid $$ — intervalo ${INTERVAL}s" | tee
 trap '' HUP
 trap 'echo "[keepalive] trap exit" >> "$LOG"; rm -f "$LOCK"; exit 0' TERM INT
 
+# ¿Hay alguien escuchando en este puerto? Ground truth de "¿puedo lanzar otro?".
+# /dev/tcp NO existe en dash (el shebang cae a `sh` = dash; comprobado: da NO),
+# así que el fallback antiguo era código muerto. Se lee /proc/net/tcp: st=0A es
+# LISTEN y el puerto va en HEX en mayusculas (49374 -> C0DE).
+port_listening() {
+  _plhex=$(printf '%04X' "$1" 2>/dev/null)
+  [ -n "$_plhex" ] || return 1
+  awk -v w="$_plhex" 'NR>1 && $4=="0A" {split($2,a,":"); if (a[2]==w) f=1} END{exit !f}' /proc/net/tcp 2>/dev/null
+}
+
 is_up() {
+  # A-8: sonda = GET / con -f y -o /dev/null + %{http_code} == 200.
+  # Por que cambia (medido 2026-09-27: 119 eventos "caido" en un dia, 270 bind fallidos):
+  #  - `serve` v2 NO expone /api/* sin auth: /api/info y /api/health devuelven 401.
+  #    Por eso la sonda va contra la SPA (/) y NO se puede copiar el /api/health
+  #    del hub: daria 401 eterno = "caido" perpetuo.
+  #  - Antes: `curl -m 2 -s / | grep -qi opencode` -> sin -f y greedy por el cuerpo
+  #    entero. Con un SOLO disparo, cualquier pausa >2s reiniciaba un servidor de
+  #    ~480MB que abre un SQLite de 2.1GB y levanta 6 venvs python (932MB).
+  #  - Ahora: -f falla en 4xx/5xx, -o /dev/null evita traer el cuerpo y -m 5 da
+  #    margen. Coste real medido: 6147 b en ~4 ms, 30/30 sondas OK.
   if command -v curl >/dev/null 2>&1; then
-    curl -m 2 -s "http://$OC_HOST:$1/" 2>/dev/null | grep -qi "opencode"
+    [ "$(curl -m 5 -s -f -o /dev/null -w '%{http_code}' "http://$OC_HOST:$1/" 2>/dev/null)" = "200" ]
     return $?
   fi
-  (echo > "/dev/tcp/$OC_HOST/$1") 2>/dev/null && return 0 || return 1
+  port_listening "$1"
 }
 hub_up() {
   # A-3: sonda = GET /api/health (EXENTO de X-Aegis-Token y ligero, ver buildHealthData).
@@ -81,8 +101,33 @@ hub_up() {
 }
 
 while true; do
+  _oc_restart=""
   if ! is_up "$OC_PORT"; then
-    echo "[$(date +%H:%M:%S)] opencode $OC_HOST:$OC_PORT caído — relanzando" >> "$LOG"
+    # A-8: backoff ANTES de decidir, igual que el hub (A-7). opencode era el UNICO
+    # servicio con sonda de un solo disparo: por eso generaba mas reinicios y mas
+    # carga que el hub (cada relanzamiento abre el DB de 2.1GB + 6 venvs python).
+    echo "[$(date +%H:%M:%S)] opencode $OC_HOST:$OC_PORT sonda KO (1/2) — backoff 6s antes de decidir reinicio" >> "$LOG"
+    sleep 6
+    if is_up "$OC_PORT"; then
+      echo "[$(date +%H:%M:%S)] opencode $OC_HOST:$OC_PORT OK tras backoff — blip descartado, SIN reiniciar" >> "$LOG"
+    else
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] opencode $OC_HOST:$OC_PORT sonda KO (2/2 seguidas) — reinicio confirmado" >> "$LOG"
+      _oc_restart=1
+    fi
+  fi
+  if [ -n "$_oc_restart" ] && port_listening "$OC_PORT"; then
+    # A-9: GUARDIA DE PUERTO. 2 sondas HTTP fallan pero el puerto SIGUE escuchando:
+    # hay un serve vivo que no contesta (arrancando, saturado o colgado). Lanzar otro
+    # NO lo arregla: choca en el bind, muere, y mientras tanto abre el DB de 2.1GB y
+    # levanta 6 venvs python (~932MB, 30-60% CPU cada uno) -> eso sube el load -> la
+    # siguiente sonda vuelve a fallar. Medido: 270 "already in use" en un dia.
+    # NO se mata el daemon `--service` (es el del CLI, condicion 4): matarlo cortaria
+    # la sesion del TUI. Se registra y se deja que lo gestione el CLI.
+    echo "  puerto $OC_PORT OCUPADO pese a 2 sondas KO — serve vivo que no responde; NO relanzar" >> "$LOG"
+    _oc_restart=""
+  fi
+  if [ -n "$_oc_restart" ]; then
+    echo "[$(date +%H:%M:%S)] opencode $OC_HOST:$OC_PORT caído (puerto libre) — relanzando" >> "$LOG"
     # SAFE: distinguir TUI interactiva (pts/N) de serve (sin tty) — NUNCA matar TUI ni hub
     # Condición 1: isRealServe — argv[0] basename opencode/opencode.exe + argv[1]=="serve" (no substring "server.js")
     # Evita falso positivo del hub: su cmdline "node .../opencode-companion/server.js" contiene "opencode" y "server.js"
@@ -133,6 +178,11 @@ while true; do
     HOME=/root nohup "$OPENCODE_BIN" serve --service >> "$HUB_DIR/opencode.log" 2>&1 &
     echo "  opencode pid $! lanzado ($OPENCODE_BIN)" >> "$LOG"
     sleep 4
+    if is_up "$OC_PORT"; then
+      echo "  opencode OK tras relanzar" >> "$LOG"
+    else
+      echo "  opencode aun no responde (arrancando) — normal; lo recoge el proximo ciclo" >> "$LOG"
+    fi
   fi
   # A-7: reintento/backoff ANTES de reiniciar — si la sonda (curl -f | grep '"server":"running"')
   # falla una vez, se espera 4s y se reintenta; sólo 2 fallos seguidos = reinicio real.
