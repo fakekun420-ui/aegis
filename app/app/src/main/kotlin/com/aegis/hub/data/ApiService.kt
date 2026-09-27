@@ -180,6 +180,21 @@ interface ApiService {
         @Body body: FormReplyBody
     ): Envelope<Map<String, Any>>
 
+    // ===== Permisos de herramientas =====
+    // Antes invisible en la app: el TUI del CLI abre el dialogo y Aegis no, asi que el
+    // turno se quedaba parado sin explicacion. Ver server.js /api/permissions.
+    @GET("api/permissions")
+    suspend fun getPendingPermissions(
+        @Query("sessionId") sessionId: String?
+    ): Envelope<List<PendingPermission>>
+
+    @POST("api/permissions/{sessionId}/{requestId}/reply")
+    suspend fun replyPermission(
+        @Path("sessionId") sessionId: String,
+        @Path("requestId") requestId: String,
+        @Body body: PermissionReplyBody
+    ): Envelope<Map<String, Any>>
+
     // Estado de ejecucion de las sesiones. Lo decide el vigilante del Hub a partir de
     // los eventos session.execution.* de OpenCode; cubre tambien los turnos lanzados
     // desde el CLI, que no pasan por el Hub.

@@ -2893,6 +2893,94 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     }
   }
 
+  // ===== Permisos de herramientas =====
+  //
+  // Cuando una herramienta pide permiso, el TUI del CLI abre un diálogo "Permission
+  // required / Allow once / Always allow / Reject". Desde Aegis el prompt era
+  // COMPLETAMENTE invisible, y el turno se quedaba parado sin dar ninguna señal: se ve
+  // "trabajando en ello" indefinidamente. Peor: la sesión seguía marcada como ocupada
+  // para siempre, porque el vigilante del Hub (startExecutionWatcher) solo atiende
+  // eventos que empiezan por "session." y `permission.asked` NO empieza por "session.".
+  //
+  // Rutas de OpenCode 2.0.14 (confirmadas contra su openapi.json; NO son /api/permission,
+  // que da 404 — son en singular y con el id de sesion en la ruta):
+  //   GET  /api/session/{id}/permission               -> {"data":[Permission.Request]}
+  //   POST /api/session/{id}/permission/{rid}/reply    -> {decision} -> 204 sin cuerpo
+  //
+  // Se usan las rutas por sesión y no las globales a propósito: las globales aceptan
+  // ?location[directory] y, si no se les pasa, OpenCode la resuelve a SU cwd (/root) y
+  // devuelve siempre lista vacía. Aquí no cabe ese error de alcance.
+
+  // GET /api/permissions (y /api/opencode/permissions) — permisos PENDIENTES.
+  // ?sessionId filtra por sesión. Sin filtro, todos los pendientes.
+  if ((pathname === "/api/permissions" || pathname === "/api/opencode/permissions") && req.method === "GET") {
+    try {
+      const want = url.searchParams.get("sessionId");
+      // Sin filtro, /api/permission/request necesita location[directory] para no mirar
+      // en /root. Se piden todas las localizaciones pendientes y se filtra aquí, que es
+      // más simple y no depende de adivinar el directorio de cada proyecto.
+      const path = want
+        ? `/api/session/${want}/permission`
+        : "/api/permission/request";
+      const r = await opencodeAdapter._v2(path, { timeoutMs: 12000 });
+      if (!r.ok) return json(res, 502, fail("PERMISSIONS_UNAVAILABLE", `OpenCode respondió ${r.status}`));
+      const j = r.json || {};
+      let all = Array.isArray(j.data) ? j.data : [];
+      // La variante global viene envuelta en {location, data}; la de sesión, no.
+      if (j.location && Array.isArray(j.data)) all = j.data;
+      return json(res, 200, ok(all));
+    } catch (e) {
+      log.warn("[permissions] list error", { err: e.message });
+      // Como en formularios: 200 con lista vacía. Un 500 aquí lo que provoca es que el
+      // poll de la app trague el error y deje el chat sin actualizar.
+      return json(res, 200, ok([]));
+    }
+  }
+
+  // POST /api/permissions/:sessionId/:requestId/reply — responder un permiso.
+  // Cuerpo: { "decision": "once" | "always" | "reject" }
+  //
+  // OJO con la semántica de "always" y "reject" en OpenCode 2.0.14, porque no es la
+  // intuitiva y conviene dejarla escrita cerca de donde se usa:
+  //  - "once": resuelve solo esta peticion y la herramienta suspendida continua.
+  //  - "always": resuelve esta, y SOLO si request.save no viene vacio persiste
+  //    {projectID, action, resources:save} como regla permanente. Ademas auto-resuelve
+  //    las demas pendientes de la misma sesion que ya quedarian en "allow".
+  //  - "reject": la herramienta FALLA, y ademas rechaza todas las demas pendientes de
+  //    la misma sesion. Un toque puede cancelar varios avisos a la vez.
+  if (pathname.match(/^\/api\/permissions\/([^\/]+)\/([^\/]+)\/reply$/) && req.method === "POST") {
+    const m = pathname.match(/^\/api\/permissions\/([^\/]+)\/([^\/]+)\/reply$/);
+    const sid = m[1];
+    const rid = m[2];
+    if (!isValidId(sid) || !isValidId(rid)) {
+      return json(res, 400, fail("INVALID_ID", "sessionId o requestId inválido"));
+    }
+    try {
+      const raw = await readJsonBody(req, 64 * 1024);
+      const body = JSON.parse(raw || "{}");
+      const decision = body.decision;
+      if (decision !== "once" && decision !== "always" && decision !== "reject") {
+        return json(res, 400, fail("INVALID_DECISION",
+          'body.decision debe ser "once", "always" o "reject"'));
+      }
+      const r = await opencodeAdapter._v2(`/api/session/${sid}/permission/${rid}/reply`, {
+        method: "POST",
+        body: { decision, message: typeof body.message === "string" ? body.message : undefined },
+        timeoutMs: 20000,
+      });
+      if (!r.ok) {
+        return json(res, 502, fail("PERMISSION_REPLY_FAILED",
+          `OpenCode respondió ${r.status}${r.text ? `: ${String(r.text).slice(0, 160)}` : ""}`));
+      }
+      // OpenCode responde 204 SIN cuerpo. Se devuelve siempre un objeto de primer
+      // nivel porque la app deserializa esto y un null haría fallar a Gson.
+      return json(res, 200, ok({ replied: true, decision }));
+    } catch (e) {
+      log.warn("[permissions] reply error", { err: e.message });
+      return json(res, 500, fail("PERMISSION_REPLY_ERROR", e.message));
+    }
+  }
+
   // GET /api/sessions/inflight — estado de ejecucion de las sesiones.
   //   ?ids=1 -> solo los ids ocupados (O(1), sin consultar OpenCode)
   //   sin    -> [{id, since, turnOver}] para las que el vigilante conoce
@@ -3586,6 +3674,15 @@ function startExecutionWatcher(adapter) {
           if (!sid) continue;
           if (ev.type === "session.execution.started") markBusy(sid);
           else if (typeof ev.type === "string" && ev.type.startsWith("session.execution.")) markIdle(sid);
+          // `permission.asked` NO empieza por "session.", asi que antes caia por las tres
+          // ramas y se descartaba en silencio. Consecuencia muy visible: un turno
+          // bloqueado esperando un permiso es INDISTINGUIBLE de un turno trabajando
+          // (OpenCode no tiene evento de estado "bloqueado": la maquina de estados solo
+          // tiene started/succeeded/failed/interrupted), asi que el prompt se quedaba
+          // colgado sin que nada lo indicara. Se trata como sesion viva: la herramienta
+          // esta suspendida, no terminada.
+          else if (ev.type === "permission.asked") { markBusy(sid); touchSession(sid); }
+          else if (ev.type === "permission.replied") touchSession(sid);
           else if (typeof ev.type === "string" && ev.type.startsWith("session.")) touchSession(sid);
         }
       });

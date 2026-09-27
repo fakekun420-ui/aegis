@@ -6,6 +6,7 @@ import com.aegis.hub.data.AppContext
 import com.aegis.hub.data.InflightSession
 import com.aegis.hub.data.ModelPreferences
 import com.aegis.hub.data.PendingForm
+import com.aegis.hub.data.PendingPermission
 import com.aegis.hub.data.FormOption
 import com.aegis.hub.data.FormField
 import com.aegis.hub.ui.TurnNotifier
@@ -129,8 +130,12 @@ class ChatViewModel : ViewModel() {
 
     private val _pendingForms = MutableStateFlow<List<PendingForm>>(emptyList())
     val pendingForms: StateFlow<List<PendingForm>> = _pendingForms
+    private val _pendingPermissions = MutableStateFlow<List<PendingPermission>>(emptyList())
+    val pendingPermissions: StateFlow<List<PendingPermission>> = _pendingPermissions
     private val _replyingForm = MutableStateFlow(false)
     val replyingForm: StateFlow<Boolean> = _replyingForm
+    private val _replyingPermission = MutableStateFlow(false)
+    val replyingPermission: StateFlow<Boolean> = _replyingPermission
 
     // Id del último mensaje del asistente cuyo turno ya se CERRÓ (info.time.completed).
     // El chat lo usa para dibujar el divisor de "respuesta final", de modo que se sabe
@@ -388,6 +393,17 @@ class ChatViewModel : ViewModel() {
                     // ciclo reintenta solo.
                 }
 
+                // Permisos pendientes, mismo criterio y mismo motivo que los formularios:
+                // van primero y en su propio try, y deben estar frescos ANTES de juzgar
+                // si el turno termino. Un turno bloqueado esperando un permiso sigue
+                // trabajando: la herramienta esta suspendida, no terminada.
+                try {
+                    val pr = api.getPendingPermissions(sessionId)
+                    if (pr.ok && pr.data != null) _pendingPermissions.value = pr.data
+                } catch (_: Exception) {
+                    // Idem: el siguiente ciclo reintenta.
+                }
+
                 try {
                     val r = api.getMessages(sessionId)
                     if (r.ok && r.data != null) {
@@ -453,6 +469,11 @@ class ChatViewModel : ViewModel() {
         // Un formulario pendiente significa que el agente esta esperando a la persona,
         // asi que el turno NO ha terminado.
         if (_pendingForms.value.isNotEmpty()) return false
+
+        // Misma regla para los permisos. Sin esto, un turno con un prompt de permiso en
+        // pantalla marcaba "respuesta final" y disparaba la notificacion mientras la
+        // herramienta seguia bloqueada esperando una respuesta que la app no ensenaba.
+        if (_pendingPermissions.value.isNotEmpty()) return false
         if (_turnBusy.value) return false
         if (_turnOver.value) return true
         // VIGILANTE CIEGO: no hay registro, o es tan viejo que ya no se cree. Aqui no se
@@ -509,6 +530,50 @@ class ChatViewModel : ViewModel() {
      * El cuerpo es `{ "answer": { "<clave del campo>": "<valor de la opción>" } }`. La
      * clave "answer" es obligatoria; el Hub la exige y devuelve 400 sin ella.
      */
+    /**
+     * Responde a un permiso pendiente.
+     *
+     * @param decision "once" | "always" | "reject". El Hub valida el valor y devuelve 400
+     *   si no es uno de esos tres, así que aqui solo se filtra el vacío para poder dar un
+     *   mensaje en castellano en vez de un error opaco.
+     *
+     * Aviso sobre la semántica, que no es la intuitiva: en OpenCode 2.0.14 "reject"
+     * NO rechaza solo este permiso, rechaza también todos los demás pendientes de la
+     * misma sesión. Un toque puede cancelar varios avisos a la vez. Por eso la UI lo
+     * escribe en el botón en vez de dejarlo implícito.
+     */
+    fun answerPermission(permission: PendingPermission, decision: String) {
+        val sid = _currentSessionId.value.orEmpty()
+        val pid = permission.id.orEmpty()
+        if (sid.isBlank() || pid.isBlank()) {
+            _error.value = "No se puede responder: permiso incompleto"
+            return
+        }
+        if (decision !in setOf("once", "always", "reject")) {
+            _error.value = "Decisión no válida: $decision"
+            return
+        }
+        viewModelScope.launch {
+            _replyingPermission.value = true
+            try {
+                val resp = api.replyPermission(sid, pid, PermissionReplyBody(decision = decision))
+                if (resp.ok) {
+                    _error.value = null
+                    // Se quita al instante para que la UI no repita los botones; el
+                    // siguiente refresco confirma que OpenCode ya no lo lista.
+                    _pendingPermissions.value = _pendingPermissions.value.filterNot { it.id == pid }
+                } else {
+                    _error.value = resp.error?.message ?: resp.error?.code
+                        ?: "No se pudo enviar la decisión"
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error al enviar la decisión"
+            } finally {
+                _replyingPermission.value = false
+            }
+        }
+    }
+
     fun answerForm(form: PendingForm, answers: Map<String, String>) {
         val sid = _currentSessionId.value.orEmpty()
         val fid = form.id.orEmpty()

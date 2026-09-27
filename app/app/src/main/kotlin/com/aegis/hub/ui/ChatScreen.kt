@@ -86,6 +86,8 @@ fun ChatScreen(
     val sessionProviderBound by vm.sessionProviderBound.collectAsState()
     val pendingSessionNav by vm.pendingSessionNav.collectAsState()
     val pendingForms by vm.pendingForms.collectAsState()
+    val pendingPermissions by vm.pendingPermissions.collectAsState()
+    val replyingPermission by vm.replyingPermission.collectAsState()
     val turnInProgress by vm.turnInProgress.collectAsState()
     // El divisor usa la MISMA decisión que la notificación (vm.turnFinished), no el
     // turnOver crudo del vigilante: leer dos señales distintas es lo que hacía que el
@@ -587,6 +589,19 @@ fun ChatScreen(
                                         form = form,
                                         busy = replyingForm,
                                         onAnswer = { respuestas -> vm.answerForm(form, respuestas) }
+                                    )
+                                }
+                            }
+
+                            // Los permisos van antes que los formularios: si hay una
+                            // herramienta esperando permiso, ESA es la razón por la que
+                            // el turno no avanza, y una encuesta posterior es ruido.
+                            pendingPermissions.forEach { perm ->
+                                item(key = "perm_${perm.id}") {
+                                    PendingPermissionCard(
+                                        permission = perm,
+                                        busy = replyingPermission,
+                                        onDecision = { d -> vm.answerPermission(perm, d) }
                                     )
                                 }
                             }
@@ -1508,6 +1523,103 @@ private fun TurnFinishedDivider() {
  *    campos — se mandó q0 y q1/q2 se perdieron sin aviso).
  */
 @Composable
+/**
+ * Tarjeta de permiso pendiente: el equivalente móvil del diálogo "Permission required"
+ * del TUI del CLI. Antes no existía y por eso Aegis se quedaba "trabajando" para
+ * siempre cuando una herramienta pedía permiso.
+ *
+ * Las tres decisiones son las de OpenCode 2.0.14 y cada una tiene un efecto secundario
+ * que el usuario no adivina, así que se escribe en el propio botón en vez de dejarlo
+ * implícito: "rechazar" también cancela el resto de permisos de la sesión, y "permitir
+ * siempre" solo persiste si el servidor propuso reglas (si no, es idéntico a "una vez").
+ */
+private fun PendingPermissionCard(
+    permission: PendingPermission,
+    busy: Boolean,
+    onDecision: (String) -> Unit
+) {
+    val warn = Color(0xFFFFB74D)
+    val danger = MaterialTheme.colorScheme.error
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = warn.copy(alpha = 0.12f)
+            ),
+            border = BorderStroke(1.dp, warn.copy(alpha = 0.5f))
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Filled.Lock, contentDescription = "Permiso pendiente", tint = warn)
+                    Text(
+                        "Permiso requerido",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = warn
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    permission.explain,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                // El recurso concreto importa al decidir: "bash" con un comando legible
+                // no es lo mismo que "edit" sobre un fichero que no se ve.
+                permission.resources?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { res ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        res,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (busy) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Enviando decisión…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { onDecision("once") },
+                            colors = ButtonDefaults.buttonColors(containerColor = danger)
+                        ) { Text("Rechazar") }
+                        OutlinedButton(onClick = { onDecision("always") }) {
+                            Text(if (permission.canPersist) "Siempre" else "Una vez")
+                        }
+                        Button(onClick = { onDecision("once") }) { Text("Permitir") }
+                    }
+                    if (!permission.canPersist) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Este permiso no admite recordarse: «Siempre» equivale a «Una vez».",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Rechazar también cancela los demás permisos de esta sesión.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun PendingFormCard(
     form: PendingForm,
     busy: Boolean,

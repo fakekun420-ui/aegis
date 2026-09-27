@@ -496,6 +496,48 @@ data class PendingForm(
 data class FormReplyBody(val answer: Map<String, String>)
 
 /**
+ * Permiso pendiente de una herramienta, tal y como lo devuelve OpenCode 2.0.14
+ * (`Permission.Request`). Es lo que el TUI del CLI pinta como "Permission required".
+ *
+ * Todos los campos vienen como opcionales a proposito: segun la version, la accion
+ * trae o no mensaje, y `save` solo viene relleno cuando la peticion admite
+ * "permitir siempre". Un campo obligatorio aqui seria un crash en produccion.
+ */
+data class PendingPermission(
+    val id: String? = null,
+    val sessionID: String? = null,
+    val action: String? = null,
+    val resources: List<String>? = null,
+    val save: List<String>? = null,
+    val message: String? = null
+) {
+    /** Etiqueta legible de la herramienta ("bash", "edit", ...). */
+    val toolName: String get() = action?.takeIf { it.isNotBlank() } ?: "herramienta"
+
+    /** Texto para el cuerpo de la tarjeta: el mensaje del servidor si existe. */
+    val explain: String get() = message?.takeIf { it.isNotBlank() }
+        ?: resources?.firstOrNull()?.takeIf { it.isNotBlank() }
+        ?: "$toolName necesita permiso para continuar"
+
+    /**
+     * Si OpenCode ha Proposed reglas permanentes para esta peticion. Si no, "siempre
+     * permitir" se comportaria EXACTAMENTE igual que "permitir una vez" (OpenCode solo
+     * persiste cuando request.save no viene vacio), asi que la UI lo dice en vez de
+     * prometer algo que no ocurre.
+     */
+    val canPersist: Boolean get() = !save.isNullOrEmpty()
+}
+
+/**
+ * Cuerpo de la respuesta a un permiso. `decision` es obligatoria: el Hub rechaza
+ * con 400 cualquier otro valor.
+ */
+data class PermissionReplyBody(
+    val decision: String,
+    val message: String? = null
+)
+
+/**
  * Estado de ejecucion de una sesion (GET /api/sessions/inflight).
  *
  * Lo lleva el vigilante del Hub, que se suscribe al stream de eventos de OpenCode.

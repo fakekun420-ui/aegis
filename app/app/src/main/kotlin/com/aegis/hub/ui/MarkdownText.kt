@@ -27,9 +27,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.selection.LocalTextSelectionColors
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -41,6 +43,36 @@ import kotlinx.coroutines.delay
  */
 @Composable
 fun MarkdownText(
+    text: String,
+    modifier: Modifier = Modifier,
+    cursor: String = "",
+    onLinkClick: ((String) -> Unit)? = null
+) {
+    // Sin esto el texto del asistente NO se puede seleccionar: una pulsación larga no
+    // abre el menú de copiar y no hay forma de llevarme una respuesta fuera de la app.
+    //
+    // Se envuelve AQUÍ y no en los cuatro puntos de llamada de ChatScreen por dos
+    // razones concretas: el texto en vivo del streaming pasa por este mismo composable
+    // (y un quinto wrappers en el call site se olvidaría el primero que se añadiese), y
+    // envolver el árbol entero desde ChatScreen haría seleccionables también las
+    // tarjetas de herramienta, donde una selección no significa nada.
+    //
+    // Los colores por defecto son azul claro sobre fondo oscuro, ilegible. Se heredan
+    // los del tema y solo se sustituyen el tirador y el fondo del resaltado.
+    val selColors = LocalTextSelectionColors.current
+    SelectionContainer(
+        colors = selColors.copy(
+            handleColor = MaterialTheme.colorScheme.primary,
+            backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        )
+    ) {
+        MarkdownTextContent(text, modifier, cursor, onLinkClick)
+    }
+}
+
+/** El render de verdad. Separado para que MarkdownText sea solo la envoltura. */
+@Composable
+private fun MarkdownTextContent(
     text: String,
     modifier: Modifier = Modifier,
     cursor: String = "",
