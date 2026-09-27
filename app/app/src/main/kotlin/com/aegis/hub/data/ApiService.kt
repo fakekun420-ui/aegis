@@ -55,6 +55,15 @@ interface ApiService {
     @GET("api/opencode/sessions/{id}/messages")
     suspend fun getMessages(@Path("id") sessionId: String): Envelope<List<Message>>
 
+    // Parte ENTERA de un mensaje (texto y binario). La lista de mensajes viaja ligera
+    // porque el Hub retira las data URI; esto es lo que se pide al desplegar una.
+    @GET("api/sessions/{sessionId}/part")
+    suspend fun getPart(
+        @Path("sessionId") sessionId: String,
+        @Query("partId") partId: String,
+        @Query("messageId") messageId: String?
+    ): Envelope<PartFull>
+
     // Send message via hub proxy POST /opencode/session/:id/message (handles injection)
     @POST("opencode/session/{id}/message")
     suspend fun sendMessage(

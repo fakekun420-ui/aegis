@@ -6,6 +6,7 @@ import com.aegis.hub.data.AppContext
 import com.aegis.hub.data.InflightSession
 import com.aegis.hub.data.ModelPreferences
 import com.aegis.hub.data.PendingForm
+import com.aegis.hub.data.PartFull
 import com.aegis.hub.data.PendingPermission
 import com.aegis.hub.data.PermissionReplyBody
 import com.aegis.hub.data.FormOption
@@ -587,6 +588,38 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             } finally {
                 _replyingPermission.value = false
             }
+        }
+    }
+
+    /**
+     * Pide una parte completa al Hub. Se usa cuando la venia recortada: la lista de
+     * mensajes no lleva el binario (serian decenas de MB de base64) y la app lo pide
+     * unicamente cuando el usuario despliega esa fila.
+     *
+     * Va por el ViewModel y no desde el composable a proposito: el id de sesion solo
+     * existe aqui, y pasarlo por el arbol de composables seria tocar la firma de medio
+     * chat para nada.
+     *
+     * @param onDone recibe la parte ya descargada, o null si fallo. Se invoca SIEMPRE,
+     *   tambien en error, para que la UI pueda quitar el estado de "cargando" y no se
+     *   quede un spinner eterno.
+     */
+    fun loadPartFull(partId: String?, messageId: String?, onDone: (PartFull?) -> Unit) {
+        val sid = _currentSessionId.value.orEmpty()
+        if (sid.isBlank() || partId.isNullOrBlank()) {
+            onDone(null)
+            return
+        }
+        viewModelScope.launch {
+            var resultado: PartFull? = null
+            try {
+                val r = api.getPart(sid, partId, messageId)
+                if (r.ok) resultado = r.data
+            } catch (_: Exception) {
+                // Un fallo al recuperar la parte no puede tumbar el chat: la fila se
+                // queda como estaba, que ya es un repliegue legible.
+            }
+            onDone(resultado)
         }
     }
 

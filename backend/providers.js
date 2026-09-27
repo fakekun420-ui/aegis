@@ -86,7 +86,13 @@ export function normalizeMessage(raw, sessionId = "", index = 0) {
       ...(p.url ? { url: p.url } : {}),
       ...(p.tool ? { tool: p.tool } : {}),
       ...(p.callID ? { callID: p.callID } : {}),
-      ...(p.state ? { state: p.state } : {})
+      ...(p.state ? { state: p.state } : {}),
+        // Marcadores del recorte de payload (server.js -> trimPartText). Sin esto la
+        // app no puede distinguir "esta parte venia recortada" de "es pequena": una
+        // imagen de un chat largo se queda en FileRow sin forma de pedir su binario.
+        // Opcionales: si no hubo recorte no aparecen.
+        ...(p.hasBinary ? { hasBinary: true, binaryChars: p.binaryChars || 0, binaryInState: p.binaryInState || 0 } : {}),
+        ...(p.truncated ? { truncated: true, fullChars: p.fullChars || 0 } : {}),
     }));
   } else {
     parts = [{ id: `prt_${timestamp}_0`, type: "text", text }];

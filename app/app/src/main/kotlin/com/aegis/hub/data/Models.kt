@@ -155,7 +155,12 @@ data class MessagePart(
     val url: String? = null,
     val tool: String? = null,
     val callID: String? = null,
-    val state: ToolState? = null
+    val state: ToolState? = null,
+    // Marcador del recorte de payload (server.js -> trimPartText). Con
+    // hasBinary=true el Hub retiro una data URI para no mandar decenas de MB de
+    // base64; el binario real se pide bajo demanda a /api/sessions/:sid/part.
+    val hasBinary: Boolean? = null,
+    val binaryChars: Int? = null
 )
 
 data class Message(
@@ -454,6 +459,27 @@ data class FormField(
     val custom: Boolean? = null
 )
 
+/**
+ * Parte completa tal y como la devuelve GET /api/sessions/:sid/part.
+ *
+ * Es lo que pide la tarjeta al desplegarse cuando la parte venia recortada: la lista de
+ * mensajes viaja ligera y el binario se recupera solo si el usuario lo quiere ver.
+ */
+data class PartFull(
+    val id: String? = null,
+    val type: String? = null,
+    val mime: String? = null,
+    val filename: String? = null,
+    val text: String? = null,
+    val output: String? = null,
+    val url: String? = null,
+    val image: String? = null,
+    val data: String? = null,
+    val stateContent: List<Map<String, Any?>>? = null
+) {
+    /** El binario puede venir en cualquiera de los tres huecos; se toma el primero. */
+    fun base64(): String? = image ?: data ?: url
+}
 data class PendingForm(
     val id: String? = null,
     val sessionID: String? = null,
