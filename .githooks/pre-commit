@@ -105,4 +105,40 @@ if [ -z "$GPY" ]; then
     exit 1
 fi
 
+# ---- 2) @Composable sin anotador (antes del exec, que no vuelve) ---------------
+#
+# Sin java, gradle ni kotlinc en este host, la UNICA compilacion real es el CI, y
+# cada error cuesta una vuelta de ~9 minutos. En una tanda el CI rechazo cuatro
+# errores y solo uno era real: al anclar un parche en "private fun PendingFormCard("
+# sin el decorador que tenia encima, el @Composable se displace a la funcion
+# siguiente. Este check lo caza en un segundo.
+#
+# tools/check_composable.py solo mira declaraciones TOP-LEVEL: una funcion local
+# dentro de un @Composable si puede llamar a composables sin llevar la anotacion.
+# Comprobado en las dos direcciones: da 0 sobre el proyecto y encuentra las dos
+# lineas exactas si se reintroduce el fallo.
+COMPO="$ROOT/tools/check_composable.py"
+if [ -f "$COMPO" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    if ! OUT=$(python3 "$COMPO" "$ROOT/app/app/src/main/kotlin" 2>&1); then
+      echo "ERROR: no se pudo ejecutar el chequeo de @Composable" >&2
+    elif echo "$OUT" | grep -q "sospechosa"; then
+      echo "================================================================" >&2
+      echo " COMMIT BLOQUEADO - funciones top-level sin @Composable" >&2
+      echo "================================================================" >&2
+      echo "$OUT" >&2
+      echo "" >&2
+      echo "  Suele ser un @Composable que se ha quedado pegado a la" >&2
+      echo "  funcion de al lado al anclar un parche sin el decorador." >&2
+      echo "  Si son falsos positivos, revisalos y salta con:" >&2
+      echo "    GRAPHIFY_SKIP_HOOK=1 git commit -m '...'" >&2
+      echo "================================================================" >&2
+      exit 1
+    fi
+  else
+    echo "aviso: sin python3, se salta el chequeo de @Composable" >&2
+  fi
+fi
+
+# ---- 3) staleness del mapa de graphify ----------------------------------------
 exec "$GPY" "$CHECK" --root "$ROOT"
