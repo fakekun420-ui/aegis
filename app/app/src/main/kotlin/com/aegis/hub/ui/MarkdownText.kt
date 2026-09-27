@@ -27,7 +27,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.selection.LocalTextSelectionColors
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -57,15 +56,14 @@ fun MarkdownText(
     // envolver el árbol entero desde ChatScreen haría seleccionables también las
     // tarjetas de herramienta, donde una selección no significa nada.
     //
-    // Los colores por defecto son azul claro sobre fondo oscuro, ilegible. Se heredan
-    // los del tema y solo se sustituyen el tirador y el fondo del resaltado.
-    val selColors = LocalTextSelectionColors.current
-    SelectionContainer(
-        colors = selColors.copy(
-            handleColor = MaterialTheme.colorScheme.primary,
-            backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-        )
-    ) {
+    // Sin colores custom: se usa elSelectionContainer tal cual. Se intento darle el
+    // del tema con LocalTextSelectionColors, pero ese simbolo no existe en
+    // androidx.compose.ui de la version que fija compose-bom 2024.10.00, y el unico
+    // sitio donde se compila de verdad es el CI (este host no tiene ni java ni gradle).
+    // El bug que se arregla es "no se puede seleccionar ni copiar"; el tono del
+    // resaltado es cosmetico, asi que se deja el de por defecto antes que arriesgar otra
+    // vuelta de compilacion por un color.
+    SelectionContainer {
         MarkdownTextContent(text, modifier, cursor, onLinkClick)
     }
 }

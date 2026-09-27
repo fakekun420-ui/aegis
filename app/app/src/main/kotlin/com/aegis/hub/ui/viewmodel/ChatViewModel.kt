@@ -7,6 +7,7 @@ import com.aegis.hub.data.InflightSession
 import com.aegis.hub.data.ModelPreferences
 import com.aegis.hub.data.PendingForm
 import com.aegis.hub.data.PendingPermission
+import com.aegis.hub.data.PermissionReplyBody
 import com.aegis.hub.data.FormOption
 import com.aegis.hub.data.FormField
 import com.aegis.hub.ui.TurnNotifier
@@ -974,8 +975,19 @@ class ChatViewModel : ViewModel() {
                                         // seguridad NO se disparaba. Resultado: el turno se
                                         // paraba sin mensaje de error para el usuario.
                                         "error" -> {
-                                            val detalle = jsonObj.optString("error")
-                                                .ifBlank { jsonObj.optString("message") }
+                                            // Por que no optString(): esto es un
+                                            // JsonObject, y la familia opt* de JsonObject
+                                            // (gson 2.10.1) exige SIEMPRE el segundo
+                                            // argumento de valor por defecto. La forma de
+                                            // un solo argumento que si existe es la de
+                                            // JsonElement, y no es este tipo. Se leen
+                                            // los dos campos con get(), que no ha
+                                            // cambiado en ninguna version, y se protege
+                                            // con ?. por si no vienen o no son primitivos.
+                                            val detalle = (jsonObj.get("error")
+                                                ?: jsonObj.get("message"))
+                                                ?.takeIf { it.isJsonPrimitive }
+                                                ?.asString.orEmpty()
                                             _error.value = detalle.ifBlank { "El turno falló" }
                                             _messages.value = _messages.value.map {
                                                 if (it.info?.id == tempMsgId) {
