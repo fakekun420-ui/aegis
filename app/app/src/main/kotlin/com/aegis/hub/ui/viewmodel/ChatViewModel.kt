@@ -467,6 +467,22 @@ class ChatViewModel : ViewModel() {
      * dedup: un mismo turno no debe de avisar cada 2 s.
      */
     private fun turnIsReallyFinished(messages: List<Message>): Boolean {
+        // VETO INMEDIATO, antes de mirar NADA mas. Una herramienta en ejecucion
+        // significa que el turno NO ha terminado, diga lo que diga el resto.
+        //
+        // Va el primero A PROPOSITO. Antes estaba mas abajo del todo, detras de
+        // "if (_turnOver.value) return true", asi que cuando el vigilante decia
+        // "terminado" nunca se llegaba a mirar y el divisor se pintaba con un bash
+        // "ejecutando..." debajo. El mismo estado erroneo hacia fallar los TRES
+        // sintomas a la vez (divisor, notificacion y circulo de carga), porque los
+        // tres beben la misma decision de turno.
+        //
+        // Se mira TODO el historial, no solo el ultimo mensaje: en un turno largo
+        // OpenCode genera varios mensajes del asistente, y el ultimo puede ser solo
+        // texto mientras el bash sigue en marcha en el anterior.
+if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } }) {
+            return false
+        }
         // Un formulario pendiente significa que el agente esta esperando a la persona,
         // asi que el turno NO ha terminado.
         if (_pendingForms.value.isNotEmpty()) return false
@@ -487,17 +503,6 @@ class ChatViewModel : ViewModel() {
         //  - no hay herramienta y el ultimo mensaje esta cerrado -> lo mas probable es que
         //    el turno haya terminado. Es el caso degradado: el vigilante no pudo saberlo.
         val last = messages.lastOrNull { it.role == "assistant" } ?: return false
-        // Una herramienta puede seguir VIVA en un mensaje ANTERIOR del asistente. En un
-        // turno largo OpenCode genera varios, y el ultimo puede ser solo texto mientras
-        // el bash sigue en marcha en el anterior: se vio el "ejecutando…" en la tarjeta
-        // con el "respuesta final" pintado DEBAJO, que es exactamente lo que prohibe.
-        //
-        // Mirar solo `last.parts` daba el falso negativo. Se mira TODO el historial, que
-        // es lo unico barato y fiable sin el vigilante: un "running" en cualquier parte
-        // significa que hay trabajo vivo.
-        if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } }) {
-            return false
-        }
         if (!warnedNoWatcher) {
             warnedNoWatcher = true
             android.util.Log.w(

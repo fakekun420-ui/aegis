@@ -803,6 +803,86 @@ function normalizeEnvelope(code, obj) {
 }
 function json(res, code, obj){ return send(res, code, JSON.stringify(normalizeEnvelope(code, obj)), {"Content-Type":"application/json; charset=utf-8"}); }
 
+// ---- B: recorte del payload de mensajes (2026-09-27) --------------------------
+// MEDIDO, no supuesto. El reparto real de los 40,5 MB de /messages:
+//   .parts[].url                    24.618 KB (61%)  data URI en base64 (type:"file")
+//   .parts[].state.content[].uri   10.720 KB (27%)  data URI en el estado
+//   .parts[].text                    1.439 KB
+//   .parts[].state.content[].text    1.063 KB
+// El 88% son data URI (capturas y adjuntos). Un recorte SOLO de texto largo no hace
+// nada: por eso el primero dio 0 partes recortadas y el mismo tamano.
+const PART_MAX_CHARS = (() => {
+  const n = parseInt(process.env.AEGIS_PART_MAX_CHARS || "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 8000;
+})();
+
+function trimPartText(p, maxChars, stats) {
+  if (!p || typeof p !== "object") return p;
+
+  // (1) data URI suelta: 61% del payload, en `url` (type "file") o `image`/`data`.
+  for (const campo of ["url", "image", "data"]) {
+    const v = p[campo];
+    if (typeof v !== "string" || v.slice(0, 5) !== "data:") continue;
+    stats.binarios++;
+    stats.saved += v.length;
+    delete p[campo];
+    p.hasBinary = true;
+    p.binaryChars = (p.binaryChars || 0) + v.length;
+    const mime = (v.slice(5).split(";")[0] || "").trim();
+    if (mime && !p.mime) p.mime = mime;
+  }
+
+  // (2) data URI dentro de state.content[]: otros 27%.
+  const st = p.state;
+  if (st && Array.isArray(st.content)) {
+    let tocados = 0;
+    for (const c of st.content) {
+      if (!c || typeof c !== "object") continue;
+      if (typeof c.uri === "string" && c.uri.slice(0, 5) === "data:") {
+        stats.binarios++;
+        stats.saved += c.uri.length;
+        const mime = (c.uri.slice(5).split(";")[0] || "").trim();
+        delete c.uri;
+        tocados++;
+        if (mime && !c.mime) c.mime = mime;
+      }
+    }
+    if (tocados > 0) {
+      p.hasBinary = true;
+      p.binaryInState = (p.binaryInState || 0) + tocados;
+    }
+  }
+
+  // (3) texto largo: son los bytes que QUEDAN, no los que pesan (6% del total).
+  if (typeof p.text === "string" && p.text.length > maxChars) {
+    const real = p.text.length;
+    stats.textos++;
+    stats.saved += real - maxChars;
+    p.text = p.text.slice(0, maxChars);
+    p.truncated = true;
+    p.fullChars = (p.fullChars || 0) + real;
+  }
+  if (st && typeof st.output === "string" && st.output.length > maxChars) {
+    const real = st.output.length;
+    stats.textos++;
+    stats.saved += real - maxChars;
+    st.output = st.output.slice(0, maxChars);
+    p.truncated = true;
+    p.fullChars = (p.fullChars || 0) + real;
+  }
+  return p;
+}
+
+function trimListForWire(list, maxChars) {
+  const stats = { textos: 0, binarios: 0, saved: 0 };
+  if (!Array.isArray(list)) return { list, ...stats };
+  for (const m of list) {
+    if (!m || !Array.isArray(m.parts)) continue;
+    for (const p of m.parts) trimPartText(p, maxChars, stats);
+  }
+  return { list, ...stats };
+}
+
 async function proxyWithInjection(req, resRaw, originalBodyBuf) {
   // For opencode message routes (/session/:id/message, /session/:id/prompt etc.), prepend system context block if project has skills.
   // Defensive: sanitize, size-cap, dedup, and never leak debug fields to provider.
@@ -1581,6 +1661,14 @@ async function handleRequest(req, res){
         }
       }
 
+      // La sesion queda OCUPADA desde aqui, y no porque lo diga un evento remoto: el Hub
+      // acaba de reenviar el prompt, o sea que sabe con certeza que el turno empezo.
+      // Antes dependia de que el vigilante viera `session.execution.started` por
+      // /api/event, que llega tarde, se pierde al reconectar y no llega si el Hub se
+      // reinicio a mitad de turno. Esa dependencia es la causa comun de que el divisor
+      // apareciese con un bash corriendo, de que la notificacion disparase antes de
+      // tiempo y de que el circulo de carga se apagase con la sesion ocupada.
+      markBusy(sid);
       log.info(`[hub] routing message for session ${sid} to provider ${adapter.id} (project: ${pId || "none"}, mode: ${agentMode}, streaming: ${isStream})`);
       const msgResult = await adapter.sendMessage(sid, body, {
         signal: abortCtrl.signal,
@@ -2878,8 +2966,11 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         if (!res.writableEnded) abortCtrl.abort();
       });
 
-      const list = await providerManager.getUnifiedMessages(sid, { signal: abortCtrl.signal });
-      const normalizedList = (Array.isArray(list) ? list : []).map((msg, idx) => normalizeMessage(msg, sid, idx));
+const list = await providerManager.getUnifiedMessages(sid, { signal: abortCtrl.signal });
+        const recortado = trimListForWire(Array.isArray(list) ? list : [], PART_MAX_CHARS);
+        if (recortado.binarios || recortado.textos) {
+          log.info(`[msgs] ${sid}: ${recortado.binarios} data URI retirada(s), ${recortado.textos} texto(s) recortado(s), ${Math.round(recortado.saved / 1024)} KB ahorrados`);
+        }      const normalizedList = (Array.isArray(list) ? list : []).map((msg, idx) => normalizeMessage(msg, sid, idx));
 
       return json(res, 200, { ok: true, data: normalizedList });
     } catch (e) {
@@ -3049,6 +3140,58 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     } catch (e) {
       log.warn("[permissions] reply error", { err: e.message });
       return json(res, 500, fail("PERMISSION_REPLY_ERROR", e.message));
+    }
+  }
+
+  // GET /api/sessions/:sid/part?messageId=..&partId=.. — la parte ENTERA, sin recortar.
+  // Es lo que hace que recortar no sea perder: la tarjeta plegada pide esto al
+  // desplegarse y recibe el texto y el binario originales.
+  //
+  // No se sirve desde la cache de A a proposito: la cache guarda la version recortada y
+  // aqui hace falta la larga. Se relee de OpenCode, que son ~4 s en una sesion de 1400
+  // mensajes, y es una accion explicita del usuario, no el poll de fondo.
+  if (pathname.match(/^\/api\/sessions\/([^\/]+)\/part$/) && req.method === "GET") {
+    const m = pathname.match(/^\/api\/sessions\/([^\/]+)\/part$/);
+    const sid = m[1];
+    const messageId = url.searchParams.get("messageId") || "";
+    const partId = url.searchParams.get("partId") || "";
+    if (!isValidId(sid)) return json(res, 400, fail("INVALID_ID", "sessionId invalido"));
+    if (!partId) return json(res, 400, fail("MISSING_PART", "hace falta ?partId="));
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 30000);
+      let lista = [];
+      try {
+        lista = await providerManager.getUnifiedMessages(sid, { signal: ctrl.signal });
+      } finally {
+        clearTimeout(t);
+      }
+      if (!Array.isArray(lista)) lista = [];
+      for (const msg of lista) {
+        if (messageId && msg && msg.info && msg.info.id && msg.info.id !== messageId) continue;
+        for (const p of (msg && msg.parts) || []) {
+          if (!p || String(p.id) !== String(partId)) continue;
+          return json(res, 200, ok({
+            id: p.id,
+            type: p.type,
+            mime: p.mime || null,
+            filename: p.filename || null,
+            text: typeof p.text === "string" ? p.text : null,
+            output: p.state && typeof p.state.output === "string" ? p.state.output : null,
+            // El binario tambien vuelve aqui: es lo que pide la app cuando la parte
+            // venia marcada hasBinary por el recorte.
+            url: typeof p.url === "string" ? p.url : null,
+            image: typeof p.image === "string" ? p.image : null,
+            data: typeof p.data === "string" ? p.data : null,
+            stateContent: p.state && Array.isArray(p.state.content) ? p.state.content : null,
+          }));
+        }
+      }
+      return json(res, 404, fail("PART_NOT_FOUND",
+        `no encuentro la parte ${partId} en ${sid}${messageId ? ` (mensaje ${messageId})` : ""}`));
+    } catch (e) {
+      log.warn("[part] fetch error", { err: e.message });
+      return json(res, 500, fail("PART_FETCH_ERROR", e.message));
     }
   }
 
@@ -3711,6 +3854,12 @@ const pendingIdle = new Map();
 function markBusy(sid) {
   if (!sid) return;
   inflightSessions.set(sid, Date.now());
+  // Un turno nuevo borra la marca de "este turno se cerro" del turno anterior. Sin esto
+  // hay una ventana entre que se envia el prompt y que el vigilante ve el
+  // `session.execution.started`: durante ella deliveredInbox sigue diciendo que el turno
+  // acabo, isTurnOver devuelve true y la app pinta el divisor, dispara la notificacion y
+  // apaga el circulo de carga con un bash todavia corriendo debajo.
+  deliveredInbox.delete(sid);
   lastSeenAt.set(sid, Date.now());
   const t = pendingIdle.get(sid);
   if (t) { clearTimeout(t); pendingIdle.delete(sid); }
