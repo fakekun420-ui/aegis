@@ -127,8 +127,10 @@ function isReadOnlyPoll(method, pathname) {
   if (pathname === "/api/forms" || pathname === "/api/permissions") return true;
   if (pathname === "/api/sessions" || pathname === "/api/sessions/inflight") return true;
   if (pathname === "/api/opencode/sessions/inflight") return true;
-  // /api/sessions/:id/models y /api/opencode/sessions/:id/messages
-  return /^\/api\/(opencode\/)?sessions\/[^/]+\/(models|messages)$/.test(pathname);
+  // /api/sessions/:id/models y /api/opencode/sessions/:id/messages, y tambien
+    // :id/part: descargar el binario recortado es un GET, no una escritura, y no
+    // debe gastar el cubo estricto de 120/min que existe para las escrituras
+  return /^\/api\/(opencode\/)?sessions\/[^/]+\/(models|messages|part)$/.test(pathname);
 }
 const rateHitsPoll = new Map(); // ip -> [timestamps del polling, cubo propio]
 
@@ -3205,15 +3207,16 @@ const list = await providerManager.getUnifiedMessages(sid, { signal: abortCtrl.s
     }
   }
 
-  // GET /api/sessions/:sid/part?messageId=..&partId=.. — la parte ENTERA, sin recortar.
+  // GET /api/sessions/:sid/part?messageId=..&partId=.. (y /api/opencode/sessions/:sid/part,
+  // que es la que llama la app) — la parte ENTERA, sin recortar.
   // Es lo que hace que recortar no sea perder: la tarjeta plegada pide esto al
   // desplegarse y recibe el texto y el binario originales.
   //
   // No se sirve desde la cache de A a proposito: la cache guarda la version recortada y
   // aqui hace falta la larga. Se relee de OpenCode, que son ~4 s en una sesion de 1400
   // mensajes, y es una accion explicita del usuario, no el poll de fondo.
-  if (pathname.match(/^\/api\/sessions\/([^\/]+)\/part$/) && req.method === "GET") {
-    const m = pathname.match(/^\/api\/sessions\/([^\/]+)\/part$/);
+  if (pathname.match(/^\/api\/(?:opencode\/)?sessions\/([^\/]+)\/part$/) && req.method === "GET") {
+    const m = pathname.match(/^\/api\/(?:opencode\/)?sessions\/([^\/]+)\/part$/);
     const sid = m[1];
     const messageId = url.searchParams.get("messageId") || "";
     const partId = url.searchParams.get("partId") || "";

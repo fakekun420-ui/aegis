@@ -61,6 +61,7 @@ import java.util.Locale
 import com.aegis.hub.data.FormField
 import com.aegis.hub.data.PendingForm
 import com.aegis.hub.data.PendingPermission
+import com.aegis.hub.data.PartFull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -541,6 +542,7 @@ fun ChatScreen(
                                         msg = fila.message,
                                         sendingInFlight = sendingInFlight,
                                         onRetry = { vm.retryMessage(fila.message, sessionId) }
+                                        onLoadPart = { partId, done -> vm.loadPartFull(partId, null, done) }
                                     )
                                     is ChatRow.Cierre -> TurnFinishedDivider()
                                 }
@@ -611,7 +613,7 @@ fun ChatScreen(
                     }
                 }
             }
-            // Boton "ir al mas reciente", al estilo del chat que se le打 de ejemplo: solo
+            // Boton "ir al mas reciente", al estilo del chat que se le da de ejemplo: solo
             // aparece cuando NO estas abajo, y tocarlo devuelve el control sin haber tenido
             // que saltarte el historial mientras leias.
             if (!atBottom) {
@@ -762,12 +764,35 @@ private fun decodeBase64Bitmap(b64: String): android.graphics.Bitmap? {
 }
 
 @Composable
-private fun FileRow(name: String, mime: String, tint: androidx.compose.ui.graphics.Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(
-            if (mime.startsWith("image/")) Icons.Filled.Photo else Icons.Filled.FolderOpen,
-            contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)
-        )
+private fun FileRow(
+    name: String,
+    mime: String,
+    tint: androidx.compose.ui.graphics.Color,
+    onClick: (() -> Unit)? = null,
+    cargando: Boolean = false
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = if (onClick != null) {
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(enabled = !cargando) { onClick?.invoke() }
+        } else Modifier
+    ) {
+        if (cargando) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = tint
+            )
+        } else {
+            Icon(
+                if (mime.startsWith("image/")) Icons.Filled.Photo else Icons.Filled.FolderOpen,
+                contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)
+            )
+        }
         Column {
             Text(name, style = MaterialTheme.typography.bodySmall, color = tint, maxLines = 1)
             if (mime.isNotBlank()) Text(mime, style = MaterialTheme.typography.labelSmall, color = tint.copy(alpha = 0.7f), maxLines = 1)
@@ -779,7 +804,12 @@ private fun FileRow(name: String, mime: String, tint: androidx.compose.ui.graphi
 private fun TerminalConsoleTurn(
     msg: Message,
     sendingInFlight: Boolean = false,
-    onRetry: (() -> Unit)? = null
+    onRetry: (() -> Unit)? = null,
+    // Cargar una parte que venia recortada. Se pasa como lambda de comportamiento
+    // (el mismo patron que onRetry) y no el ViewModel entero: la sesion ya la sabe
+    // el ViewModel, y pasar `vm` por el arbol de composables por un parametro es
+    // ruido que se propaga a todas las firmas intermedias.
+    onLoadPart: ((partId: String?, done: (PartFull?) -> Unit) -> Unit)? = null
 ) {
     val isUser = msg.role == "user"
     val raw = msg.text
@@ -864,7 +894,16 @@ private fun TerminalConsoleTurn(
                         if (images.isNotEmpty() || imageFiles.isNotEmpty() || nonImageFiles.isNotEmpty()) {
                             Spacer(Modifier.height(4.dp))
                             images.forEach { img ->
-                                val bitmap = (img.image ?: img.data ?: img.url)?.let { decodeBase64Bitmap(it) }
+                                // Base64 ya bajada para esta parte, si el usuario la pidio. La lista de
+                                // mensajes llega SIN el binario (el Hub retira las data URI para no mandar
+                                // decenas de MB), asi que sin esto la imagen se queda en fila compacta para
+                                // siempre. La clave del remember es el id de la PARTE, no el del mensaje: con
+                                // la del mensaje dos imagenes del mismo turno comparten estado y pulsar una
+                                //tocaria la otra.
+                                var descargada by remember(img.id) { mutableStateOf<String?>(null) }
+                                var pidiendo by remember(img.id) { mutableStateOf(false) }
+                                val bitmap = (descargada ?: img.image ?: img.data ?: img.url)
+                                    ?.let { decodeBase64Bitmap(it) }
                                 if (bitmap != null) {
                                     Image(
                                         bitmap = bitmap.asImageBitmap(),
@@ -875,7 +914,28 @@ private fun TerminalConsoleTurn(
                                         contentScale = ContentScale.FillWidth
                                     )
                                 } else {
-                                    FileRow(name = img.filename ?: "imagen", mime = img.mime ?: "image/*", tint = Color(0xFFD4D4D0))
+                                    val recortada = img.hasBinary == true
+                                    FileRow(
+                                        name = img.filename ?: "imagen",
+                                        mime = img.mime ?: "image/*",
+                                        tint = Color(0xFFD4D4D0),
+                                        cargando = pidiendo,
+                                        // El toque solo existe si la venia recortada: no se descargan imagenes
+                                        // porque el usuario haya abierto un chat largo, solo si lo pide esa fila.
+                                        onClick = if (recortada && !pidiendo && onLoadPart != null) {
+                                            {
+                                                pidiendo = true
+                                                onLoadPart?.invoke(img.id) { parte ->
+                                                    // Siempre se invoca, tambien en error (lo garantiza
+                                                    // loadPartFull): si no, un fallo deja el spinner
+                                                    // girando para siempre. Poner el false ANTES de asignar
+                                                    // el resultado es lo que evita ese bucle.
+                                                    pidiendo = false
+                                                    descargada = parte?.base64()
+                                                }
+                                            }
+                                        } else null
+                                    )
                                 }
                             }
                             imageFiles.forEach { img ->
