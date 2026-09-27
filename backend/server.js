@@ -98,23 +98,73 @@ const RATE_LIMIT_N = (() => {
 })();
 const RATE_LIMIT_ENABLED = process.env.AEGIS_RATE_LIMIT !== "0" && RATE_LIMIT_N > 0;
 const rateHits = new Map(); // ip -> [timestamps dentro de la ventana]
-function rateLimitCheck(ip) {
+// ---- segundo cubo: el POLLING de la app (2026-09-27) ------------------------
+// El techo de 120/min se diseno con la cuenta de "chat-polling ~40/min + UI
+// holgada". Esa cuenta era FALSA: medido, la app hace ~180 req/min y se limitaba a
+// si misma. Reparto real del ciclo, con la app en un turno activo:
+//   startViewRefresh, cada 2s: inflight + forms + permissions + messages  = 4
+//   pollingJob,       cada 1.5s: messages                                = 1
+//   lista de chats,   cada 2s: sessions                                  = 1
+//   selector de modelo, cada 2s: models                                  = 1
+//   => ~3,7 req/s = ~220/min, casi el doble del techo.
+// Medido en hub.log: turno cerrado 05:45:32 y primer 429 a las 05:46:12, 40 s para
+// agotar el presupuesto entero. Efecto: al caer en 429 el poll se traga el error y se
+// queda con el estado viejo, asi que "Trabajando en ello" y el divisor vuelven a
+// mentir, y el envio de una encuesta se come el 429.
+//
+// No se desactiva la proteccion: se le da al polling de solo lectura su propio cubo
+// mas alto. Un bucle runaway se detiene en ese cubo; lo que deja de pasar es la app
+// legitima estrangulandose con su propio presupuesto.
+const RATE_LIMIT_POLL_N = (() => {
+  const n = parseInt(process.env.AEGIS_RATE_LIMIT_POLL_N || "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 600;
+})();
+// Solo GET y solo estas rutas: las que consulta el bucle de refresco de la app. Una
+// escritura (el reply de un formulario o de un permiso) cuenta para el cubo estricto,
+// porque no debe poder esconderse detras del trafico de lectura.
+function isReadOnlyPoll(method, pathname) {
+  if (method !== "GET") return false;
+  if (pathname === "/api/forms" || pathname === "/api/permissions") return true;
+  if (pathname === "/api/sessions" || pathname === "/api/sessions/inflight") return true;
+  if (pathname === "/api/opencode/sessions/inflight") return true;
+  // /api/sessions/:id/models y /api/opencode/sessions/:id/messages
+  return /^\/api\/(opencode\/)?sessions\/[^/]+\/(models|messages)$/.test(pathname);
+}
+const rateHitsPoll = new Map(); // ip -> [timestamps del polling, cubo propio]
+
+// Log obligatorio en los 502: sin esto, un fallo de OpenCode al responder un
+// formulario o un permiso no dejaba NI UNA LINEA en el log, y el diagnostico se hizo
+// a ciegas. Se registra el estado y un trozo del cuerpo, que es donde viene el motivo.
+function log502(que, code, r) {
+  log.warn(`[${que}] OpenCode respondio ${r.status} (${code})`, {
+    status: r.status,
+    body: String(r.text ?? "").slice(0, 300),
+  });
+  return r;
+}
+function rateLimitCheck(ip, bucket) {
   if (!RATE_LIMIT_ENABLED) return { allowed: true };
+  // bucket = "poll" usa su propio contador y su propio techo. NO comparten ventana: si
+  // la compartieran, el poll se comeria el presupuesto del estricto y seguiria
+  // estrangulando al resto, que es justo lo que se quiere evitar.
+  const poll = bucket === "poll";
+  const ceiling = poll ? RATE_LIMIT_POLL_N : RATE_LIMIT_N;
+  const store = poll ? rateHitsPoll : rateHits;
   const now = Date.now();
   const cutoff = now - RATE_WINDOW_MS;
-  let arr = rateHits.get(ip);
-  if (!arr) { arr = []; rateHits.set(ip, arr); }
+  let arr = store.get(ip);
+  if (!arr) { arr = []; store.set(ip, arr); }
   // poda sliding-window de los timestamps fuera de la ventana
   let i = 0;
   while (i < arr.length && arr[i] <= cutoff) i++;
   if (i > 0) arr = arr.slice(i);
-  if (arr.length >= RATE_LIMIT_N) {
-    rateHits.set(ip, arr);
+  if (arr.length >= ceiling) {
+    store.set(ip, arr);
     const retryAfterMs = (arr[0] + RATE_WINDOW_MS) - now;
-    return { allowed: false, retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)) };
+    return { allowed: false, retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)), ceiling };
   }
   arr.push(now);
-  rateHits.set(ip, arr);
+  store.set(ip, arr);
   return { allowed: true };
 }
 
@@ -1130,13 +1180,15 @@ async function handleRequest(req, res){
   const isBootstrapStatePoll = pathname === "/api/bootstrap/state" && req.method === "GET";
   if (isApi && !isPublicHealth && !isBootstrapStatePoll) {
     const ip = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : "unknown";
-    const rl = rateLimitCheck(ip);
+    const pollBucket = isReadOnlyPoll(req.method, pathname);
+    const rl = rateLimitCheck(ip, pollBucket ? "poll" : "strict");
     if (!rl.allowed) {
       res.setHeader("Retry-After", String(rl.retryAfterSec));
-      log.warn(`[ratelimit] 429 ${req.method} ${pathname.slice(0, 120)} desde ${ip} (techo ${RATE_LIMIT_N}/min)`);
+      const techo = rl.ceiling || RATE_LIMIT_N;
+      log.warn(`[ratelimit] 429 ${req.method} ${pathname.slice(0, 120)} desde ${ip} (techo ${techo}/min, cubo ${pollBucket ? "poll" : "estricto"})`);
       return json(res, 429, {
         ok: false,
-        error: { code: "RATE_LIMITED", message: `rate limit excedido: ${RATE_LIMIT_N} peticiones/min por IP — reintenta en ${rl.retryAfterSec}s (header Retry-After)` }
+        error: { code: "RATE_LIMITED", message: `rate limit excedido: ${techo} peticiones/min por IP — reintenta en ${rl.retryAfterSec}s (header Retry-After)` }
       });
     }
   }
@@ -2864,7 +2916,7 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
   if ((pathname === "/api/forms" || pathname === "/api/opencode/forms") && req.method === "GET") {
     try {
       const r = await opencodeAdapter._v2("/api/form", { timeoutMs: 12000 });
-      if (!r.ok) return json(res, 502, fail("FORMS_UNAVAILABLE", `OpenCode respondió ${r.status}`));
+      if (!r.ok) return json(res, 502, log502("forms", "FORMS_UNAVAILABLE", r), fail("FORMS_UNAVAILABLE", `OpenCode respondió ${r.status}`));
       const j = r.json || {};
       const all = Array.isArray(j.data) ? j.data : [];
       const want = url.searchParams.get("sessionId");
@@ -2942,7 +2994,7 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         ? `/api/session/${want}/permission`
         : "/api/permission/request";
       const r = await opencodeAdapter._v2(path, { timeoutMs: 12000 });
-      if (!r.ok) return json(res, 502, fail("PERMISSIONS_UNAVAILABLE", `OpenCode respondió ${r.status}`));
+      if (!r.ok) return json(res, 502, log502("permissions", "PERMISSIONS_UNAVAILABLE", r), fail("PERMISSIONS_UNAVAILABLE", `OpenCode respondió ${r.status}`));
       const j = r.json || {};
       let all = Array.isArray(j.data) ? j.data : [];
       // La variante global viene envuelta en {location, data}; la de sesión, no.

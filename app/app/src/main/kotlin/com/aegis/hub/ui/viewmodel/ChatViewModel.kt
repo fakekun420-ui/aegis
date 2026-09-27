@@ -487,7 +487,17 @@ class ChatViewModel : ViewModel() {
         //  - no hay herramienta y el ultimo mensaje esta cerrado -> lo mas probable es que
         //    el turno haya terminado. Es el caso degradado: el vigilante no pudo saberlo.
         val last = messages.lastOrNull { it.role == "assistant" } ?: return false
-        if (last.parts.orEmpty().any { it.state?.status == "running" }) return false
+        // Una herramienta puede seguir VIVA en un mensaje ANTERIOR del asistente. En un
+        // turno largo OpenCode genera varios, y el ultimo puede ser solo texto mientras
+        // el bash sigue en marcha en el anterior: se vio el "ejecutando…" en la tarjeta
+        // con el "respuesta final" pintado DEBAJO, que es exactamente lo que prohibe.
+        //
+        // Mirar solo `last.parts` daba el falso negativo. Se mira TODO el historial, que
+        // es lo unico barato y fiable sin el vigilante: un "running" en cualquier parte
+        // significa que hay trabajo vivo.
+        if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } }) {
+            return false
+        }
         if (!warnedNoWatcher) {
             warnedNoWatcher = true
             android.util.Log.w(
