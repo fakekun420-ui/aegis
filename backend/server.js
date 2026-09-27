@@ -3014,14 +3014,38 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     // lo que permite al cliente distinguir "turno en marcha" de "registro que se quedo
     // pegado" porque el vigilante perdio el `succeeded` al reconectar.
     //
-    // (Antes esto era un Set con .get(), que no existe: el endpoint lanzaba TypeError y
-    // devolvia 500, el poll del cliente se lo tragaba y se quedaba con el estado viejo.)
+    //
+    // ESTO ESTABA ROTO DE DOS FORMAS, y las dos importan:
+    //
+    // 1) `turnOver: false` hardcodeado. El diseño del ADR-003 (el divisor lo decide
+    //    session.execution.succeeded, nunca un time.completed adivinado) NO ESTABA
+    //    IMPLEMENTADO: el campo nunca valía true, así que la app caía siempre en su
+    //    modo degradado, que devuelve "terminado" en cuanto el último mensaje tiene
+    //    time.completed. Y eso ocurre tras CADA bash. De ahí el divisor que salía
+    //    después de cada bash con exit 0. La función isTurnOver() ya existía y hacía
+    //    justo falta: simplemente no la llamaba nadie.
+    //
+    // 2) `seen.has(sid)`, donde `seen` NO ESTÁ DECLARADO EN NINGÚN SITIO (un solo uso
+    //    en todo el fichero). ReferenceError en cada petición -> 500. El poll de la app
+    //    se lo tragaba y se quedaba con el estado viejo, o sea que tampoco recibía el
+    //    punto 1. El comentario que hay arriba afirma que esto ya estaba arreglado, y no
+    //    lo estaba: se cambío .get() por .has() sobre un Set que no existe, y eso
+    //    cambia el error de TypeError a ReferenceError sin arreglar nada.
+    //
+    // El `seen` que hace falta es un Set LOCAL de ids ya emitidos, para no repetir una
+    // sesion que sigue en inflightSessions y además acaba de aparecer en deliveredInbox
+    // (pasa en cuanto empieza un turno nuevo). No hace falta que persista entre
+    // peticiones: solo deduplica dentro de esta respuesta.
+    const emitted = new Set(live.map(([id]) => id));
     const out = live.map(([id, since]) => ({
-      id, since, turnOver: false, lastSeen: lastSeenAt.get(id) ?? since,
+      id, since, turnOver: isTurnOver(id), lastSeen: lastSeenAt.get(id) ?? since,
     }));
     for (const [sid, since] of deliveredInbox) {
-      if (seen.has(sid)) continue;
-      if (now - since < 15 * 60 * 1000) out.push({ id: sid, since, turnOver: true });
+      if (emitted.has(sid)) continue;
+      if (now - since < 15 * 60 * 1000) {
+        emitted.add(sid);
+        out.push({ id: sid, since, turnOver: true, lastSeen: since });
+      }
     }
     return json(res, 200, ok(out));
   }
