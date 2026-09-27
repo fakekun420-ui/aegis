@@ -230,7 +230,69 @@ function badParam(res, name) {
 // resiliencia: no morir por crash del proxy, pero sí permitir reinicio limpio por keepalive (pkill -f) o por kill -15
 process.on('uncaughtException', e => log.error('[hub] uncaughtException', { err: e?.stack || String(e) }));
 process.on('unhandledRejection', e => log.error('[hub] unhandledRejection', { err: e?.stack || String(e) }));
-process.on('SIGTERM', () => { log.info('[hub] SIGTERM — cierre limpio (keepalive relanza)'); try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
+// Quien envia el SIGTERM, de verdad. El mensaje anterior decia SIEMPRE
+// "keepalive relanza", estea o no fuera keepalive, y eso hizo perder tiempo a dos
+// sesiones distintas persiguiendo al culpable equivocado (la otra sesion lo apunta
+// explicitamente: "Me hizo perder tiempo CREO apuntando al keepalive equivocado dos
+// veces"). Un diagnostico no puede afirmar una causa que no ha comprobado.
+//
+// De donde sale el dato: en Linux, /proc/<pid>/stat[15] es el campo "signal" del
+// proceso. Ojo con los indices: los dos primeros campos del stat son "pid" y "comm", y
+// "comm" va entre parentesis CON ESPACIOS, asi que partiendo por la cadena el campo
+// signal es el numero 12 contando desde 1, NO el 15. Se recorre el fichero a mano en vez
+// de usar split() por lo mismo, y se toma el ultimo parentesis que cierra.
+function senalRecibida(pid) {
+  try {
+    const st = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    const fin = st.lastIndexOf(")");
+    const campos = st.slice(fin + 2).trim().split(/\s+/);
+    // campos[0] = state (campo 3 del stat), asi que signal = campo 15 -> indice 12.
+    return parseInt(campos[12], 10);
+  } catch (_) { return null; }
+}
+
+// El padre es quien casi siempre manda la senal. Se registra porque "me ha matado mi
+// padre keepalive" y "me ha matado un reinicio manual" son diagnosticos distintos.
+function padre(pid) {
+  try {
+    const st = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    const fin = st.lastIndexOf(")");
+    const campos = st.slice(fin + 2).trim().split(/\s+/);
+    return { ppid: parseInt(campos[1], 10), starttime: campos[19] };
+  } catch (_) { return { ppid: null, starttime: null }; }
+}
+
+function quienMato(que) {
+  const mio = process.pid;
+  const p = padre(mio);
+  const senal = senalRecibida(mio);
+  let padreCmd = "desconocido";
+  try {
+    if (p.ppid && p.ppid > 1) padreCmd = fs.readFileSync(`/proc/${p.ppid}/cmdline`, "utf8").replace(/\0/g, " ").trim().slice(0, 120);
+  } catch (_) {}
+  // OJO con el nombre: el campo `signal` de /proc/<pid>/stat es la ultima senal que
+  // DETUVO el proceso (job control), NO la que lo mato. Al recibir un SIGTERM normal
+  // suele valer 0, o un valor viejo sin relacion (aqui salia 8 = SIGFPE, de un
+  // parpadeo de otro momento). Etiquetarlo como "la senal que me mato" seria el mismo
+  // error que el del mensaje hardcodeado que se acaba de quitar: afirmar una causa sin
+  // comprobarla. El diagnostico de quien lo mato va aparte, en ppid + padreCmd, que si
+  // es fiable.
+  const NAMES = { 1: "SIGHUP", 2: "SIGINT", 3: "SIGQUIT", 9: "SIGKILL", 15: "SIGTERM" };
+  const nombre = senal != null ? (NAMES[senal] || `senal ${senal}`) : "desconocida";
+  // Se registra el DATO, no la conclusion. Quien lo lea decide quien fue; el log no
+  // accuse a nadie por su cuenta.
+  log.info(`[hub] ${que} recibido`, {
+    // senalQueDetuvo NO es la que mato, ver el comentario de arriba. Quien lo mato se
+    // deduce de ppid + padreCmd.
+    senalQueDetuvo: nombre,
+    senalQueDetuvoNum: senal,
+    pid: mio,
+    ppid: p.ppid,
+    padreCmd,
+  });
+}
+
+process.on('SIGTERM', () => { quienMato("SIGTERM"); try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
 process.on('SIGINT',  () => { log.info('[hub] SIGINT — cierre');  try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
 process.on('SIGPIPE', () => log.info('[hub] SIGPIPE ignorado'));
 
