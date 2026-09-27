@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.aegis.hub.data.TurnState
 
 class MainViewModel : ViewModel() {
     private val api = ApiClient.service

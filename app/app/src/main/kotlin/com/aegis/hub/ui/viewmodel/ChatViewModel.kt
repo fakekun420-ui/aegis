@@ -28,6 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import com.aegis.hub.data.TurnState
 
 class ChatViewModel : ViewModel() {
     private val api = ApiClient.service
