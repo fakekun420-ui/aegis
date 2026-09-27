@@ -1941,15 +1941,23 @@ export class ProviderManager {
     if (oc) {
       try {
         ocMsgs = await oc.getMessages(sessionId, opts);
-      } catch (_) {}
+      } catch (e) {
+        // Un fallo aqui se traducía en "0 mensajes" sin dejar rastro, que en la app es
+        // un historial vacio sin ninguna explicacion. Se loguea; NO se propaga, porque
+        // el 404 de una sesion de antigravity (id agy_...) es normal y esta funcion
+        // existe justo para no propagar ese ruido. Lo que no puede es desaparecer.
+        log.warn(`[unified] opencode fallo leyendo ${sessionId}: ${e?.message || e}`);
+      }
     }
 
     const agy = this.adapters.get("antigravity");
-    if (agy) {
-      try {
-        agyMsgs = await agy.getMessages(sessionId, opts);
-      } catch (_) {}
-    }
+      if (agy) {
+        try {
+          agyMsgs = await agy.getMessages(sessionId, opts);
+        } catch (e) {
+          log.warn(`[unified] antigravity fallo leyendo ${sessionId}: ${e?.message || e}`);
+        }
+      }
 
     if (ocMsgs.length > 0 && agyMsgs.length > 0) {
       const merged = [...ocMsgs, ...agyMsgs];
