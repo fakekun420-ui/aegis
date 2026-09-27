@@ -800,6 +800,78 @@ private fun FileRow(
     }
 }
 
+
+/**
+ * Una fila de parte adjunta, con el toque que recupera el binario cuando la venia
+ * recortada.
+ *
+ * Esta en un solo lugar a proposito. La version anterior tenia la logica metida dentro
+ * del bucle de `images`, y MEDIDO sobre una sesion real resulto ser codigo muerto: las
+ * partes recortadas son type="file" sin `url` (el recorte se lo borra), asi que caen en
+ * `nonImageFiles` y no en `images`. Con el toque en la rama, no lo tocaba nadie.
+ * Ahora las tres ramas pasan por aqui, asi que el toque va con la parte y no con la
+ * rama: si el reparto cambia manana, sigue funcionando.
+ *
+ * @param alto 0 = sin limite de alto; >0 = tope en dp, como necesitan los adjuntos
+ *   pequenos. Las imagenes grandes se muestran a ancho completo sin tope.
+ */
+@Composable
+private fun PartRow(
+    part: MessagePart,
+    nombre: String,
+    mime: String,
+    tint: androidx.compose.ui.graphics.Color,
+    onLoadPart: ((partId: String?, done: (PartFull?) -> Unit) -> Unit)?,
+    alto: Int = 0
+) {
+    // La clave del remember es el id de la PARTE y no el del mensaje: con la del mensaje
+    // dos imagenes del mismo turno comparten estado y pulsar una moveria la otra.
+    var descargada by remember(part.id) { mutableStateOf<String?>(null) }
+    var pidiendo by remember(part.id) { mutableStateOf(false) }
+
+    val bitmap = (descargada ?: part.image ?: part.data ?: part.url)
+        ?.let { decodeBase64Bitmap(it) }
+
+    if (bitmap != null) {
+        val forma = if (alto > 0) {
+            Modifier.fillMaxWidth(0.7f).heightIn(max = alto.dp).clip(RoundedCornerShape(8.dp))
+        } else {
+            Modifier.fillMaxWidth(0.7f).clip(RoundedCornerShape(8.dp))
+        }
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = nombre,
+            modifier = forma,
+            contentScale = ContentScale.FillWidth
+        )
+        return
+    }
+
+    // El toque solo si la parte venia recortada Y el binario es una imagen. En
+    // nonImageFiles tambien caen adjuntos que no lo son, y bajarse 5 MB de un PDF para
+    // no poder pintar nada es peor que no tener toque: se descarga solo lo que se ve.
+    val esImagen = mime.isBlank() || mime.startsWith("image/")
+    val pulsable = part.hasBinary == true && esImagen && !pidiendo && onLoadPart != null
+    FileRow(
+        name = nombre,
+        mime = mime,
+        tint = tint,
+        cargando = pidiendo,
+        onClick = if (pulsable) {
+            {
+                pidiendo = true
+                onLoadPart?.invoke(part.id) { parte ->
+                    // Siempre se invoca, tambien en error (lo garantiza loadPartFull): si
+                    // no, un fallo deja el spinner girando para siempre. Por eso el false
+                    // va ANTES de asignar el resultado.
+                    pidiendo = false
+                    descargada = parte?.base64()
+                }
+            }
+        } else null
+    )
+}
+
 @Composable
 private fun TerminalConsoleTurn(
     msg: Message,
@@ -894,68 +966,32 @@ private fun TerminalConsoleTurn(
                         if (images.isNotEmpty() || imageFiles.isNotEmpty() || nonImageFiles.isNotEmpty()) {
                             Spacer(Modifier.height(4.dp))
                             images.forEach { img ->
-                                // Base64 ya bajada para esta parte, si el usuario la pidio. La lista de
-                                // mensajes llega SIN el binario (el Hub retira las data URI para no mandar
-                                // decenas de MB), asi que sin esto la imagen se queda en fila compacta para
-                                // siempre. La clave del remember es el id de la PARTE, no el del mensaje: con
-                                // la del mensaje dos imagenes del mismo turno comparten estado y pulsar una
-                                //tocaria la otra.
-                                var descargada by remember(img.id) { mutableStateOf<String?>(null) }
-                                var pidiendo by remember(img.id) { mutableStateOf(false) }
-                                val bitmap = (descargada ?: img.image ?: img.data ?: img.url)
-                                    ?.let { decodeBase64Bitmap(it) }
-                                if (bitmap != null) {
-                                    Image(
-                                        bitmap = bitmap.asImageBitmap(),
-                                        contentDescription = img.filename ?: "imagen adjunta",
-                                        modifier = Modifier
-                                            .fillMaxWidth(0.7f)
-                                            .clip(RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.FillWidth
-                                    )
-                                } else {
-                                    val recortada = img.hasBinary == true
-                                    FileRow(
-                                        name = img.filename ?: "imagen",
-                                        mime = img.mime ?: "image/*",
-                                        tint = Color(0xFFD4D4D0),
-                                        cargando = pidiendo,
-                                        // El toque solo existe si la venia recortada: no se descargan imagenes
-                                        // porque el usuario haya abierto un chat largo, solo si lo pide esa fila.
-                                        onClick = if (recortada && !pidiendo && onLoadPart != null) {
-                                            {
-                                                pidiendo = true
-                                                onLoadPart?.invoke(img.id) { parte ->
-                                                    // Siempre se invoca, tambien en error (lo garantiza
-                                                    // loadPartFull): si no, un fallo deja el spinner
-                                                    // girando para siempre. Poner el false ANTES de asignar
-                                                    // el resultado es lo que evita ese bucle.
-                                                    pidiendo = false
-                                                    descargada = parte?.base64()
-                                                }
-                                            }
-                                        } else null
-                                    )
-                                }
+                                PartRow(
+                                    part = img,
+                                    nombre = img.filename ?: "imagen",
+                                    mime = img.mime ?: "image/*",
+                                    tint = Color(0xFFD4D4D0),
+                                    onLoadPart = onLoadPart
+                                )
                             }
                             imageFiles.forEach { img ->
-                                val bitmap = img.url?.let { decodeBase64Bitmap(it) }
-                                if (bitmap != null) {
-                                    Image(
-                                        bitmap = bitmap.asImageBitmap(),
-                                        contentDescription = img.filename ?: "imagen adjunta",
-                                        modifier = Modifier
-                                            .fillMaxWidth(0.7f)
-                                            .heightIn(max = 260.dp)
-                                            .clip(RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.FillWidth
-                                    )
-                                } else {
-                                    FileRow(name = img.filename ?: "imagen", mime = img.mime ?: "image/*", tint = Color(0xFFD4D4D0))
-                                }
+                                PartRow(
+                                    part = img,
+                                    nombre = img.filename ?: "imagen",
+                                    mime = img.mime ?: "image/*",
+                                    tint = Color(0xFFD4D4D0),
+                                    onLoadPart = onLoadPart,
+                                    alto = 260
+                                )
                             }
                             nonImageFiles.forEach { f ->
-                                FileRow(name = f.filename ?: "archivo", mime = f.mime ?: "", tint = Color(0xFFD4D4D0))
+                                PartRow(
+                                    part = f,
+                                    nombre = f.filename ?: "archivo",
+                                    mime = f.mime ?: "",
+                                    tint = Color(0xFFD4D4D0),
+                                    onLoadPart = onLoadPart
+                                )
                             }
                         }
 
