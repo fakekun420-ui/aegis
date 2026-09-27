@@ -875,6 +875,22 @@ function json(res, code, obj){ return send(res, code, JSON.stringify(normalizeEn
 //   .parts[].state.content[].text    1.063 KB
 // El 88% son data URI (capturas y adjuntos). Un recorte SOLO de texto largo no hace
 // nada: por eso el primero dio 0 partes recortadas y el mismo tamano.
+  // ---- A-3: cache de /messages, invalidada por evento (2026-09-27) -------------
+  // MEDIDO: 13,9 s / 13,1 s / 14,0 s por llamada, y la app pregunta cada 2 s. El
+  // recorte de payload (que bajo 40.530 -> 5.575 KB) no toco el tiempo, porque el coste
+  // no es serializar: es releer 1400 mensajes de OpenCode en cada poll.
+  //
+  // Se cachea el STRING FINAL (ya recortado y normalizado), no la lista. El recorte
+  // muta en sitio, asi que cachear la entrada y recortar al servir daria un recorte
+  // sobre otro y la segunda vez no habria nada que retirar.
+  const MSGS_CACHE_TTL_MS = 4000;
+  const MSGS_CACHE_MAX = 3;
+  const msgsCache = new Map();      // sid -> { body, at }
+  const msgsInflight = new Map();   // sid -> Promise<{recortado}>, para no duplicar trabajo
+  function invalidarCacheMensajes(sid) {
+    if (sid) msgsCache.delete(sid);
+  }
+
 const PART_MAX_CHARS = (() => {
   const n = parseInt(process.env.AEGIS_PART_MAX_CHARS || "", 10);
   return Number.isFinite(n) && n > 0 ? n : 8000;
@@ -3025,18 +3041,55 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         }
       }
 
-      const abortCtrl = new AbortController();
-      req.on("close", () => {
-        if (!res.writableEnded) abortCtrl.abort();
-      });
+        // A-3: servir de cache si sigue viva. El TTL (4 s) es la red de seguridad para
+        // un evento perdido; el mecanismo real es la invalidacion, mas abajo.
+        const hit = msgsCache.get(sid);
+        if (hit && Date.now() - hit.at < MSGS_CACHE_TTL_MS) {
+          return send(res, 200, hit.body, { "Content-Type": "application/json; charset=utf-8" });
+        }
 
-const list = await providerManager.getUnifiedMessages(sid, { signal: abortCtrl.signal });
-        const recortado = trimListForWire(Array.isArray(list) ? list : [], PART_MAX_CHARS);
+        // Single-flight: si ya hay una lectura en curso para esta sesion, se espera a
+        // esa en vez de lanzar otra. Sin esto, con poll de 2 s y lectura de 14 s, se
+        // acumulan varias lecturas identicas en paralelo haciendo el mismo trabajo.
+        //
+        // La lectura ya NO lleva el abortCtrl de ESTA peticion: al compartirla entre
+        // varias, que un solo cliente se vaya no puede cancelar la lectura de los
+        // demas. Se cancela por tiempo, que es lo que evita dejar un fetch colgado.
+        let flying = msgsInflight.get(sid);
+        if (!flying) {
+          flying = (async () => {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 30000);
+            let lista;
+            try {
+              lista = await providerManager.getUnifiedMessages(sid, { signal: ctrl.signal });
+            } finally {
+              clearTimeout(t);
+            }
+            const recortado = trimListForWire(Array.isArray(lista) ? lista : [], PART_MAX_CHARS);
+            const normalizedList = (Array.isArray(lista) ? lista : [])
+              .map((msg, idx) => normalizeMessage(msg, sid, idx));
+            const body = JSON.stringify(normalizeEnvelope(200, { ok: true, data: normalizedList }));
+            // Eviccion por antiguedad: 6 MB por sesion, y esto corre en un movil.
+            while (msgsCache.size >= MSGS_CACHE_MAX) {
+              const masVieja = msgsCache.keys().next().value;
+              if (masVieja === undefined || masVieja === sid) break;
+              msgsCache.delete(masVieja);
+            }
+            msgsCache.set(sid, { body, at: Date.now() });
+            return { recortado };
+          })();
+          msgsInflight.set(sid, flying);
+          const limpiar = () => { if (msgsInflight.get(sid) === flying) msgsInflight.delete(sid); };
+          flying.then(limpiar, limpiar);
+        }
+        const { recortado } = await flying;
         if (recortado.binarios || recortado.textos) {
           log.info(`[msgs] ${sid}: ${recortado.binarios} data URI retirada(s), ${recortado.textos} texto(s) recortado(s), ${Math.round(recortado.saved / 1024)} KB ahorrados`);
-        }      const normalizedList = (Array.isArray(list) ? list : []).map((msg, idx) => normalizeMessage(msg, sid, idx));
-
-      return json(res, 200, { ok: true, data: normalizedList });
+        }
+        const servido = msgsCache.get(sid);
+        if (servido) return send(res, 200, servido.body, { "Content-Type": "application/json; charset=utf-8" });
+        return json(res, 200, { ok: true, data: [] });
     } catch (e) {
       log.error(`[hub] getMessages error for ${sid}`, { err: e.message });
       return json(res, 502, { ok: false, error: `get messages failed: ${String(e.message || e).slice(0,400)}` });
@@ -3936,6 +3989,10 @@ function markBusy(sid) {
 function touchSession(sid) {
   if (!sid) return;
   lastSeenAt.set(sid, Date.now());
+  // A-3: touchSession significa "algo toco esta sesion", que es justo la condicion
+  // para que sus mensajes puedan haber cambiado. Se invalida aqui y no solo en el
+  // vigilante SSE porque touchSession tambien se llama desde el resto del Hub.
+  invalidarCacheMensajes(sid);
 }
 function markIdle(sid) {
   if (!sid) return;
@@ -3981,6 +4038,8 @@ function startExecutionWatcher(adapter) {
           try { ev = JSON.parse(line.slice(5).trim()); } catch (_) { continue; }
           const sid = ev && ev.data && ev.data.sessionID;
           if (!sid) continue;
+          // A-3: cualquier evento de esta sesion puede haber cambiado sus mensajes.
+          invalidarCacheMensajes(sid);
           if (ev.type === "session.execution.started") markBusy(sid);
           else if (typeof ev.type === "string" && ev.type.startsWith("session.execution.")) markIdle(sid);
           // `permission.asked` NO empieza por "session.", asi que antes caia por las tres
