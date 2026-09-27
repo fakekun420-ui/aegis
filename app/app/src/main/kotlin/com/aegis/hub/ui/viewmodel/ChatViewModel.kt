@@ -28,7 +28,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import com.aegis.hub.data.TurnState
 
 class ChatViewModel : ViewModel() {
     private val api = ApiClient.service
@@ -361,8 +360,8 @@ class ChatViewModel : ViewModel() {
                         // Si el vigilante perdio el succeeded al reconectar, la sesion se
                         // queda "ocupada" hasta 15 min y el indicador de "trabajando" se
                         // quedaba pegado aunque el turno hubiera acabado.
-                        _turnBusy.value = mine.isReliableBusy()
-                        _turnOver.value = mine.isReliableOver()
+                        _turnBusy.value = TurnState.isBusy(mine)
+                        _turnOver.value = TurnState.isOver(mine)
                     }
                 } catch (_: Exception) {
                 }

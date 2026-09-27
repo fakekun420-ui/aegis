@@ -531,13 +531,20 @@ object TurnState {
     /** Silencio máximo tolerado antes de dudar del registro. */
     const val MAX_SILENCE_MS = 45_000L
 
-    /** Registro que dice "ocupado" y además se ve reciente: creíble. */
-    fun InflightSession?.isReliableBusy(now: Long = System.currentTimeMillis()): Boolean {
-        if (this == null || turnOver) return false
-        val last = lastSeen ?: since ?: return false
+    /**
+     * ¿Este registro dice "ocupado" y además es de fiar?
+     *
+     * Se pasa la sesión como parámetro en vez de declarar una extensión de miembro
+     * (`fun InflightSession?.isReliableBusy()`): las extensiones de miembro sobre un
+     * objeto importado daba "Unresolved reference" en ambos ViewModel, y una llamada
+     * explícita no deja lugar a ambigüedad. Sigue siendo el ÚNICO sitio donde se decide.
+     */
+    fun isBusy(s: InflightSession?, now: Long = System.currentTimeMillis()): Boolean {
+        if (s == null || s.turnOver) return false
+        val last = s.lastSeen ?: s.since ?: return false
         return now - last < MAX_SILENCE_MS
     }
 
-    /** Registro que dice "el turno terminó": creíble, y se queda creíble un rato. */
-    fun InflightSession?.isReliableOver(): Boolean = this != null && turnOver
+    /** ¿Este registro dice que el turno terminó? */
+    fun isOver(s: InflightSession?): Boolean = s != null && s.turnOver
 }
