@@ -356,8 +356,12 @@ class ChatViewModel : ViewModel() {
                         // El vigilante manda UNA fila por sesion: busy si no ha
                         // terminado, turnOver si acaba de terminar.
                         val mine = ex.data.firstOrNull { it.id == sid }
-                        _turnBusy.value = mine != null && !mine.turnOver
-                        _turnOver.value = mine != null && mine.turnOver
+                        // Un registro "ocupado" solo vale si se ve actividad reciente.
+                        // Si el vigilante perdio el succeeded al reconectar, la sesion se
+                        // queda "ocupada" hasta 15 min y el indicador de "trabajando" se
+                        // quedaba pegado aunque el turno hubiera acabado.
+                        _turnBusy.value = mine.isReliableBusy()
+                        _turnOver.value = mine.isReliableOver()
                     }
                 } catch (_: Exception) {
                 }
@@ -441,15 +445,25 @@ class ChatViewModel : ViewModel() {
         if (_pendingForms.value.isNotEmpty()) return false
         if (_turnBusy.value) return false
         if (_turnOver.value) return true
+        // VIGILANTE CIEGO: no hay registro, o es tan viejo que ya no se cree. Aqui no se
+        // puede devolver "no ha terminado" a ciegas: eso dejaba el indicador de
+        // "trabajando" pegado indefinidamente. Se usa la senal de los mensajes, que en
+        // este caso si es fiable:
+        //  - hay una herramienta running -> hay trabajo vivo, NO ha terminado. Cubre el
+        //    bash sleep 60, donde no llega ningun evento y un registro por antiguedad
+        //    mentiria.
+        //  - no hay herramienta y el ultimo mensaje esta cerrado -> lo mas probable es que
+        //    el turno haya terminado. Es el caso degradado: el vigilante no pudo saberlo.
+        val last = messages.lastOrNull { it.role == "assistant" } ?: return false
+        if (last.parts.orEmpty().any { it.state?.status == "running" }) return false
         if (!warnedNoWatcher) {
             warnedNoWatcher = true
             android.util.Log.w(
                 "AegisChat",
-                "Sin datos del vigilante para ${_currentSessionId.value}: se asume turno EN CURSO. " +
-                "Si el vigilante se perdio, el divisor y la notificacion no saldran hasta el siguiente turno."
+                "Vigilante sin datos para ${_currentSessionId.value}: se decide con los mensajes."
             )
         }
-        return false
+        return last.info?.time?.containsKey("completed") == true
     }
 
     private var warnedNoWatcher = false

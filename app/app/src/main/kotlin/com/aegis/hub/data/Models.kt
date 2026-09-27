@@ -506,5 +506,38 @@ data class FormReplyBody(val answer: Map<String, String>)
 data class InflightSession(
     val id: String? = null,
     val since: Long? = null,
-    val turnOver: Boolean = false
+    val turnOver: Boolean = false,
+    /**
+     * Ultimo instante en el que se vio CUALQUIER evento de la sesion.
+     *
+     * Es lo que distingue un turno EN MARCHA de un registro que se quedo pegado. El
+     * vigilante se desconecta y reconecta, y en el hueco pierde eventos: si se pierde el
+     * `succeeded`, la sesion se queda "ocupada" hasta 15 minutos. Con `lastSeen` se
+     * detecta: un turno vivo genera eventos a destajo (session.step.*, session.text.*,
+     * session.usage.updated...), asi que el silencio prolongado significa registro
+     * obsoleto, no turno lento.
+     */
+    val lastSeen: Long? = null
 )
+
+/**
+ * Decide si el estado de turno del vigilante es de fiar, en UN solo sitio.
+ *
+ * Lo consumen DOS vistas (el indicador del chat y el círculo de la lista de chats) y
+ * ambas sufrian el mismo bug por caminos separados, asi que la decisión va aquí y no
+ * duplicada.
+ */
+object TurnState {
+    /** Silencio máximo tolerado antes de dudar del registro. */
+    const val MAX_SILENCE_MS = 45_000L
+
+    /** Registro que dice "ocupado" y además se ve reciente: creíble. */
+    fun InflightSession?.isReliableBusy(now: Long = System.currentTimeMillis()): Boolean {
+        if (this == null || turnOver) return false
+        val last = lastSeen ?: since ?: return false
+        return now - last < MAX_SILENCE_MS
+    }
+
+    /** Registro que dice "el turno terminó": creíble, y se queda creíble un rato. */
+    fun InflightSession?.isReliableOver(): Boolean = this != null && turnOver
+}

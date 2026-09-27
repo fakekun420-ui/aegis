@@ -81,7 +81,7 @@ class MainViewModel : ViewModel() {
                     if (r.ok && r.data != null) {
                         // Solo las que NO han terminado: un turnOver es historia, no una
                         // sesion ocupada, y dejarlas marcadas seria mentiroso.
-                        _inflightIds.value = r.data.filter { !it.turnOver }.mapNotNull { it.id }.toSet()
+                        _inflightIds.value = r.data.filter { it.isReliableBusy() }.mapNotNull { it.id }.toSet()
                     }
                 } catch (_: Exception) {
                     // Fallo puntual de red: el siguiente ciclo reintenta solo.
@@ -96,7 +96,7 @@ class MainViewModel : ViewModel() {
             try {
                 val r = api.getInflight()
                 if (r.ok && r.data != null) {
-                    _inflightIds.value = r.data.filter { !it.turnOver }.mapNotNull { it.id }.toSet()
+                    _inflightIds.value = r.data.filter { it.isReliableBusy() }.mapNotNull { it.id }.toSet()
                 }
             } catch (_: Exception) {}
         }

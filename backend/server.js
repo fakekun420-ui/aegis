@@ -2885,7 +2885,12 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     const live = [...inflightSessions.entries()].filter(([, t]) => now - t < 15 * 60 * 1000);
     if (onlyIds) return json(res, 200, ok(live.map(([id]) => id)));
     const seen = new Set(live.map(([id]) => id));
-    const out = live.map(([id, since]) => ({ id, since, turnOver: false }));
+    // `seen` = ultimo instante en el que se vio CUALQUIER evento de la sesion. Es lo que
+    // permite al cliente distinguir "turno en marcha" de "registro que se quedo pegado"
+    // porque el vigilante perdio el `succeeded` al reconectar.
+    const out = live.map(([id, since]) => ({
+      id, since, turnOver: false, lastSeen: (seen.get(id) || since),
+    }));
     for (const [sid, since] of deliveredInbox) {
       if (seen.has(sid)) continue;
       if (now - since < 15 * 60 * 1000) out.push({ id: sid, since, turnOver: true });
@@ -3504,6 +3509,14 @@ function markBusy(sid) {
   const t = pendingIdle.get(sid);
   if (t) { clearTimeout(t); pendingIdle.delete(sid); }
 }
+
+// Cualquier evento de la sesion prueba que sigue VIVA, aunque no sea de ejecucion
+// (los hay a destajo: session.step.*, session.text.delta, session.usage.updated...).
+// Se usa para distinguir un turno en marcha de un registro que se quedo pegado.
+function touchSession(sid) {
+  if (!sid) return;
+  inflightSessions.set(sid, Date.now());
+}
 function markIdle(sid) {
   if (!sid) return;
   if (pendingIdle.has(sid)) return;
@@ -3549,6 +3562,7 @@ function startExecutionWatcher(adapter) {
           if (!sid) continue;
           if (ev.type === "session.execution.started") markBusy(sid);
           else if (typeof ev.type === "string" && ev.type.startsWith("session.execution.")) markIdle(sid);
+          else if (typeof ev.type === "string" && ev.type.startsWith("session.")) touchSession(sid);
         }
       });
       const again = () => { if (!stopped) setTimeout(connect, 3000); };
