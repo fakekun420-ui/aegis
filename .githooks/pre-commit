@@ -1,0 +1,176 @@
+#!/bin/sh
+# graphify-staleness — hook pre-commit
+#
+# BLOQUEA el commit si el mapa de graphify-out/ esta desactualizado respecto al
+# codigo. Vive fuera de OpenCode: lo ejecuta `git commit`, asi que se comporta
+# igual desde un agente, desde agy, desde una edicion manual o desde Termux.
+#
+# -- Como decide (y por que no usa mtime) -------------------------------------
+# El veredicto sale de md5(contenido) == manifest.ast_hash. md5 es exactamente
+# lo que graphify estampa al indexar (detect._md5_file = hashlib.md5 en trozos de
+# 64 KB). El mtime NO participa: /sdcard es FUSE y su mtime miente (ponytail §2,
+# medido el 2026-09-27), y tanto el test de §4.3.1 como el propio
+# detect_incremental(kind="ast") de graphify tienen un fast path que se fía del
+# mtime — con el mtime congelado y el contenido nuevo, los dos dan "al dia" y el
+# grafo queda viejo en silencio. Aqui no hay mtime, luego no hay falso negativo.
+#
+# El inventario de ficheros NO es una lista de extensiones escrita a mano: es
+# detect() de graphify, el mismo que usa `graphify update`. Una lista propia
+# mentia: daba por bueno un mapa viejo en package-lock.json (que detect()
+# excluye) y por malo un .sh nuevo que graphify si indexa.
+#
+# Coste medido: 0,3 s en Aegis, 2,5 s en Quant-Math-Public (detect() cuece el
+# recuento de palabras de los documentos).
+#
+# -- Que NO garantiza ---------------------------------------------------------
+# · graphify update refresca el ast_hash de los .md pero NO reingiere su texto en
+#   el grafo (los documentos solo se reindexan con `/graphify --update`). Tras un
+#   commit que solo toca docs, este hook pasa y el grafo puede no contener el
+#   texto nuevo. Ningun test de manifest detecta eso.
+# · `graphify update` sobre /sdcard puede fallar al final, al renombrar el
+#   atómico: "Rebuild failed: ... .graph.tmp.json -> graph.json". Es el FUSE de
+#   §2, es transitorio y se arregla reintentando. Si ves ese error, reintenta.
+# · `--no-verify` salta el hook. Inherente a git: reduce la via por defecto, no la
+#   elimina.
+# · Un agente con shell puede `git config --unset core.hooksPath`. No es una
+#   defensa contra un actor hostil; es un guardian por defecto.
+#
+# -- Puesta en marcha tras un clone nuevo --------------------------------------
+#   sh .githooks/install.sh
+#
+# Salida de emergencia:  GRAPHIFY_SKIP_HOOK=1 git commit ...   (avisa por stderr)
+# Verbose:                GRAPHIFY_HOOK_VERBOSE=1 git commit ...
+
+set -u
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+[ -n "$ROOT" ] || exit 0
+cd "$ROOT" || exit 0
+
+OUT="graphify-out"
+[ -f "$OUT/manifest.json" ] && [ -f "$OUT/graph.json" ] || exit 0
+
+if [ "${GRAPHIFY_SKIP_HOOK:-0}" = "1" ]; then
+    echo "graphify: commit NO verificado (GRAPHIFY_SKIP_HOOK=1)." >&2
+    exit 0
+fi
+
+# --- localizar un interprete python con graphify importable -------------------
+GPY=""
+if command -v graphify >/dev/null 2>&1; then
+    GPY=$(head -1 "$(command -v graphify)" 2>/dev/null | sed 's/^#!\(.*\)$/\1/')
+    [ -x "$GPY" ] || GPY=""
+fi
+if [ -z "$GPY" ] && [ -f "$OUT/.graphify_python" ]; then
+    GPY=$(cat "$OUT/.graphify_python" 2>/dev/null)
+    [ -x "$GPY" ] || GPY=""
+fi
+for cand in python3 python; do
+    [ -n "$GPY" ] && break
+    command -v "$cand" >/dev/null 2>&1 || continue
+    "$cand" -c 'import graphify.detect' >/dev/null 2>&1 && GPY=$(command -v "$cand")
+done
+if [ -z "$GPY" ]; then
+    {
+        echo "================================================================"
+        echo " graphify: COMMIT BLOQUEADO - no puedo comprobar el mapa"
+        echo "================================================================"
+        echo "  No encuentro un python con graphify importable. Busqué:"
+        echo "    - el intérprete del propio 'graphify' (shebang)"
+        echo "    - $OUT/.graphify_python"
+        echo "    - python3 / python del PATH"
+        echo ""
+        echo "  Sin el, el hook no puede comparar md5 y no va a dejar pasar"
+        echo "  un commit a ciegas. Arregla el toolchain (pkg install python"
+        echo "  en Termux, o graphify en el chroot) o salta este commit:"
+        echo "    GRAPHIFY_SKIP_HOOK=1 git commit -m '...'"
+        echo "================================================================"
+    } >&2
+    exit 1
+fi
+
+exec "$GPY" - "$ROOT" <<'PY'
+import os, sys, time
+from pathlib import Path
+
+root = Path(sys.argv[1])
+t0 = time.time()
+try:
+    from graphify.detect import detect, load_manifest, _md5_file
+except Exception as exc:                                    # toolchain roto
+    sys.stderr.write("graphify: no puedo importar graphify.detect: %s\n" % exc)
+    sys.exit(1)
+
+try:
+    full = detect(root)
+except Exception as exc:
+    sys.stderr.write("graphify: detect() falló: %s\n" % exc)
+    sys.exit(1)
+
+man = load_manifest(str(root / "graphify-out" / "manifest.json"), root=root)
+inventory = set()
+for _ft, flist in full["files"].items():
+    inventory.update(flist)
+
+changed, blank, unread, deleted = [], [], [], []
+for key, val in man.items():
+    p = Path(key)
+    if not p.exists():
+        deleted.append(key)
+        continue
+    stored = (val or {}).get("ast_hash") or ""
+    if not stored:
+        blank.append(key)          # el AST fallo en su dia: hay que reindexar
+        continue
+    h = _md5_file(p)
+    if not h:
+        unread.append(key)
+        continue
+    if h != stored:
+        changed.append(key)
+
+new = sorted(inventory - set(man))
+total = len(changed) + len(deleted) + len(blank) + len(unread) + len(new)
+
+def rel(paths, n=8):
+    out = []
+    for p in paths[:n]:
+        try: p = str(Path(p).relative_to(root))
+        except Exception: pass
+        out.append("   %s" % p)
+    return out
+
+if total == 0:
+    if os.environ.get("GRAPHIFY_HOOK_VERBOSE") == "1":
+        sys.stderr.write("graphify: mapa al día (%d ficheros, md5 verificado en %.2fs)\n"
+                         % (len(man), time.time() - t0))
+    sys.exit(0)
+
+w = sys.stderr.write
+w("\n")
+w("================================================================\n")
+w(" graphify: COMMIT BLOQUEADO - el mapa esta desactualizado\n")
+w("================================================================\n")
+w("  indexados y verificados por md5 : %d\n" % len(man))
+w("  modificados                      : %d\n" % len(changed))
+w("  borrados                         : %d\n" % len(deleted))
+w("  nuevos (los ve graphify, sin indice) : %d\n" % len(new))
+w("  sin ast_hash (AST fallo antes)   : %d\n" % len(blank))
+w("  ilegibles                        : %d\n" % len(unread))
+w("  (%.2fs)\n" % (time.time() - t0))
+if changed: w("  modificados, por ejemplo:\n" + "\n".join(rel(changed)) + "\n")
+if deleted: w("  borrados:\n" + "\n".join(rel(deleted)) + "\n")
+if new:     w("  nuevos:\n" + "\n".join(rel(new)) + "\n")
+if blank:   w("  sin ast_hash:\n" + "\n".join(rel(blank)) + "\n")
+if unread:  w("  ilegibles:\n" + "\n".join(rel(unread)) + "\n")
+w("\n")
+w(" arreglo:\n")
+w("   graphify update %s%s\n" % (root, " --force" if deleted else ""))
+w(" y repite el commit. El mapa es un indice: si queda viejo, el agente\n")
+w(" que se oriente por el arranca de codigo que ya no existe.\n")
+w("\n")
+w(" este commit en concreto no sale por el:\n")
+w("   GRAPHIFY_SKIP_HOOK=1 git commit -m '...'\n")
+w("================================================================\n")
+sys.exit(1)
+PY
