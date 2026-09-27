@@ -720,10 +720,29 @@ function normalizeEnvelope(code, obj) {
   // error en string (fail(), handlers legacy, routers) -> error:{code,message}
   if (obj.error != null && typeof obj.error !== "object" && (code >= 400 || obj.ok === false)) {
     const clone = { ...obj };
-    const errCode = typeof obj.code === "string" ? obj.code : errorCodeForStatus(code);
+    // Hay dos convenciones de llamada a fail() conviviendo y NO se pueden arreglar
+    // cambiando la firma, porque ambas existen de verdad:
+    //   - 11 llamadas del tipo fail("INVALID_ID", "sessionId o formId inválido")
+    //   -  6 llamadas del tipo fail("not found")
+    // ...y la firma es fail(error, code), o sea MENSAJE primero. Las 11 primeras sacan
+    // el mensaje por `code` y el código por `error`, y acababan la respuesta con
+    // {code:"sessionId o formId inválido", message:"INVALID_ID"}: al revés.
+    // Se nota en la app, que muestra resp.error.message y recibía "INVALID_ID" en vez
+    // del motivo, y en cualquier cliente que lea el contrato.
+    // Se detecta el cruce por FORMA (un token tipo CODIGO contra una frase con
+    // espacios), no por una lista de códigos, para que también cubra los nuevos.
+    let errText = String(obj.error);
+    let errCode = typeof obj.code === "string" ? obj.code : errorCodeForStatus(code);
+    const looksLikeCode = (v) => typeof v === "string" && /^[A-Z][A-Z0-9_]*$/.test(v.trim());
+    const looksLikeProse = (v) => typeof v === "string" && /\s/.test(v.trim());
+    if (looksLikeCode(errText) && looksLikeProse(errCode)) {
+      const swapped = errCode;
+      errCode = errText;
+      errText = swapped;
+    }
     delete clone.code;
     clone.ok = false;
-    clone.error = { code: errCode, message: String(obj.error).slice(0, 800) };
+    clone.error = { code: errCode, message: errText.slice(0, 800) };
     return clone;
   }
   // 4xx/5xx sin error explícito -> error genérico con el motivo HTTP (nunca HTML ni cuerpo liso)
