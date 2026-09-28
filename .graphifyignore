@@ -1,0 +1,15 @@
+# Ruido de tooling, no codigo de la app.
+# Razon: §4.3.1 marca STALE=yes con cada retoque de estos ficheros, y son cambios que
+# no afectan al grafo de codigo. Los nodos de tooling no aportan nada al mapa.
+.opencode/
+node_modules/
+graphify-out/
+
+# Artefactos de build y logs (Aegis: assembleDebug, hub.log, etc.)
+app/build/
+app/app/build/
+.gradle/
+*.apk
+*.aab
+*.log
+*.log.wedged-*
