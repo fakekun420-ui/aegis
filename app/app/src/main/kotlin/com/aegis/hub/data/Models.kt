@@ -182,6 +182,7 @@ data class ToolState(
             has("command") || has("CommandLine") || has("cmd") -> "bash"
             has("oldString") || has("newString") -> "edit"
             has("path") && has("content") -> "write"
+            has("path") && (has("pattern") || has("glob")) -> "search"
             has("path") || has("AbsolutePath") || has("TargetFile") -> "read"
             has("query") || has("url") || has("Url") -> "web"
             has("id") -> "skill"

@@ -432,6 +432,14 @@ class ChatViewModel : ViewModel() {
                 delay(2000)
                 if (_currentSessionId.value != sessionId) break
                 // Durante un envío hay otro poll corriendo; no competimos con él.
+                // OJO: estos dos `continue` se saltan el cierre de ciclo, asi que un
+                // ciclo descartado NO cuenta como fallido NI resetea la racha. Es
+                // deliberado: no se esta midiendo nada, y pedir una sonda extra solo
+                // para esto costaria peticiones en el turno que mas las necesita. El
+                // efecto honesto es una ventana: con texto en vivo, el refresco hace
+                // como mucho 6 ciclos de espera (~12 s) y despues uno completo, asi
+                // que hubReachable puede tardar hasta ~14 s en corregirse. No queda
+                // pegado: en cuanto hay un ciclo completo, si responde, se resetea.
                 if (pollingJob?.isActive == true) continue
                 // El stream manda mientras hay texto en vivo, pero con un tope: si el
                 // stream se queda a medias y _streamingText no vuelve a vaciarse, este

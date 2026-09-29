@@ -1107,7 +1107,11 @@ private fun TerminalConsoleTurn(
                                 SubagentCard(state = st)
                             } else {
                                 ToolExecutionCard(
-                                    tool = st?.toolName ?: part.tool ?: "herramienta",
+                                    // El nombre REAL gana si viaja (lo preserva el
+                                    // normalizador, providers.js:87); la inferencia es
+                                    // solo el respaldo para la ruta nativa v2, que no lo
+                                    // manda. Al reves se perderia el nombre bueno.
+                                    tool = part.tool ?: st?.toolName ?: "herramienta",
                                     command = st?.command ?: "",
                                     output = st?.outputText,
                                     status = st?.status ?: "completed",

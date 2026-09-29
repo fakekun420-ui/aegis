@@ -156,7 +156,13 @@ fun SubagentCard(
                         color = Color(0xFFC9D1D9),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
-                        maxLines = if (expanded) Int.MAX_VALUE else 6,
+                        // Acotado a 2000 lineas a proposito. Un subagente devuelve
+                        // informes largos, y maxLines=Int.MAX_VALUE obliga a Compose
+                        // a medir el texto ENTERO en cada layout: en un chat con varias
+                        // delegaciones eso es jank en el scroll del LazyColumn. El
+                        // texto completo esta en la sesion del subagente, enlazada
+                        // abajo; aqui se enseña lo util.
+                        maxLines = if (expanded) 2000 else 6,
                         modifier = Modifier
                             .heightIn(max = if (expanded) 520.dp else 200.dp)
                             .then(if (expanded) Modifier.verticalScroll(bodyScroll) else Modifier)
