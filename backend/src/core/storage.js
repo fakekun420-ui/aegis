@@ -98,7 +98,7 @@ export function atomicWriteFileSync(filePath, data) {
 // loadProjectsStore — ÚNICA definición (unificación backlog F0-F2)
 // ==========================================
 // Antes: server.js (con seeds de sessionTitles, la canónica) y providers.js (A-4,
-// sin seeds, para AntigravityAdapter.deleteSession). Se conserva la versión
+// sin seeds, para el borrado de sesion). Se conserva la version
 // CANÓNICA de server.js (es un superconjunto: hace lo mismo + seed de sessionTitles
 // + catch con log) y ambos consumidores importan de aquí. Misma firma () => store.
 // Declarado como arrow-const (no `function` declarativo) para que el grep de

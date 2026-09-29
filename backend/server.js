@@ -10,8 +10,6 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   OpencodeAdapter,
-  AntigravityAdapter,
-  ClaudeCodeAdapter,
   ProviderManager,
   fileMutex,
   atomicReadFileSync,
@@ -432,8 +430,8 @@ function validateProjectPayload(body, isCreate) {
   if (body.linkedProjects !== undefined && !Array.isArray(body.linkedProjects)) return "linkedProjects must be array";
   if (body.directory !== undefined && body.directory !== null && typeof body.directory !== "string") return "directory must be string";
   if (body.folder !== undefined && body.folder !== null && typeof body.folder !== "string") return "folder must be string";
-  if (body.provider !== undefined && !["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim())) {
-    return "invalid provider — must be 'opencode' or 'antigravity'";
+  if (body.provider !== undefined && String(body.provider).toLowerCase().trim() !== "opencode") {
+    return "invalid provider — must be 'opencode'";
   }
   return null;
 }
@@ -640,18 +638,10 @@ const opencodeAdapter = new OpencodeAdapter({
   logPath: path.join(__dirname, "opencode.log"),
   getSystemContextBlock: (pid) => buildSystemContextBlock(pid)
 });
-const antigravityAdapter = new AntigravityAdapter({
-  binPath: fs.existsSync("/root/.local/bin/agy") ? "/root/.local/bin/agy" : "agy",
-  brainDir: "/root/.gemini/antigravity-cli/brain",
-  cwd: PROJECTS_ROOT,
-  getSystemContextBlock: (pid) => buildSystemContextBlock(pid)
-});
 providerManager.register(opencodeAdapter);
-providerManager.register(antigravityAdapter);
-// A-7 (A-4 backlog #1): registro del adapter claudecode junto a los demás (id "claudecode").
-// Bajo riesgo: listSessions()/getMessages() devuelven [], NUNCA es el provider por defecto
-// (defaultProvider = antigravity) y la app no consume GET /api/providers.
-providerManager.register(new ClaudeCodeAdapter());
+// AntigravityAdapter (938 lineas) y ClaudeCodeAdapter (un stub con metodos vacios)
+// se han retirado: OpenCode es el unico motor. El plugin opencode-antigravity sigue
+// dando los modelos Antigravity DENTRO de OpenCode, que es donde deben estar.
 
 // F3: handler de /api/setup/* — recibe la maquinaria REAL del hub (adapter de
 // sesiones/mensajes de OpenCode + la misma sonda /global/health del health) para
@@ -1276,14 +1266,12 @@ async function buildHealthData(opts = {}) {
       if (job.lastRun && (!jobsLastRun || job.lastRun > jobsLastRun)) jobsLastRun = job.lastRun;
     }
   } catch (_) {}
-  // adapters: opencode sano vía probe HTTP; antigravity = binario agy presente; resto = registrado
+  // adapters: opencode sano via probe HTTP
   const adapters = {};
   try {
     const oc = opts.ocHealth || await probeOpencodeHealth();
     for (const p of providerManager.listProviders()) {
       if (p.id === "opencode") adapters[p.id] = oc && oc.healthy ? "healthy" : "down";
-      else if (p.id === "antigravity") adapters[p.id] = binAvailable(antigravityAdapter.binPath) ? "ok" : "missing";
-      else adapters[p.id] = "registered";
     }
   } catch (_) {}
   return {
@@ -1476,6 +1464,13 @@ async function handleRequest(req, res){
       // execWatcher y sin senal de fin de turno. New -> "opencode"; los `agy_` que ya
       // existen se siguen detectando en el envio y no se tocan.
       if (!provId) provId = "opencode";
+      // Un proveedor desconocido se rechaza, no se ignora en silencio: antes de quitar
+      // Antigravity, mandar provider:"antigravity" devolvia 200 con un id opencode,
+      // y un cliente que creyera estar en otro motor no tendria forma de enterarse.
+      if (!providerManager.adapters.has(String(provId).toLowerCase())) {
+        return json(res, 400, { ok: false, error: { code: "PROVIDER_UNKNOWN",
+          message: `unknown provider: ${String(provId).slice(0, 40)} (disponible: opencode)` } });
+      }
 
       const adapter = providerManager.resolveProvider(null, provId, store);
       log.info(`[hub] creating session via ${adapter.id} (title: ${body.title || "untitled"}, project: ${projectId || "none"})`);
@@ -1527,11 +1522,6 @@ async function handleRequest(req, res){
     const sid = sanitizeProjectId(decodeURIComponent(deleteSessionIntercept[1]));
     // F4: primera línea de validación (regex del contrato) ANTES de tocar store/fs
     if (!isValidId(sid)) return invalidId(res, "session", sid);
-    // Anti path-traversal: id debe resolver dentro de basePath (brainDir) — este sid llega a
-    // fs.rmSync(recursive) en AntigravityAdapter.deleteSession (providers.js) vía path.join(brainDir, sid)
-    if (!resolvesInside(antigravityAdapter.brainDir, sid)) {
-      return json(res, 400, { ok: false, error: `invalid session id (path traversal): ${sid}`, code: "BAD_REQUEST" });
-    }
     try {
       // 1. Remove atomically from all projects and purge from sessionTitles in projects.json
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
@@ -1553,40 +1543,15 @@ async function handleRequest(req, res){
         if (changed) saveProjectsStore(store);
       });
 
-      // 2. Provider cleanup — detects agy_ prefix, in-memory sessionMap, brain directory, or projects.json record
-      let isAgy = sid.startsWith("agy_") ||
-                  antigravityAdapter.sessionMap.has(sid) ||
-                  fs.existsSync(path.join(antigravityAdapter.brainDir, sid));
-      if (!isAgy) {
-        const checkStore = loadProjectsStore();
-        for (const p of checkStore.projects) {
-          const f = (p.sessions || []).find((s) => s.sessionId === sid || s.agyConversationId === sid);
-          if (f && (f.provider === "antigravity" || f.agyConversationId)) {
-            isAgy = true;
-            break;
-          }
+      // 2) Sesion de OpenCode: el unico caso que queda.
+      try {
+        if (typeof opencodeAdapter.deleteSession === "function") {
+          await opencodeAdapter.deleteSession(sid);
         }
+      } catch (e) {
+        log.warn(`[hub] opencodeAdapter.deleteSession warning: ${e.message}`);
       }
-
-      if (isAgy) {
-        // Antigravity session: purge local brain directory, never delegate to OpenCode
-        try {
-          await antigravityAdapter.deleteSession(sid);
-        } catch (e) {
-          log.warn(`[hub] antigravityAdapter.deleteSession warning: ${e.message}`);
-        }
-        return json(res, 200, { ok: true, data: { removed: sid, storagePurged: true }, removed: sid });
-      } else {
-        // OpenCode session
-        try {
-          if (typeof opencodeAdapter.deleteSession === "function") {
-            await opencodeAdapter.deleteSession(sid);
-          }
-        } catch (e) {
-          log.warn(`[hub] opencodeAdapter.deleteSession warning: ${e.message}`);
-        }
-        return json(res, 200, { ok: true, data: { removed: sid, storagePurged: true }, removed: sid });
-      }
+      return json(res, 200, { ok: true, data: { removed: sid, storagePurged: true }, removed: sid });
     } catch (e) {
       log.error(`[hub] DELETE session error for ${sid}`, { err: e.message });
       return json(res, 500, fail(`delete session failed: ${e.message}`));
@@ -1621,16 +1586,10 @@ async function handleRequest(req, res){
                 (body.projectId && String(body.projectId).trim()) ||
                 null;
       let provId = headerProvider || body.provider || null;
-      if (!provId) {
-        if (sid.startsWith("agy_") || antigravityAdapter.sessionMap.has(sid) || fs.existsSync(path.join(antigravityAdapter.brainDir, sid))) {
-          provId = "antigravity";
-        } else {
-          provId = "opencode";
-        }
-      }
-      // F6: la convención del id de sesión (ses_/agy_) prevalece sobre cualquier
+      if (!provId) provId = "opencode";
+      // F6: la convención del id de sesión (ses_) prevalece sobre cualquier
       // header X-Provider — el vínculo de proveedor de nacimiento es inamovible.
-      const sidConv = sid.startsWith("agy_") ? "antigravity" : (sid.startsWith("ses_") ? "opencode" : null);
+      const sidConv = sid.startsWith("ses_") ? "opencode" : null;
       if (sidConv) provId = sidConv;
 
       // Immediate atomic persistence of session association and provider
@@ -1658,7 +1617,7 @@ async function handleRequest(req, res){
               title: existingTitle,
               createdAt: nowIso(),
               lastUsed: nowIso(),
-              provider: provId || parentProject.provider || "antigravity"
+              provider: provId || parentProject.provider || "opencode"
             });
             parentProject.sessions = parentProject.sessions || [];
             parentProject.sessions.push(sessionEntry);
@@ -1668,9 +1627,8 @@ async function handleRequest(req, res){
         if (sessionEntry) {
           // F6: vínculo de proveedor INAMOVIBLE. La convención del id repara
           // registros corrompidos; sin convención, sólo se llena el hueco
-          // (set-once). El header nunca pisa un vínculo ya existente — antes,
-          // cambiar el pill a Antigravity re-bindeaba la sesión y "desaparecía".
-          const sidConv2 = sid.startsWith("agy_") ? "antigravity" : (sid.startsWith("ses_") ? "opencode" : null);
+          // (set-once). El header nunca pisa un vínculo ya existente.
+          const sidConv2 = sid.startsWith("ses_") ? "opencode" : null;
           if (sidConv2) sessionEntry.provider = sidConv2;
           else if (!sessionEntry.provider && provId) sessionEntry.provider = provId;
           sessionEntry.lastUsed = nowIso();
@@ -1687,7 +1645,7 @@ async function handleRequest(req, res){
           const store = loadProjectsStore();
           store.sessionTitles = store.sessionTitles || {};
           const curTitle = store.sessionTitles[sid] || resolveExistingSessionTitle(store, sid);
-          if (!curTitle || curTitle.startsWith("companion:") || curTitle.startsWith("session:") || curTitle.startsWith("agy_") || curTitle.startsWith("ses_") || curTitle === "Nuevo chat" || curTitle === "Antigravity session" || /^[0-9a-fA-F-]{8,}$/.test(curTitle)) {
+          if (!curTitle || curTitle.startsWith("companion:") || curTitle.startsWith("session:") || curTitle.startsWith("ses_") || curTitle === "Nuevo chat" || /^[0-9a-fA-F-]{8,}$/.test(curTitle)) {
             const cleanPrompt = promptText.replace(/[\r\n]+/g, " ").trim();
             const autoTitle = cleanPrompt.length > 30 ? cleanPrompt.slice(0, 30).trim() + "…" : cleanPrompt;
             store.sessionTitles[sid] = autoTitle;
@@ -1727,17 +1685,6 @@ async function handleRequest(req, res){
           abortCtrl.abort();
         }
       });
-
-      // Pass agyConversationId to AntigravityAdapter if tracked
-      if (adapter.id === "antigravity") {
-        for (const p of currentStore.projects) {
-          const found = (p.sessions || []).find((s) => s.sessionId === sid);
-          if (found && found.agyConversationId) {
-            adapter.sessionMap.set(sid, found.agyConversationId);
-            break;
-          }
-        }
-      }
 
       if (isStream) {
         res.writeHead(200, withCors(res, {
@@ -1793,23 +1740,6 @@ async function handleRequest(req, res){
           }
         } : null
       });
-
-      // If Antigravity returned a conversationId, persist it immediately
-      if (adapter.id === "antigravity" && adapter.sessionMap.has(sid)) {
-        const agyConvId = adapter.sessionMap.get(sid);
-        await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
-          const s = loadProjectsStore();
-          for (const p of s.projects) {
-            const found = (p.sessions || []).find((se) => se.sessionId === sid);
-            if (found) {
-              found.agyConversationId = agyConvId;
-              found.lastUsed = nowIso();
-              saveProjectsStore(s);
-              break;
-            }
-          }
-        });
-      }
 
       const normalized = normalizeMessage(msgResult, sid);
 
@@ -2914,10 +2844,6 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
   if (deleteSessionMatch && req.method === "DELETE") {
     const sid = sanitizeProjectId(decodeURIComponent(deleteSessionMatch[1]));
     if (!isValidId(sid)) return invalidId(res, "session", sid); // F4: primera línea (regex del contrato)
-    // Anti path-traversal: mismo criterio que GET/POST — path.resolve(basePath, id) debe quedar dentro de basePath
-    if (!resolvesInside(antigravityAdapter.brainDir, sid)) {
-      return json(res, 400, { ok: false, error: `invalid session id (path traversal): ${sid}`, code: "BAD_REQUEST" });
-    }
     try {
       // Remove from any project in projects.json and clean sessionTitles
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
@@ -3052,7 +2978,7 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
 
           if (sessionEntry) {
             // F6: convención del id manda; sin convención, set-once.
-            const convMsg = sid.startsWith("agy_") ? "antigravity" : (sid.startsWith("ses_") ? "opencode" : null);
+            const convMsg = sid.startsWith("ses_") ? "opencode" : null;
             const boundMsg = convMsg || sessionEntry.provider || headerProvider || null;
             if (boundMsg) sessionEntry.provider = boundMsg;
             sessionEntry.lastUsed = nowIso();
@@ -3060,15 +2986,6 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
 
           saveProjectsStore(s);
         });
-      }
-
-      // Sync agyConversationId if stored in projects.json
-      const store = loadProjectsStore();
-      for (const p of store.projects) {
-        const found = (p.sessions || []).find(s => s.sessionId === sid);
-        if (found && found.agyConversationId) {
-          antigravityAdapter.sessionMap.set(sid, found.agyConversationId);
-        }
       }
 
         // ---- ?tail=N: la cola, en una sola pagina -------------------------------
@@ -3181,16 +3098,10 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
 
   // GET /api/opencode/models (and GET /api/models) — list available models for the model selector
   if((pathname === "/api/opencode/models" || pathname === "/api/models") && req.method === "GET") {
-    const prov = url.searchParams.get("provider");
-    if (prov === "antigravity" || !prov) {
-      const models = await antigravityAdapter.listModels();
-      return json(res, 200, ok(models));
-    }
-    if (prov === "all") {
-      const oc = await opencodeAdapter.listModels();
-      const agy = await antigravityAdapter.listModels();
-      return json(res, 200, ok({ opencode: oc, antigravity: agy }));
-    }
+    // Antes, sin parametro `provider`, esta ruta devolvia la lista de
+    // AntigravityAdapter (los modelos del CLI agy) en vez de la de OpenCode. La app
+    // la llama sin parametro, asi que el selector de modelos ofrecia el motor
+    // equivocado. Ahora solo hay un motor y una lista.
     const models = await opencodeAdapter.listModels();
     return json(res, 200, ok(models));
   }
@@ -4002,8 +3913,7 @@ function sanitizeSessionProviders() {
     let fixed = 0;
     for (const p of store.projects || []) {
       for (const s of p.sessions || []) {
-        const conv = typeof s.sessionId === "string" && s.sessionId.startsWith("agy_") ? "antigravity"
-          : typeof s.sessionId === "string" && s.sessionId.startsWith("ses_") ? "opencode" : null;
+        const conv = typeof s.sessionId === "string" && s.sessionId.startsWith("ses_") ? "opencode" : null;
         if (conv && s.provider && s.provider !== conv) { s.provider = conv; fixed++; }
       }
     }
