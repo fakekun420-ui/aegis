@@ -374,10 +374,11 @@ fun ChatScreen(
         },
         bottomBar = {
             Column(modifier = Modifier.navigationBarsPadding().imePadding()) {
-                // El chip NUNCA cae al id crudo: si el modelo elegido no está en la lista
-                // se muestra como no disponible en vez de imprimir "gemini-3.8-flash-high"
-                // como si fuera un nombre de modelo. Antes ese fallback hacía que el chip
-                // pareciera correcto mientras ningún radio podía marcarse.
+                // El chip NUNCA cae al id crudo: si el modelo elegido no esta en la
+                // lista se muestra como no disponible en vez de imprimir un id como si
+                // fuera un nombre de modelo. Ese fallback hacia que el chip pareciera
+                // correcto mientras ningun radio podia marcarse — que es exactamente
+                // lo que pasaba con el id caducado que se usaba por defecto.
                 val modelDisplayName = models.find { it.id == selectedModel }?.name
                     ?: when {
                         selectedModel.isNullOrBlank() && !modelsLoading -> "Elige un modelo"

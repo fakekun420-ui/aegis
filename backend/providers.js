@@ -381,6 +381,36 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     }));
   }
 
+  /**
+   * Activa un modelo en una sesion. UNICO sitio que sabe hacerlo: lo usan el envio de
+   * mensajes y la creacion de sesion. Estar en dos sitios es exactamente como los dos
+   * acaban discrepando.
+   *
+   * OpenCode NO acepta modelo en el POST de creacion (solo {title}), asi que una
+   * sesion nueva se modela llamando a este mismo metodo con el id recien creado.
+   */
+  async _switchSessionModel(sessionId, model, opts = {}, { fallbackToFirst = false } = {}) {
+    if (!model || !sessionId) return null;
+    let ref = await this._resolveModelRef(model);
+    if (!ref && fallbackToFirst && this._modelRefs && this._modelRefs.size) {
+      ref = this._modelRefs.values().next().value;
+    }
+    if (!ref) {
+      log.warn("[opencode] modelo no resoluble, se deja el de la sesion", { model: String(model).slice(0, 120) });
+      return null;
+    }
+    const key = `${ref.providerID}/${ref.id}`;
+    if (this._lastModel.get(sessionId) === key) return key;
+    const activar = (m) => this._v2(`/api/session/${encodeURIComponent(sessionId)}/model`, {
+      method: "POST", body: { model: { id: m.id, providerID: m.providerID } }, timeoutMs: 8000, signal: opts.signal
+    });
+    let r = await activar(ref);
+    if (!r.ok && ref.alt && ref.alt.id && ref.alt.id !== ref.id) r = await activar(ref.alt);
+    if (!r.ok) throw new Error(`OpenCode no pudo activar el modelo ${key}: ${r.status}${r.text ? ` ${String(r.text).slice(0, 160)}` : ""}`);
+    this._lastModel.set(sessionId, key);
+    return key;
+  }
+
   async createSession(opts = {}) {
     // F6: POST /api/session (session.create) — acepta {title} y responde {data:Session.Info}.
     const title = opts.title || `session:${Date.now().toString(36)}`;
@@ -388,6 +418,17 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     const data = r.json && (r.json.data || r.json);
     if (!r.ok || !data || !data.id) {
       throw new Error(`Failed to create opencode session: ${r.status} ${r.text ? String(r.text).slice(0, 200) : ""}`.trim());
+    }
+    // El modelo inicial se fija DESPUES de crearla, porque el POST de creacion de
+    // OpenCode solo acepta {title}. Es "mejor esfuerzo" a proposito: si el modelo no
+    // se puede activar, la sesion sigue existiendo y el primer turno la resolvera. Que
+    // la creacion fallara por un modelo seria peor que dejar que OpenCode elija.
+    if (opts.model) {
+      try {
+        await this._switchSessionModel(data.id, opts.model, opts);
+      } catch (e) {
+        log.warn("[opencode] no se pudo fijar el modelo inicial de la sesion", { model: String(opts.model).slice(0, 120), err: e.message });
+      }
     }
     return {
       id: data.id,
@@ -591,27 +632,11 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     // en el indice se caia a "antigravity-gemini-3-flash". Ahora, si no hay modelo, lo
     // elige el Hub/OpenCode; los ids antigravity-* siguen siendo modelos validos de
     // OpenCode (los aporta el plugin) y el usuario puede elegir el que quiera.
-    let effectiveModel = payload.model || null;
+    const effectiveModel = payload.model || null;
     if (effectiveModel) {
-      let ref = await this._resolveModelRef(effectiveModel);
-      if (!ref && !payload.model) {
-        ref = this._modelRefs && this._modelRefs.values().next().value;
-      }
-      if (ref) {
-        const key = `${ref.providerID}/${ref.id}`;
-        if (this._lastModel.get(sessionId) !== key) {
-          let r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}/model`, {
-            method: "POST", body: { model: { id: ref.id, providerID: ref.providerID } }, timeoutMs: 8000, signal: opts.signal
-          });
-          if (!r.ok && ref.alt && ref.alt.id && ref.alt.id !== ref.id) {
-            r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}/model`, {
-              method: "POST", body: { model: { id: ref.alt.id, providerID: ref.providerID } }, timeoutMs: 8000, signal: opts.signal
-            });
-          }
-          if (!r.ok) throw new Error(`OpenCode no pudo activar el modelo ${key}: ${r.status}${r.text ? ` ${String(r.text).slice(0, 160)}` : ""}`);
-          this._lastModel.set(sessionId, key);
-        }
-      }
+      // `fallbackToFirst` solo cuando el cliente NO pidio modelo: si lo pidio y no se
+      // resuelve, se avisa del id raro en vez de colarse en otro a espaldas del usuario.
+      await this._switchSessionModel(sessionId, effectiveModel, opts, { fallbackToFirst: !payload.model });
     }
 
     // 4) Agente PLAN/BUILD — POST /session/:id/agent (mejor esfuerzo)

@@ -18,7 +18,13 @@ echo "[hub] iniciando opencode serve --service (puerto gestionado :$OC_PORT) ...
 # `--service`, NUNCA `--port/--hostname`: sin registro el CLI no ve el servidor y da
 # "Timed out waiting for the background service"; ademas genera un password aleatorio
 # cada boot y contesta 401 en /api/info. ponytail-global.md §4.5.
-nohup opencode serve --service > "$HUB_DIR/opencode.log" 2>&1 &
+# `>>` y NUNCA `>`: con truncado, cada reinicio BORRA el log anterior. Con `serve` eso
+# importa de verdad — el Hub scrapea de aqui la contraseña de Basic auth que `serve`
+# genera en cada arranque (F6); si el fichero se vacia entre el arranque y el scrape,
+# el Hub se queda sin contraseña y todo lo que proxya da 401. Con el Hub, `>` ademas
+# destruye la evidencia del cuelgue anterior: por eso el diagnostico del wedge hubo que
+# rescatarse a mano como hub.log.wedged-022351.
+nohup opencode serve --service >> "$HUB_DIR/opencode.log" 2>&1 &
 sleep 3
 if ! curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$OC_PORT/" | grep -qE "200|401"; then
   echo "[hub] WARN opencode no responde aún, continuo de todos modos"
@@ -28,7 +34,15 @@ else
 fi
 
 echo "[hub] iniciando hub :$HUB_PORT -> opencode :$OC_PORT ..."
-nohup node "$HUB_DIR/server.js" --port "$HUB_PORT" --opencode-port "$OC_PORT" > "$HUB_DIR/hub.log" 2>&1 &
+# `>>`, por lo mismo que opencode.log arriba, y con un motivo mas: stdout del Hub esta
+# en /sdcard, que es FUSE. MEDIDO 2026-09-29: al tocarse/rotarse este fichero, el
+# descriptor quedo roto y `console.log` empezo a lanzar EPIPE. Como el logger loguea
+# cada error, eso era un bucle infinito (EPIPE -> uncaughtException -> log -> EPIPE):
+# 760 lineas por segundo con el Hub al 100% de CPU, escribiendo en FUSE. Un proceso
+# bloqueado en FUSE se queda en estado D y no se puede matar con una señal.
+# El bucle ya no puede formarse (ver src/core/logger.js: stdout se abandona al primer
+# fallo y el log real sigue en el sink de fichero). Esto evita ademas la causa.
+nohup node "$HUB_DIR/server.js" --port "$HUB_PORT" --opencode-port "$OC_PORT" >> "$HUB_DIR/hub.log" 2>&1 &
 sleep 2
 cat "$HUB_DIR/hub.log" | tail -n 40 || true
 echo ""

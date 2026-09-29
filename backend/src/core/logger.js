@@ -44,6 +44,30 @@ const MAX_BACKUPS = 3; // aegis.log.1 .. aegis.log.3
 // Estado del sink a nivel de MÓDULO: todos los createLogger() comparten UN fd.
 const sink = { fd: null, bytes: 0, disabled: false };
 
+// ---- stdout NO puede romper el logger (MEDIDO 2026-09-29) --------------------
+// keepalive.sh abre la stdout del hub con `>` hacia hub.log. Si ese destino
+// desaparece (rotacion, borrado, un reinicio de keepalive) el descriptor queda
+// roto y `console.log` LANZA EPIPE. Y aqui estaba el bucle:
+//     EPIPE -> uncaughtException -> el handler LOGUEA -> console.log -> EPIPE -> ...
+// sin fin. Medido: 760 lineas de EPIPE en UN segundo, todas identicas, y el Hub
+// con la CPU al 100%. Encima cada linea es una escritura en /sdcard, que es FUSE:
+// un proceso bloqueado ahi queda en estado D y no se puede matar con una señal.
+// Eso no es una teoria del cuelgue del movil: es el mecanismo.
+//
+// El contrato del sink de fichero (arriba) dice "JAMÁS lanza". Este lo cumple
+// stdout tambien: el error se traga en el stream —no en cada write— y tras el
+// PRIMER fallo se deja de intentar, que es lo que corta el bucle de verdad. El
+// log REAL sigue yendo al sink de fichero, que es el que se lee para diagnosticar.
+let stdoutVivo = true;
+try {
+  if (process.stdout && typeof process.stdout.on === "function") {
+    process.stdout.on("error", () => { stdoutVivo = false; });
+  }
+  if (process.stderr && typeof process.stderr.on === "function") {
+    process.stderr.on("error", () => { /* idem: escribir nunca puede romper */ });
+  }
+} catch (_) { stdoutVivo = false; }
+
 /** Abre (o reabre) el sink. Lanza sólo hacia el caller envuelto en try/catch. */
 function sinkOpen() {
   fs.mkdirSync(LOG_DIR, { recursive: true });
@@ -109,7 +133,12 @@ export class Logger {
     const entry = `[${new Date().toISOString()}] [${level}] [${this.moduleName}] ${msg} ${JSON.stringify(ctx)}`;
     this.logs.push(entry);
     if (this.logs.length > 1000) this.logs.shift();
-    console.log(entry);   // stdout del hub (keepalive.sh -> hub.log) — sin cambios
+    // stdout con red de seguridad: `console.log` a un stream roto lanza EPIPE, y un
+    // logger que lanza es un bucle (ver el bloque de arriba). Tras el primer fallo se
+    // abandona stdout; el sink de fichero sigue recibiendo TODO.
+    if (stdoutVivo) {
+      try { console.log(entry); } catch (_) { stdoutVivo = false; }
+    }
     sinkWrite(`${entry}\n`); // sink propio backend/logs/aegis.log (F4) — mismo entry
   }
 }

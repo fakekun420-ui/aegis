@@ -51,7 +51,12 @@ class ChatViewModel : ViewModel() {
     private val _modelsLoading = MutableStateFlow(false)
     val modelsLoading: StateFlow<Boolean> = _modelsLoading
 
-    private val _selectedModel = MutableStateFlow<String?>("gemini-3.8-flash-high")
+    // SIN id fijo. Antes arrancaba en "gemini-3.8-flash-high", que no existe en el
+    // catalogo de OpenCode, asi que la ventana de chat lo ensegnaba y lo mandaba en
+    // cada turno. Empieza en null y lo rellena [loadModels] con el primer free REAL
+    // de la lista; si la lista no ha llegado todavia, se envia sin modelo y decide
+    // OpenCode.
+    private val _selectedModel = MutableStateFlow<String?>(null)
     val selectedModel: StateFlow<String?> = _selectedModel
 
     // El modelo ya NO se guarda en un mapa del ViewModel: ese mapa muria con el
@@ -260,8 +265,8 @@ class ChatViewModel : ViewModel() {
             if (!last.isNullOrBlank() && _selectedModel.value.isNullOrBlank()) {
                 _selectedModel.value = last
             }
-            // Ya no se fuerza un modelo: con OpenCode como unico motor, el modelo se
-            // elige en su lista y "gemini-3.8-flash-high" no existe ahi.
+            // Aqui ya no se fuerza ningun modelo. Lo pone `loadModels` con el primer
+            // free de la lista de OpenCode, que es la unica fuente de verdad.
         }
     }
 
@@ -346,8 +351,11 @@ class ChatViewModel : ViewModel() {
                     // cuando no hay nada elegido; si hay eleccion, se respeta aunque la
                     // lista no la traiga (puede ser un modelo filtrado o de otro motor).
                     if (_selectedModel.value.isNullOrBlank()) {
-                        val defaultHigh = resp.data.find { it.id == "gemini-3.8-flash-high" }
-                        _selectedModel.value = defaultHigh?.id ?: resp.data.first().id
+                        // El primero FREE de la lista. Antes se buscaba un id concreto
+                        // ("gemini-3.8-flash-high") y, si no estaba, caia en el
+                        // primero de la lista sin mirar si era gratis: o sea, un
+                        // default de pago disfrazado de neutro.
+                        _selectedModel.value = resp.data.modeloPorDefecto
                     }
                 } else {
                     // F6: sin lista fiable NO se conserva la del proveedor anterior
@@ -828,10 +836,11 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         // los chats nuevos pueden cambiar libremente de motor.
         _sessionProviderBound.value = sessionId.isNotBlank()
         currentSessionForModel = sessionId
-        // El default solo se aplica si el proveedor es ANTIGRAVITY: "gemini-3.8-flash-high"
-        // no existe en la lista de OpenCode (470 modelos, el primero es longcat-2.5-
-        // preview-free), así que ponerlo en una sesión `ses_*` dejaba el compositor sin
-        // ningún radio marcado y hacía que la lista lo sustituyera por el primero.
+        // Al cambiar de sesion, el modelo se vuelve a resolver desde cero: lo elige
+        // `loadModels` con el primer free real de la lista. El comentario que estaba
+        // aqui decia que el default "solo se aplica si el proveedor es ANTIGRAVITY",
+        // y eso era FALSO: no habia ninguna condicion, y Antigravity hace dias que no
+        // existe. Se deja el reset explicito, que si hace falta.
         if (_selectedModel.value.isNullOrBlank()) {
             _selectedModel.value = null
         }
@@ -1014,7 +1023,11 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             // 5. Send message with SSE real-time token streaming
             try {
                 val currentAgentMode = _agentMode.value
-                val currentModel = _selectedModel.value ?: "gemini-3.8-flash-high"
+                // Sin fallback a un id. Si no hay modelo elegido se envia null y
+                // decide OpenCode; mandar un id caducado es peor que no mandar nada,
+                // porque ademas el Hub lo conservaba para la sesion (lo advertia con
+                // "modelo no encontrado en el indice v2") y persistia el error.
+                val currentModel = _selectedModel.value
                 val sendReq = SendMessageRequest(
                     parts = reqParts,
                     model = currentModel,
@@ -1316,7 +1329,8 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
     private suspend fun createNewSession(provider: String = "opencode"): String? = withContext(Dispatchers.IO) {
         try {
             val title = "Nuevo chat"
-            val bodyJson = "{\"title\":\"${title.replace("\"", "\\\"")}\",\"provider\":\"$provider\",\"model\":\"gemini-3.8-flash-high\"}"
+            // Sin "model": lo pone el Hub con el primer free de la lista de OpenCode.
+            val bodyJson = "{\"title\":\"${title.replace("\"", "\\\"")}\",\"provider\":\"$provider\"}"
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:8765/opencode/session")
                 .header("X-Provider", provider)

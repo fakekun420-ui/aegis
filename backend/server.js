@@ -240,8 +240,30 @@ function badParam(res, name) {
 }
 
 // resiliencia: no morir por crash del proxy, pero sí permitir reinicio limpio por keepalive (pkill -f) o por kill -15
-process.on('uncaughtException', e => log.error('[hub] uncaughtException', { err: e?.stack || String(e) }));
-process.on('unhandledRejection', e => log.error('[hub] unhandledRejection', { err: e?.stack || String(e) }));
+// Frecuencia de las excepciones SIN CAPTURAR. MEDIDO 2026-09-29: una sola peticion
+// abandonada produjo 578 lineas de EPIPE. Es el mismo problema que los 500 de
+// respondUnhandledRequestError y se resuelve igual: la primera se dice entera, luego
+// una de cada 25, y el total al parar. NO se silencia — el diagnostico se conserva.
+const EXC_LOG_EVERY = 25;
+const excVistos = new Map();
+function logExcepcion(etiqueta, e) {
+  const clave = `${etiqueta} ${(e && (e.code || e.message)) || String(e)}`.slice(0, 160);
+  const ahora = Date.now();
+  let rec = excVistos.get(clave);
+  if (!rec) { rec = { n: 0, desde: ahora }; excVistos.set(clave, rec); }
+  rec.n++;
+  // La ventana de un minuto caduca: si el fallo vuelve mas tarde, se vuelve a decir
+  // como PRIMERA vez y no como continuacion de un minuto viejo.
+  if (ahora - rec.desde > 60000) {
+    if (rec.n > 1) log.warn(`[hub] ${etiqueta} dejo de ocurrir: ${rec.n} en 60 s`);
+    rec.n = 0; rec.desde = ahora; return;
+  }
+  if (rec.n === 1 || rec.n % EXC_LOG_EVERY === 0) {
+    log.error(etiqueta, { err: (e && e.stack) || String(e) });
+  }
+}
+process.on('uncaughtException', e => logExcepcion('[hub] uncaughtException', e));
+process.on('unhandledRejection', e => logExcepcion('[hub] unhandledRejection', e));
 // Quien envia el SIGTERM, de verdad. El mensaje anterior decia SIEMPRE
 // "keepalive relanza", estea o no fuera keepalive, y eso hizo perder tiempo a dos
 // sesiones distintas persiguiendo al culpable equivocado (la otra sesion lo apunta
@@ -1340,6 +1362,47 @@ async function dispatchRoute(handler, req, res, pathname) {
 // listModels() rechazando en GET /api/opencode/models) caía en
 // process.on('unhandledRejection') y la petición quedaba COLGADA: sin headers y
 // sin res.end() — el cliente sufría timeout con respuesta vacía.
+/**
+ * El modelo por defecto de una sesion nueva: el PRIMERO FREE de la lista de OpenCode.
+ *
+ * No se escribe el id a mano. La lista la devuelve `opencode serve` y cambia sola (el
+ * 2026-09-29 tenia 472 modelos, 39 free), asi que un id fijo envejece: y aqui ya habia
+ * uno caducado. MEDIDO: el default de antes era "gemini-3.8-flash-high", que NO esta
+ * entre los 472 (existen "gemini-3.8-flash", "google/gemini-3.8-flash" y
+ * "antigravity-gemini-3.8-flash", pero no el "-high"). O sea que cada turno de cada
+ * sesion nueva viajaba con un modelo inexistente.
+ *
+ * `listModels()` ya viene ORDENADO (free de OpenCode primero) y ya marca `free`
+ * comprobando coste cero, no solo el sufijo "-free" del id. Se reusa esa regla en vez
+ * de duplicarla aqui, que es como se desincroniza un default.
+ *
+ * Con cache caliente (10 min) esto es instantaneo. Con cache frio se acota el tiempo
+ * y, si no llega, se devuelve null: es preferible que elija OpenCode a inventar un id.
+ */
+const PRIMER_FREE_TIMEOUT_MS = 2500;
+async function primerModeloFree(timeoutMs = PRIMER_FREE_TIMEOUT_MS) {
+  try {
+    const lista = await Promise.race([
+      opencodeAdapter.listModels().catch(() => []),
+      new Promise((r) => setTimeout(() => r([]), timeoutMs))
+    ]);
+    const libre = Array.isArray(lista) ? lista.find((m) => m && m.free && m.id) : null;
+    if (libre) {
+      // Se DICE que modelo se eligio. Un default que se aplica en silencio no se
+      // puede depurar: si manana un turno sale raro, la primera pregunta es "con que
+      // modelo salio", y si el Hub no lo dijo, no hay forma de saberlo sin mirar la
+      // sesion uno por uno.
+      log.info(`[hub] modelo por defecto de sesion nueva: ${libre.id} (primer free de la lista de OpenCode)`);
+      return String(libre.id);
+    }
+    log.warn("[hub] sin modelo free en la lista de OpenCode: la sesion nueva nace sin modelo y decide OpenCode");
+    return null;
+  } catch (e) {
+    log.warn("[hub] no se pudo resolver el modelo por defecto", { err: e.message });
+    return null;
+  }
+}
+
 async function handleRequest(req, res){
   // timeouts largos para payloads multimodales grandes (video/audio/docs en Base64).
   // Este req.setTimeout es de INACTIVIDAD y se aplica a TODAS las peticiones que entran,
@@ -1494,9 +1557,15 @@ async function handleRequest(req, res){
       const adapter = providerManager.resolveProvider(null, provId, store);
       log.info(`[hub] creating session via ${adapter.id} (title: ${body.title || "untitled"}, project: ${projectId || "none"})`);
 
+      // Modelo de la sesion nueva: el que pida el cliente o, si no, el PRIMERO FREE
+      // de la lista de OpenCode. Antes NO se pasaba modelo ninguno —esta llamada solo
+      // mandaba {title, projectId}—, asi que la sesion nacia con el default propio de
+      // OpenCode, que no es el mismo criterio que ve el usuario en el selector.
+      const modeloInicial = (body.model && String(body.model).trim()) || await primerModeloFree();
       const created = await adapter.createSession({
         title: body.title,
-        projectId
+        projectId,
+        model: modeloInicial || undefined
       });
 
       const entry = normalizeSessionEntry({
@@ -1682,13 +1751,15 @@ async function handleRequest(req, res){
 
       body.projectId = pId;
       if (!body.model) {
-        // BACKLOG F0-F2 (decisión documentada — BUG-05/06): default de modelo
-        // INTENCIONAL y único. modelRouter/taskClassifier se eliminaron porque
-        // route() clasificaba POR PROMPT (p.ej. "fix" -> claudecode, "arquitectura"
-        // -> gemini-3.1-pro) y eso cambiaba el comportamiento por defecto; providers.json
-        // no tiene sección de modelos que consumir. El PROVEEDOR por defecto sí es
-        // configurable (providers.json -> ProviderManager.loadConfig / POST /api/providers/default).
-        body.model = "gemini-3.8-flash-high";
+        // La razon de F0-F2 sigue siendo valida —el enrutado por prompt se elimino a
+        // proposito— pero su conclusion ("default de modelo INTENCIONAL y unico")
+        // dejo de serlo: el id que se eligio entonces ya no existe en el catalogo.
+        // Lo que se mantiene es que no se enruta por prompt. Lo que se cambia es de
+        // donde sale el id: de una constante caducada al primer free REAL de OpenCode.
+        const libre = await primerModeloFree();
+        if (libre) body.model = libre;
+        // Si no se pudo resolver (OpenCode caido, o cache frio y lento), NO se
+        // inventa nada: se deja el campo tal cual y que OpenCode elija su default.
       }
       const agentMode = body.agent || body.mode || req.headers["x-agent"] || req.headers["x-mode"] || "build";
       body.agent = agentMode;
@@ -3900,6 +3971,20 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
   staticStream.on("error", (e) => {
     log.error(`[hub] static read err ${fp}`, { err: e.message });
     if (!res.writableEnded) { try { res.end(); } catch (_) {} }
+  });
+  // El cliente puede colgarse: un `curl | head`, el usuario cerrando la pestana, la
+  // app cerrando el stream al rotar. Eso es NORMAL. Pero al caer el socket, el write
+  // lanza EPIPE, y `res` no tiene manejador global de 'error': el error subia como
+  // evento del stream y de ahi a `uncaughtException`, que logueaba COMO ERROR.
+  // MEDIDO 2026-09-29: 578 lineas de EPIPE de golpe —la mitad del log— por un solo
+  // cliente que cerro antes de tiempo. Cada linea es una escritura en /sdcard, que es
+  // FUSE (y un proceso esperando a FUSE se queda en estado D): es la misma tormenta de
+  // escritura que cuelga el movil, y ademas tapa el diagnostico de verdad.
+  res.on("error", (e) => {
+    try { staticStream.destroy(); } catch (_) {}
+    const code = e && e.code;
+    if (code === "EPIPE" || code === "ERR_STREAM_DESTROYED" || code === "ERR_STREAM_PREMATURE_CLOSE") return;
+    log.warn(`[hub] static write err ${fp}`, { err: e.message });
   });
   staticStream.pipe(res);
 }

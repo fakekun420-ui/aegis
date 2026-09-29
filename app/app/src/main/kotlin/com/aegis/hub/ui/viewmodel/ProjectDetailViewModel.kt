@@ -85,7 +85,8 @@ class ProjectDetailViewModel : ViewModel() {
                 // Create session via hub
                 val provider = _project.value?.provider ?: "opencode"
                 val title = "companion:${_project.value?.name ?: projectId}:${System.currentTimeMillis() % 100000}"
-                val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":\"$projectId\",\"provider\":\"$provider\",\"model\":\"gemini-3.8-flash-high\"}"
+                // Sin "model": lo pone el Hub con el primer free de la lista.
+                val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":\"$projectId\",\"provider\":\"$provider\"}"
                 val req = okhttp3.Request.Builder()
                     .url("http://127.0.0.1:8765/opencode/session")
                     .header("X-Provider", provider)

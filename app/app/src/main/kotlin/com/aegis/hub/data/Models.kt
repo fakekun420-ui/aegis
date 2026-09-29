@@ -318,8 +318,29 @@ data class AttachedFile(
 data class ModelOption(
     val id: String,
     val name: String,
-    val description: String? = null
+    val description: String? = null,
+    // El Hub ya lo expone en `free` (/api/models), y lo calcula mirando el COSTE del
+    // modelo, no solo si el id acaba en "-free". MEDIDO 2026-09-29: 39 de 472 modelos
+    // lo traen a true. Sin este campo la app no puede distinguir un free de uno de
+    // pago, y por eso el default acababa hardcodeado a un id que no existe.
+    val free: Boolean = false
 )
+
+/**
+ * El modelo por defecto de una sesion nueva: el PRIMERO FREE de la lista de OpenCode,
+ * en el orden en que llega (el Hub ya la devuelve con los free de OpenCode primero).
+ *
+ * Es una regla, no un id fijo, a proposito. El id que se usaba antes
+ * ("gemini-3.8-flash-high") no esta en el catalogo: MEDIDO 2026-09-29 entre los 472
+ * modelos existen "gemini-3.8-flash", "google/gemini-3.8-flash" y
+ * "antigravity-gemini-3.8-flash", pero no el "-high". El Hub lo confirmo en su log a
+ * las 17:37 de ese mismo dia: "modelo no encontrado en el indice v2".
+ *
+ * Si la lista no trae ninguno free, se devuelve null y deja que OpenCode elija: es
+ * preferible a inventar un id.
+ */
+val List<ModelOption>.modeloPorDefecto: String?
+    get() = firstOrNull { it.free }?.id
 
 data class SendMessageRequestWithModel(
     val parts: List<Map<String, String>>,
