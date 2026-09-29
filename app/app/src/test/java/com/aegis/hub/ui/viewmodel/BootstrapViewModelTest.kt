@@ -163,7 +163,7 @@ class BootstrapViewModelTest {
         assertTrue(fc!!.data!!.ready)
         assertFalse(ui.finalCheckLoading)
         assertEquals(
-            listOf("opencode", "antigravity", "a11y", "bootstrap"),
+            listOf("opencode", "a11y", "bootstrap"),
             fc.data!!.checkList.map { it.id }
         )
         assertEquals(
@@ -177,7 +177,7 @@ class BootstrapViewModelTest {
         )
         assertTrue(fc.data!!.checkList.all { it.statusOrManual == SetupCheckStatus.ok })
         assertNull(ui.actionError)
-        assertNull(ui.authGuide) // antigravity ok → NO se dispara guideAuth()
+        assertNull(ui.authGuide)
         assertNull(ui.smokeReply)
         assertTrue(ui.hubReachable) // F3: un fallo/success de setup no alterna el bloqueo
     }
@@ -209,19 +209,19 @@ class BootstrapViewModelTest {
         assertTrue(ui.hubReachable) // el error queda LOCAL: la tarjeta sigue visible
     }
 
-    // ---- 6) runFinalCheck() con antigravity en manual → carga la guía de auth ----
+    // ---- 6) runFinalCheck() con un check en "manual" → carga la guía de auth ----
     @Test
-    fun runFinalCheck_antigravityManual_disparaGuideAuth() = runTest {
+    fun runFinalCheck_checkManual_disparaGuideAuth() = runTest {
         val fake = FakeRepo().apply {
             onState = { Response.success(BootstrapResponse(ok = true, data = doneState())) }
-            onFinalCheck = { Response.success(finalCheckAntigravityManual()) }
+            onFinalCheck = { Response.success(finalCheckManual()) }
             onAuthGuide = {
                 Response.success(
                     AuthGuideResponse(
                         ok = true,
                         data = AuthGuideData(
                             mode = "manual",
-                            command = "/root/.local/bin/agy",
+                            command = "abre la app y concede accesibilidad",
                             status = "missing_auth"
                         )
                     )
@@ -237,7 +237,7 @@ class BootstrapViewModelTest {
         val ui = vm.ui.value
         assertNotNull(ui.authGuide)
         assertEquals("manual", ui.authGuide?.data?.mode)
-        assertEquals("/root/.local/bin/agy", ui.authGuide?.data?.command)
+        assertEquals("abre la app y concede accesibilidad", ui.authGuide?.data?.command)
         assertEquals("missing_auth", ui.authGuide?.data?.status)
         assertFalse(ui.authGuideLoading)
         assertNull(ui.actionError)
@@ -408,7 +408,6 @@ private val STEP_DEFS = listOf(
     "ubuntu" to "Ubuntu (chroot/proot)",
     "node" to "Node.js",
     "opencode" to "OpenCode",
-    "antigravity" to "Antigravity / Artemis",
     "skills" to "Skills y plugins"
 )
 
@@ -449,23 +448,21 @@ private fun finalCheckAllOk(): FinalCheckResponse =
             ready = true,
             checks = listOf(
                 SetupCheck("opencode", "OpenCode (proxy4096)", SetupCheckStatus.ok, "OpenCode respondiendo en 127.0.0.1:4096"),
-                SetupCheck("antigravity", "Antigravity/Artemis (agy + auth)", SetupCheckStatus.ok, "agy + sesión OAuth verificada"),
                 SetupCheck("a11y", "Servicio de accesibilidad (:8766)", SetupCheckStatus.ok, "bridge de accesibilidad escuchando"),
                 SetupCheck("bootstrap", "Instalación inicial (wizard)", SetupCheckStatus.ok, "wizard completado (phase=done)")
             )
         )
     )
 
-/** antigravity en "manual" → el VM debe encadenar guideAuth(). */
-private fun finalCheckAntigravityManual(): FinalCheckResponse =
+/** un check en "manual" → el VM debe encadenar guideAuth(). */
+private fun finalCheckManual(): FinalCheckResponse =
     FinalCheckResponse(
         ok = true,
         data = FinalCheckData(
             ready = false,
             checks = listOf(
-                SetupCheck("opencode", "OpenCode (proxy4096)", SetupCheckStatus.ok, "OpenCode respondiendo en 127.0.0.1:4096"),
-                SetupCheck("antigravity", "Antigravity/Artemis (agy + auth)", SetupCheckStatus.manual, "agy SIN sesión OAuth — ejecuta el login"),
-                SetupCheck("a11y", "Servicio de accesibilidad (:8766)", SetupCheckStatus.ok, "bridge de accesibilidad escuchando"),
+                SetupCheck("opencode", "OpenCode (proxy4096)", SetupCheckStatus.ok, "OpenCode respondiendo en 127.0.0.1:49374"),
+                SetupCheck("a11y", "Servicio de accesibilidad (:8766)", SetupCheckStatus.manual, "abre la app y concede accesibilidad"),
                 SetupCheck("bootstrap", "Instalación inicial (wizard)", SetupCheckStatus.ok, "wizard completado (phase=done)")
             )
         )

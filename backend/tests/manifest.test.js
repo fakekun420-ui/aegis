@@ -2,7 +2,7 @@
 //
 // Objetivo: fijar el shape del manifiesto de dependencias (SBOM) que el wizard
 // y los audits usan para saber QUÉ trae este despliegue. Reglas del contrato:
-//   * shape EXACTO: {hub, node, ubuntu, opencode, agy, skills, generatedAt}
+//   * shape EXACTO: {hub, node, ubuntu, opencode, skills, generatedAt}
 //   * honestidad: donde no hay dato verificable el campo va `null` + `note`
 //     (NUNCA se inventa una versión)
 //   * hub.version sale de HUB_VERSION de server.js (se lee del FICHERO FUENTE:
@@ -12,9 +12,9 @@
 //     verdad (src/bootstrap/*-manifest.json), sha256 = 64 hex
 //   * skills = ids de skills-manifest.json ∪ catálogo allowlist, con la versión
 //     pineada del catálogo (graphify -> null, opencode-mem -> "2.26.0")
-//   * sondeos opencode/agy con timeout corto => el endpoint resuelve en <8s
+//   * sondeo de opencode con timeout corto => el endpoint resuelve en <8s
 //
-// NO se testea el valor EXACTO de opencode/agy: dependen de si el serve está
+// NO se testea el valor EXACTO de opencode: dependen de si el serve está
 // arriba o si el binario existe en la máquina que ejecuta los tests. Se fija la
 // forma (version string|null + note no vacío), que es lo que exige el contrato.
 
@@ -112,12 +112,12 @@ test("2. shape EXACTO del SBOM + versiones derivadas de los manifests reales", a
   const elapsed = Date.now() - t0;
   assert.equal(status, 200, `esperaba 200, vino ${status} (${JSON.stringify(body).slice(0, 300)})`);
   assert.equal(body.ok, true);
-  assert.ok(elapsed < 8000, `manifest tardó ${elapsed}ms (sondas opencode 1.5s + agy 3s en paralelo => <8s)`);
+  assert.ok(elapsed < 8000, `manifest tardó ${elapsed}ms (sonda de opencode con timeout => <8s)`);
 
   const m = body.data;
   assert.deepEqual(
     Object.keys(m).sort(),
-    ["agy", "generatedAt", "hub", "node", "opencode", "skills", "ubuntu"],
+    ["generatedAt", "hub", "node", "opencode", "skills", "ubuntu"],
     "shape del SBOM cambiado"
   );
 
@@ -156,9 +156,9 @@ test("2. shape EXACTO del SBOM + versiones derivadas de los manifests reales", a
   assert.ok(!JSON.stringify(body).includes(token), "el token del hub no puede filtrarse en el manifest");
 });
 
-test("3. honestidad null+note en las sondas opencode/agy (nunca versiones inventadas)", async () => {
+test("3. honestidad null+note en la sonda de opencode (nunca versiones inventadas)", async () => {
   const { body } = await api("/api/setup/manifest");
-  for (const key of ["opencode", "agy"]) {
+  for (const key of ["opencode"]) {
     const entry = body.data[key];
     assert.deepEqual(Object.keys(entry).sort(), ["note", "version"], `${key} debe ser {version, note}`);
     assert.equal(typeof entry.note, "string", `${key}.note debe existir siempre`);

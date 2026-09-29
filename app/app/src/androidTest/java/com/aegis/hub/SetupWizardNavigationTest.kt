@@ -104,7 +104,6 @@ class SetupWizardNavigationTest {
                         checks = listOf(
                             SetupCheck("opencode", "OpenCode (proxy4096)", SetupCheckStatus.ok, "ok"),
                             SetupCheck(
-                                "antigravity", "Antigravity/Artemis (agy + auth)",
                                 SetupCheckStatus.ok, "ok"
                             ),
                             SetupCheck("a11y", "Servicio de accesibilidad (:8766)", SetupCheckStatus.ok, "ok"),
@@ -147,7 +146,6 @@ class SetupWizardNavigationTest {
             BootstrapStep("ubuntu", stepTitles[1], status, BootstrapRollback.none, progress, "detalle", null),
             BootstrapStep("node", stepTitles[2], status, BootstrapRollback.none, progress, "detalle", null),
             BootstrapStep("opencode", stepTitles[3], status, BootstrapRollback.none, progress, "detalle", null),
-            BootstrapStep("antigravity", stepTitles[4], status, BootstrapRollback.none, progress, "detalle", null),
             BootstrapStep("skills", stepTitles[5], status, BootstrapRollback.none, progress, "detalle", null)
         )
     }

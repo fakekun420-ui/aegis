@@ -8,7 +8,7 @@
 //   A) AEGIS_BOOTSTRAP_DRY=1 + AEGIS_BOOTSTRAP_FAIL=ubuntu
 //      → run: phase "failed", ubuntu failed con error FAIL_INJECTED y rollback
 //        en {none,done,failed}; preflight ya satisfecho (skipped); los pasos
-//        posteriores (node/opencode/antigravity/skills) quedan "pending".
+//        posteriores (node/opencode/skills) quedan "pending".
 //   B) mismo fichero de estado SIN la inyección
 //      → POST /step/ubuntu/retry → 202 y la ejecución CONTINÚA hasta phase
 //        "done"; node (siempre satisfacible: process.execPath) sale "skipped"
@@ -21,7 +21,7 @@
 //
 // Los hubs de A/B setean AEGIS_BOOTSTRAP_TEST_STEP="" para neutralizar la env
 // por si acaso; la suite C es la única que registra el paso fake (los hubs de
-// los tests de contrato de 6 pasos NUNCA la ven).
+// los tests de contrato de 5 pasos NUNCA la ven).
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -42,7 +42,7 @@ const STATE_A = `${TMP_DIR}/aegis-f2-state-a-${process.pid}.json`; // A y B lo c
 const STATE_C = `${TMP_DIR}/aegis-f2-state-c-${process.pid}.json`;
 const FAKE_ARTIFACT = `${TMP_DIR}/aegis-f2-artifact-${process.pid}`;
 
-const REAL_STEP_IDS = ["preflight", "ubuntu", "node", "opencode", "antigravity", "skills"];
+const REAL_STEP_IDS = ["preflight", "ubuntu", "node", "opencode", "skills"];
 
 function seedTokenIfMissing() {
   try {
@@ -196,7 +196,7 @@ test("A. DRY + AEGIS_BOOTSTRAP_FAIL=ubuntu → phase failed, ubuntu failed (FAIL
   );
 
   // pasos posteriores NUNCA alcanzados → pending
-  for (const id of ["node", "opencode", "antigravity", "skills"]) {
+  for (const id of ["node", "opencode", "skills"]) {
     assert.equal(byId[id].status, "pending", `el paso "${id}" debió quedar pending`);
     assert.equal(byId[id].rollback, "none");
   }
@@ -289,7 +289,7 @@ test("C. rollback real: el paso fake crea un fichero y lanza → tras el fallo Y
 
   const byId = Object.fromEntries(data.steps.map(s => [s.id, s]));
 
-  // los 6 pasos reales cerraron (dry) antes de llegar al fake
+  // los 5 pasos reales cerraron (dry) antes de llegar al fake
   for (const id of REAL_STEP_IDS) {
     assert.ok(
       ["done", "skipped"].includes(byId[id].status),

@@ -17,7 +17,7 @@
 //
 // Cobertura:
 //   1. GET  /api/bootstrap/state     -> 403 sin token; shape exacto con token
-//                                       (6 pasos, orden y títulos literales)
+//                                       (5 pasos, orden y títulos literales)
 //   2. POST /api/bootstrap/run       -> 202 {phase:"running"}; 2º run -> 409 ALREADY_RUNNING
 //   3. poll hasta salir de running   -> en DRY: phase "done" y todos done|skipped
 //   4. POST /api/bootstrap/step/:id/retry -> 409 NOT_RETRYABLE (done) + 404 NOT_FOUND
@@ -54,7 +54,6 @@ const STEP_CONTRACT = [
   { id: "ubuntu",      title: "Ubuntu (chroot/proot)" },
   { id: "node",        title: "Node.js" },
   { id: "opencode",    title: "OpenCode" },
-  { id: "antigravity", title: "Antigravity / Artemis" },
   { id: "skills",      title: "Skills y plugins" }
 ];
 const STEP_IDS = STEP_CONTRACT.map(s => s.id);
@@ -178,9 +177,9 @@ test("1. GET /api/bootstrap/state: 403 sin token y shape EXACTO con token", asyn
   assert.equal(typeof body.data.updatedAt, "string");
   assert.ok(!Number.isNaN(Date.parse(body.data.updatedAt)), "updatedAt debe ser ISO parseable");
 
-  // 6 pasos, EN ESTE ORDEN, con estos títulos LITERALES
+  // 5 pasos, EN ESTE ORDEN, con estos títulos LITERALES
   assert.ok(Array.isArray(body.data.steps));
-  assert.equal(body.data.steps.length, 6);
+  assert.equal(body.data.steps.length, 5);
   assert.deepEqual(
     body.data.steps.map(s => ({ id: s.id, title: s.title })),
     STEP_CONTRACT,

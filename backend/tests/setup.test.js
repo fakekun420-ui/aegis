@@ -13,10 +13,10 @@
 //
 // Cobertura:
 //   1. las 3 rutas SIN token -> 403 FORBIDDEN (el middleware Fase 0 cubre /api/setup/*)
-//   2. GET  /api/setup/final-check       -> shape exacto: {ready, checks[4]} con
+//   2. GET  /api/setup/final-check       -> shape exacto: {ready, checks[3]} con
 //                                           ids/labels literales, statuses del
 //                                           enum y `ready` coherente (+ <5s)
-//   3. POST /api/setup/auth/antigravity  -> {mode:"manual", command, status}
+//   3. (retirada) POST /api/setup/auth/antigravity -> 404
 //                                           y NUNCA el token en la respuesta
 //
 // NO se testea aquí el smoke-test: haría una llamada REAL al modelo (hasta 60s)
@@ -47,7 +47,6 @@ seedTokenIfMissing();
 // Labels literales del contrato F3 — deben casar AL PIE DE LA LETRA
 const CHECK_CONTRACT = [
   { id: "opencode",    label: "OpenCode (proxy4096)" },
-  { id: "antigravity", label: "Antigravity/Artemis (agy + auth)" },
   { id: "a11y",        label: "Servicio de accesibilidad (:8766)" },
   { id: "bootstrap",   label: "Instalación inicial (wizard)" }
 ];
@@ -126,7 +125,6 @@ test("1. /api/setup/* sin token -> 403 FORBIDDEN (middleware Fase 0 cubre el pre
   const rutas = [
     ["/api/setup/final-check", "GET"],
     ["/api/setup/smoke-test", "POST"],
-    ["/api/setup/auth/antigravity", "POST"],
   ];
   for (const [ruta, method] of rutas) {
     const { status, body } = await api(ruta, { withToken: false, method });
@@ -136,7 +134,7 @@ test("1. /api/setup/* sin token -> 403 FORBIDDEN (middleware Fase 0 cubre el pre
   }
 });
 
-test("2. GET /api/setup/final-check -> {ready, checks[4]} con labels exactos y ready coherente", async () => {
+test("2. GET /api/setup/final-check -> {ready, checks[3]} con labels exactos y ready coherente", async () => {
   const t0 = Date.now();
   const { status, body } = await api("/api/setup/final-check");
   const elapsed = Date.now() - t0;
@@ -147,7 +145,7 @@ test("2. GET /api/setup/final-check -> {ready, checks[4]} con labels exactos y r
 
   const checks = body.data.checks;
   assert.ok(Array.isArray(checks));
-  assert.equal(checks.length, 4, "el contrato F3 define exactamente 4 checks");
+  assert.equal(checks.length, 3, "el contrato define exactamente 3 checks (el de antigravity se retiro con el motor)");
   assert.deepEqual(
     checks.map(c => ({ id: c.id, label: c.label })),
     CHECK_CONTRACT,
@@ -172,18 +170,10 @@ test("2. GET /api/setup/final-check -> {ready, checks[4]} con labels exactos y r
   assert.ok(elapsed < 5000, `final-check tardó ${elapsed}ms (esperado <5000ms: 4 checks en paralelo de <=2s)`);
 });
 
-test("3. POST /api/setup/auth/antigravity -> mode manual + command + status (sin token)", async () => {
-  const { status, body } = await api("/api/setup/auth/antigravity", { method: "POST" });
-  assert.equal(status, 200);
-  assert.equal(body.ok, true);
-  assert.deepEqual(Object.keys(body.data).sort(), ["command", "mode", "status"]);
-  assert.equal(body.data.mode, "manual", "el login de agy es interactivo (navegador/TTY) => nunca spawned");
-  assert.equal(typeof body.data.command, "string");
-  assert.ok(body.data.command.length > 0, "command debe traer el comando exacto a ejecutar");
-  assert.ok(
-    ["authenticated", "missing_auth", "missing_cli"].includes(body.data.status),
-    `status inválido: ${body.data.status}`
-  );
-  // Nunca secretos: ni el token del hub ni contenido de credenciales
-  assert.ok(!JSON.stringify(body).includes(token), "el token del hub no puede aparecer en la respuesta");
+test("3. POST /api/setup/auth/antigravity ya NO existe (retirado con el motor)", async () => {
+  // Test invertido a proposito. Antes cubria la ruta que devolvia el comando de
+  // instalacion de `agy`; esa ruta se ha retirado con el proveedor. Un 404 es ahora
+  // lo CORRECTO, y fijarlo aqui evita que la ruta reaparezca por descuido.
+  const { status } = await api("/api/setup/auth/antigravity", { method: "POST" });
+  assert.equal(status, 404, "la ruta de auth de agy no debe volver a existir");
 });

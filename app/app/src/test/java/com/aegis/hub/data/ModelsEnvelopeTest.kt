@@ -21,10 +21,10 @@ class ModelsEnvelopeTest {
     private val gson = GsonBuilder().setLenient().create()
 
     // ------------------------------------------------------------------
-    // GET /api/bootstrap/state → 6 pasos (STEP_DEFS reales de state.js)
+    // GET /api/bootstrap/state → 5 pasos (STEP_DEFS reales de state.js)
     // ------------------------------------------------------------------
     @Test
-    fun `bootstrap state con 6 pasos parsea los STEP_DEFS reales`() {
+    fun `bootstrap state con 5 pasos parsea los STEP_DEFS reales`() {
         val json = """
             {
               "ok": true,
@@ -39,7 +39,6 @@ class ModelsEnvelopeTest {
                   {"id":"ubuntu","title":"Ubuntu (chroot/proot)","status":"running","rollback":"none","progress":40,"detail":"instalando","error":null},
                   {"id":"node","title":"Node.js","status":"pending","rollback":"none","progress":0,"detail":"pendiente","error":null},
                   {"id":"opencode","title":"OpenCode","status":"pending","rollback":"none","progress":0,"detail":"pendiente","error":null},
-                  {"id":"antigravity","title":"Antigravity / Artemis","status":"pending","rollback":"none","progress":0,"detail":"pendiente","error":null},
                   {"id":"skills","title":"Skills y plugins","status":"pending","rollback":"none","progress":0,"detail":"pendiente","error":null}
                 ]
               }
@@ -53,7 +52,7 @@ class ModelsEnvelopeTest {
         assertNotNull(data)
         assertEquals(BootstrapPhase.running, data!!.phaseOrIdle)
         assertEquals("ubuntu", data.currentStepId)
-        assertEquals(6, data.stepList.size)
+        assertEquals(5, data.stepList.size)   // el paso antigravity se retiro con el motor
         // Orden y títulos EXACTOS de STEP_DEFS (state.js L42-47)
         assertEquals("preflight", data.stepList[0].id)
         assertEquals("Comprobación previa", data.stepList[0].title)
@@ -114,7 +113,6 @@ class ModelsEnvelopeTest {
                 "ready": true,
                 "checks": [
                   {"id":"opencode","label":"OpenCode (proxy4096)","status":"ok","detail":"responde en :4096"},
-                  {"id":"antigravity","label":"Antigravity/Artemis (agy + auth)","status":"ok","detail":"agy + auth ok"},
                   {"id":"a11y","label":"Servicio de accesibilidad (:8766)","status":"manual","detail":"revísalo a mano"},
                   {"id":"bootstrap","label":"Instalación inicial (wizard)","status":"ok","detail":"wizard done"}
                 ]
@@ -151,7 +149,6 @@ class ModelsEnvelopeTest {
                 "ready": false,
                 "checks": [
                   {"id":"opencode","label":"OpenCode (proxy4096)","status":"fail","detail":"sin respuesta"},
-                  {"id":"antigravity","label":"Antigravity/Artemis (agy + auth)","status":"fail","detail":"falta auth"},
                   {"id":"a11y","label":"Servicio de accesibilidad (:8766)","status":"fail","detail":"puerto 8766 caído"},
                   {"id":"bootstrap","label":"Instalación inicial (wizard)","status":"ok","detail":"wizard done"}
                 ]
@@ -243,7 +240,8 @@ class ModelsEnvelopeTest {
     }
 
     // ------------------------------------------------------------------
-    // POST /api/setup/auth/antigravity → guía de autenticación
+    // (retirada) POST /api/setup/auth/antigravity -> 404. El tipo AuthGuideResponse se
+// conserva; este test fija que el envelope se sigue parseando si llega.
     // ------------------------------------------------------------------
     @Test
     fun `auth guide parsea mode command y status`() {

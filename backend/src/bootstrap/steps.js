@@ -1,102 +1,3 @@
-// steps.js — registro de pasos del bootstrap (FASE F1 checks · FASE F2 motor de instalación)
-//
-// STEPS exporta los 6 pasos EN EL ORDEN del contrato (STEP_DEFS importado de
-// state.js, fuente única de id/título) con la firma de hooks:
-//
-//   check(ctx)   -> {done, detail}   comprobación IDEMPOTENTE (sin mutate):
-//                                    ¿el paso ya está satisfecho en el dispositivo?
-//   run(ctx)                      F2: motor de instalación REAL por paso (tabla
-//                                    abajo), cada uno con su rollback. En dry
-//                                    (AEGIS_BOOTSTRAP_DRY=1) simula progreso
-//                                    rápido con detail "[DRY]" sin mutar ni
-//                                    descargar. preflight sigue siendo el check
-//                                    duro de F1 (root/su · arch · disco · red).
-//   rollback(ctx) -> "none"|"done"|"failed"
-//                                    F2: best-effort y NO destructivo fuera de
-//                                    lo creado por ESTE run. Las acciones de
-//                                    reversa se registran en run() vía
-//                                    ctx.onRollback(fn) y drainRollbacks() las
-//                                    ejecuta en LIFO; si alguna falla =>
-//                                    "failed" (el paso queda failed reanudable).
-//
-// HOOK DE TEST (solo tests, documentado):
-//   AEGIS_BOOTSTRAP_FAIL=<stepId>  => check() de ese paso devuelve done:false
-//                                    (para forzar run) y run() lanza
-//                                    Error("FAIL_INJECTED") ANTES de mutar.
-//                                    Permite probar fallo→rollback→retry/resume
-//                                    sin tocar el dispositivo.
-//   AEGIS_BOOTSTRAP_TEST_STEP=<id> => paso fake extra al FINAL (state.js): su run
-//                                    crea AEGIS_BOOTSTRAP_TEST_ARTIFACT y lanza
-//                                    FAIL_INJECTED → prueba de rollback REAL sin
-//                                    red (bootstrap-rollback.test.js).
-//
-// ctx (lo construye orchestrator.js):
-//   execFile(file, argv, {timeout})  promisificado SIN shell (lista de argv).
-//     Resuelve SIEMPRE {code, stdout, stderr, error} y NUNCA rechaza: un comando
-//     inexistente o una salida != 0 es información para el detail, no una
-//     excepción (los check son no-lanzadores por diseño; preflight.run sí lanza
-//     cuando falta un requisito duro).
-//   log             createLogger("bootstrap")
-//   dry             bool (AEGIS_BOOTSTRAP_DRY=1) => run() no muta ni spawnea
-//   progress(pct, detail)  actualiza el paso actual en el state (persistido)
-//   cancelRequested() -> bool  (cancelación cooperativa dentro de pasos largos)
-//   paths           {backendDir, stateFile}
-//   env             process.env
-//   onRollback(fn)  F2: registra una acción de reversa (LIFO) del run EN CURSO
-//   recordArtifact(a) F2: inventario {type,path|id} de lo creado (diagnóstico)
-//   rollbackFns/artifacts  arrays del ctx (se vacían antes de CADA run)
-//
-// Descargas (downloadVerified): fetch en streaming + SHA256 con
-// crypto.createHash("sha256") en el propio stream → mismatch = tmp borrado +
-// Error("EBADCHECKSUM…"); progreso con content-length si viene (si no, MB
-// descargados); cancelación cooperativa periódica; timeout duro 10 min;
-// REGLA OBLIGATORIA del roadmap: sha256 sin 64 hex => NO se descarga NADA
-// ("Falta SHA256 del manifiesto: no se descarga nada sin verificación").
-//
-// Motor F2 por paso (run real → rollback):
-//   ubuntu     descarga ubuntu-base (manifiesto, SHA256) → tar -xzf -C target →
-//              valida target/etc/os-release. Rollback: tmp + target SOLO si lo
-//              creó este run (jamás un directorio parcial ajeno).
-//   node       reutiliza backend/node.bin (stage-node.sh) si responde, si no
-//              descarga node-v24 (manifiesto, SHA256) → tar --strip-components=1
-//              en $AEGIS_NODE_DIR o <rootfs>/usr/local → enlaza en PATH → node -v.
-//              Rollback: tmp + dir creado + symlink creado (jamás un node ajeno).
-//   opencode   wrapper 0o755 en /usr/local/bin|~/.local/bin apuntando al bundle
-//              backend/opencode.cjs + node (NUNCA copia/borra el bundle original);
-//              fallback npm install -g opencode-ai (id fijo, argv). Valida
-//              `opencode --version`. Rollback: borra SOLO el wrapper, o npm
-//              uninstall -g opencode-ai si lo instaló npm.
-//   agy        asegura binario agy (sin paquete npm oficial → error honesto con el
-//              instalador oficial documentado), crea ~/.gemini/antigravity-cli si
-//              falta y DESPUÉS exige auth (token OAuth >0 B — su contenido NUNCA
-//              se imprime ni se copia). Rollback: solo el dir creado aquí; ni el
-//              binario preexistente ni NINGÚN token.
-//   skills     SkillManager.install de lo que falte según skills-manifest.json con
-//              ctx.progress(i/n). Rollback: uninstall SOLO los instalados en ESTE
-//              run.
-//
-// Rutas REALES descubiertas en el dispositivo (find-ubuntu.sh, stage-node.sh,
-// opencode.sh, keepalive.sh, AntigravityAdapter y sondeo directo):
-//   - El hub ya corre DENTRO del rootfs Ubuntu 24.04 aarch64 (/etc/os-release
-//     ID=ubuntu) y existe el ancla de chroot que localiza find-ubuntu.sh
-//     (PID con "bash --login" + /proc/PID/root/usr/bin/node + server.js).
-//   - node: /usr/bin/node (hub) + bundle staged backend/node.bin (stage-node.sh).
-//   - opencode: bin en PATH (keepalive usa el ELF de opencode-ai; aquí hay
-//     symlink /usr/local/bin/opencode) o bundle backend/node.bin + opencode.cjs
-//     (exactamente lo que ejecuta opencode.sh).
-//   - Antigravity/Artemis: binario agy en /root/.local/bin/agy (ELF, v1.2.9,
-//     206MB — NO proviene de npm: los paquetes npm "agy"/"antigravity-cli" son
-//     placeholders de terceros; la distribución oficial es el instalador
-//     https://antigravity.google/cli/install.sh — docs: antigravity.google/docs/cli/install),
-//     config/auth en ~/.gemini/antigravity-cli (antigravity-oauth-token + brain/)
-//     y config Artemis en ~/.artemis/.artemis_env. NO hay ningún proxy
-//     antigravity en 127.0.0.1:4096 — en este proyecto 4096 es el puerto de
-//     OpenCode (OC_PORT en keepalive.sh).
-//   - skills: SkillManager lee ~/.config/opencode/skills/*.json y los binarios
-//     conocidos de ~/.local/bin (graphify está como symlink uv en disco).
-//   - proot NO está instalado en este dispositivo; chroot (/usr/sbin/chroot) y
-//     unshare (/usr/bin/unshare) SÍ → el fallback proot queda detectado y
-//     documentado en el detail, listo para hosts sin privilegios.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -406,58 +307,6 @@ async function opencodeCheck(ctx) {
   return { done: false, detail: `OpenCode no disponible: sin binario "opencode" en PATH (probados: ${cands.filter(Boolean).join(", ")}) ni bundle opencode.cjs+node.bin en ${ctx.paths.backendDir}` };
 }
 
-// ---------------------------------------------------------------------------
-// antigravity — binario agy + auth (OAuth) + config Artemis
-// ---------------------------------------------------------------------------
-const AGY_AUTH_FILES = uniq([
-  "/root/.gemini/antigravity-cli/antigravity-oauth-token",
-  path.join(HOME, ".gemini", "antigravity-cli", "antigravity-oauth-token")
-]);
-const AGY_BRAIN_DIR = "/root/.gemini/antigravity-cli/brain";
-const ARTEMIS_ENV_FILE = path.join(HOME, ".artemis", ".artemis_env");
-
-async function antigravityCheck(ctx) {
-  const cands = uniq([
-    "/root/.local/bin/agy",          // binPath por defecto de AntigravityAdapter
-    whichSync("agy", ctx.env),
-    "/usr/local/bin/agy",
-    "/usr/bin/agy"
-  ]);
-  let bin = null;
-  let version = null;
-  for (const c of cands) {
-    if (!c || !fs.existsSync(c)) continue;
-    const r = await ctx.execFile(c, ["--version"], { timeout: 8000 });
-    const v = r.stdout.trim();
-    if (r.code === 0 && v) { bin = c; version = v; break; }
-  }
-
-  // Auth: token OAuth de ~/.gemini/antigravity-cli con contenido real (>0 B)
-  let authPath = null;
-  let authSize = 0;
-  for (const f of AGY_AUTH_FILES) {
-    try {
-      const st = fs.statSync(f);
-      if (st.isFile() && st.size > 0) { authPath = f; authSize = st.size; break; }
-    } catch { /* no existe */ }
-  }
-
-  const extras = [];
-  if (fs.existsSync(ARTEMIS_ENV_FILE)) extras.push(`config Artemis en ${ARTEMIS_ENV_FILE}`);
-  if (fs.existsSync(AGY_BRAIN_DIR)) extras.push(`brain en ${AGY_BRAIN_DIR}`);
-  const tail = extras.length ? ` · ${extras.join(" · ")}` : "";
-
-  if (bin && authPath) {
-    return { done: true, detail: `agy ${version} en ${bin} + token OAuth (${authSize} B) en ${authPath}${tail}` };
-  }
-  if (!bin && authPath) {
-    return { done: false, detail: `auth PARCIAL: token OAuth en ${authPath} pero falta/falla el binario agy (probados: ${cands.filter(Boolean).join(", ")})${tail}` };
-  }
-  if (bin && !authPath) {
-    return { done: false, detail: `auth PARCIAL: agy ${version} en ${bin} pero SIN token OAuth en ~/.gemini/antigravity-cli/antigravity-oauth-token (login pendiente — ejecuta \`${bin}\` en una terminal y completa el login)` };
-  }
-  return { done: false, detail: `Antigravity/Artemis ausente: sin binario agy (${cands.filter(Boolean).join(", ")}) ni token OAuth en ~/.gemini/antigravity-cli` };
-}
 
 // ---------------------------------------------------------------------------
 // skills — manifiesto (QUÉ debe instalar F2) contra SkillManager (disco real)
@@ -996,81 +845,6 @@ async function opencodeRun(ctx) {
 
 // ---------------------------------------------------------------------------
 // antigravity — run REAL: asegura binario agy + config dir, DESPUÉS exige auth
-// ---------------------------------------------------------------------------
-async function antigravityRun(ctx) {
-  if (ctx.dry) {
-    await dryRun(ctx, "antigravity", [
-      "[DRY] antigravity: sin creación de ~/.gemini/antigravity-cli",
-      "[DRY] antigravity: sin instalación de agy ni verificación de token (el contenido del token NUNCA se lee)",
-      "[DRY] antigravity: auth OAuth no requerida en modo simulado"
-    ]);
-    return;
-  }
-  throwIfCanceled(ctx, "antigravity: inicio");
-
-  // (1) binario agy — candidatas reales (AntigravityAdapter + antigravityCheck)
-  const cands = uniq([
-    "/root/.local/bin/agy",
-    whichSync("agy", ctx.env),
-    "/usr/local/bin/agy",
-    "/usr/bin/agy"
-  ]);
-  let bin = null;
-  let ver = null;
-  for (const c of cands) {
-    if (!c || !fs.existsSync(c)) continue;
-    const r = await ctx.execFile(c, ["--version"], { timeout: 8000 });
-    if (r.code === 0 && r.stdout.trim()) { bin = c; ver = r.stdout.trim(); break; }
-  }
-  if (!bin) {
-    // INVESTIGADO (F2): NO existe paquete npm oficial que provea `agy`
-    // (npm view de "agy"/"antigravity-cli"/"antigravity" => placeholders de
-    // terceros, NO el CLI de Google). Distribución oficial: install.sh sin
-    // SHA256 publicado verificable ⇒ este motor NO descarga nada: error honesto.
-    throw new Error(
-      `binario agy ausente (${cands.filter(Boolean).join(", ")}): no hay paquete npm oficial que lo provea ` +
-      `(los paquetes npm "agy"/"antigravity-cli" son placeholders de terceros — NO instalarlos). ` +
-      `Instálalo con el instalador oficial: curl -fsSL https://antigravity.google/cli/install.sh | bash ` +
-      `(docs: https://antigravity.google/docs/cli/install) y reintenta el paso`
-    );
-  }
-
-  // (2) dir de config con estructura mínima — SOLO si falta (si existe, intocado)
-  const cfgDir = path.join(HOME, ".gemini", "antigravity-cli");
-  if (!fs.existsSync(cfgDir)) {
-    fs.mkdirSync(path.join(cfgDir, "brain"), { recursive: true });
-    ctx.recordArtifact({ type: "dir", path: cfgDir });
-    // Seguro: si el dir no existía, TAMPOCO existe ningún token dentro ⇒
-    // borrarlo no puede tocar credenciales preexistentes.
-    ctx.onRollback(() => { try { fs.rmSync(cfgDir, { recursive: true, force: true }); } catch { /* ya borrado */ } });
-  }
-  throwIfCanceled(ctx, "antigravity: config dir");
-
-  // (3) auth: token OAuth con contenido >0 B. Su contenido NUNCA se imprime,
-  // copia ni registra — sólo ruta y tamaño.
-  let authPath = null;
-  let authSize = 0;
-  for (const f of AGY_AUTH_FILES) {
-    try {
-      const st = fs.statSync(f);
-      if (st.isFile() && st.size > 0) { authPath = f; authSize = st.size; break; }
-    } catch { /* no existe */ }
-  }
-  if (!authPath) {
-    throw new Error(
-      "Autenticación de Antigravity/Artemis requerida: completa el login y reintenta el paso " +
-      "(token OAuth ausente o vacío en ~/.gemini/antigravity-cli/antigravity-oauth-token — " +
-      "F3 verificó que NO existe subcomando `agy auth login`: ejecuta `/root/.local/bin/agy` en una " +
-      "terminal y completa el login que inicia el CLI (abre el navegador / URL de autorización; " +
-      "docs: https://antigravity.google/docs/cli/install)"
-    );
-  }
-
-  const extras = [];
-  if (fs.existsSync(ARTEMIS_ENV_FILE)) extras.push("config Artemis presente");
-  if (fs.existsSync(AGY_BRAIN_DIR)) extras.push("brain/ presente");
-  ctx.progress(100, `agy ${ver} en ${bin} + token OAuth (${authSize} B) en ${authPath}${extras.length ? " · " + extras.join(" · ") : ""}`);
-}
 
 // ---------------------------------------------------------------------------
 // skills — run REAL: SkillManager.install de lo que falte (progreso i/n)
@@ -1148,7 +922,6 @@ const CHECKS = {
   ubuntu: ubuntuCheck,
   node: nodeCheck,
   opencode: opencodeCheck,
-  antigravity: antigravityCheck,
   skills: skillsCheck
 };
 
@@ -1157,7 +930,6 @@ const RUNS = {
   ubuntu: ubuntuRun,
   node: nodeRun,
   opencode: opencodeRun,
-  antigravity: antigravityRun,
   skills: skillsRun
 };
 
@@ -1174,7 +946,6 @@ const ROLLBACKS = {
   ubuntu: drainRollbacks,
   node: drainRollbacks,
   opencode: drainRollbacks,
-  antigravity: drainRollbacks,
   skills: drainRollbacks
 };
 

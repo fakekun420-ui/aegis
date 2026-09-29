@@ -5,8 +5,8 @@
 //   GET  /api/setup/final-check          -> 200 {ok,data:{ready:boolean, checks:[...]}}
 //   POST /api/setup/smoke-test           -> 200 {ok,data:{ok:true, reply:"<texto REAL del modelo>"}}
 //                                            | 502/504 envelope code:"SMOKE_FAILED"
-//   POST /api/setup/auth/antigravity     -> 200 {ok,data:{mode:"manual", command, status}}
-//   GET  /api/setup/manifest             -> 200 {ok,data:{hub,node,ubuntu,opencode,agy,skills,generatedAt}}
+//   (retirada) POST /api/setup/auth/antigravity -> 404
+//   GET  /api/setup/manifest             -> 200 {ok,data:{hub,node,ubuntu,opencode,skills,generatedAt}}
 //                                            (F4: SBOM honesto — null+note cuando
 //                                            algo no es verificable, nunca inventa)
 //
@@ -46,23 +46,6 @@ const OPENCODE_PORT = parseInt(
   (fs.existsSync("/root/.config/opencode/service.json") ? "49374" : "4096"),
   10
 );
-
-// Instalador oficial del CLI agy (documentado en F2/F3; los paquetes npm
-// "agy"/"antigravity-cli" son placeholders de terceros: NO usarlos).
-const AGY_INSTALL_CMD = "curl -fsSL https://antigravity.google/cli/install.sh | bash";
-const AGY_DOCS = "https://antigravity.google/docs/cli/install";
-
-const AGY_BIN_CANDIDATES = [...new Set([
-  "/root/.local/bin/agy",                    // binPath por defecto de AntigravityAdapter
-  path.join(HOME, ".local/bin/agy"),
-  "/usr/local/bin/agy",
-  "/usr/bin/agy"
-])];
-// Mismas rutas que AGY_AUTH_FILES de steps.js — sólo se STATea, nunca se lee.
-const AGY_AUTH_FILES = [...new Set([
-  "/root/.gemini/antigravity-cli/antigravity-oauth-token",
-  path.join(HOME, ".gemini", "antigravity-cli", "antigravity-oauth-token")
-])];
 
 function uniq(list) { return [...new Set(list.filter(Boolean))]; }
 
@@ -131,26 +114,6 @@ async function opencodeManifestEntry(probeOpenCode, binTimeoutMs) {
   return { version: null, note: `sin serve en ${OPENCODE_HOST}:${OPENCODE_PORT} ni binario "opencode" verificable — no se inventa versión` };
 }
 
-// agy: binario oficial (findAgyBin) + `agy --version` (<=3000ms), CACHEADO por
-// proceso — la primera llamada paga el timeout, las demás son síncronas.
-let agyVersionCache; // undefined = aún no resuelto
-function agyManifestEntry(timeoutMs) {
-  if (agyVersionCache !== undefined) return Promise.resolve(agyVersionCache);
-  const bin = findAgyBin();
-  if (!bin) {
-    agyVersionCache = { version: null, note: `binario agy ausente (${AGY_BIN_CANDIDATES.join(", ")}) — instálalo con: ${AGY_INSTALL_CMD}` };
-    return Promise.resolve(agyVersionCache);
-  }
-  return new Promise(resolve => {
-    execFile(bin, ["--version"], { timeout: timeoutMs, env: process.env }, (err, stdout) => {
-      const v = err ? null : String(stdout || "").trim() || null;
-      agyVersionCache = v
-        ? { version: v, note: `\`agy --version\` (${bin})` }
-        : { version: null, note: `\`agy --version\` falló/no respondió en ${timeoutMs}ms (${bin}) — no se inventa versión` };
-      resolve(agyVersionCache);
-    });
-  });
-}
 
 // skills: ids del manifiesto del bootstrap ∪ catálogo allowlist, enriquecidos
 // con la versión pineada del catálogo (graphify -> null: no lleva versión;
@@ -171,37 +134,19 @@ function skillsManifestList() {
 }
 
 async function buildManifest({ probeOpenCode, hubVersion }) {
-  const [opencode, agy] = await Promise.all([
-    opencodeManifestEntry(probeOpenCode, 1500),
-    agyManifestEntry(3000)
+  const [opencode] = await Promise.all([
+    opencodeManifestEntry(probeOpenCode, 1500)
   ]);
   return {
     hub: { version: hubVersion || null },
     node: nodeManifestEntry(),
     ubuntu: ubuntuManifestEntry(),
     opencode,
-    agy,
     skills: skillsManifestList(),
     generatedAt: new Date().toISOString()
   };
 }
 
-function findAgyBin() {
-  for (const c of AGY_BIN_CANDIDATES) {
-    try { if (fs.existsSync(c)) return c; } catch (_) {}
-  }
-  return null;
-}
-
-function findAgyAuth() {
-  for (const f of AGY_AUTH_FILES) {
-    try {
-      const st = fs.statSync(f);
-      if (st.isFile() && st.size > 0) return { path: f, size: st.size };
-    } catch (_) { /* no existe */ }
-  }
-  return null;
-}
 
 // ---------------------------------------------------------------------------
 // Sonda OpenCode — MISMO approach que probeOpencodeHealth() de server.js
@@ -304,34 +249,6 @@ const CHECK_DEFS = [
       return {
         status: "fail",
         detail: `OpenCode no disponible: sin serve en ${OPENCODE_HOST}:${OPENCODE_PORT} ni binario "opencode" verificable`
-      };
-    }
-  },
-  {
-    id: "antigravity",
-    label: "Antigravity/Artemis (agy + auth)",
-    run() {
-      const bin = findAgyBin();
-      if (!bin) {
-        return {
-          status: "fail",
-          detail: `binario agy ausente (${AGY_BIN_CANDIDATES.join(", ")}) — instálalo con: ${AGY_INSTALL_CMD} (docs: ${AGY_DOCS})`
-        };
-      }
-      const auth = findAgyAuth();
-      if (!auth) {
-        // Sin sesión: login MANUAL (verificado en F3: el CLI actual NO tiene
-        // subcomando "auth login" — el flujo es interactivo en el propio `agy`
-        // y necesita navegador/TTY, así que el hub no lo spawnea).
-        return {
-          status: "manual",
-          detail: `agy en ${bin} pero SIN sesión OAuth en ~/.gemini/antigravity-cli/antigravity-oauth-token — ejecuta \`${bin}\` en una terminal y completa el login (abre el navegador; docs: ${AGY_DOCS})`
-        };
-      }
-      // El contenido del token NUNCA se lee ni se registra: sólo tamaño.
-      return {
-        status: "ok",
-        detail: `agy en ${bin} + sesión OAuth verificada (${auth.path}, ${auth.size} B > 0 — el contenido del token nunca se lee)`
       };
     }
   },
@@ -563,33 +480,10 @@ export function createSetupHandler(deps = {}) {
       );
     }
 
-    // 3) POST /api/setup/auth/antigravity — SIEMPRE mode:"manual" (investigado en F3):
-    //    `agy` actual NO expone subcomando "auth login" (verificado: `agy help auth`
-    //    => unknown subcommand) y el flujo oficial es interactivo (keyring local con
-    //    navegador, o URL de autorización manual vía SSH — antigravity.google/docs/cli/install).
-    //    Spawnearlo desatendido colgaría esperando TTY/navegador => honestidad > aparentar.
-    if (pathname === "/api/setup/auth/antigravity" && req.method === "POST") {
-      const bin = findAgyBin();
-      const auth = findAgyAuth();
-      let status;
-      let command;
-      if (!bin) {
-        status = "missing_cli";
-        command = AGY_INSTALL_CMD;             // primero instalar el CLI
-      } else if (!auth) {
-        status = "missing_auth";
-        command = bin;                          // y luego ejecutarlo para loguearse
-      } else {
-        status = "authenticated";
-        command = bin;
-      }
-      // NUNCA el token: ni contenido, ni bytes, ni hash — sólo si existe (>0 B).
-      return jsonHelper(res, 200, { ok: true, data: { mode: "manual", command, status } });
-    }
 
     // 4) GET /api/setup/manifest — SBOM (F4): qué trae este despliegue, con
     //    versiones REALES de manifests/sondas y null+note donde no hay dato
-    //    verificable. Sondas en paralelo + agy cacheado por proceso.
+    //    verificable. Sonda con timeout corto.
     if (pathname === "/api/setup/manifest" && req.method === "GET") {
       return buildManifest({ probeOpenCode, hubVersion })
         .then(manifest => {

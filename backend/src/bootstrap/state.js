@@ -4,7 +4,7 @@
 //  - Cargar/guardar `backend/bootstrap-state.json` con atomicWriteFileSync
 //    (helper existente de src/core/storage.js: tmp + fsync + rename) — nunca
 //    queda JSON corrupto aunque el hub caiga a mitad de una transición.
-//  - Seeder EXACTO del contrato: 6 pasos (STEP_DEFS, orden y títulos literales)
+//  - Seeder EXACTO del contrato: 5 pasos (STEP_DEFS, orden y títulos literales)
 //    en `pending`, phase "idle".
 //  - update(patch)   => fusiona campos de cabecera + updatedAt ISO y persiste.
 //  - updateStep(id…) => fusiona campos de un paso, recalcula currentStepId y
@@ -43,7 +43,6 @@ export const STEP_DEFS = [
   { id: "ubuntu",      title: "Ubuntu (chroot/proot)" },
   { id: "node",        title: "Node.js" },
   { id: "opencode",    title: "OpenCode" },
-  { id: "antigravity", title: "Antigravity / Artemis" },
   { id: "skills",      title: "Skills y plugins" }
 ];
 
