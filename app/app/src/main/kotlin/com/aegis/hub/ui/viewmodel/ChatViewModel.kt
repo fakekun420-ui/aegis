@@ -74,6 +74,36 @@ class ChatViewModel : ViewModel() {
     private val _currentSessionId = MutableStateFlow<String?>(null)
     val currentSessionId: StateFlow<String?> = _currentSessionId
 
+    // Si el Hub se ha ido. El refresco sigue tragandose los fallos a proposito (un
+    // fallo puntual de red no debe tumbar el refresco: el siguiente ciclo reintenta
+    // solo), pero tragar SIN CONTAR hacia que la pantalla mneta: se quedaba con el
+    // estado viejo y un 429/502 no dejaba ni una pista, de modo que "Trabajando en
+    // ello" podia quedarse pegado para un turno que ya habia acabado. Con el
+    // contador, la app puede distinguir "un fallo" de "el Hub no esta" y decirlo.
+    private val _hubReachable = MutableStateFlow(true)
+    val hubReachable: StateFlow<Boolean> = _hubReachable
+    private var refreshFailStreak = 0
+
+    /**
+     * Un ciclo del refresco salio bien -> el Hub responde.
+     * Uno fallo -> se cuenta; a partir de [HUB_FAIL_STREAK_FOR_DEGRADED] se dice.
+     *
+     * El umbral son 3 ciclos (6 s) y no 1 a proposito: el criterio del codigo es que
+     * un fallo puntual se ignora, y eso se respeta. Lo que se cambia no es tragarse
+     * el fallo, es que tragarselo tenga un final.
+     */
+    private fun noteRefreshResult(ok: Boolean) {
+        if (ok) {
+            if (refreshFailStreak != 0) {
+                refreshFailStreak = 0
+                _hubReachable.value = true
+            }
+            return
+        }
+        refreshFailStreak++
+        if (refreshFailStreak >= HUB_FAIL_STREAK_FOR_DEGRADED) _hubReachable.value = false
+    }
+
     private val _streamingText = MutableStateFlow<String?>(null)
     val streamingText: StateFlow<String?> = _streamingText
 
@@ -362,6 +392,11 @@ class ChatViewModel : ViewModel() {
     // por log. 200 es lo que hace falta para cubrir un turno largo.
     private val TAIL_POLL = 200
 
+    // Ciclos de refresco seguidos fallidos antes de decir que el Hub no esta.
+    // El refresco va cada 2 s, asi que 3 son ~6 s: suficiente para no Destapar un
+    // fallo puntual, suficiente para no dejar la pantalla mintiendo un minuto.
+    private val HUB_FAIL_STREAK_FOR_DEGRADED = 3
+
     private fun mergeTail(actual: List<Message>, cola: List<Message>): List<Message> {
         if (cola.isEmpty()) return actual
         val porId = HashMap<String, Message>()
@@ -407,6 +442,11 @@ class ChatViewModel : ViewModel() {
                     continue
                 }
                 if (streamingSince > 0) streamingSince = 0
+                // Un ciclo cuenta como fallido si CUALQUIERA de las llamadas de abajo
+                // revienta. Se decide al final del ciclo, no en cada catch: si se
+                // contara por peticion, un exito intermedio resetea la racha y la de
+                // "Hub caido" no llegaria nunca a dispararse.
+                var cycleFailed = false
                 // Estado de ejecucion (session.execution.*). Es lo que decide si el
                 // turno ha terminado de verdad, asi que va PRIMERO. O(1): el Hub lo
                 // tiene en memoria, no consulta a OpenCode.
@@ -425,6 +465,11 @@ class ChatViewModel : ViewModel() {
                         _turnOver.value = TurnState.isOver(mine)
                     }
                 } catch (_: Exception) {
+                    // Antes era un catch mudo SIN NI UN COMENTARIO: un 429/502 aqui no
+                    // dejaba ni una linea, y como de este bloque depende el "trabajando"
+                    // y el cierre de turno, la pantalla se quedaba con el estado viejo
+                    // sin avisar. Ahora el ciclo cuenta como fallido.
+                    cycleFailed = true
                 }
 
                 // Formularios pendientes. Va PRIMERO y en su propio try: un fallo al
@@ -436,7 +481,9 @@ class ChatViewModel : ViewModel() {
                     if (fr.ok && fr.data != null) _pendingForms.value = fr.data
                 } catch (_: Exception) {
                     // Un fallo puntual de red no debe tumbar el refresco: el siguiente
-                    // ciclo reintenta solo.
+                    // ciclo reintenta solo. Lo que se anade es que CUENTE, para que
+                    // varios ciclos seguidos acaben diciendolo en pantalla.
+                    cycleFailed = true
                 }
 
                 // Permisos pendientes, mismo criterio y mismo motivo que los formularios:
@@ -447,7 +494,8 @@ class ChatViewModel : ViewModel() {
                     val pr = api.getPendingPermissions(sessionId)
                     if (pr.ok && pr.data != null) _pendingPermissions.value = pr.data
                 } catch (_: Exception) {
-                    // Idem: el siguiente ciclo reintenta.
+                    // Idem: el siguiente ciclo reintenta, y ademas cuenta.
+                    cycleFailed = true
                 }
 
                 try {
@@ -483,7 +531,16 @@ class ChatViewModel : ViewModel() {
                         announceFinishedTurnIfAny(fresh)
                     }
                 } catch (_: Exception) {
+                    // Aqui ya fallo el camino rapido Y el lento (si el rapido se
+                    // recupera con el historial completo, se sale por el if de arriba
+                    // y no se llega aqui). O sea: los mensajes no llegan.
+                    cycleFailed = true
                 }
+
+                // Cierre del ciclo. Ahi se decide si el Hub esta disponible: ni antes
+                // (seria contar por peticion y la racha nunca llegaria a 3) ni nunca
+                // (seria tragarselo sin final, que es justo el bug que se arregla).
+                noteRefreshResult(ok = !cycleFailed)
             }
         }
     }
