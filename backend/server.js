@@ -264,6 +264,76 @@ function logExcepcion(etiqueta, e) {
 }
 process.on('uncaughtException', e => logExcepcion('[hub] uncaughtException', e));
 process.on('unhandledRejection', e => logExcepcion('[hub] unhandledRejection', e));
+
+// =====================================================================
+// GUARDIA DE SUPERVIVENCIA — un hub de tests no puede sobrevivir a su padre
+// =====================================================================
+// MEDIDO 2026-09-29: matar al proceso dueño con SIGKILL dejó SEIS hubs huérfanos
+// con PPID=1 reteniendo 504 MB, de UN solo fichero de tests. Con 12 ficheros y
+// varias vueltas, eso es exactamente los 106 huérfanos / 5.757 MB del informe.
+// Un hub vivo pesa 80-90 MB: 6 ya son media gigabyte, y el movil tiene 11,3.
+//
+// El `after()` que hay en los 12 ficheros de test NO es la defensa. Cuando el
+// dueño muere con SIGKILL —que es lo que hace un timeout de CI— no se ejecuta
+// NINGÚN hook, y los hijos que el fichero ya habia acumulado se quedan vivos
+// para siempre (el `after()` mata a `hubs`, pero nadie mata a `hubs`). Que el
+// fichero contenga un after() no dice nada sobre ese camino: el unico proceso
+// que sigue en pie cuando todo lo demas ha muerto es el hijo, asi que la
+// defensa tiene que vivir aqui.
+//
+// DOS disparadores, y por que los dos:
+//   1) INTRINSECO (el que se usa solo): mi padre es un runner de tests. Se lee
+//      UNA vez al arrancar, mientras el padre todavia existe. En produccion el
+//      padre es un shell (`nohup node server.js`, desde start-hub.sh o
+//      keepalive.sh) y NUNCA lleva `--test`, asi que alli la guardia no se arma y
+//      no cambia absolutamente nada.
+//   2) EXPLICITO: AEGIS_SELF_LIMIT_MS en milisegundos. Hace falta porque CI
+//      ejecuta `node --test` DIRECTO, no `npm test`: una variable puesta en
+//      package.json no llegaria a los hijos.
+//
+// Se mira el padre por SU /proc, no por si el hijo es "de tests" de alguna
+// manera adivinada: si /proc no se puede leer, la guardia NO se arma. Fallar
+// hacia "no auto-matarme" es lo que corresponde: en produccion un falso positivo
+// seria un Hub que se suicide al cerrarse quien lo lanzo.
+let GUARDIA_TOPE_MS = 0;
+function armarGuardiaSupervivencia() {
+  const explicito = parseInt(process.env.AEGIS_SELF_LIMIT_MS || "", 10);
+  const padre = process.ppid;
+  let armado = Number.isFinite(explicito) && explicito > 0;
+  if (!armado && padre > 1) {
+    try {
+      // MEDIDO: el padre real de un hub de test es
+      //   node --test-coverage-functions=0 --test-concurrency=0 --test-isolation=process ...
+      // Node pone esos flags al forkear el hijo por fichero, asi que `--test` va
+      // seguido de GUION, no de espacio. Un matcher que exija `--test(\s|$)` no
+      // casa con NADA y la guardia no se arma nunca: fue lo que paso en la primera
+      // version de esto, y el unico sintoma fue que el defecto seguia ahi.
+      // Por eso se hace PREFIJO, y por eso se comprueba con control NEGATIVO: los
+      // lanzadores de produccion (start-hub.sh, keepalive.sh, service.d) no llevan
+      // `--test` y siguen dando False.
+      const cmd = fs.readFileSync(`/proc/${padre}/cmdline`, "utf8").replace(/\0/g, " ");
+      armado = /(^|\s)--test/.test(cmd);
+    } catch (_) { /* sin /proc: no se arma. Ver el comentario de arriba. */ }
+  }
+  if (!armado) return false;
+  GUARDIA_TOPE_MS = (Number.isFinite(explicito) && explicito > 0) ? explicito : 15 * 60 * 1000;
+  const arranque = Date.now();
+  const iv = setInterval(() => {
+    if (!fs.existsSync(`/proc/${padre}`)) {
+      log.warn(`[hub] guardia de supervivencia: mi padre (pid ${padre}) ya no existe — el run de tests murio sin cerrar sus hooks. Me voy, para no quedarme huerfano ocupando ~80 MB.`);
+      process.exit(0);
+    }
+    if (Date.now() - arranque > GUARDIA_TOPE_MS) {
+      log.warn(`[hub] guardia de supervivencia: superados los ${GUARDIA_TOPE_MS} ms de vida maxima de un hub de test. Me voy.`);
+      process.exit(0);
+    }
+  }, 2000);
+  // unref: el temporizador no es motivo para mantener vivo al proceso.
+  if (iv.unref) iv.unref();
+  log.info(`[hub] guardia de supervivencia armada (padre ${padre}, tope ${GUARDIA_TOPE_MS} ms) — este hub es de tests`);
+  return true;
+}
+if (armarGuardiaSupervivencia()) { /* solo informativo */ }
 // Quien envia el SIGTERM, de verdad. El mensaje anterior decia SIEMPRE
 // "keepalive relanza", estea o no fuera keepalive, y eso hizo perder tiempo a dos
 // sesiones distintas persiguiendo al culpable equivocado (la otra sesion lo apunta
