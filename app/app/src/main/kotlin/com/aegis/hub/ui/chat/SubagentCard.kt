@@ -4,17 +4,13 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,12 +45,29 @@ import com.aegis.hub.data.ToolState
  * Paleta y formas heredadas de [com.aegis.hub.ui.ToolExecutionCard] para que las dos
  * tarjetas se lean como parte de la misma familia.
  */
+/**
+ * Cuantas lineas se ven contraidas y cuantas expandidas. Son LINEAS y no una caja con
+ * scroll: ver el comentario del cuerpo expandido.
+ */
+private const val LINEAS_COLAPSADAS = 6
+private const val LINEAS_EXPANDIDAS = 200
+
 @Composable
 fun SubagentCard(
     state: ToolState,
     modifier: Modifier = Modifier
 ) {
-    var expanded by remember(state.subagentSessionId) { mutableStateOf(false) }
+    // SIN clave en el remember, a proposito. La clave natural
+    // (`state.subagentSessionId`) es una propiedad que LLEGA TARDE: mientras el
+    // subagente trabaja no hay `metadata`, asi que vale null, y cuando el subagente
+    // termina aparece el sessionID. `remember(clave)` reinicia el estado cuando la
+    // clave cambia, o sea justo en el instante en que el usuario ya tiene el informe
+    // desplegado y el subagente acaba: se le cierra solo en las manos. Sin clave, el
+    // estado vive mientras viva la tarjeta, que es lo unico razonable.
+    var expanded by remember { mutableStateOf(false) }
+
+    // Si el texto REALLY se corta al entrar. Lo dice el layout, no una suposicion.
+    var cuerpoCortado by remember { mutableStateOf(false) }
 
     val status = state.status ?: "running"
     val isRunning = status == "running" || status == "pending"
@@ -141,45 +154,53 @@ fun SubagentCard(
             // Cuerpo: el resultado del subagente. Colapsado por defecto porque un
             // informe de subagente son miles de caracteres y el chat es un scroll.
             if (!cleanBody.isNullOrBlank()) {
-                // El estado de scroll se crea SIEMPRE, no solo cuando esta expandido:
-                // llamar a un @Composable de forma condicional dentro de Modifier.then
-                // es legal pero fragil. Aqui se hoistea y se decide que hacer con el.
-                val bodyScroll = rememberScrollState()
-                Box(
+                // SIN scroll propio. Antes el texto expandido iba con
+                // `verticalScroll` + `heightIn(max = 520.dp)`, o sea un panel de 520 dp
+                // con scroll PROPIIO dentro de un chat que ya es un scroll vertical.
+                // Al desplegar, arrastrar sobre la tarjeta movia el panel y no el chat:
+                // el chat parecia clavado, que es justo lo que se reportaba como "el
+                // despliegue no funciona". Peor: el texto que sobrepasaba esos 520 dp
+                // se quedaba OCULTO, sin ninguna pista de que hubiera mas debajo.
+                // Ahora el limite son lineas y el texto expandido fluye con el chat,
+                // que es el unico scroll que el usuario ya sabe usar.
+                val lineasVisibles = if (expanded) LINEAS_EXPANDIDAS else LINEAS_COLAPSADAS
+                Text(
+                    text = cleanBody,
+                    color = Color(0xFFC9D1D9),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    maxLines = lineasVisibles,
+                    // `onTextLayout` responde si el texto se corta DE VERDAD, en vez de
+                    // suponerlo por la longitud de la cadena. Antes el enlace "ver todo"
+                    // salia siempre: en un informe corto no habia nada mas que ver, se
+                    // pulsaba y no pasaba nada, y eso se lee como un boton roto.
+                    onTextLayout = { r ->
+                        val corta = r.hasVisualOverflow || r.lineCount > lineasVisibles
+                        if (corta != cuerpoCortado) cuerpoCortado = corta
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { expanded = !expanded }
                         .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = cleanBody,
-                        color = Color(0xFFC9D1D9),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        // Acotado a 2000 lineas a proposito. Un subagente devuelve
-                        // informes largos, y maxLines=Int.MAX_VALUE obliga a Compose
-                        // a medir el texto ENTERO en cada layout: en un chat con varias
-                        // delegaciones eso es jank en el scroll del LazyColumn. El
-                        // texto completo esta en la sesion del subagente, enlazada
-                        // abajo; aqui se enseña lo util.
-                        maxLines = if (expanded) 2000 else 6,
-                        modifier = Modifier
-                            .heightIn(max = if (expanded) 520.dp else 200.dp)
-                            .then(if (expanded) Modifier.verticalScroll(bodyScroll) else Modifier)
-                    )
-                }
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { expanded = !expanded }
                         .padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = if (expanded) "ver menos" else "ver todo",
-                        color = Color(0xFF58A6FF),
-                        fontSize = 10.5.sp
-                    )
+                    // El enlace solo si queda algo por ver, o si ya esta desplegado (para
+                    // poder volver a plegar). Antes habia DOS superficies pulsables
+                    // —la caja del texto y esta fila— y el texto de esta fila caia
+                    // dentro de la otra: un area de pulsacion ambigua.
+                    if (expanded || cuerpoCortado) {
+                        Text(
+                            text = if (expanded) "ver menos" else "ver todo",
+                            color = Color(0xFF58A6FF),
+                            fontSize = 10.5.sp,
+                            modifier = Modifier.clickable { expanded = !expanded }
+                        )
+                    }
                     val meta = buildString {
                         if (state.isTruncated) append("recortado por el Hub")
                         state.subagentSessionId?.let { append(" ${it.takeLast(6)}") }
