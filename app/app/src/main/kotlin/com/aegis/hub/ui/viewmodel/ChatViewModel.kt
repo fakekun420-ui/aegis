@@ -202,7 +202,7 @@ class ChatViewModel : ViewModel() {
         if (t == null) return true
         val s = t.trim()
         if (s.isBlank()) return true
-        if (s.startsWith("ses_") || s.startsWith("agy_") || s.startsWith("companion:") || s.startsWith("local_")) return true
+        if (s.startsWith("ses_") || s.startsWith("companion:") || s.startsWith("local_")) return true
         if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
         return false
     }
@@ -260,9 +260,8 @@ class ChatViewModel : ViewModel() {
             if (!last.isNullOrBlank() && _selectedModel.value.isNullOrBlank()) {
                 _selectedModel.value = last
             }
-            if (_selectedModel.value.isNullOrBlank() && provider == "antigravity") {
-                _selectedModel.value = "gemini-3.8-flash-high"
-            }
+            // Ya no se fuerza un modelo: con OpenCode como unico motor, el modelo se
+            // elige en su lista y "gemini-3.8-flash-high" no existe ahi.
         }
     }
 
@@ -290,7 +289,6 @@ class ChatViewModel : ViewModel() {
         // app dejaba cambiar y luego no llegaba ninguna respuesta.
         val sid = _currentSessionId.value.orEmpty()
         val sessionProvider = when {
-            sid.startsWith("agy_") -> "antigravity"
             sid.startsWith("ses_") -> "opencode"
             else -> null
         }
@@ -804,10 +802,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             // la misma sesión tampoco deja el refresco muerto.
             startViewRefresh(sessionId)
         }
-        // Una sesion en blanco es un chat NUEVO -> opencode. Un id `agy_` es una
-        // sesion ya nacida en Antigravity: se respeta, porque su conversacion vive
-        // en el brain de `agy` y reasignarla la dejaria huerfana.
-        val prov = (provider ?: if (sessionId.startsWith("agy_")) "antigravity" else "opencode").lowercase().trim()
+        val prov = (provider ?: "opencode").lowercase().trim()
         _selectedProvider.value = prov
         // F6: sólo una sesión existente queda vinculada al proveedor de nacimiento;
         // los chats nuevos pueden cambiar libremente de motor.
@@ -818,7 +813,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         // preview-free), así que ponerlo en una sesión `ses_*` dejaba el compositor sin
         // ningún radio marcado y hacía que la lista lo sustituyera por el primero.
         if (_selectedModel.value.isNullOrBlank()) {
-            _selectedModel.value = if (prov == "antigravity") "gemini-3.8-flash-high" else null
+            _selectedModel.value = null
         }
         restoreModelFor(sessionId, prov)
         if (sessionId.isBlank()) {

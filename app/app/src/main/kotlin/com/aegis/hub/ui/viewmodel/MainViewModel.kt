@@ -377,11 +377,10 @@ class MainViewModel : ViewModel() {
         return try {
             val proj = _projects.value.find { it.id == projectId }
             // providerOverride gana: desde la lista de chats no hay proyecto asociado
-            // (projectId = ""), así que sin esto TODOS los chats nuevos nacían como
-            // "antigravity" sin importar lo que el usuario hubiera elegido.
+            // (projectId = ""), así que sin esto el motor caia al default del Hub.
             val provider = providerOverride?.takeIf { it.isNotBlank() }
                 ?: proj?.provider
-                ?: "antigravity"
+                ?: "opencode"
             val effectiveProjectId = projectId.trim().ifBlank { null }
             val sid = createSessionViaHub(title, effectiveProjectId, provider)
             if (sid != null) {
@@ -394,10 +393,10 @@ class MainViewModel : ViewModel() {
         } catch (e: Exception) { _error.value = e.message; null }
     }
 
-    private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "antigravity"): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
             val pIdStr = if (!projectId.isNullOrBlank()) "\"$projectId\"" else "null"
-            val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":$pIdStr,\"provider\":\"$provider\",\"model\":\"gemini-3.8-flash-high\"}"
+            val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":$pIdStr,\"provider\":\"$provider\"}"
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:8765/opencode/session")
                 .header("X-Provider", provider)

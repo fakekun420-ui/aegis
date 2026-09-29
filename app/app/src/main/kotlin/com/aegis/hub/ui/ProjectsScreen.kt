@@ -45,17 +45,16 @@ import com.aegis.hub.util.relativeTime
 
 @Composable
 fun ProviderBadge(provider: String, modifier: Modifier = Modifier) {
-    val isAgy = provider.equals("antigravity", ignoreCase = true)
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = if (isAgy) AgyBadgeBg else OpenCodeBadgeBg,
-        border = BorderStroke(1.dp, if (isAgy) AgyBadgeBorder else OpenCodeBadgeBorder),
+        color = OpenCodeBadgeBg,
+        border = BorderStroke(1.dp, OpenCodeBadgeBorder),
         modifier = modifier
     ) {
         Text(
-            text = if (isAgy) "Antigravity" else "OpenCode",
+            text = "OpenCode",
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isAgy) AgyBadgeFg else OpenCodeBadgeFg,
+            color = OpenCodeBadgeFg,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
         )
     }
@@ -360,7 +359,7 @@ fun ProjectsScreen(
     if (showCreate) {
         var name by remember { mutableStateOf("") }
         var desc by remember { mutableStateOf("") }
-        var selectedProvider by remember { mutableStateOf("antigravity") }
+        var selectedProvider by remember { mutableStateOf("opencode") }
         AlertDialog(
             onDismissRequest = { showCreate = false },
             shape = RoundedCornerShape(16.dp),
@@ -370,21 +369,6 @@ fun ProjectsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = desc, onValueChange = { desc = it }, label = { Text("Descripción (opcional)") }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
-                    Text("Proveedor / Agente:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        FilterChip(
-                            selected = selectedProvider == "opencode",
-                            onClick = { selectedProvider = "opencode" },
-                            label = { Text("OpenCode") },
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        FilterChip(
-                            selected = selectedProvider == "antigravity",
-                            onClick = { selectedProvider = "antigravity" },
-                            label = { Text("Antigravity") },
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                    }
                 }
             },
             confirmButton = {

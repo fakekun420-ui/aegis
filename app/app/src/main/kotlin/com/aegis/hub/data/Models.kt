@@ -25,8 +25,9 @@ data class SessionRef(
     val provider: String? = null
 ) {
     fun resolvedProvider(projectProvider: String? = null): String {
-        val p = provider ?: projectProvider
-        return if (p?.lowercase() == "antigravity" || sessionId.startsWith("agy_")) "Antigravity" else "OpenCode"
+        // Solo hay un motor, asi que esto ya no decide nada. Se conserva la firma
+        // porque hay 5 llamadas y el campo `provider` sigue viajando en el store.
+        return "OpenCode"
     }
 }
 
@@ -36,21 +37,21 @@ data class Project(
     val description: String? = null,
     val createdAt: String? = null,
     val archivedAt: String? = null,
-    val provider: String? = "antigravity",
+    val provider: String? = "opencode",
     val folder: String? = null,
     val ponytail: String? = null,
     val sessions: List<SessionRef>? = null,
     val skills: List<Any>? = null,
     val linkedProjects: List<String>? = null
 ) {
-    val resolvedProvider: String get() = if (provider?.lowercase() == "antigravity") "Antigravity" else "OpenCode"
+    val resolvedProvider: String get() = "OpenCode"
     val resolvedFolder: String get() = folder ?: "/sdcard/projects/${name.lowercase().replace(" ", "-").replace(Regex("[^a-z0-9_-]"), "")}/"
 }
 
 data class CreateProjectRequest(
     val name: String,
     val description: String? = null,
-    val provider: String? = "antigravity",
+    val provider: String? = "opencode",
     // Ruta de una carpeta YA existente bajo /sdcard/projects para vincularla como
     // proyecto en vez de crear una carpeta nueva a partir del nombre. El backend la
     // valida: debe resolver dentro de PROJECTS_ROOT (FOLDER_OUTSIDE_ROOT) y no puede
@@ -68,7 +69,7 @@ data class PatchProjectRequest(
 data class LinkSessionRequest(
     val sessionId: String,
     val title: String? = null,
-    val provider: String? = "antigravity"
+    val provider: String? = "opencode"
 )
 
 // ---- Sessions (proxy /api/opencode/sessions -> opencode /session) ----
@@ -88,9 +89,9 @@ data class OpencodeSession(
     val provider: String? = null
 ) {
     val resolvedId: String get() = id ?: ID ?: ""
-    val resolvedTitle: String get() = title ?: name ?: if (resolvedId.startsWith("agy_")) "Nuevo chat" else resolvedId.take(8)
+    val resolvedTitle: String get() = title ?: name ?: resolvedId.take(8)
     val lastActivityIso: String? get() = updatedAt ?: updatedAtAlt ?: createdAt ?: createdAtAlt
-    val resolvedProvider: String get() = if (provider?.lowercase() == "antigravity" || resolvedId.startsWith("agy_")) "Antigravity" else "OpenCode"
+    val resolvedProvider: String get() = "OpenCode"
 }
 
 data class PinResponse(

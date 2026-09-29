@@ -339,24 +339,7 @@ fun VoiceConversationScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    FilterChip(
-                        selected = selectedProvider == "opencode",
-                        onClick = { vm.selectProvider("opencode") },
-                        label = { Text("OpenCode Zen") },
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    FilterChip(
-                        selected = selectedProvider == "antigravity",
-                        onClick = { vm.selectProvider("antigravity") },
-                        label = { Text("Antigravity") },
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-
+                // Sin selector de motor: queda OpenCode y solo OpenCode.
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp)) {

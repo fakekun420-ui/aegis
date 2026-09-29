@@ -729,37 +729,12 @@ fun ChatScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Proveedor y Modelo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("Elige el motor y modelo para esta sesión:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Modelo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Elige el modelo para esta sesión:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    FilterChip(
-                        selected = selectedProvider == "opencode",
-                        onClick = { vm.selectProvider("opencode") },
-                        label = { Text("OpenCode Zen") },
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    FilterChip(
-                        selected = selectedProvider == "antigravity",
-                        onClick = { vm.selectProvider("antigravity") },
-                        label = { Text("Antigravity") },
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-                if (sessionProviderBound) {
-                    // El proveedor ya NO está bloqueado: los chips están siempre
-                    // activos y, al elegir otro motor, se crea una sesión nueva y se
-                    // navega a ella (el proveedor vive en el prefijo del id, así que
-                    // esta sesión no se puede re-etiquetar). El aviso solo explica que
-                    // el cambio no reescribe este chat.
-                    Text(
-                        "El motor está ligado a esta sesión. Al elegir otro se abrirá un " +
-                            "chat nuevo con ese motor; este se conserva tal cual.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
+                // El selector de motor se fue con Antigravity: queda uno solo, asi
+                // que una fila de chips donde una opcion esta siempre activa es ruido
+                // que hace creer que se puede cambiar algo que no se puede.
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 models.forEach { model ->
@@ -1596,7 +1571,7 @@ private fun isTechnicalSessionId(t: String?): Boolean {
     if (t == null) return true
     val s = t.trim()
     if (s.isBlank()) return true
-    if (s.startsWith("ses_") || s.startsWith("agy_") || s.startsWith("companion:") || s.startsWith("local_")) return true
+    if (s.startsWith("ses_") || s.startsWith("companion:") || s.startsWith("local_")) return true
     if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
     return false
 }
