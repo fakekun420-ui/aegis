@@ -320,9 +320,24 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         var isForeground: Boolean = false
     }
 
+    // onStart/onStop, y NO onResume/onPause: `isForeground` decide entre el divisor
+    // DENTRO del chat y una notificacion a la barra, asi que la pregunta correcta es
+    // "el usuario puede ver la Activity?", y esa es onStart/onStop. Con onPause, un
+    // dialogo, la sombra de notificaciones o simplemente apagar la pantalla ponian la
+    // bandera a false mientras el chat seguia a la vista: el usuario estaba viendo el
+    // turno terminar y recibia ademas una notificacion de lo que estaba viendo.
+    override fun onStart() {
+        super.onStart()
+        isForeground = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        isForeground = false
+    }
+
     override fun onResume() {
         super.onResume()
-        isForeground = true
         // El usuario acaba de volver de Ajustes → "Acceso a todos los archivos". Si ya
         // está concedido, TokenProvider dejó de necesitar root en la siguiente lectura
         // del token (60 s de caché como mucho). Avisamos solo en la transición.
@@ -330,11 +345,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             allFilesWarned = true
             toast("Acceso al almacenamiento concedido: ya no hace falta root")
         }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        isForeground = false
     }
     fun getWakePhrases(): Array<String> = com.aegis.hub.data.VoicePreferences.getWakePhrases(this)
     fun saveWakePhrases(arr: Array<String>) = com.aegis.hub.data.VoicePreferences.saveWakePhrases(this, arr)

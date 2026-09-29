@@ -56,8 +56,36 @@ class MainViewModel : ViewModel() {
     // Ids de las sesiones con un turno EN CURSO ahora mismo. Lo mantiene el vigilante
     // del Hub a partir de los eventos session.execution.* de OpenCode, asi que
     // funciona igual si el turno se lanzo desde la app o desde el CLI.
+    /** Cuanto se mantiene la marca "terminado" antes de desaparecer sola. */
+    private val FINISHED_TTL_MS = 12_000L
+
     private val _inflightIds = MutableStateFlow<Set<String>>(emptySet())
     val inflightIds: StateFlow<Set<String>> = _inflightIds
+
+    // Sesiones cuyo turno ACABÓ hace nada. El Hub ya lo envía (`turnOver`) y antes se
+    // tiraba: el panel solo sabía decir "trabajando" y no "terminado", así que al
+    // acabarse un turno el círculo desaparecía sin ninguna confirmación de que
+    // terminó — el estado se confundía con "ya no está mirando".
+    //
+    // Caduca a los FINISHED_TTL_MS: si no, cualquier sesión que haya trabajado alguna
+    // vez en la sesión actual quedaría marcada como "terminada" para siempre, que es
+    // tan mentiroso como no marcar nada.
+    private val _finishedIds = MutableStateFlow<Set<String>>(emptySet())
+    val finishedIds: StateFlow<Set<String>> = _finishedIds
+    private val finishedAt = mutableMapOf<String, Long>()
+
+    private fun applyInflight(rows: List<InflightSession>) {
+        _inflightIds.value = rows.filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
+        val now = System.currentTimeMillis()
+        for (r in rows) {
+            val id = r.id ?: continue
+            if (TurnState.isOver(r)) finishedAt[id] = now
+        }
+        finishedAt.keys.retainAll { id ->
+            now - (finishedAt[id] ?: 0L) < FINISHED_TTL_MS
+        }
+        _finishedIds.value = finishedAt.keys.toSet()
+    }
     private var inflightJob: Job? = null
 
     init {
@@ -80,9 +108,9 @@ class MainViewModel : ViewModel() {
                 try {
                     val r = api.getInflight()
                     if (r.ok && r.data != null) {
-                        // Solo las que NO han terminado: un turnOver es historia, no una
-                        // sesion ocupada, y dejarlas marcadas seria mentiroso.
-                        _inflightIds.value = r.data.filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
+                        // Solo las que NO han terminado cuentan como ocupadas: un
+                        // turnOver es historia, no una sesion ocupada.
+                        applyInflight(r.data)
                     }
                 } catch (_: Exception) {
                     // Fallo puntual de red: el siguiente ciclo reintenta solo.
@@ -97,7 +125,7 @@ class MainViewModel : ViewModel() {
             try {
                 val r = api.getInflight()
                 if (r.ok && r.data != null) {
-                    _inflightIds.value = r.data.filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
+                    applyInflight(r.data)
                 }
             } catch (_: Exception) {}
         }

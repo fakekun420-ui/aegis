@@ -34,6 +34,7 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
     val sessions by vm.sessions.collectAsState()
     // Sesiones con turno en curso, para el circulo de "ejecutando" en la lista.
     val inflightIds by vm.inflightIds.collectAsState()
+    val finishedIds by vm.finishedIds.collectAsState()
 
     NavHost(navController = navController, startDestination = startDestination) {
         // F1 — Wizard de configuración inicial (sólo se entra como arranque de primer uso;
@@ -146,6 +147,7 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
             LaunchedEffect(Unit) { vm.refreshSessions() }
             ChatsScreen(
                 inflightIds = inflightIds,
+                finishedIds = finishedIds,
                 sessions = sessions,
                 projects = projects,
                 isLoading = vm.loadingSessions.collectAsState().value,

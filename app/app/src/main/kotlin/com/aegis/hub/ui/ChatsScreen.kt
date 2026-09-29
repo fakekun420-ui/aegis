@@ -24,6 +24,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +43,11 @@ fun ChatsScreen(
     // Sesiones con un turno en curso. Cada una lleva un circulo girando, para poder ver
     // de un vistazo cuales siguen trabajando SIN abrir cada chat.
     inflightIds: Set<String> = emptySet(),
+    // Sesiones cuyo turno acaba de terminar. El circulo girando dice "trabajando"; esto
+    // dice "ya termino" durante unos segundos. Sin esto, al acabar un turno el circulo
+    // desaparecia y no habia forma de distinguir "acabo de terminar" de "no lo estaba
+    // mirando" — el Hub ya lo envia (turnOver) y antes se descartaba.
+    finishedIds: Set<String> = emptySet(),
     isLoading: Boolean = false,
     error: String? = null,
     onBack: () -> Unit,
@@ -212,6 +218,15 @@ fun ChatsScreen(
                                                         modifier = Modifier.size(11.dp),
                                                         strokeWidth = 1.6.dp,
                                                         color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                } else if (sess.resolvedId in finishedIds) {
+                                                    // Check de "terminado". Un tique, no un
+                                                    // icono grande: informa sin gritar.
+                                                    Icon(
+                                                        Icons.Filled.Check,
+                                                        contentDescription = "Turno terminado",
+                                                        tint = Color(0xFF3FB950),
+                                                        modifier = Modifier.size(13.dp)
                                                     )
                                                 }
                                                 if (sess.pinned) {
