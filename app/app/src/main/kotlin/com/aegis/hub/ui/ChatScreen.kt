@@ -55,6 +55,7 @@ import com.aegis.hub.data.LiveToolExecution
 import com.aegis.hub.data.Message
 import com.aegis.hub.data.MessagePart
 import com.aegis.hub.data.MessageDeliveryStatus
+import com.aegis.hub.ui.chat.SubagentCard
 import com.aegis.hub.ui.viewmodel.ChatViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1061,14 +1062,25 @@ private fun TerminalConsoleTurn(
                 if (hasToolParts) {
                     parts.forEach { part ->
                         if (part.type == "tool") {
-                            ToolExecutionCard(
-                                tool = part.tool ?: "bash",
-                                command = part.state?.command ?: "",
-                                output = part.state?.output,
-                                status = part.state?.status ?: "completed",
-                                exitCode = part.state?.exitCode ?: 0,
-                                duration = part.state?.duration
-                            )
+                            val st = part.state
+                            // Una delegacion se pinta como subagente, no como bash.
+                            // Antes TODO tool caia en ToolExecutionCard con `part.tool
+                            // ?: "bash"`, y como `tool` llega siempre a null MEDIDO,
+                            // una delegacion salia rotulada "bash", sin comando y sin
+                            // resultado. `toolName`/`outputText` leen la forma real del
+                            // input y del state nativo (v2 usa `content`, no `output`).
+                            if (st != null && st.isSubagent) {
+                                SubagentCard(state = st)
+                            } else {
+                                ToolExecutionCard(
+                                    tool = st?.toolName ?: part.tool ?: "herramienta",
+                                    command = st?.command ?: "",
+                                    output = st?.outputText,
+                                    status = st?.status ?: "completed",
+                                    exitCode = st?.exitCode ?: 0,
+                                    duration = st?.duration
+                                )
+                            }
                         } else if (part.type == "text" && !part.text.isNullOrBlank()) {
                             MarkdownText(text = part.text.trim())
                         }

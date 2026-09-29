@@ -110,13 +110,85 @@ data class MessageInfo(
     val deliveryStatus: MessageDeliveryStatus get() = status ?: MessageDeliveryStatus.SENT
 }
 
+// Bloque de contenido de una tool en el formato nativo de OpenCode v2. El Hub lo
+// reenvía verbatim dentro de `state` (providers.js), pero el cliente no lo
+// declaraba, así que Gson lo descartaba y la salida de TODA herramienta se perdía.
+data class ToolContentBlock(
+    val type: String? = null,
+    val text: String? = null
+)
+
 data class ToolState(
     val status: String? = null,
     val input: Map<String, Any?>? = null,
+    // Ruta LEGACY: el normalizador antiguo (providers.js:1541) escribía `output`.
     val output: String? = null,
+    // Formato NATIVO v2: el resultado llega como `content` = lista de bloques.
+    val content: List<ToolContentBlock>? = null,
+    // `metadata` trae sessionID/status (subagentes), truncated, exit, name (skills).
+    val metadata: Map<String, Any?>? = null,
     val exitCode: Int? = null,
     val duration: Double? = null
 ) {
+    /**
+     * La salida que se debe pintar, venga del formato que venga.
+     *
+     * MEDIDO 2026-09-29 sobre una sesión real: las 69 tool parts de una sesión con
+     * subagentes llegaron con `state.content` (array de bloques) y `state.output`
+     * siempre a null. Leer solo `output` es leer siempre null — por eso la tarjeta
+     * de una herramienta salía sin resultado. Se prefiere `output` si existe para no
+     * cambiar el comportamiento de la ruta legacy, y se aplana `content` si no.
+     */
+    val outputText: String?
+        get() {
+            val legacy = output?.takeIf { it.isNotBlank() }
+            if (legacy != null) return legacy
+            val joined = content
+                ?.mapNotNull { it.text }
+                ?.filter { it.isNotBlank() }
+                ?.joinToString("\n")
+                ?.takeIf { it.isNotBlank() }
+            return joined
+        }
+
+    /**
+     * Una invocación de subagente se reconoce por la FORMA de su `input`, no por su
+     * nombre: toda herramienta que reciba `agent` es una delegación. No se menciona
+     * ningún cargo ni ningún proyecto con nombre propio, así que esto funciona con
+     * cualquier subagente que se añada mañana, no solo con los de hoy.
+     */
+    val isSubagent: Boolean get() = input?.containsKey("agent") == true
+
+    val agentName: String? get() = input?.get("agent") as? String
+    val agentDescription: String? get() = input?.get("description") as? String
+
+    /** Sesión hija del subagente. Permite abrir su conversación desde la tarjeta. */
+    val subagentSessionId: String? get() = metadata?.get("sessionID") as? String
+    val isTruncated: Boolean get() = metadata?.get("truncated") == true
+
+    /**
+     * El nombre de la herramienta NO viaja en el payload: el normalizador lo
+     * conserva si existe (providers.js:87) y la ruta nativa v2 no lo trae — MEDIDO,
+     * las 69 tool parts de una sesión real llegaron sin `tool` ni `callID`. Antes de
+     * arreglarlo en la UI, el nombre se infiere de las claves de `input`. Es una
+     * etiqueta para la persona, no un valor de lógica: si la inferencia falla se
+     * dice "herramienta" en vez de mentir con un "bash" fijo.
+     */
+    val toolName: String get() {
+        val i = input ?: return "herramienta"
+        fun has(k: String) = i.containsKey(k)
+        return when {
+            has("agent") -> "subagente"
+            has("command") || has("CommandLine") || has("cmd") -> "bash"
+            has("oldString") || has("newString") -> "edit"
+            has("path") && has("content") -> "write"
+            has("path") || has("AbsolutePath") || has("TargetFile") -> "read"
+            has("query") || has("url") || has("Url") -> "web"
+            has("id") -> "skill"
+            else -> "herramienta"
+        }
+    }
+
     val command: String get() {
         val direct = input?.get("command") as? String
             ?: input?.get("CommandLine") as? String
