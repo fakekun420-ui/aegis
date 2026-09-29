@@ -99,6 +99,31 @@ test("1. sink en AEGIS_LOG_DIR + rotación -> aegis.log.1 y endpoint en orden cr
   // => techo por defecto, para que el propipetición al endpoint cuente y pase.
   await startHub({ AEGIS_LOG_DIR: LOG_DIR, AEGIS_LOG_MAX_BYTES: "300" });
 
+  // El Hub SEGUIDO ESCRIBIENDO al arrancar: la sonda de IPs de LAN es asíncrona y su
+  // línea llega la última, DESPUÉS de "sessionOwnership". Este test compara lo que
+  // sirvió el endpoint con una re-lectura del disco, así que si el log crece entre las
+  // dos lecturas la comparación falla POR UNA CARRERA, no por un defecto del endpoint.
+  // Y "tamaño estable" no sirve como señal aquí: con AEGIS_LOG_MAX_BYTES=300 el fichero
+  // rota y cambia de tamaño sin que se haya dejado de escribir. Lo que se espera es la
+  // última línea de arranque, y luego dos lecturas seguidas con el mismo tamaño.
+  await (async () => {
+    const read = () => {
+      let all = "";
+      for (const f of [`${LOG_FILE}.1`, LOG_FILE]) {
+        if (fs.existsSync(f)) all += fs.readFileSync(f, "utf8");
+      }
+      return all;
+    };
+    for (let i = 0; i < 80; i++) {
+      if (read().includes("inaccesible")) {
+        const a = read().length;
+        await new Promise(r => setTimeout(r, 150));
+        if (read().length === a) return;
+      }
+      await new Promise(r => setTimeout(r, 120));
+    }
+  })();
+
   assert.ok(fs.existsSync(LOG_FILE), `el sink debe crear ${LOG_FILE}`);
   assert.ok(fs.existsSync(`${LOG_FILE}.1`), "la rotación debe haber creado aegis.log.1 durante el arranque");
   assert.ok(fs.statSync(`${LOG_FILE}.1`).size > 0, "aegis.log.1 no puede quedar vacío");

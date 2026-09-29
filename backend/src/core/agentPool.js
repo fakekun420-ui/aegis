@@ -46,9 +46,29 @@ export class AgentPool {
     return list.map(a => ({ id: a.id, name: a.name, status: a.status }));
   }
   
+  /**
+   * Cancelacion HONESTA. Antes solo vaciaba el array y devolvia "All agents
+   * cancelled": los agentes en marcha seguian corriendo, porque un dispatch ya
+   * lanzado no se puede parar sin un canal de cancelacion.
+   *
+   * Se elige decir la verdad antes que fingir: se saca a los agentes del registro
+   * (dejan de ocupar cupo y de aparecer en el estado) y se devuelve cuantos seguian
+   * vivos, para que la app pueda decirlo en vez de prometer una parada que no ocurre.
+   * Cancelar de verdad exige AbortSignal en BaseAgent.execute(), que es un trabajo
+   * aparte y no se finge aqui.
+   */
   cancelAll(projectId) {
+    const running = this.active.get(projectId) || [];
+    const n = running.length;
     this.active.set(projectId, []);
-    return { ok: true, message: "All agents cancelled" };
+    return {
+      ok: true,
+      deregistered: n,
+      stillRunning: n,
+      message: n === 0
+        ? "No habia agentes activos"
+        : `Se deregistraron ${n} agente(s), pero SIGUEN corriendo: no hay canal de cancelacion`,
+    };
   }
 }
 export const agentPool = new AgentPool();

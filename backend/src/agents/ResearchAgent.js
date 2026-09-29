@@ -7,11 +7,19 @@ export class ResearchAgent extends BaseAgent {
     this.status = "running";
     this.emit("AGENT_STARTED", { context });
     try {
-      const res = await this.invoker.invoke("graphify", ["--markdown"], this.projectId);
-      let content = "";
-      if (res.ok) content = res.data;
-      else content = "# Research Fallback\nGraphify failed or not installed. " + res.error;
-      
+      // El flag era "--markdown", que NO existe en graphify (verificado contra la CLI:
+      // "unknown command '--markdown'"), asi que este agente fallaba SIEMPRE y aun asi
+      // escribia un RESEARCH.md de decepcion marcado como FINAL y devolvia ok:true.
+      // Se usa una orden que existe de verdad.
+      const res = await this.invoker.invoke("graphify", ["query", "que hace este proyecto y como se organiza", "--budget", "1200"], this.projectId);
+      if (!res.ok) {
+        // Si la skill falla, NO se escribe un artefacto que parezca una investigacion
+        // creada. Se devuelve el fallo y no se finge.
+        this.status = "failed";
+        this.emit("AGENT_FAILED", { error: res.error });
+        return { ok: false, error: res.error };
+      }
+      const content = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
       this.writeArtifact("RESEARCH.md", content, { state: "FINAL" });
       this.status = "completed";
       this.emit("AGENT_COMPLETED", { artifact: "RESEARCH.md" });

@@ -15,11 +15,22 @@ export class SkillInvoker {
         env: { ...process.env, HOME: "/root", PATH: `/root/.local/bin:${process.env.PATH || ""}` } 
       });
       
+      // Sin limite, un skill que escupe mucho accumulates en memoria hasta tumbar el
+      // Hub (el acumulador de string no tiene techo). Se corta por TAMANO y se DICE
+      // en el resultado, en vez de truncar en silencio.
+      const MAX_OUT = 2 * 1024 * 1024;
       let stdout = "";
       let stderr = "";
+      let truncated = false;
+      const cap = (prev, chunk) => {
+        if (prev.length >= MAX_OUT) { truncated = true; return prev; }
+        const next = prev + chunk;
+        if (next.length > MAX_OUT) { truncated = true; return next.slice(0, MAX_OUT); }
+        return next;
+      };
       
-      p.stdout.on("data", c => stdout += c);
-      p.stderr.on("data", c => stderr += c);
+      p.stdout.on("data", c => { stdout = cap(stdout, c); });
+      p.stderr.on("data", c => { stderr = cap(stderr, c); });
       
       const timer = setTimeout(() => {
         if (isDone) return;
@@ -38,9 +49,9 @@ export class SkillInvoker {
         try { data = JSON.parse(outTrim); } catch (_) {}
         
         if (code === 0) {
-          resolve({ ok: true, data, error: null });
+          resolve({ ok: true, data, error: null, truncated });
         } else {
-          resolve({ ok: false, data: outTrim, error: `Skill exited with code ${code}: ${stderr.trim()}` });
+          resolve({ ok: false, data: outTrim, error: `Skill exited with code ${code}: ${stderr.trim()}`, truncated });
         }
       });
       

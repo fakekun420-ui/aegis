@@ -4,7 +4,11 @@
 
 import path from "node:path";
 
-export const WORKSPACE_ROOT = "/sdcard/projects";
+// Una sola fuente de verdad. Antes server.js leia process.env.PROJECTS_ROOT y aqui
+// habia "/sdcard/projects" a fuego: el env estaba documentado, testeado y encima
+// ignorado por la mitad del sistema (proyectos, workflows, agentes, skills, bootstrap).
+// Los tests aislan el env, asi que el desacuerdo no se veia en CI.
+export const WORKSPACE_ROOT = process.env.PROJECTS_ROOT || "/sdcard/projects";
 
 /**
  * Validates projectId against safe filesystem naming convention

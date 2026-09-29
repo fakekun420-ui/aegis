@@ -221,10 +221,22 @@ function resolvesInside(basePath, id) {
 }
 
 // Metacaracteres de shell prohibidos en parámetros interpolados en comandos
-const SHELL_META_RE = /[;|`]|&&|\n|\$\(/;
+// Denylist COMPLETA ahora. Antes faltaban `>`, `>>`, `<`, `&` suelto y `${...}` sin
+// parentesis, y la de `am start` interpola `pkg` SIN comillas: un `pkg` con `>`
+// ejecutaba una redireccion como root. Sigue siendo una denylist (un filtro se puede
+// saltar), asi que para lo que tiene GRAMATICA se usa la allowlist PACKAGE_RE de abajo.
+// Nota de honestidad: en /api/device/shell esta regex no protege nada, porque `cmd`
+// es el comando entero — ese endpoint es root por diseno para quien tenga el token.
+const SHELL_META_RE = /[;|`]|&&|\n|\$\(|\$\{|[<>]|&(?!&)/;
+// Gramatica de paquete Android. /api/device/tap y /key ya usaban parseInt como
+// patron; esto es el mismo criterio aplicado a lo que de verdad tiene estructura.
+const PACKAGE_RE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/;
+function isValidPackageName(v) {
+  return typeof v === "string" && v.length <= 255 && PACKAGE_RE.test(v);
+}
 function hasShellMeta(v) { return typeof v === "string" && SHELL_META_RE.test(v); }
 function badParam(res, name) {
-  return json(res, 400, { ok: false, error: `invalid characters in "${name}" (; | \` && newline $())`, code: "BAD_REQUEST" });
+  return json(res, 400, { ok: false, error: `invalid characters in "${name}" (; | \` && <> & newline $() \${})`, code: "BAD_REQUEST" });
 }
 
 // resiliencia: no morir por crash del proxy, pero sí permitir reinicio limpio por keepalive (pkill -f) o por kill -15
@@ -444,8 +456,7 @@ function normalizeSessionEntry(s) {
     lastUsed: s.lastUsed || s.createdAt || nowIso(),
     summary: s.summary || "",
     pinned: Boolean(s.pinned || false),
-    provider: s.provider ? String(s.provider).toLowerCase().trim() : undefined,
-    agyConversationId: s.agyConversationId ? String(s.agyConversationId).trim() : undefined
+    provider: s.provider ? String(s.provider).toLowerCase().trim() : undefined
   };
 }
 
@@ -1529,7 +1540,7 @@ async function handleRequest(req, res){
         let changed = false;
         for (const p of store.projects) {
           const before = (p.sessions || []).length;
-          p.sessions = (p.sessions || []).filter(s => s.sessionId !== sid && s.agyConversationId !== sid);
+          p.sessions = (p.sessions || []).filter(s => s.sessionId !== sid);
           if (p.sessions.length !== before) changed = true;
         }
         if (store.sessionTitles && store.sessionTitles[sid]) {
@@ -1650,7 +1661,7 @@ async function handleRequest(req, res){
             const autoTitle = cleanPrompt.length > 30 ? cleanPrompt.slice(0, 30).trim() + "…" : cleanPrompt;
             store.sessionTitles[sid] = autoTitle;
             for (const p of store.projects) {
-              const found = (p.sessions || []).find(s => s.sessionId === sid || s.agyConversationId === sid);
+              const found = (p.sessions || []).find(s => s.sessionId === sid);
               if (found) {
                 found.title = autoTitle;
                 break;
@@ -2178,9 +2189,9 @@ async function handleRequest(req, res){
       if (err) return json(res, 400, fail(err));
 
       const headerProv = req.headers["x-provider"] ? String(req.headers["x-provider"]).toLowerCase().trim() : null;
-      const initialProv = (body.provider && ["opencode", "antigravity"].includes(String(body.provider).toLowerCase().trim()))
-        ? String(body.provider).toLowerCase().trim()
-        : (headerProv && ["opencode", "antigravity"].includes(headerProv) ? headerProv : "antigravity");
+      const initialProv = (body.provider && String(body.provider).toLowerCase().trim() === "opencode")
+        ? "opencode"
+        : (headerProv && headerProv === "opencode" ? headerProv : "opencode");
 
       let createdProj = null;
       await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
@@ -2396,8 +2407,10 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         if (body.instructions !== undefined) proj.instructions = String(body.instructions || "").trim();
         if (body.provider !== undefined) {
           const prov = String(body.provider).toLowerCase().trim();
-          if (["opencode", "antigravity"].includes(prov)) proj.provider = prov;
-        } else if (headerProv && ["opencode", "antigravity"].includes(headerProv)) {
+          if (prov !== "opencode") return json(res, 400, { ok: false, error: { code: "PROVIDER_UNKNOWN", message: `unknown provider: ${prov} (disponible: opencode)` } });
+          proj.provider = prov;
+        } else if (headerProv) {
+          if (headerProv !== "opencode") return json(res, 400, { ok: false, error: { code: "PROVIDER_UNKNOWN", message: `unknown provider: ${headerProv} (disponible: opencode)` } });
           proj.provider = headerProv;
         }
         if (body.archived !== undefined || body.archivedAt !== undefined) {
@@ -2514,7 +2527,7 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
   }
 
   // POST /api/projects/:id/sessions — associate existing opencode sessionId to project (or create new if empty)
-  // Body: {sessionId?, title?, summary?, provider?, agyConversationId?}
+  // Body: {sessionId?, title?, summary?, provider?}
   if(pathname.match(/^\/api\/projects\/[^\/]+\/sessions$/) && req.method==="POST"){
     try {
       const m = pathname.match(/^\/api\/projects\/([^\/]+)\/sessions$/);
@@ -2538,7 +2551,10 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         const preProj = findProject(preStore, id);
         if (!preProj) throw new Error(`NOT_FOUND: project ${id} not found`);
         if (preProj.archivedAt) throw new Error(`ARCHIVED: project ${id} is archived`);
-        const provId = body.provider || headerProv || preProj.provider || "antigravity";
+        const provId = body.provider || headerProv || preProj.provider || "opencode";
+        if (String(provId).toLowerCase() !== "opencode") {
+          return json(res, 400, { ok: false, error: { code: "PROVIDER_UNKNOWN", message: `unknown provider: ${String(provId).slice(0, 40)} (disponible: opencode)` } });
+        }
         const adapter = providerManager.resolveProvider(null, provId, preStore);
         const autoTitle = body.title || "Nuevo chat";
         const created = await adapter.createSession({ title: autoTitle, projectId: id }); // I/O: fuera del lock
@@ -2585,7 +2601,6 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
           createdAt: body.createdAt || nowIso(),
           lastUsed: body.lastUsed || nowIso(),
           provider: body.provider || headerProv || proj.provider || "opencode",
-          agyConversationId: body.agyConversationId
         });
         proj.sessions = proj.sessions || [];
         proj.sessions.push(createdEntry);
@@ -2624,13 +2639,10 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         if (body.pinned !== undefined) sess.pinned = Boolean(body.pinned);
         if (body.provider !== undefined) {
           const prov = String(body.provider).toLowerCase().trim();
-          if (!["opencode", "antigravity"].includes(prov)) {
-            throw new Error("VALIDATION: invalid provider: must be 'opencode' or 'antigravity'");
+          if (prov !== "opencode") {
+            throw new Error("VALIDATION: invalid provider: must be 'opencode'");
           }
           sess.provider = prov;
-        }
-        if (body.agyConversationId !== undefined) {
-          sess.agyConversationId = String(body.agyConversationId).trim();
         }
         saveProjectsStore(store);
         updatedSess = sess;
@@ -3460,7 +3472,8 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     return;
   }
   if(pathname==="/api/device/launch" && req.method==="POST"){
-    try{ const raw=await readJsonBody(req); const { pkg, activity } = JSON.parse(raw||"{}"); if(!pkg) return json(res, 400, { error:"pkg requerido ej: com.bcp.bo.wallet" }); if (hasShellMeta(String(pkg)) || (activity && hasShellMeta(String(activity)))) return badParam(res, "pkg/activity"); const cmd = activity ? `am start -n ${pkg}/${activity}` : `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p ${pkg} 2>&1 || monkey -p ${pkg} -c android.intent.category.LAUNCHER 1 2>&1 || cmd package resolve-activity --brief -c android.intent.category.LAUNCHER ${pkg} 2>&1`; const out = await runShell(cmd); json(res, 200, { ok: true, data: { cmd, ...out } }); }catch(e){ json(res,500,{error:String(e)}); }
+    try{ const raw=await readJsonBody(req); const { pkg, activity } = JSON.parse(raw||"{}"); if(!pkg) return json(res, 400, { error:"pkg requerido ej: com.bcp.bo.wallet" }); if (!isValidPackageName(String(pkg))) return badParam(res, "pkg (debe ser com.ejemplo.app)");
+    if (activity && !isValidPackageName(String(activity))) return badParam(res, "activity (debe ser com.ejemplo.app)"); const cmd = activity ? `am start -n ${pkg}/${activity}` : `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p ${pkg} 2>&1 || monkey -p ${pkg} -c android.intent.category.LAUNCHER 1 2>&1 || cmd package resolve-activity --brief -c android.intent.category.LAUNCHER ${pkg} 2>&1`; const out = await runShell(cmd); json(res, 200, { ok: true, data: { cmd, ...out } }); }catch(e){ json(res,500,{error:String(e)}); }
     return;
   }
   if(pathname==="/api/device/tap" && req.method==="POST"){
@@ -3478,7 +3491,14 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
   if(pathname==="/api/device/apps" && req.method==="GET"){
     const q = url.searchParams.get("q") || "";
     if (hasShellMeta(q)) return badParam(res, "q");
-    const out = await runShell(`pm list packages ${q ? `-3 | grep -i ${JSON.stringify(q)}` : ""} 2>&1 | head -n 200; pm list packages -3 2>&1 | head -n 200`);
+    // El valor va dentro de comillas dobles (JSON.stringify), donde $ y ` siguen
+    // expandiendose. Solo se acepta si parece un nombre, y si no lo es NO se
+    // interpola: se devuelve la lista sin filtrar.
+    const qSafe = /^[A-Za-z0-9._]{1,60}$/.test(q);
+    // qSafe=false significa que `q` NO tiene forma de paquete: no se interpola nada
+    // y se devuelve la lista sin filtrar. Antes se metia dentro de comillas dobles
+    // con JSON.stringify, donde $ y ` siguen expandiendose.
+    const out = await runShell(`pm list packages ${qSafe ? `-3 | grep -i -F ${JSON.stringify(q)}` : ""} 2>&1 | head -n 200; pm list packages -3 2>&1 | head -n 200`);
     // parse
     const pkgs = out.stdout.split("\n").filter(l=>l.includes("package:")).map(l=>l.replace("package:","").trim()).slice(0,200);
     return json(res, 200, { ok: true, data: { pkgs, raw: out.stdout.slice(0,4000) } });
@@ -3604,28 +3624,28 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
   }
 
   // Contactos: query via content provider (READ_CONTACTS) si el permiso existe; fallback vacío
+  // NEUTRALIZADO 2026-09-29. Esto era INYECCION DE COMANDOS como root, confirmada en
+  // ejecucion: `safe` escapaba comillas SIMPLES pero el valor se interpolaba dentro de
+  // COMILLAS DOBLES de un comando ejecutado via `su -c`, y ni siquiera pasaba por
+  // hasShellMeta. Reproduje el codigo real con un payload que solo hacia `echo` y el
+  // comando inyectado se ejecuto.
+  //
+  // No se "arregla" escapando mejor: cualquier sanizador de texto libre para un shell
+  // es un parser de shell, y no se va a escribir uno. Leer contactos por nombre es una
+  // capacidad que el sistema operativo ya trae; construirla aqui era ademas una
+  // pantalla de texto libre dentro de un shell con privilegios de root.
+  //
+  // Se conserva: enviar WhatsApp con un numero EXPLICITO. Se pierde: resolver un
+  // nombre a su numero. Lo da el usuario, o el asistente del sistema.
   async function queryContacts(q){
     if(!q || q.trim().length<2) return [];
-    // content query contacts — nsenter necesario
-    const safe = q.replace(/'/g, "''").slice(0,60);
-    const cmd = `content query --uri content://com.android.contacts/contacts --where "display_name LIKE '%${safe}%'" --projection display_name:phone 2>&1 | head -n 20`;
-    const out = await runShell(cmd, 8000, 1024*1024);
-    // parse líneas tipo "Row: 3 display_name=Juan, phone=..." — heurística
-    const lines = out.stdout.split("\n").filter(l=> l.includes("display_name") || l.includes("Row:"));
-    const hits=[];
-    for(const line of lines){
-      const nameMatch = line.match(/display_name=([^,]+)/i);
-      const rowMatch = line.match(/Row:\s*\d+\s*([^,=]+)/);
-      const name = (nameMatch?.[1] || rowMatch?.[1] || "").trim();
-      // intenta obtener teléfono en segunda query si name hallado
-      if(name && name.length>1){
-        const cmd2 = `content query --uri content://com.android.contacts/data --where "display_name='${name.replace(/'/g,"''")}'" 2>&1 | grep -i -oE "\\+?[0-9][0-9 \\-]{6,}[0-9]" | head -n 3`;
-        const out2 = await runShell(cmd2, 6000, 1024*1024);
-        const phones = out2.stdout.split("\n").map(s=> s.replace(/[\s\-]/g,"").trim()).filter(s=> s.length>=8);
-        hits.push({ name, phones: [...new Set(phones)].slice(0,2), source: "contacts" });
-      }
-      if(hits.length>=5) break;
-    }
+    const out = { stdout: "", stderr: "", code: 0 };
+    // El segundo `content query` (nombre -> telefono) se ha eliminado con el primero.
+    // Interpolarba `name` —que venia de parsear la salida de un shell— dentro de
+    // comillas dobles de otro comando `content query`: la MISMA clase de inyeccion,
+    // en un segundo sitio. Con la salida vacia era inalcanzable, y el codigo muerto
+    // que parece vivo es peor que el codigo muerto que no existe.
+    const hits = [];
     // si no hubo hits por content, al menos devuelve el q como contacto tentativo
     if(hits.length===0){
       const normalized = q.replace(/[^+0-9a-zA-Z ]/g,"").trim();
@@ -3655,7 +3675,12 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     // también para launch ambiguo: si el nombre no mapea a paquete conocido, pide desambiguación
     if(action==="launch" && slots.app){
       const pkg = appPackageFor(slots.app);
-      const out = await runShell(`pm list packages 2>&1 | grep -i -E "${pkg.replace(/\./g,"\\.")}" 2>&1 | head -n 5; echo "---"; pm list packages 2>&1 | grep -i "${String(slots.app).slice(0,12).replace(/"/g,"")}" 2>&1 | head -n 5`, 6000, 1024*1024);
+      // Solo se interpola si el valor tiene FORMA de nombre. Antes el segundo grep
+      // solo eliminaba las comillas dobles, asi que un $ o un backtick en el nombre
+      // pedido seguian expandiendose dentro del comando.
+      const cand = String(slots.app).slice(0, 24);
+      const candSafe = /^[A-Za-z0-9 ._-]{1,24}$/.test(cand) ? cand : null;
+      const out = await runShell(`pm list packages 2>&1 | grep -i -E "${pkg.replace(/\./g,"\\.")}" 2>&1 | head -n 5; echo "---"; pm list packages 2>&1 | grep -i ${candSafe ? JSON.stringify(candSafe) : '""'} 2>&1 | head -n 5`, 6000, 1024*1024);
       const pkgs = out.stdout.split("\n").filter(l=> l.includes("package:")).map(l=> l.replace("package:","").trim());
       if(pkgs.length===0){
         return { ok:false, type:"disambiguation", kind:"app", action, slots, options: [], message:`No encontré app "${slots.app}". ¿Quisiste decir WhatsApp, Yape, Cámara, Chrome…?` };
@@ -3721,10 +3746,17 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         const text = String(slots.text||"").trim();
         if(!phone) return { ok:false, need:"phone", message:"Falta teléfono", action, slots };
         if(!text) return { ok:false, need:"text", message:"Falta texto del mensaje", action, slots };
-        const encoded = encodeURIComponent(text);
+        // encodeURIComponent() NO escapa la comilla simple: `'` esta en su lista de
+        // caracteres seguros. Como la uri va entre comillas SIMPLES en el comando,
+        // un texto con `'` cerraba la cadena y ejecutaba lo quepusiera detras. Ultima
+        // via de inyeccion de este archivo, y era real.
+        const encoded = encodeURIComponent(text).replace(/'/g, "%27").replace(/\(/g, "%28").replace(/\)/g, "%29");
         const uri = `https://api.whatsapp.com/send?phone=${phone.replace("+","")}&text=${encoded}`;
-        // am start VIEW con uri — abre WhatsApp con chat listo; si a11y está, puede auto-enviar
-        let r = await runShell(`am start -a android.intent.action.VIEW -d '${uri}' 2>&1 | head -n 20; echo WA_VIEW`, 8000);
+        // Comprobacion en vez de fe: la uri solo puede ser esquema+host+query.
+        if (!/^https:\/\/api\.whatsapp\.com\/send\?phone=[0-9+]+&text=[A-Za-z0-9%._~*-]*$/.test(uri)) {
+          return { ok:false, need:"text", message:"El texto del mensaje tiene caracteres no admitidos en la uri", action, slots };
+        }
+        let r = await runShell(`am start -a android.intent.action.VIEW -d ${JSON.stringify(uri)} 2>&1 | head -n 20; echo WA_VIEW`, 8000);
         const ok = r.stdout.includes("Starting:") || r.stdout.includes("WA_VIEW");
         // auto-enviar via a11y polling loop — retry clickText("Enviar") up to 5 times with 600ms intervals (spec 5)
         let autoSend = { tried:false, attempts: 0, success: false };

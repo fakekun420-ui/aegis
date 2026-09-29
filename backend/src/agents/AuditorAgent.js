@@ -14,7 +14,10 @@ export class AuditorAgent extends BaseAgent {
       let files = [];
       if (fs.existsSync(dir)) files = fs.readdirSync(dir);
       
-      let report = "# Audit Report\n\n";
+      // Alcance real de este agente: comprueba que los .md tengan frontmatter. Nada
+      // mas. El titulo lo decia, el nombre ("Auditor") no; se aclara en el informe
+      // para que nadie lo lea como una revision de codigo.
+      let report = "# Informe de frontmatter\n\nEste agente comprueba UNA cosa: que cada .md tenga su bloque de frontmatter (`---`). No audita codigo ni seguridad.\n\n";
       for (const f of files) {
         if (f.endsWith(".md")) {
           const content = fs.readFileSync(path.join(dir, f), "utf8");

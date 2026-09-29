@@ -112,8 +112,17 @@ export class WorkflowEngine {
           const p = (async () => {
             try {
               const res = await agentPool.dispatch(step.agent, projectId, { stepId: sid, params: step.params }, maxConcurrent);
-              if (res && res.promise) {
-                await res.promise;
+              let outcome = null;
+              if (res && res.promise) outcome = await res.promise;
+              // Un agente puede FALLAR sin lanzar: devuelve {ok:false} y la promesa se
+              // resuelve igual. Mirar solo si la promesa lanza hacia que el motor no
+              // pueda reportar "failed" NUNCA, y de ahi que un workflow con todos los
+              // agentes caidos se anunciara como completado con progreso 100
+              // (verificado con sonda antes de este cambio).
+              if (outcome && outcome.ok === false) {
+                const err = new Error(`step ${sid} fallo: ${outcome.error || "sin detalle"}`);
+                err.isStepFailure = true;
+                throw err;
               }
               stepStatuses[sid] = "completed";
             } catch (err) {
