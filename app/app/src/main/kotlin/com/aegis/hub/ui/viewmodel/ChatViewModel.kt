@@ -392,6 +392,11 @@ class ChatViewModel : ViewModel() {
     // por log. 200 es lo que hace falta para cubrir un turno largo.
     private val TAIL_POLL = 200
 
+    // Espera del refresco: normal y maxima cuando el Hub no responde (ver el
+    // comentario del backoff dentro del bucle).
+    private val REFRESH_MIN_WAIT_MS = 2_000L
+    private val REFRESH_MAX_WAIT_MS = 30_000L
+
     // Ciclos de refresco seguidos fallidos antes de decir que el Hub no esta.
     // El refresco va cada 2 s, asi que 3 son ~6 s: suficiente para no Destapar un
     // fallo puntual, suficiente para no dejar la pantalla mintiendo un minuto.
@@ -428,8 +433,14 @@ class ChatViewModel : ViewModel() {
         viewRefreshSessionId = sessionId
         viewRefreshJob = viewModelScope.launch {
             var streamingSince = 0
+            // Mismo motivo que en MainViewModel: espera fija ante un Hub que falla
+            // dispara peticiones sin parar. Este bucle hace CUATRO por ciclo
+            // (inflight, formularios, permisos, mensajes), asi que a 2 s son
+            // ~120/min solo aqui. Con backoff, un Hub caido deja de generar trafico.
+            var waitMs = REFRESH_MIN_WAIT_MS
+            var refreshFailures = 0
             while (isActive) {
-                delay(2000)
+                delay(waitMs)
                 if (_currentSessionId.value != sessionId) break
                 // Durante un envío hay otro poll corriendo; no competimos con él.
                 // OJO: estos dos `continue` se saltan el cierre de ciclo, asi que un
@@ -549,6 +560,15 @@ class ChatViewModel : ViewModel() {
                 // (seria contar por peticion y la racha nunca llegaria a 3) ni nunca
                 // (seria tragarselo sin final, que es justo el bug que se arregla).
                 noteRefreshResult(ok = !cycleFailed)
+                // El backoff se decide por CICLO (no por peticion) por lo mismo que
+                // noteRefreshResult: un exito intermedio no resetea nada.
+                if (cycleFailed) {
+                    refreshFailures++
+                    if (refreshFailures >= 3) waitMs = REFRESH_MAX_WAIT_MS
+                } else {
+                    refreshFailures = 0
+                    if (waitMs != REFRESH_MIN_WAIT_MS) waitMs = REFRESH_MIN_WAIT_MS
+                }
             }
         }
     }

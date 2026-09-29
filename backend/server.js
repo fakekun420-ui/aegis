@@ -304,8 +304,16 @@ function quienMato(que) {
   });
 }
 
-process.on('SIGTERM', () => { quienMato("SIGTERM"); try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
-process.on('SIGINT',  () => { log.info('[hub] SIGINT — cierre');  try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
+// Cierre ordenado: el vigilante SSE se cierra ANTES de salir. Antes no se cerraba
+// nunca, asi que cada reinicio del Hub (y keepalive reinicia bastante) dejaba su
+// suscripcion colgada dentro de `opencode serve`. Con reinicios seguidos, ahi se
+// acumulaba la memoria.
+function stopBackgroundWatchers(reason) {
+  try { if (execWatcher) execWatcher.stop(); } catch (e) { log.error(`[hub] ${reason}: execWatcher.stop err`, { err: e.message }); }
+  try { if (typeof jobScheduler !== "undefined" && jobScheduler && jobScheduler.stop) jobScheduler.stop(); } catch (_) {}
+}
+process.on('SIGTERM', () => { quienMato("SIGTERM"); stopBackgroundWatchers("SIGTERM"); try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
+process.on('SIGINT',  () => { log.info('[hub] SIGINT — cierre'); stopBackgroundWatchers("SIGINT"); try { server.close(() => process.exit(0)); } catch (_) { process.exit(0); } setTimeout(()=> process.exit(0), 2000); });
 process.on('SIGPIPE', () => log.info('[hub] SIGPIPE ignorado'));
 
 function argVal(name, fallback){
@@ -3900,9 +3908,47 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
 // que escape a su try/catch interno termina aquí y SIEMPRE cierra la respuesta:
 // 500 envelope si aún no se enviaron headers; si ya se enviaron, fin de stream
 // (nunca doble writeHead -> ERR_HTTP_HEADERS_SENT, nunca petición colgada).
+// Frecuencia de cada 500, para NO volcar una linea por peticion cuando un fallo se
+// repite. MEDIDO 2026-09-27: un ReferenceError en /api/sessions/inflight produjo
+// 4367 lineas de error identicas en los logs rotados, porque la app consulta esa
+// ruta cada 2 s con espera fija y sin backoff ante un 5xx. Escribir (y rotar) esas
+// lineas en /sdcard, que es FUSE, es lo que genera la cola de procesos en estado D:
+// un proceso esperando a FUSE no se puede matar con una senal.
+//
+// NO se silencia el error: se dice la primera vez, luego cada N, y el total al final
+// del minuto. El diagnostico se conserva entero y el volumen de escritura deja de
+// ser el problema.
+const UNHANDLED_LOG_EVERY = 25;
+const unhandledSeen = new Map(); // "METHOD url" -> {count, firstAt}
+function logUnhandledRate(key) {
+  const now = Date.now();
+  let rec = unhandledSeen.get(key);
+  if (!rec) { rec = { count: 0, firstAt: now }; unhandledSeen.set(key, rec); }
+  rec.count++;
+  // La ventana de un minuto caduca: si el fallo vuelve a aparecer mas tarde, se
+  // vuelve a avisar como PRIMERA vez, no como continuacion de un一分钟 viejo.
+  if (now - rec.firstAt > 60_000) {
+    if (rec.count > 1) {
+      log.warn(`[hub] ${key} dejo de fallar: ${rec.count} errores en 60 s (ya no en cadena)`);
+    }
+    rec.count = 0; rec.firstAt = now;
+    return true;
+  }
+  if (rec.count === 1 || rec.count % UNHANDLED_LOG_EVERY === 0) return true;
+  return false;
+}
+
 function respondUnhandledRequestError(req, res, e) {
   const msg = String((e && (e.message || e.stack)) || e).slice(0, 800);
-  log.error(`[hub] unhandled request error ${req && req.method} ${((req && req.url) || "").slice(0, 140)}`, { err: (e && e.stack) || String(e) });
+  const key = `${req && req.method} ${((req && req.url) || "").slice(0, 140)}`;
+  if (logUnhandledRate(key)) {
+    log.error(`[hub] unhandled request error ${key}`, {
+      err: (e && e.stack) || String(e),
+      suprimidos: unhandledSeen.get(key)?.count > 1
+        ? `1 de cada ${UNHANDLED_LOG_EVERY} hasta que pare (contador en linea siguiente)`
+        : undefined
+    });
+  }
   if (res.headersSent) {
     if (!res.writableEnded) { try { res.end(); } catch (_) {} }
     return;
@@ -4041,12 +4087,18 @@ function isTurnOver(sid) {
 function startExecutionWatcher(adapter) {
   if (execWatcher) return;
   let stopped = false;
+  // El socket SSE vivo. `stop()` solo ponia un flag, asi que la conexion se quedaba
+  // abierta hasta que el proceso muriera: cada reinicio del Hub dejaba su suscripcion
+  // colgada del lado de `opencode serve`, que es donde se acumula la memoria.
+  let liveReq = null, liveRes = null;
   const connect = () => {
     if (stopped) return;
     let auth = {};
     try { auth = adapter._authHeader ? adapter._authHeader() : {}; } catch (_) {}
+    liveReq = null;
     const req = http.request(`http://${OPENCODE_HOST}:${OPENCODE_PORT}/api/event`,
       { headers: { Accept: "text/event-stream", ...auth } }, (res) => {
+      liveRes = res;
       if (res.statusCode !== 200) { res.resume(); setTimeout(connect, 5000); return; }
       log.info("[exec] vigilante conectado a /api/event");
       let buf = "";
@@ -4084,6 +4136,7 @@ function startExecutionWatcher(adapter) {
       res.on("error", again);
     });
     req.on("error", () => { if (!stopped) setTimeout(connect, 5000); });
+    liveReq = req;
     req.end();
   };
   connect();
@@ -4095,7 +4148,16 @@ function startExecutionWatcher(adapter) {
     }
   }, 30000);
   if (sweep.unref) sweep.unref();
-  execWatcher = { stop() { stopped = true; clearInterval(sweep); } };
+  execWatcher = {
+    stop() {
+      stopped = true;
+      clearInterval(sweep);
+      // Cerrar de verdad: sin esto el servidor de opencode sigue viendo la
+      // suscripcion hasta que muere el proceso, y los reinicios del Hub la acumulan.
+      for (const h of [liveRes, liveReq]) { try { if (h) h.destroy(); } catch (_) {} }
+      liveRes = null; liveReq = null;
+    }
+  };
 }
 
 server.listen(HUB_PORT, "127.0.0.1", async ()=>{

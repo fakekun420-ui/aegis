@@ -56,6 +56,10 @@ class MainViewModel : ViewModel() {
     // Ids de las sesiones con un turno EN CURSO ahora mismo. Lo mantiene el vigilante
     // del Hub a partir de los eventos session.execution.* de OpenCode, asi que
     // funciona igual si el turno se lanzo desde la app o desde el CLI.
+    /** Espera del poll de inflight: normal y maxima cuando el Hub no responde. */
+    private val POLL_MIN_WAIT_MS = 3_000L
+    private val POLL_MAX_WAIT_MS = 30_000L
+
     /** Cuanto se mantiene la marca "terminado" antes de desaparecer sola. */
     private val FINISHED_TTL_MS = 12_000L
 
@@ -104,18 +108,39 @@ class MainViewModel : ViewModel() {
     private fun startInflightPolling() {
         inflightJob?.cancel()
         inflightJob = viewModelScope.launch {
+            // Espera FIJA con espera fija: el fallo se repite cada 3 s para siempre.
+            // MEDIDO 2026-09-27: con el Hub devolviendo 500 en esta ruta, la app hizo
+            // 4367 peticiones en el rato que duró el fallo. Cada una costaba una linea
+            // de error en el Hub, escrita en /sdcard, que es FUSE — y un proceso
+            // bloqueado en FUSE se queda en estado D, que no se puede matar. Esa es la
+            // cadena que llenaba la RAM y colgaba el movil.
+            //
+            // Aqui se hace lo contrario: si el Hub no responde, se ESPERA MAS. El primer
+            // fallo se recupera al ritmo normal; a partir de tres seguidos se sube a
+            // POLL_MAX_WAIT_MS y se baja solo cuando responde otra vez.
+            var waitMs = POLL_MIN_WAIT_MS
+            var consecutiveFailures = 0
             while (isActive) {
+                var ok = false
                 try {
                     val r = api.getInflight()
                     if (r.ok && r.data != null) {
                         // Solo las que NO han terminado cuentan como ocupadas: un
                         // turnOver es historia, no una sesion ocupada.
                         applyInflight(r.data)
+                        ok = true
                     }
                 } catch (_: Exception) {
                     // Fallo puntual de red: el siguiente ciclo reintenta solo.
                 }
-                delay(3000)
+                if (ok) {
+                    consecutiveFailures = 0
+                    if (waitMs != POLL_MIN_WAIT_MS) waitMs = POLL_MIN_WAIT_MS
+                } else {
+                    consecutiveFailures++
+                    if (consecutiveFailures >= 3) waitMs = POLL_MAX_WAIT_MS
+                }
+                delay(waitMs)
             }
         }
     }
