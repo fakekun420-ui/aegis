@@ -60,7 +60,9 @@ class ChatViewModel : ViewModel() {
     // servidor, que es la fuente autoritativa. Ver la nota de `load()`.
     private var currentSessionForModel: String = ""
 
-    private val _selectedProvider = MutableStateFlow<String>("antigravity")
+    // OpenCode es el unico motor de la sesion. Antes arrancaba en "antigravity" y, con
+    // el default del Hub tambien en antigravity, ningun chat nuevo era de OpenCode.
+    private val _selectedProvider = MutableStateFlow<String>("opencode")
     val selectedProvider: StateFlow<String> = _selectedProvider
 
     // F6: sesión ya vinculada a un proveedor — el pill queda fijo para que
@@ -333,7 +335,7 @@ class ChatViewModel : ViewModel() {
     }
 
     fun loadModels(provider: String? = null) {
-        val prov = (provider ?: _selectedProvider.value).lowercase().trim().ifBlank { "antigravity" }
+        val prov = (provider ?: _selectedProvider.value).lowercase().trim().ifBlank { "opencode" }
         viewModelScope.launch {
             _modelsLoading.value = true
             try {
@@ -802,7 +804,10 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             // la misma sesión tampoco deja el refresco muerto.
             startViewRefresh(sessionId)
         }
-        val prov = (provider ?: if (sessionId.isBlank() || sessionId.startsWith("agy_")) "antigravity" else "opencode").lowercase().trim()
+        // Una sesion en blanco es un chat NUEVO -> opencode. Un id `agy_` es una
+        // sesion ya nacida en Antigravity: se respeta, porque su conversacion vive
+        // en el brain de `agy` y reasignarla la dejaria huerfana.
+        val prov = (provider ?: if (sessionId.startsWith("agy_")) "antigravity" else "opencode").lowercase().trim()
         _selectedProvider.value = prov
         // F6: sólo una sesión existente queda vinculada al proveedor de nacimiento;
         // los chats nuevos pueden cambiar libremente de motor.
@@ -884,7 +889,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
     ) {
         if (text.isBlank() && files.isEmpty()) return
 
-        val provider = (explicitProvider ?: _selectedProvider.value).lowercase().trim().ifBlank { "antigravity" }
+        val provider = (explicitProvider ?: _selectedProvider.value).lowercase().trim().ifBlank { "opencode" }
         val tempMsgId = "local_${System.currentTimeMillis()}"
 
         // FASE A-5: guarda anti doble envío — un segundo click/reentrada con el mismo
@@ -1291,9 +1296,9 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         }
     }
 
-    suspend fun createVoiceSession(provider: String = "antigravity"): String? = createNewSession(provider)
+    suspend fun createVoiceSession(provider: String = "opencode"): String? = createNewSession(provider)
 
-    private suspend fun createNewSession(provider: String = "antigravity"): String? = withContext(Dispatchers.IO) {
+    private suspend fun createNewSession(provider: String = "opencode"): String? = withContext(Dispatchers.IO) {
         try {
             val title = "Nuevo chat"
             val bodyJson = "{\"title\":\"${title.replace("\"", "\\\"")}\",\"provider\":\"$provider\",\"model\":\"gemini-3.8-flash-high\"}"

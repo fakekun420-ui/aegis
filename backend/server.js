@@ -1468,7 +1468,14 @@ async function handleRequest(req, res){
         const p = findProject(store, projectId);
         if (p && p.provider) provId = p.provider;
       }
-      if (!provId) provId = "antigravity";
+      // NACIMIENTO de la sesion. Antes caia en "antigravity" sin motivo, y eso ya
+      // no es un detalle: el id de una sesion nace con prefijo `agy_`, y la ruta de
+      // envio (linea ~1616) ata de por vida al proveedor de nacimiento. Es decir: el
+      // default de aqui decidia, sin que nadie lo eligiera, que TODOS los chats
+      // nuevos iban por AntigravityAdapter — la rama sin aegis-context, sin
+      // execWatcher y sin senal de fin de turno. New -> "opencode"; los `agy_` que ya
+      // existen se siguen detectando en el envio y no se tocan.
+      if (!provId) provId = "opencode";
 
       const adapter = providerManager.resolveProvider(null, provId, store);
       log.info(`[hub] creating session via ${adapter.id} (title: ${body.title || "untitled"}, project: ${projectId || "none"})`);
