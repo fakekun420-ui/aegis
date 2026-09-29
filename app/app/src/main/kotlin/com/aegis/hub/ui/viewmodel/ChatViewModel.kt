@@ -21,6 +21,7 @@ import com.aegis.hub.data.MessageDeliveryStatus
 import com.aegis.hub.data.MessageInfo
 import com.aegis.hub.data.MessagePart
 import com.aegis.hub.data.ModelOption
+import com.aegis.hub.data.modeloPorDefecto
 import com.aegis.hub.data.SendMessageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1054,7 +1055,11 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                         .url("http://127.0.0.1:8765/api/opencode/sessions/$targetSessionId/message?stream=true")
                         .header("Accept", "text/event-stream")
                         .header("X-Provider", provider)
-                        .header("X-Model", currentModel)
+                        // Solo si hay modelo. `header()` exige String no nulo, y ahora
+                        // `currentModel` es nullable a proposito (ya no hay un id de
+                        // reserva caducado): sin modelo, la cabecera no se pone y decide
+                        // el Hub con el primer free de la lista.
+                        .apply { if (currentModel != null) header("X-Model", currentModel) }
                         .header("X-Agent", currentAgentMode)
                         .header("X-Mode", currentAgentMode)
                         .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
