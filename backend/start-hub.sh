@@ -4,18 +4,23 @@
 set -e
 HUB_DIR="/sdcard/projects/Aegis/backend"
 HUB_PORT="8765"
-OC_PORT="4096"
+OC_PORT="49374"   # puerto gestionado autoritativo (ponytail-global.md §4.5)
 for i in 1 2 3 4 5 6; do case "$1" in --port) HUB_PORT="$2"; shift 2;; --opencode-port) OC_PORT="$2"; shift 2;; *) break;; esac; done
 
 # mata previos si existen
-pkill -f "opencode serve.*$OC_PORT" 2>/dev/null || true
+# SOLO mata serves "pelados" (--port/--hostname). Tocar uno con --service mataria el
+# servicio gestionado entero. ponytail-global.md §4.5 lo llama regresion obligatoria.
+pkill -f "opencode serve --port" 2>/dev/null || true
 pkill -f "Aegis/backend/server.js" 2>/dev/null || true
 sleep 1
 
-echo "[hub] iniciando opencode serve :$OC_PORT ..."
-nohup opencode serve --port "$OC_PORT" --hostname 0.0.0.0 > "$HUB_DIR/opencode.log" 2>&1 &
+echo "[hub] iniciando opencode serve --service (puerto gestionado :$OC_PORT) ..."
+# `--service`, NUNCA `--port/--hostname`: sin registro el CLI no ve el servidor y da
+# "Timed out waiting for the background service"; ademas genera un password aleatorio
+# cada boot y contesta 401 en /api/info. ponytail-global.md §4.5.
+nohup opencode serve --service > "$HUB_DIR/opencode.log" 2>&1 &
 sleep 3
-if ! curl -s "http://127.0.0.1:$OC_PORT/" | grep -qi opencode; then
+if ! curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$OC_PORT/" | grep -qE "200|401"; then
   echo "[hub] WARN opencode no responde aún, continuo de todos modos"
   cat "$HUB_DIR/opencode.log" | tail -n 20 || true
 else
