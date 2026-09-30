@@ -89,7 +89,12 @@ fun SubagentCard(
 
     // Con el parser que pinta, no con la longitud de la cadena. Se recuerda porque el
     // recomponer no debe reparsear un informe entero en cada fotograma.
-    val nBloques = remember(cleanBody) { markdownBlockCount(cleanBody) }
+    //
+    // `orEmpty()` y no `cleanBody`: aqui `cleanBody` es `String?` (puede no haber cuerpo)
+    // y aqui todavia NO se hasmartcasteado — el smart-cast llega despues, dentro del
+    // `if (!cleanBody.isNullOrBlank())`. `markdownBlockCount` pide `String` y Kotlin no
+    // perdona: lo caza build-debug ("Argument type mismatch"), no el typechecker local.
+    val nBloques = remember(cleanBody) { markdownBlockCount(cleanBody.orEmpty()) }
 
     val accent = when {
         isRunning -> Color(0xFFD29922)
