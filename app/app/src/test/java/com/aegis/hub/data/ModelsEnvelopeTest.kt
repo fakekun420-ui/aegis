@@ -107,7 +107,7 @@ class ModelsEnvelopeTest {
     // GET /api/setup/final-check → 4 checks (CHECK_DEFS) + ready
     // ------------------------------------------------------------------
     @Test
-    fun `final check parsea los 4 CHECK_DEFS con estados mixtos`() {
+    fun `final check parsea los 3 CHECK_DEFS con estados mixtos`() {
         val json = """
             {
               "ok": true,
@@ -140,10 +140,13 @@ class ModelsEnvelopeTest {
         // que era el 2 (accesibilidad) es ahora el 1, y el bootstrap el 2.
         assertEquals("Servicio de accesibilidad (:8766)", data.checkList[1].label)
         assertEquals("Instalación inicial (wizard)", data.checkList[2].label)
+        // Con 3 checks, el que queda en "manual" es el de ACCESIBILIDAD (indice 1). Con
+        // los 4 de antes era el indice 2, porque por delante estaba el de antigravity: el
+        // JSON, el estado y el detalle se corrieron en bloque y no de uno en uno.
         assertEquals(SetupCheckStatus.ok, data.checkList[0].status)
-        assertEquals(SetupCheckStatus.ok, data.checkList[1].status)
-        assertEquals(SetupCheckStatus.manual, data.checkList[2].status)
-        assertEquals("revísalo a mano", data.checkList[2].detail)
+        assertEquals(SetupCheckStatus.manual, data.checkList[1].status)
+        assertEquals(SetupCheckStatus.ok, data.checkList[2].status)
+        assertEquals("revísalo a mano", data.checkList[1].detail)
     }
 
     @Test
