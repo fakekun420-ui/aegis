@@ -90,6 +90,9 @@ jobs:
       - name: Build Debug APK
         run: gradle assembleDebug
         working-directory: app
+      - name: Run JVM unit tests (JUnit)
+        run: gradle testDebugUnitTest
+        working-directory: app
       - name: Upload APK debug
         uses: actions/upload-artifact@v4
         with:

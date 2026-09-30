@@ -224,18 +224,27 @@ fun ChatsScreen(
                                                 // (session.execution.started sin terminar).
                                                 if (sess.resolvedId in inflightIds) {
                                                     CircularProgressIndicator(
-                                                        modifier = Modifier.size(11.dp),
+                                                        // El `.semantics` va ENCAADENADO AL
+                                                        // MODIFIER, no despues del color.
+                                                        // En el commit anterior quedo tras
+                                                        // `colorScheme.onSurfaceVariant`, que es un
+                                                        // `Color`: Kotlin encadena sobre lo que
+                                                        // tenga delante, y un Color no tiene
+                                                        // `.semantics`. Rompia la compilacion de todo
+                                                        // el APK, y lo detecto la CI.
+                                                        modifier = Modifier
+                                                            .size(11.dp)
+                                                            .semantics {
+                                                                contentDescription =
+                                                                    if (inflightFiable) "Sesión trabajando"
+                                                                    else "Sesión marcada como trabajando, pero el dato es antiguo: el Hub no responde"
+                                                            },
                                                         strokeWidth = 1.6.dp,
                                                         color = if (inflightFiable)
                                                             MaterialTheme.colorScheme.primary
                                                         else
                                                             MaterialTheme.colorScheme.onSurfaceVariant
-                                                    .semantics {
-                                                        contentDescription = if (inflightFiable)
-                                                            "Sesión trabajando"
-                                                        else
-                                                            "Sesión marcada como trabajando, pero el dato es antiguo: el Hub no responde"
-                                                    }
+                                                    )
                                                 } else if (sess.resolvedId in finishedIds) {
                                                     // Check de "terminado". Un tique, no un
                                                     // icono grande: informa sin gritar.
