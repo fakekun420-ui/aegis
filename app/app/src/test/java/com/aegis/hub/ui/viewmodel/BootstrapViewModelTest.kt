@@ -1,6 +1,7 @@
 package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.test.runCurrent
 import com.aegis.hub.data.AuthGuideData
 import com.aegis.hub.data.AuthGuideResponse
 import com.aegis.hub.data.BootstrapActionResponse

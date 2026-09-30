@@ -8,6 +8,7 @@
 
 package com.aegis.hub.data
 
+import com.aegis.hub.ui.markdownBlockCount
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

@@ -126,7 +126,7 @@ class ToolStateTest {
     /** Si input tiene "query" o "url", dice "web". */
     @Test
     fun `toolName devuelve "web" cuando hay query`() {
-        val ts = ToolState(input = mapOf("query" a "test"), content = null)
+        val ts = ToolState(input = mapOf("query" to "test"), content = null)
         assertEquals("web", ts.toolName)
     }
 
