@@ -209,8 +209,8 @@ class BootstrapViewModel(
 
     /**
      * F3 — GET /api/setup/final-check → comprobaciones de la verificación final.
-     * Éxito → finalCheck (ready + checks); si el check "antigravity" queda en
-     * fail/manual se carga además la guía de comandos (guideAuth()). Cualquier
+     * Éxito → finalCheck (ready + checks); si ALGUN check queda en fail/manual se carga
+     * además la guía de comandos (guideAuth()). Cualquier
      * error queda LOCAL en actionError con la guía friendlyError() sin perder el
      * raw (hubReachable NO se alterna: la tarjeta permanece visible).
      */
@@ -226,8 +226,19 @@ class BootstrapViewModel(
                 when {
                     resp.isSuccessful && body != null && data != null -> {
                         _ui.value = _ui.value.copy(finalCheck = body, finalCheckLoading = false)
-                        val agy = data.checkList.firstOrNull { it.id == "antigravity" }
-                        if (agy != null && agy.statusOrManual != SetupCheckStatus.ok) guideAuth()
+                        // MEDIDO 2026-09-30, encendiendo `testDebugUnitTest`: esto
+                        // buscaba el check `antigravity`, que salio del contrato cuando
+                        // OpenCode paso a ser el unico motor. Con ese nombre, `agy` era
+                        // SIEMPRE null y `guideAuth()` no podia dispararse nunca: la guia
+                        // que explica como conceder un permiso que falta era codigo
+                        // muerto, y el test que lo cubria no se ejecutaba.
+                        //
+                        // La regla que queria decir no es "el check de antigravity" sino
+                        // "ALGUN check no esta ok" — que es justo lo que la guia viene a
+                        // explicar. Con el contrato actual (opencode, a11y, bootstrap) el
+                        // que puede quedar en manual es `a11y`.
+                        val pendiente = data.checkList.firstOrNull { it.statusOrManual != SetupCheckStatus.ok }
+                        if (pendiente != null) guideAuth()
                     }
                     resp.isSuccessful -> {
                         pendingActionError = true

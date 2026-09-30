@@ -128,8 +128,11 @@ class ModelsEnvelopeTest {
         val data = res.data
         assertNotNull(data)
         assertTrue(data!!.ready)
-        assertEquals(4, data.checkList.size)
-        // Labels EXACTOS de CHECK_DEFS (setupRoutes.js L151-227)
+        // 3 checks: opencode, a11y, bootstrap. El `antigravity` salio con el motor
+        // (setupRoutes.js:224-273). El numero se comprueba de forma explicita porque si no,
+        // un check que desaparece por el camino pasa desapercibido.
+        assertEquals(3, data.checkList.size)
+        // Labels EXACTOS de CHECK_DEFS (setupRoutes.js:224-273)
         assertEquals("opencode", data.checkList[0].id)
         assertEquals("OpenCode (proxy4096)", data.checkList[0].label)
         // MEDIDO del contrato real (setupRoutes.js:224-273): opencode, a11y, bootstrap.
@@ -164,10 +167,13 @@ class ModelsEnvelopeTest {
 
         assertNotNull(data)
         assertFalse(data!!.ready)
+        // El JSON de este caso trae opencode=fail, a11y=fail y bootstrap=OK: el wizard
+        // instalado no es el motivo del fallo. Con el check de antigravity fuera, el
+        // ultimo indice es el 2 y su estado es ok, no fail.
         assertEquals(SetupCheckStatus.fail, data.checkList[0].status)
         assertEquals(SetupCheckStatus.fail, data.checkList[1].status)
-        assertEquals(SetupCheckStatus.fail, data.checkList[2].status)
-        assertEquals(3, data.checkList.size)  // el 4º (antigravity) salio con el motor
+        assertEquals(SetupCheckStatus.ok, data.checkList[2].status)
+        assertEquals(3, data.checkList.size)
         // checks null → lista vacía
         val none = gson.fromJson(
             """{"ok": true, "data": {"ready": false, "checks": null}}""",
