@@ -2,6 +2,11 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.test.runCurrent
+
+// `data` no tiene valor por defecto en `BootstrapActionResponse`, asi que hay que pasarlo
+// aunque sea null. Este fichero llevaba semanas sin compilar porque el workflow no
+// ejecutaba ningun test: no hacia falta escribir uno nuevo para descubrirlo, bastaba con
+// encender `testDebugUnitTest`.
 import com.aegis.hub.data.AuthGuideData
 import com.aegis.hub.data.AuthGuideResponse
 import com.aegis.hub.data.BootstrapActionResponse
@@ -371,7 +376,7 @@ private class FakeRepo : BootstrapRepository {
         Response.success(AuthGuideResponse(ok = false, data = null))
     }
     var onRetry: () -> Response<BootstrapActionResponse> = {
-        Response.success(BootstrapActionResponse(ok = true))
+        Response.success(BootstrapActionResponse(ok = true, data = null))
     }
 
     var stateCalls = 0
@@ -386,7 +391,7 @@ private class FakeRepo : BootstrapRepository {
     }
 
     override suspend fun runBootstrap(body: BootstrapRunRequest): Response<BootstrapActionResponse> =
-        Response.success(BootstrapActionResponse(ok = true))
+        Response.success(BootstrapActionResponse(ok = true, data = null))
 
     override suspend fun retryBootstrapStep(id: String): Response<BootstrapActionResponse> {
         retryCalls++
@@ -394,7 +399,7 @@ private class FakeRepo : BootstrapRepository {
     }
 
     override suspend fun cancelBootstrap(): Response<BootstrapActionResponse> =
-        Response.success(BootstrapActionResponse(ok = true))
+        Response.success(BootstrapActionResponse(ok = true, data = null))
 
     override suspend fun getFinalCheck(): Response<FinalCheckResponse> = onFinalCheck()
 
