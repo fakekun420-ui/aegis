@@ -486,7 +486,19 @@ export class OpencodeAdapter extends BaseProviderAdapter {
           name: String(a.name),
           mode: String(a.mode || "primary"),
           model: a.model ? String(a.model.id || a.model) : null,
-          description: a.description ? String(a.description) : null
+          description: a.description ? String(a.description) : null,
+          // `hidden` es la bandera del PROPIO OpenCode para no enseyar un agente en su
+          // selector. MEDIDO 2026-09-30 en el registro crudo de los 6 primary:
+          //
+          //     orchestrator hidden=false   Build hidden=false   Plan hidden=false
+          //     Compaction  hidden=true    Title   hidden=true   Summary hidden=true
+          //
+          // O sea que hidden=false y mode=primary da EXACTAMENTE los 3 que se pueden
+          // cambiar a mano. Sin esta campo habia dos salidas y las dos malas: hardcodear
+          // 3 nombres (se queda viejo en cuanto OpenCode anada uno) o deducirlo de que
+          // tenga descripcion (los internos no la tienen, pero eso es casualidad, no
+          // regla). El Hub lo devuelve tal cual y decide la app.
+          hidden: a.hidden === true
         }));
       this._agentsCache = lista;
       this._agentsCacheTime = ahora;

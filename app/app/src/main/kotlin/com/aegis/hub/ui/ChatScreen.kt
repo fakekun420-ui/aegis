@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -736,14 +737,21 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // El scroll va ANTES que el alto maximo, y no es cosmetico: sin el,
+                    // `heightIn` recortaba en silencio. MEDIDO: con la lista de 40, la
+                    // hoja mostraba 4 de 6 primarios y el resto no existia para el
+                    // usuario — ni se podia tocar, ni se arrastraba, ni habia aviso de que
+                    // faltara algo. Un limite de altura sin scroll no acota nada: solo
+                    // hace desaparecer lo que no cabe.
+                    .verticalScroll(rememberScrollState())
                     .heightIn(max = 520.dp)
                     .padding(horizontal = 24.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text("Agente", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Los que OpenCode publica ahora mismo. Los primary llevan la sesion; un " +
-                        "cargo (subagent) tambien puede, y el Hub descarta los nombres que no existan.",
+                    "Los ${agents.size} que OpenCode deja elegir. Los cargos y los demas " +
+                        "subagentes no salen porque un agente los invoca, no porque los elijas tu.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -757,20 +765,7 @@ fun ChatScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
-                    val subagentes = agents.filter { it.mode == "subagent" }
-                    val primarios = agents.filter { it.mode != "subagent" }
-                    listOf(
-                        "Principal" to primarios,
-                        "Cargos y subagentes (${subagentes.size})" to subagentes
-                    ).forEach { par ->
-                        val grupo = par.second
-                        if (grupo.isNotEmpty()) {
-                            Text(
-                                par.first,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            grupo.forEach { ag ->
+                    agents.forEach { ag ->
                                 ListItem(
                                     headlineContent = {
                                         Text(
@@ -796,8 +791,6 @@ fun ChatScreen(
                                         .fillMaxWidth()
                                         .clickable { vm.selectAgent(ag.name); showAgentSheet = false }
                                 )
-                            }
-                        }
                     }
                 }
                 Spacer(Modifier.height(16.dp))

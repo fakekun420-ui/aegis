@@ -332,12 +332,36 @@ data class OpencodeAgent(
     val name: String,
     val mode: String = "primary",
     val model: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    // Lo que OpenCode marca para NO ensenar en su propio selector. MEDIDO 2026-09-30:
+    // de los 40, 37 son visibles y 3 ocultos (Compaction, Title, Summary). Con
+    // `mode == "primary" && !hidden` salen exactamente Build, Plan y orchestrator.
+    //
+    // El valor por defecto es `false` a proposito: si el Hub dejara de mandar el campo,
+    // se verian los 6 en vez de 0, que es degradar hacia lo visible y no hacia lo
+    // invisible. Un default true esconderia agentes que si valen sin avisar.
+    val hidden: Boolean = false
 )
 
-/** Un primary antes que un subagent: es el orden en el que se ofrecen. */
-fun List<OpencodeAgent>.primariosPrimero(): List<OpencodeAgent> =
-    sortedWith(compareBy({ it.mode != "primary" }, { it.name.lowercase() }))
+/**
+ * Los agentes que OpenCode ofrece para cambiar a mano, y SOLO esos.
+ *
+ * MEDIDO 2026-09-30 sobre el registro crudo: 40 agentes, 37 visibles, 3 ocultos
+ * (Compaction, Title, Summary, que son internos de la tuberia de OpenCode). Con
+ * `mode == "primary" && !hidden` la lista queda en tres: Build, Plan y orchestrator.
+ *
+ * Se descartan los 34 subagentes (los cargos de Kaenor y General/Explore) a proposito:
+ * son agentes que un agente invoca con la herramienta `task`, no destinations que se
+ * elijan para tu sesion. Es lo mismo que hace el propio OpenCode en su selector.
+ *
+ * No es que no sirvan: MEDIDO, un turno con `agent=kaenor-ai-engineer` corre y contesta.
+ * Es que no son lo que el boton esta preguntando. Si algun dia se quieren, el Hub los
+ * sigue exponiendo todos en `/api/opencode/agents` y esta funcion es el unico sitio que
+ * habria que tocar.
+ */
+fun List<OpencodeAgent>.seleccionables(): List<OpencodeAgent> =
+    filter { it.mode == "primary" && !it.hidden }
+        .sortedBy { it.name.lowercase() }
 
 data class ModelOption(
     val id: String,

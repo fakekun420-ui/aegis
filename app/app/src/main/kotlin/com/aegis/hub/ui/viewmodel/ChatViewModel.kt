@@ -22,7 +22,7 @@ import com.aegis.hub.data.MessageInfo
 import com.aegis.hub.data.MessagePart
 import com.aegis.hub.data.ModelOption
 import com.aegis.hub.data.OpencodeAgent
-import com.aegis.hub.data.primariosPrimero
+import com.aegis.hub.data.seleccionables
 import com.aegis.hub.data.modeloPorDefecto
 import com.aegis.hub.data.SendMessageRequest
 import kotlinx.coroutines.Dispatchers
@@ -367,7 +367,9 @@ class ChatViewModel : ViewModel() {
             try {
                 val resp = api.getOpencodeAgents()
                 if (resp.ok && resp.data != null) {
-                    _agents.value = resp.data.primariosPrimero()
+                    // Solo los que OpenCode ofrece para elegir. La lista COMPLETA sigue
+                    // en el Hub por si algun dia se quieren los cargos.
+                    _agents.value = resp.data.seleccionables()
                     // Si el agente elegido ya no esta (se borro un cargo), se vuelve a
                     // Build. Antes no habia lista con la que comprobar nada, y el valor
                     // se quedaba pegado a un nombre que el Hub ya no reconoceria.

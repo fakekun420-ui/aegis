@@ -48,7 +48,11 @@ async function startFakeServe(password = "test-pass") {
     { name: "orchestrator", mode: "primary", model: { id: "space-bunny-free", providerID: "opencode" }, description: "Orquestador" },
     { name: "Build", mode: "primary", model: null, description: "The default agent" },
     { name: "Plan", mode: "primary", model: null, description: "Read-only" },
-    { name: "kaenor-ai-engineer", mode: "subagent", model: { id: "x", providerID: "opencode" }, description: "Modelos y agentes" }
+    { name: "kaenor-ai-engineer", mode: "subagent", model: { id: "x", providerID: "opencode" }, description: "Modelos y agentes" },
+    // El caso que faltaba: un primary OCULTO. Es como vienen los tres internos de
+    // OpenCode (Compaction, Title, Summary), y sin el, un `hidden` que el Hub no pasara
+    // no se notaria en ningun test.
+    { name: "Compaction", mode: "primary", model: null, description: null, hidden: true }
   ];
   const s = http.createServer((req, res) => {
     const h = String(req.headers.authorization || "");
@@ -117,6 +121,41 @@ test("A1: listAgents() trae la lista REAL del serve, con el model aplanado a tex
     "un agente sin model llega null: no undefined (que en Kotlin es un tipo distinto) ni {}"
   );
   assert.equal(orch.description, "Orquestador", "la descripcion se conserva: es lo que explica que hace cada cargo");
+});
+
+test("A6: `hidden` se pasa tal cual, y primary+visible son los elegibles", async () => {
+  const serve = await startFakeServe();
+  const ad = adapterPara(serve.port);
+  const lista = await ad.listAgents();
+
+  // `hidden` es la bandera del PROPIO OpenCode para no ensenar un agente en su selector.
+  // MEDIDO 2026-09-30 en el registro crudo: orchestrator/Build/Plan hidden=false y
+  // Compaction/Title/Summary hidden=true. Es lo unico que separa los 3 reales de los
+  // internos: por descripcion NO vale (los internos no la tienen, pero eso es casualidad,
+  // no regla) y por nombre habria que hardcodear 3, que se queda viejo.
+  const porNombre = (n) => lista.find((a) => a.name === n);
+  assert.equal(porNombre("Compaction").hidden, true, "un primary oculto llega con hidden=true");
+  assert.equal(porNombre("Build").hidden, false, "un primary visible llega con hidden=false");
+  assert.equal(porNombre("orchestrator").hidden, false, "orchestrator es visible");
+  assert.equal(
+    porNombre("kaenor-ai-engineer").hidden, false,
+    "un subagent visible tambien lo es: la bandera no significa 'cargo', significa 'no lo ensenes'"
+  );
+
+  // Y la regla que aplica la app, escrita aqui para que no se vuelva a inventar otra.
+  // El serve falso trae 4 visibles (orchestrator, Build, Plan, kaenor-ai-engineer) y 1
+  // oculto (Compaction). Los elegibles son los 3 primary visibles: ni el oculto, ni el
+  // subagent. La comparacion se hace sobre la lista COMPLETA de nombres, para que
+  // falte un agente o sobre uno de mas.
+  const elegibles = lista
+    .filter((a) => a.mode === "primary" && !a.hidden)
+    .map((a) => a.name)
+    .sort();
+  assert.deepEqual(
+    elegibles,
+    ["Build", "Plan", "orchestrator"],
+    "primary+visible tiene que ser exactamente los 3 elegibles: ni el oculto ni el subagent"
+  );
 });
 
 test("A2: la puerta de plan/build NO ha vuelto, y la activacion pasa por _agentExiste", () => {
