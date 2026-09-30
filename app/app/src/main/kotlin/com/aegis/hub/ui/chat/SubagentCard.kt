@@ -27,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aegis.hub.data.ToolState
+import com.aegis.hub.ui.MarkdownText
+import com.aegis.hub.ui.markdownBlockCount
 
 /**
  * Tarjeta de una invocacion de subagente.
@@ -46,11 +48,16 @@ import com.aegis.hub.data.ToolState
  * tarjetas se lean como parte de la misma familia.
  */
 /**
- * Cuantas lineas se ven contraidas y cuantas expandidas. Son LINEAS y no una caja con
- * scroll: ver el comentario del cuerpo expandido.
+ * Cuantos BLOQUES de markdown se ven contraidos. Antes eran 6 LINEAS sobre un `Text` que
+ * no entendia markdown, asi que los `**`, las cabeceras y las listas se veian tal cual y
+ * un informe corto con titulos ocupaba mas lineas de las que decias.
+ *
+ * Son bloques porque el corte tiene que caer en una frontera de bloque: partir una lista a
+ * la mitad deja un elemento sin su punto. Y expandido ya no hay limite: antes eran 200
+ * lineas, un numero inventado que ademas obligaba a Compose a medir un texto enorme en
+ * cada layout. Sin limite, lo unico que acota es el propio scroll del chat.
  */
-private const val LINEAS_COLAPSADAS = 6
-private const val LINEAS_EXPANDIDAS = 200
+private const val BLOQUES_COLAPSADOS = 6
 
 @Composable
 fun SubagentCard(
@@ -66,9 +73,6 @@ fun SubagentCard(
     // estado vive mientras viva la tarjeta, que es lo unico razonable.
     var expanded by remember { mutableStateOf(false) }
 
-    // Si el texto REALLY se corta al entrar. Lo dice el layout, no una suposicion.
-    var cuerpoCortado by remember { mutableStateOf(false) }
-
     val status = state.status ?: "running"
     val isRunning = status == "running" || status == "pending"
     val isError = status == "error"
@@ -82,6 +86,10 @@ fun SubagentCard(
         ?.replace(Regex("</subagent>\\s*$"), "")
         ?.trim()
         ?.takeIf { it.isNotBlank() } ?: body
+
+    // Con el parser que pinta, no con la longitud de la cadena. Se recuerda porque el
+    // recomponer no debe reparsear un informe entero en cada fotograma.
+    val nBloques = remember(cleanBody) { markdownBlockCount(cleanBody) }
 
     val accent = when {
         isRunning -> Color(0xFFD29922)
@@ -161,23 +169,16 @@ fun SubagentCard(
                 // el chat parecia clavado, que es justo lo que se reportaba como "el
                 // despliegue no funciona". Peor: el texto que sobrepasaba esos 520 dp
                 // se quedaba OCULTO, sin ninguna pista de que hubiera mas debajo.
-                // Ahora el limite son lineas y el texto expandido fluye con el chat,
+                // Ahora el limite son BLOQUES y el texto expandido fluye con el chat,
                 // que es el unico scroll que el usuario ya sabe usar.
-                val lineasVisibles = if (expanded) LINEAS_EXPANDIDAS else LINEAS_COLAPSADAS
-                Text(
+                MarkdownText(
                     text = cleanBody,
-                    color = Color(0xFFC9D1D9),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    maxLines = lineasVisibles,
-                    // `onTextLayout` responde si el texto se corta DE VERDAD, en vez de
-                    // suponerlo por la longitud de la cadena. Antes el enlace "ver todo"
-                    // salia siempre: en un informe corto no habia nada mas que ver, se
-                    // pulsaba y no pasaba nada, y eso se lee como un boton roto.
-                    onTextLayout = { r ->
-                        val corta = r.hasVisualOverflow || r.lineCount > lineasVisibles
-                        if (corta != cuerpoCortado) cuerpoCortado = corta
-                    },
+                    maxBlocks = if (expanded) Int.MAX_VALUE else BLOQUES_COLAPSADOS,
+                    // Con MarkdownText, no con Text plano: un informe de subagente viene
+                    // con markdown y antes se veian los `**`, las `#` y los `-`crudos. Los
+                    // colores los fija el propio renderer (MEDIDO: los 7 tipos de bloque
+                    // llevan color propio de paleta oscura), asi que dentro de esta tarjeta
+                    // oscura se leen bien sin forzar nada.
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { expanded = !expanded }
@@ -193,6 +194,11 @@ fun SubagentCard(
                     // poder volver a plegar). Antes habia DOS superficies pulsables
                     // —la caja del texto y esta fila— y el texto de esta fila caia
                     // dentro de la otra: un area de pulsacion ambigua.
+                    //
+                    // "Queda algo" lo dice el MISMO parser que pinta, no la longitud de la
+                    // cadena ni un onTextLayout: un informe con un solo bloque pero largo
+                    // antes ensenaba "ver todo" y no habia nada mas que ver.
+                    val cuerpoCortado = nBloques > BLOQUES_COLAPSADOS
                     if (expanded || cuerpoCortado) {
                         Text(
                             text = if (expanded) "ver menos" else "ver todo",

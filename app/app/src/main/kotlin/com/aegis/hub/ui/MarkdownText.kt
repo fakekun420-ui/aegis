@@ -45,7 +45,12 @@ fun MarkdownText(
     text: String,
     modifier: Modifier = Modifier,
     cursor: String = "",
-    onLinkClick: ((String) -> Unit)? = null
+    onLinkClick: ((String) -> Unit)? = null,
+    // Cuantos BLOQUES se pintan, por defecto todos. El corte es por bloques y no por
+    // lineas porque parseMarkdown ya ha partido el texto: un maxLines de Compose no sabe
+    // donde acaba un bloque sin volver a parsear, y cortar por dentro de uno parte una
+    // lista o una tabla justo por la mitad, que es peor que mostrar un bloque de mas.
+    maxBlocks: Int = Int.MAX_VALUE
 ) {
     // Sin esto el texto del asistente NO se puede seleccionar: una pulsación larga no
     // abre el menú de copiar y no hay forma de llevarme una respuesta fuera de la app.
@@ -64,7 +69,7 @@ fun MarkdownText(
     // resaltado es cosmetico, asi que se deja el de por defecto antes que arriesgar otra
     // vuelta de compilacion por un color.
     SelectionContainer {
-        MarkdownTextContent(text, modifier, cursor, onLinkClick)
+        MarkdownTextContent(text, modifier, cursor, onLinkClick, maxBlocks)
     }
 }
 
@@ -74,7 +79,8 @@ private fun MarkdownTextContent(
     text: String,
     modifier: Modifier = Modifier,
     cursor: String = "",
-    onLinkClick: ((String) -> Unit)? = null
+    onLinkClick: ((String) -> Unit)? = null,
+    maxBlocks: Int = Int.MAX_VALUE
 ) {
     val context = LocalContext.current
     val handleLink: (String) -> Unit = onLinkClick ?: { url ->
@@ -91,10 +97,15 @@ private fun MarkdownTextContent(
     }
 
     val blocks = remember(text) { parseMarkdown(text) }
+    val truncado = blocks.size > maxBlocks
+    val visibles = if (truncado) blocks.take(maxBlocks.coerceAtLeast(0)) else blocks
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        blocks.forEachIndexed { index, block ->
-            val isLast = index == blocks.lastIndex
-            val trailingCursor = if (isLast) cursor else ""
+        visibles.forEachIndexed { index, block ->
+            val isLast = index == visibles.lastIndex
+            // El cursor de escritura va al ultimo bloque REAL del texto. Con la vista
+            // truncada, el ultimo bloque VISIBLE no es el final del documento: pegarle
+            // ahi pondria el cursor a mitad de una frase, que se lee como texto roto.
+            val trailingCursor = if (isLast && !truncado) cursor else ""
 
             when (block) {
                 is MdBlock.Header -> MarkdownInlineText(
@@ -461,6 +472,18 @@ private sealed class MdBlock {
     data class OrderedList(val items: List<String>) : MdBlock()
     data class Paragraph(val text: String) : MdBlock()
 }
+
+/**
+ * Cuantos bloques tiene un texto en markdown. Vive FUERA del composable a proposito: el
+ * que decide si hace falta un "ver todo" lo pregunta ANTES de componer, no despues.
+ *
+ * Por que hace falta: con un `maxLines` de Compose, saber si el texto se corta de verdad
+ * obliga a mirar `onTextLayout`, o sea un dato que llega en un segundo fotograma. Y como
+ * `remember` se resetea con esa lectura, la tarjeta se cerraba sola en el instante en que
+ * el subagente terminaba. Aqui la pregunta se responde con el mismo parser que pinta, sin
+ * fotogramas y sin estado.
+ */
+fun markdownBlockCount(text: String): Int = parseMarkdown(text).size
 
 private fun parseMarkdown(src: String): List<MdBlock> {
     val blocks = mutableListOf<MdBlock>()

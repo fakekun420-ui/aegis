@@ -119,7 +119,10 @@ fun ChatScreen(
     val streamingText by vm.streamingText.collectAsState()
     val streamingTools by vm.streamingTools.collectAsState()
     val agentMode by vm.agentMode.collectAsState()
+    val agents by vm.agents.collectAsState()
+    val agentsLoading by vm.agentsLoading.collectAsState()
     var showModelSheet by remember { mutableStateOf(false) }
+    var showAgentSheet by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -418,7 +421,8 @@ fun ChatScreen(
                     onSelectModelClick = { showModelSheet = true },
                     onVoice = onVoice,
                     agentMode = agentMode,
-                    onToggleAgentMode = { vm.toggleAgentMode() }
+                    agentIsPrimary = agents.firstOrNull { it.name == agentMode }?.mode != "subagent",
+                    onSelectAgentClick = { showAgentSheet = true }
                 )
             }
         }
@@ -717,6 +721,83 @@ fun ChatScreen(
                             modifier = Modifier.size(56.dp).semantics { contentDescription = "Archivos" }
                         ) { Icon(Icons.Filled.FolderOpen, contentDescription = "Archivos", modifier = Modifier.size(28.dp)) }
                         Text("Archivos", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+
+    // Hoja de agentes. Estructura igual que la de modelos a proposito: las dos son
+    // "elegir una cosa de una lista que da el Hub", y hacerlas distintas solo para que
+    // se parezcan es trabajo sin resultado.
+    if (showAgentSheet) {
+        ModalBottomSheet(onDismissRequest = { showAgentSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("Agente", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Los que OpenCode publica ahora mismo. Los primary llevan la sesion; un " +
+                        "cargo (subagent) tambien puede, y el Hub descarta los nombres que no existan.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                if (agents.isEmpty()) {
+                    Text(
+                        if (agentsLoading) "Cargando agentes\u2026"
+                        else "No se pudieron cargar los agentes. Revisa que OpenCode este activo.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    val subagentes = agents.filter { it.mode == "subagent" }
+                    val primarios = agents.filter { it.mode != "subagent" }
+                    listOf(
+                        "Principal" to primarios,
+                        "Cargos y subagentes (${subagentes.size})" to subagentes
+                    ).forEach { par ->
+                        val grupo = par.second
+                        if (grupo.isNotEmpty()) {
+                            Text(
+                                par.first,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            grupo.forEach { ag ->
+                                ListItem(
+                                    headlineContent = {
+                                        Text(
+                                            ag.name,
+                                            fontWeight = if (ag.name == agentMode) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    },
+                                    supportingContent = {
+                                        Text(
+                                            listOfNotNull(
+                                                ag.description?.takeIf { it.isNotBlank() },
+                                                if (ag.model != null) "modelo: ${ag.model}" else null
+                                            ).joinToString(" \u00b7 ").ifBlank { ag.mode }
+                                        )
+                                    },
+                                    leadingContent = {
+                                        RadioButton(
+                                            selected = ag.name == agentMode,
+                                            onClick = { vm.selectAgent(ag.name); showAgentSheet = false }
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { vm.selectAgent(ag.name); showAgentSheet = false }
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -1217,7 +1298,13 @@ private fun UnifiedFloatingComposer(
     onSelectModelClick: () -> Unit,
     onVoice: () -> Unit,
     agentMode: String = "build",
-    onToggleAgentMode: () -> Unit = {}
+    // Antes `onToggleAgentMode`, un interruptor de dos. Ahora el boton ABRE una hoja con
+    // los agentes que OpenCode publica de verdad (MEDIDO 2026-09-30: 40, no 2).
+    onSelectAgentClick: () -> Unit = {},
+    // Si el agente elegido NO es un subagent. Con la lista sin cargar no se sabe, y se
+    // supone primary porque es el valor por defecto del propio OpenCode: ante la duda se
+    // muestra el estado de partida, no un color inventado.
+    agentIsPrimary: Boolean = true,
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -1304,14 +1391,20 @@ private fun UnifiedFloatingComposer(
                         )
                     }
 
-                    // Botón de Agente PLAN / BUILD: 'P' amarillo mostaza / 'B' azul
-                    val isPlan = agentMode.lowercase() == "plan"
-                    val buttonBg = if (isPlan) Color(0xFFD4A017) else Color(0xFF1E88E5)
-                    val letterColor = if (isPlan) Color(0xFF141413) else Color.White
-                    val letter = if (isPlan) "P" else "B"
-                    val modeDesc = if (isPlan) "Modo Plan (solo lectura)" else "Modo Build (ejecución y edición)"
+                    // Boton de agente: la letra es la inicial del nombre REAL
+                    // (orchestrator -> O, build -> B, plan -> P, kaenor-ai-engineer -> K).
+                    //
+                    // El color pasa a codificar el `mode` que da OpenCode y no dos casos
+                    // escritos a mano: azul = primary, verde azulado = subagent. Antes
+                    // "plan" era mostaza; ahora es primary, o sea azul, y la letra "P" y la
+                    // hoja siguen diciendo cual es. El color queda como pista y no como
+                    // fuente: deducir el modo de un color obliga a recordar la regla.
+                    val agentName = agentMode.trim()
+                    val letter = agentName.take(1).uppercase().ifBlank { "?" }
+                    val buttonBg = if (agentIsPrimary) Color(0xFF1E88E5) else Color(0xFF00897B)
+                    val modeDesc = "Agente: $agentName. Toca para cambiar de agente"
                     Surface(
-                        onClick = onToggleAgentMode,
+                        onClick = onSelectAgentClick,
                         shape = CircleShape,
                         color = buttonBg,
                         modifier = Modifier
@@ -1330,7 +1423,7 @@ private fun UnifiedFloatingComposer(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
                                 ),
-                                color = letterColor
+                                color = Color.White
                             )
                         }
                     }

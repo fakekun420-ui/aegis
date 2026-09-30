@@ -21,6 +21,8 @@ import com.aegis.hub.data.MessageDeliveryStatus
 import com.aegis.hub.data.MessageInfo
 import com.aegis.hub.data.MessagePart
 import com.aegis.hub.data.ModelOption
+import com.aegis.hub.data.OpencodeAgent
+import com.aegis.hub.data.primariosPrimero
 import com.aegis.hub.data.modeloPorDefecto
 import com.aegis.hub.data.SendMessageRequest
 import kotlinx.coroutines.Dispatchers
@@ -118,8 +120,21 @@ class ChatViewModel : ViewModel() {
     private val _streamingTools = MutableStateFlow<List<LiveToolExecution>>(emptyList())
     val streamingTools: StateFlow<List<LiveToolExecution>> = _streamingTools
 
-    private val _agentMode = MutableStateFlow<String>("build") // "plan" | "build"
+    // El nombre del agente activo. Antes era "plan" | "build" y nada mas: un interruptor
+    // de dos, mientras OpenCode publica 40 agentes (MEDIDO 2026-09-30). Se mantiene como
+    // String y no como enum a proposito, porque el valor NO lo elegimos nosotros: es el
+    // nombre exacto que OpenCode tiene, y una lista cerrada aqui se quedaria vieja en
+    // cuanto se anadiera un cargo.
+    private val _agentMode = MutableStateFlow<String>("build")
     val agentMode: StateFlow<String> = _agentMode
+
+    // Los agentes reales, tal cual. Sin lista no hay selector: se muestran los 6 primary
+    // y se dice, en vez de fingir que la lista esta completa.
+    private val _agents = MutableStateFlow<List<OpencodeAgent>>(emptyList())
+    val agents: StateFlow<List<OpencodeAgent>> = _agents
+
+    private val _agentsLoading = MutableStateFlow(false)
+    val agentsLoading: StateFlow<Boolean> = _agentsLoading
 
     private var pollingJob: Job? = null
 
@@ -326,12 +341,47 @@ class ChatViewModel : ViewModel() {
         loadModels(p)
     }
 
-    fun toggleAgentMode() {
-        _agentMode.value = if (_agentMode.value == "plan") "build" else "plan"
+    /**
+     * Elige el agente de la sesion. Sustituye a `toggleAgentMode()`, que alternaba entre
+     * dos valores fijos: MEDIDO, de los 40 agentes de OpenCode solo se podian alcanzar 2.
+     */
+    fun selectAgent(name: String) {
+        val limpio = name.trim()
+        if (limpio.isBlank()) return
+        val lista = _agents.value
+        // Sin lista no se bloquea: el Hub vuelve a validar contra /api/agent y es la
+        // validacion que de verdad importa (MEDIDO: OpenCode guarda CUALQUIER nombre, y
+        // uno inexistente produce un turno vacio sin decir nada). Este filtro es solo
+        // para que un toque en la hoja no installs un nombre imposible.
+        if (lista.isNotEmpty() && lista.none { it.name == limpio }) {
+            _error.value = "«$limpio» no es un agente de OpenCode."
+            return
+        }
+        _agentMode.value = limpio
     }
 
-    fun setAgentMode(mode: String) {
-        _agentMode.value = if (mode.lowercase().trim() == "plan") "plan" else "build"
+    fun loadAgents() {
+        if (_agentsLoading.value) return
+        viewModelScope.launch {
+            _agentsLoading.value = true
+            try {
+                val resp = api.getOpencodeAgents()
+                if (resp.ok && resp.data != null) {
+                    _agents.value = resp.data.primariosPrimero()
+                    // Si el agente elegido ya no esta (se borro un cargo), se vuelve a
+                    // Build. Antes no habia lista con la que comprobar nada, y el valor
+                    // se quedaba pegado a un nombre que el Hub ya no reconoceria.
+                    val elegido = _agentMode.value
+                    if (elegido.isNotBlank() && resp.data.none { it.name == elegido }) {
+                        _agentMode.value = "build"
+                    }
+                }
+            } catch (e: Exception) {
+                _error.value = "No se pudieron cargar los agentes: ${e.message}"
+            } finally {
+                _agentsLoading.value = false
+            }
+        }
     }
 
     fun clearError() {
@@ -849,6 +899,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         if (sessionId.isBlank()) {
             _sessionTitle.value = "Nuevo chat"
             loadModels(prov)
+            loadAgents()
             return
         }
         _currentSessionId.value = sessionId
@@ -856,6 +907,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             _loading.value = true
             _error.value = null
             loadModels(prov)
+            loadAgents()
 
             // Try to resolve human-readable title from sessions list
             try {

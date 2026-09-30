@@ -3270,7 +3270,22 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
     return json(res, 200, ok(models));
   }
 
-  // GET /api/forms (and /api/opencode/forms) — formularios/preguntas PENDIENTES.
+  // GET /api/opencode/agents — los agentes que OpenCode EXPONE de verdad.
+  //
+  // Hace falta una ruta propia y no vale el proxy generico `/opencode/*` porque ese no
+  // anade el Basic de OpenCode (esa credencial solo vive en providers.js) y devuelve
+  // 401: MEDIDO 2026-09-30, `/opencode/api/agent` a traves del proxy sale VACIA
+  // mientras que la misma llamada contra el serve responde con los 40 agentes.
+  //
+  // MEDIDO 2026-09-30: son 40 — Build, General, Explore, Compaction, Title, Summary,
+  // Plan, mas `orchestrator` y los 32 cargos de Kaenor. Se devuelven TAL CUAL, sin
+  // filtrar: el Hub es un espejo fiel, y que agentes "interesan" lo decide la app.
+  if (pathname === "/api/opencode/agents" && req.method === "GET") {
+    const agents = await opencodeAdapter.listAgents();
+    return json(res, 200, ok(agents));
+  }
+
+  // GET /api/forms (and /api/opencode/forms) — formularios/preguntas PENDENTES.
   //
   // Cuando una herramienta lanza una pregunta al usuario, el TUI del CLI la pinta y
   // se responde con flechas + Enter. Desde Aegis no había forma de verla NI de

@@ -315,6 +315,30 @@ data class AttachedFile(
 )
 
 // ---- Models ----
+/**
+ * Un agente REAL de OpenCode, tal cual lo publica `GET /api/agent`.
+ *
+ * MEDIDO 2026-09-30: son 40 — 6 `primary` (orchestrator, Build, Plan y los tres internos
+ * de OpenCode) y 34 `subagent` (los 32 cargos de Kaenor + General + Explore). Antes de
+ * esto la app no tenia NINGUN modelo de agente y el boton azul era un interruptor de
+ * dos: `if (agentMode == "plan") "build" else "plan"`. O sea que de 40 agentes
+ * reachables solo se podian elegir dos, y el resto no era que no existieran.
+ *
+ * `model` es el modelo FIJADO del agente, no el de la sesion: MEDIDO, de los 6 primary
+ * solo `orchestrator` lo tiene (`space-bunny-free`); Build y Plan lo dejan en null y
+ * usan el de la sesion. Por eso la hoja lo enseña tal cual, sin inventar un valor.
+ */
+data class OpencodeAgent(
+    val name: String,
+    val mode: String = "primary",
+    val model: String? = null,
+    val description: String? = null
+)
+
+/** Un primary antes que un subagent: es el orden en el que se ofrecen. */
+fun List<OpencodeAgent>.primariosPrimero(): List<OpencodeAgent> =
+    sortedWith(compareBy({ it.mode != "primary" }, { it.name.lowercase() }))
+
 data class ModelOption(
     val id: String,
     val name: String,

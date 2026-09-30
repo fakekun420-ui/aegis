@@ -460,6 +460,52 @@ export class OpencodeAdapter extends BaseProviderAdapter {
   }
 
   /**
+   * Los agentes que OpenCode EXPONE de verdad. MEDIDO 2026-09-30: son 40 — los 7
+   * internos (Build, General, Explore, Compaction, Title, Summary, Plan) mas
+   * `orchestrator` y los 32 cargos de Kaenor. Se leen de la API, no de una lista
+   * escrita a mano: una lista fija se queda vieja en cuanto se anade un cargo, que es
+   * justo lo que pasaba con el modelo por defecto.
+   *
+   * Se devuelve TAL CUAL, sin filtrar ni reordenar en el Hub: el Hub es un espejo
+   * fiel y decidir que agentes "interesan" esdecision de la app, no del proxy. Los
+   * tres internos (Compaction, Title, Summary) tambien salen, con su `mode`, para que
+   * quien lo vea pueda decir que sobran en vez de encontrarlos fantasma.
+   */
+  async listAgents() {
+    const ahora = Date.now();
+    if (this._agentsCache && (ahora - (this._agentsCacheTime || 0)) < 60000) {
+      return this._agentsCache;
+    }
+    try {
+      const r = await this._v2("/api/agent", { timeoutMs: 10000 });
+      const raw = (r.ok && r.json && (Array.isArray(r.json.data) ? r.json.data : null)) || null;
+      if (!raw) throw new Error(`/api/agent -> ${r.status}`);
+      const lista = raw
+        .filter((a) => a && a.name)
+        .map((a) => ({
+          name: String(a.name),
+          mode: String(a.mode || "primary"),
+          model: a.model ? String(a.model.id || a.model) : null,
+          description: a.description ? String(a.description) : null
+        }));
+      this._agentsCache = lista;
+      this._agentsCacheTime = ahora;
+      return lista;
+    } catch (e) {
+      log.warn("[opencode] listAgents error", { err: e.message });
+      return this._agentsCache || [];
+    }
+  }
+
+  /** El nombre de un agente existe de verdad? (para no mandar basura al serve) */
+  async _agentExiste(nombre) {
+    if (!nombre) return true;   // sin agente: que decida OpenCode
+    const lista = await this.listAgents();
+    if (!lista.length) return true;   // no se puede comprobar: no bloquear
+    return lista.some((a) => a.name === nombre);
+  }
+
+  /**
    * Activa un modelo en una sesion. UNICO sitio que sabe hacerlo: lo usan el envio de
    * mensajes y la creacion de sesion. Estar en dos sitios es exactamente como los dos
    * acaban discrepando.
@@ -717,16 +763,25 @@ export class OpencodeAdapter extends BaseProviderAdapter {
       await this._switchSessionModel(sessionId, effectiveModel, opts, { fallbackToFirst: !payload.model });
     }
 
-    // 4) Agente PLAN/BUILD — POST /session/:id/agent (mejor esfuerzo)
+    // 4) Agente de la sesion — POST /session/:id/agent (mejor esfuerzo)
+    //
+    // MEDIDO 2026-09-30: esto estaba limitado a `["plan", "build"]`, asi que CUALQUIER
+    // otro agente —empezando por `orchestrator` y los 32 cargos— se descartaba EN
+    // SILENCIO. No habia conexion directa con los agentes de OpenCode: habia una
+    // puerta que solo dejaba pasar a dos.
+    //
+    // MEDIDO que el serve los acepta de verdad: `POST /api/session/:id/agent` con
+    // `{"agent":"orchestrator"}` responde 204. Y `GET /api/agent` lo lista con
+    // mode=primary y un modelo asignado. La restriccion era nuestra, no del serve.
     const agentMode = payload.agent || payload.mode || opts.agent || opts.mode || null;
-    if (agentMode && ["plan", "build"].includes(String(agentMode))) {
+    if (agentMode && await this._agentExiste(String(agentMode))) {
       try {
         const r = await this._v2(`/api/session/${encodeURIComponent(sessionId)}/agent`, {
           method: "POST", body: { agent: String(agentMode) }, timeoutMs: 6000, signal: opts.signal
         });
-        if (!r.ok && r.status !== 404) log.warn("[opencode] switchAgent failed", { status: r.status });
+        if (!r.ok && r.status !== 404) log.warn("[opencode] switchAgent failed", { agent: String(agentMode), status: r.status });
       } catch (e) {
-        log.warn("[opencode] switchAgent error", { err: e.message });
+        log.warn("[opencode] switchAgent error", { agent: String(agentMode), err: e.message });
       }
     }
 
