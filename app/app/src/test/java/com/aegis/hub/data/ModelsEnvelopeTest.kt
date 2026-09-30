@@ -59,8 +59,10 @@ class ModelsEnvelopeTest {
         assertEquals("Ubuntu (chroot/proot)", data.stepList[1].title)
         assertEquals("Node.js", data.stepList[2].title)
         assertEquals("OpenCode", data.stepList[3].title)
-        assertEquals("Antigravity / Artemis", data.stepList[4].title)
-        assertEquals("Skills y plugins", data.stepList[5].title)
+        // "Skills y plugins" es el ULTIMO (indice 4): el paso "Antigravity / Artemis" salio
+        // del wizard cuando OpenCode paso a ser el unico motor. MEDIDO del contrato real en
+        // backend/src/bootstrap/state.js:42-46 — cinco pasos, ninguno de antigravity.
+        assertEquals("Skills y plugins", data.stepList[4].title)
         assertEquals(BootstrapStepStatus.done, data.stepList[0].status)
         assertEquals(BootstrapStepStatus.running, data.stepList[1].status)
         assertEquals(BootstrapStepStatus.pending, data.stepList[2].status)
@@ -130,13 +132,14 @@ class ModelsEnvelopeTest {
         // Labels EXACTOS de CHECK_DEFS (setupRoutes.js L151-227)
         assertEquals("opencode", data.checkList[0].id)
         assertEquals("OpenCode (proxy4096)", data.checkList[0].label)
-        assertEquals("Antigravity/Artemis (agy + auth)", data.checkList[1].label)
-        assertEquals("Servicio de accesibilidad (:8766)", data.checkList[2].label)
-        assertEquals("Instalación inicial (wizard)", data.checkList[3].label)
+        // MEDIDO del contrato real (setupRoutes.js:224-273): opencode, a11y, bootstrap.
+        // El check `antigravity` salio con el motor, y con el los indices se corren: el
+        // que era el 2 (accesibilidad) es ahora el 1, y el bootstrap el 2.
+        assertEquals("Servicio de accesibilidad (:8766)", data.checkList[1].label)
+        assertEquals("Instalación inicial (wizard)", data.checkList[2].label)
         assertEquals(SetupCheckStatus.ok, data.checkList[0].status)
         assertEquals(SetupCheckStatus.ok, data.checkList[1].status)
         assertEquals(SetupCheckStatus.manual, data.checkList[2].status)
-        assertEquals(SetupCheckStatus.ok, data.checkList[3].status)
         assertEquals("revísalo a mano", data.checkList[2].detail)
     }
 
@@ -164,7 +167,7 @@ class ModelsEnvelopeTest {
         assertEquals(SetupCheckStatus.fail, data.checkList[0].status)
         assertEquals(SetupCheckStatus.fail, data.checkList[1].status)
         assertEquals(SetupCheckStatus.fail, data.checkList[2].status)
-        assertEquals(SetupCheckStatus.ok, data.checkList[3].status)
+        assertEquals(3, data.checkList.size)  // el 4º (antigravity) salio con el motor
         // checks null → lista vacía
         val none = gson.fromJson(
             """{"ok": true, "data": {"ready": false, "checks": null}}""",

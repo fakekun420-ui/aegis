@@ -88,7 +88,9 @@ class BootstrapViewModelTest {
         runCurrent()                         // ejecuta la carga inicial encolada
         val trasCarga = vm.ui.value
         assertEquals(BootstrapPhase.done, trasCarga.state?.phase)
-        assertEquals(6, trasCarga.state?.stepList?.size)
+        // 5 pasos, no 6: el paso "antigravity" salio del wizard. MEDIDO de
+        // backend/src/bootstrap/state.js:42-46.
+        assertEquals(5, trasCarga.state?.stepList?.size)
         assertTrue(trasCarga.hubReachable)
         assertNull(trasCarga.actionError)
         assertFalse(trasCarga.loading)
@@ -107,7 +109,7 @@ class BootstrapViewModelTest {
         val ui = vm.ui.value
         assertEquals(BootstrapPhase.done, ui.state?.phase)
         assertEquals(BootstrapPhase.done, ui.state?.phaseOrIdle)
-        assertEquals(6, ui.state?.stepList?.size)
+        assertEquals(5, ui.state?.stepList?.size)
         assertTrue(ui.hubReachable)
         assertNull(ui.actionError)
 
@@ -152,7 +154,7 @@ class BootstrapViewModelTest {
 
     // ---- 4) runFinalCheck() éxito → finalCheck.ready + los 4 checks ----
     @Test
-    fun runFinalCheck_exito_reflejaReadyYLosCuatroChecks() = runTest {
+    fun runFinalCheck_exito_reflejaReadyYLosTresChecks() = runTest {
         val fake = FakeRepo().apply {
             onState = { Response.success(BootstrapResponse(ok = true, data = doneState())) }
             onFinalCheck = { Response.success(finalCheckAllOk()) }
@@ -175,7 +177,6 @@ class BootstrapViewModelTest {
         assertEquals(
             listOf(
                 "OpenCode (proxy4096)",
-                "Antigravity/Artemis (agy + auth)",
                 "Servicio de accesibilidad (:8766)",
                 "Instalación inicial (wizard)"
             ),

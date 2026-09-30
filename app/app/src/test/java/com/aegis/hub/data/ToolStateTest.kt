@@ -11,6 +11,7 @@ package com.aegis.hub.data
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ToolStateTest {
@@ -32,7 +33,11 @@ class ToolStateTest {
     @Test
     fun `outputText devuelve vacío cuando no hay ni output ni content`() {
         val ts = ToolState(output = null, content = null)
-        assertEquals("", ts.outputText)
+        // `outputText` esta declarado `String?`, asi que aqui lo correcto es null y no "".
+        // El test esperaba "" desde antes de que existiera la propiedad nullable: nunca se
+        // ejecuto, y nadie vio que la expectativa no cuadraba con el tipo declarado. El
+        // consumidor (SubagentCard) trata null con `isNullOrBlank()`, que cubre ambos.
+        assertNull(ts.outputText)
     }
 
     @Test
