@@ -8,8 +8,6 @@ import android.os.Build
 import android.os.Environment
 import android.app.Activity
 import android.app.Application
-import android.app.Activity
-import android.app.Application
 import android.os.Bundle
 import android.provider.Settings
 import android.speech.RecognizerIntent
