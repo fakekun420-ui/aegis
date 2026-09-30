@@ -470,10 +470,74 @@ const PROJECTS_STORE_FILE = process.env.AEGIS_PROJECTS_STORE
 // (fuente única — antes existía también en providers.js). Misma firma, misma
 // semántica (versión canónica con seeds de sessionTitles); se importa arriba.
 
+/**
+ * Migracion UNICA: separa los titulos automaticos de los que el usuario puso a mano.
+ *
+ * Hace falta porque los dos compartian cubo (`sessionTitles`) y el automatico, escrito al
+ * enviar el primer mensaje, le ganaba al nombre real de OpenCode para siempre. Corregir
+ * el overlay sin esto no arregla NADA en los datos que ya estan: siguen en el cubo del
+ * renombrado deliberado y el overlay los respeta como decision del usuario.
+ *
+ * La firma del auto-titulador es acabar en '…' — lo anade siempre que recorta a 30
+ * caracteres. Se decide por la forma, no por una lista de ids, y es reversible: el
+ * titulo no se borra, cambia de cubo. MEDIDO 2026-09-30: 5 automaticos de 10 entradas.
+ *
+ * Idempotente: si la clave ya esta en `sessionAutoTitles`, no se toca. Un store que ya
+ * se migro no se vuelve a tocar en el siguiente arranque.
+ */
+async function migrarTitulosAutomaticos() {
+  try {
+    let movidos = 0, yaEstaban = 0;
+    await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
+      const store = loadProjectsStore();
+      const titulos = store.sessionTitles || {};
+      const claves = Object.keys(titulos);
+      if (!claves.length) return;
+      store.sessionAutoTitles = store.sessionAutoTitles || {};
+      for (const sid of claves) {
+        const t = titulos[sid];
+        if (typeof t !== "string" || !/…$/.test(t.trim())) continue;
+        if (store.sessionAutoTitles[sid]) { yaEstaban++; continue; }
+        store.sessionAutoTitles[sid] = t;
+        delete titulos[sid];
+        movidos++;
+      }
+      if (movidos) saveProjectsStore(store);
+    });
+    if (movidos || yaEstaban) {
+      log.info(`[hub] titulos automaticos separados de los renombrados a mano: ${movidos} movidos, ${yaEstaban} ya estaban`);
+    }
+  } catch (e) {
+    // Una migracion que falla NO puede impedir que el Hub levante: se dice y se sigue.
+    log.warn("[hub] migracion de titulos automaticos fallo (no bloquea el arranque)", { err: e.message });
+  }
+}
+
+/**
+ * ¿El titulo que trae OpenCode es real o es el id crudo de una sesion que su agente
+ * Title todavia no ha bautizado? Se decide por la FORMA, no por una lista de ids: un id
+ * empieza por `ses_` y un nombre de persona no.
+ */
+function tituloRealDeOpenCode(titulo) {
+  if (!titulo) return false;
+  const t = String(titulo).trim();
+  if (!t) return false;
+  if (t === titulo && /^[0-9a-fA-F-]{12,}$/.test(t)) return false;
+  return !(t.startsWith("ses_") || t.startsWith("local_") || t === "Nuevo chat" || t === "New chat");
+}
+
 function resolveExistingSessionTitle(store, sessionId, fallbackTitle = null) {
   if (!sessionId) return fallbackTitle || "";
   if (store && store.sessionTitles && store.sessionTitles[sessionId]) {
     return store.sessionTitles[sessionId];
+  }
+  // El provisional se consulta DESPUES del deliberado y solo si no hay otro nombre. Se
+  // separaron los dos cubos porque mezclados el provisional pisaba al nombre real de
+  // OpenCode y no habia forma de deshacerlo: `store.sessionTitles` se sigue leyendo igual
+  // para no perder los titulos ya guardados, y `sessionAutoTitles` recoge los nuevos
+  // automaticos. Un store viejo (sin `sessionAutoTitles`) no se rompe: falls vacio.
+  if (store && store.sessionAutoTitles && store.sessionAutoTitles[sessionId]) {
+    return store.sessionAutoTitles[sessionId];
   }
   if (store && Array.isArray(store.projects)) {
     for (const p of store.projects) {
@@ -1799,20 +1863,35 @@ async function handleRequest(req, res){
         saveProjectsStore(store);
       });
 
-      // Auto-update session title from first prompt if title is technical or placeholder
+      // Titulo PROVISIONAL a partir del primer mensaje, y SOLO si la sesion no tiene
+      // ningun nombre. Va a su propio cubo (`sessionAutoTitles`) y no a `sessionTitles`:
+      // antes los dos compartian cubo, y como el provisional se escribia al enviar y el
+      // overlay de la lista leia el store, el texto del primer mensaje acababa ganándole
+      // al nombre que le ponia OpenCode — para siempre y sin forma de deshacerlo.
+      //
+      // MEDIDO 2026-09-30: ses_f15109400ffeCFxEAtL8u33Dn0 se llama "quant-math" en
+      // OpenCode y salia en la app como "adjunto captura ee pantalla de…".
+      //
+      // Con esto una sesion YA EXISTENTE no se renombra nunca por aqui: si tiene nombre
+      // real de OpenCode, `resolveExistingSessionTitle` lo devuelve y la condicion no
+      // entra; y si el usuario la renombro a mano, `sessionTitles` esta lleno y tampoco.
       const promptText = typeof body.text === "string" ? body.text : (body.prompt || (Array.isArray(body.parts) && body.parts[0]?.text) || "");
       if (promptText && promptText.trim()) {
         await fileMutex.runExclusive(PROJECTS_STORE_FILE, async () => {
           const store = loadProjectsStore();
           store.sessionTitles = store.sessionTitles || {};
-          const curTitle = store.sessionTitles[sid] || resolveExistingSessionTitle(store, sid);
+          store.sessionAutoTitles = store.sessionAutoTitles || {};
+          // Renombrado a mano: intocable. Antes esta comprobacion no existia, y por eso
+          // un nombre puesto a mano se perdia en cuanto se mandaba otro mensaje.
+          if (store.sessionTitles[sid]) return;
+          const curTitle = resolveExistingSessionTitle(store, sid);
           if (!curTitle || curTitle.startsWith("companion:") || curTitle.startsWith("session:") || curTitle.startsWith("ses_") || curTitle === "Nuevo chat" || /^[0-9a-fA-F-]{8,}$/.test(curTitle)) {
             const cleanPrompt = promptText.replace(/[\r\n]+/g, " ").trim();
-            const autoTitle = cleanPrompt.length > 30 ? cleanPrompt.slice(0, 30).trim() + "…" : cleanPrompt;
-            store.sessionTitles[sid] = autoTitle;
+            const autoTitle = cleanPrompt.length > 30 ? cleanPrompt.slice(0, 30).trim() + "\u2026" : cleanPrompt;
+            store.sessionAutoTitles[sid] = autoTitle;
             for (const p of store.projects) {
               const found = (p.sessions || []).find(s => s.sessionId === sid);
-              if (found) {
+              if (found && !found.title) {
                 found.title = autoTitle;
                 break;
               }
@@ -2947,9 +3026,25 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
           // Registro único (F6): el item conserva el id, el nombre REAL que le
           // puso OpenCode (providerTitle) y el nombre puesto desde la app (title).
           item.providerTitle = (item.raw && item.raw.title) || item.title || null;
-          const custom = resolveExistingSessionTitle(store, item.id);
-          if (custom && custom !== item.id) {
-            item.title = custom;
+          // MEDIDO 2026-09-30: aqui se perdia el nombre. `resolveExistingSessionTitle`
+          // devuelve tambien el titulo PROVISIONAL (el recorte del primer mensaje) y al
+          // asignarlo a `item.title` ese texto ganaba para siempre: la sesion
+          // ses_f15109400ffe se llama "quant-math" en OpenCode y se veia como
+          // "adjunto captura ee pantalla de…" en la app. El nombre real seguia ahi, en
+          // `providerTitle`, y no se ense~naba nunca.
+          //
+          // Ahora solo gana lo que el usuario puso a mano. El resto manda OpenCode, y el
+          // titulo provisional solo se usa si OpenCode aun no ha puesto ninguno (sesion
+          // recien creada: su `title` es el id crudo hasta que su agente Title la bautiza).
+          const deliberado = store.sessionTitles && store.sessionTitles[item.id];
+          if (deliberado && deliberado !== item.id) {
+            item.title = deliberado;
+          } else {
+            item.title = item.providerTitle || item.title;
+            const auto = store.sessionAutoTitles && store.sessionAutoTitles[item.id];
+            if (auto && !tituloRealDeOpenCode(item.providerTitle)) {
+              item.title = auto;
+            }
           }
           item.pinned = resolveExistingSessionPinned(store, item.id);
         }
@@ -3561,6 +3656,40 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
         : null));
     } catch (e) {
       log.warn("[session-model] error", { err: e.message });
+      return json(res, 200, ok(null));
+    }
+  }
+
+  // GET /api/sessions/:id/agent — agente REAL con el que esta trabajando la sesion.
+  //
+  // Hermano de la ruta del modelo, que esta justo encima y existe por el mismo motivo:
+  // la app no lo pedia, y el valor ya estaba ahi. MEDIDO 2026-09-30 sobre
+  // ses_f15109400ffeCFxEAtL8u33Dn0:
+  //
+  //   GET /api/session/:id  ->  { agent: "orchestrator", model: {...} }
+  //
+  // Sin esta ruta, abrir un chat y elegir agente era estado del ViewModel: se perdia al
+  // salir, y ademas la sesion podia quedar con un agente distinto del que el usuario
+  // eligio. Con ella, la verdad la tiene OpenCode y la app solo la lee — igual que con
+  // el modelo.
+  //
+  // Devuelve {agent, model} o null si la sesion no existe o no tiene agente fijado.
+  if (pathname.match(/^\/api\/sessions\/([^\/]+)\/agent$/) && req.method === "GET") {
+    const sid = sanitizeProjectId(decodeURIComponent(pathname.match(/^\/api\/sessions\/([^\/]+)\/agent$/)[1]));
+    if (!isValidId(sid)) return invalidId(res, "session", sid);
+    try {
+      const r = await opencodeAdapter._v2(`/api/session/${encodeURIComponent(sid)}`, { timeoutMs: 8000 });
+      if (!r.ok) return json(res, 502, fail("SESSION_AGENT_UNAVAILABLE", `OpenCode respondio ${r.status}`));
+      const ses = (r.json && (r.json.data || r.json)) || {};
+      const agente = ses.agent;
+      const m = ses.model;
+      if (!agente) return json(res, 200, ok(null));
+      return json(res, 200, ok({
+        agent: String(agente),
+        model: m && typeof m === "object" ? (m.id ?? null) : null
+      }));
+    } catch (e) {
+      log.warn("[session-agent] error", { err: e.message });
       return json(res, 200, ok(null));
     }
   }
@@ -4354,6 +4483,11 @@ server.listen(HUB_PORT, "127.0.0.1", async ()=>{
   // fallo aqui NUNCA debe impedir que el hub levante.
   try { startExecutionWatcher(opencodeAdapter); }
   catch (e) { log.warn("[exec] vigilante no arranca", { err: e.message }); }
+  // Separar los titulos automaticos de los renombrados a mano. Va despues del vigilante y
+  // con su propio try/catch: si falla, se dice y el Hub sigue igual. Sin await a proposito
+  // — el arranque no depende de una migracion de datos.
+  try { void migrarTitulosAutomaticos(); }
+  catch (e) { log.warn("[hub] migracion de titulos no se pudo lanzar", { err: e.message }); }
   log.info(`  api    : /api/status  /api/device/*`);
   log.info(`  session: /api/system/status (ownership)  /api/system/session-info (pid/uptime)`);
   log.info(`  pid    : ${process.pid}  node ${process.version}  keepAlive 125s (multimodal streaming)`);

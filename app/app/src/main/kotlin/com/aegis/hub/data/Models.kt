@@ -740,7 +740,23 @@ data class InflightSession(
  */
 object TurnState {
     /** Silencio máximo tolerado antes de dudar del registro. */
-    const val MAX_SILENCE_MS = 45_000L
+    /**
+     * Techo de seguridad por si el vigilante del Hub muere y `turnOver` no llega nunca.
+     *
+     * ANTES eran 45 s, y ese numero era el defecto: una herramienta de mas de 45 s no
+     * emite NADA durante ese rato, asi que el circulo se apagaba mientras el turno seguia
+     * vivo. MEDIDO 2026-09-30 en la captura del usuario: `bash(sleep 270; ...)` con
+     * "Trabajando en ello..." dentro del chat y SIN circulo en la lista — el mismo turno,
+     * dos indicadores, uno cierto y otro apagado. Lo que no puede distinguir "no hay
+     * eventos" de "se acabo" es un reloj corto, y esa distincion es justo la que se
+     * perdia.
+     *
+     * `turnOver` es la senal fiable y no necesita reloj. El silencio queda solo como red
+     * de seguridad, y 6 h da margen de sobra a un turno: pasado ese punto, o el turno esta
+     * colgado o el vigilante murio, y en los dos casos un circulo de mas importa mucho
+     * menos que apagarlo antes de tiempo.
+     */
+    const val MAX_SILENCE_MS = 6L * 60L * 60L * 1000L
 
     /**
      * ¿Este registro dice "ocupado" y además es de fiar?

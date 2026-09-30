@@ -20,6 +20,8 @@ import com.aegis.hub.data.Message
 import com.aegis.hub.data.MessageDeliveryStatus
 import com.aegis.hub.data.MessageInfo
 import com.aegis.hub.data.MessagePart
+import android.util.Log
+import com.aegis.hub.data.AgentPreferences
 import com.aegis.hub.data.ModelOption
 import com.aegis.hub.data.OpencodeAgent
 import com.aegis.hub.data.seleccionables
@@ -35,6 +37,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import com.aegis.hub.data.TurnState
+
+/**
+ * Agente con el que arranca un chat que no sabe cual usar. "orchestrator" a proposito:
+ * MEDIDO 2026-09-30 es el unico de los tres elegibles con modelo propio y el unico que
+ * delega en los cargos. "build" era el valor anterior y mandaba los turnos del chat a un
+ * agente distinto del que se esta usando en el resto del sistema.
+ */
+private const val AGENTE_POR_DEFECTO = "orchestrator"
 
 class ChatViewModel : ViewModel() {
     private val api = ApiClient.service
@@ -125,7 +135,17 @@ class ChatViewModel : ViewModel() {
     // String y no como enum a proposito, porque el valor NO lo elegimos nosotros: es el
     // nombre exacto que OpenCode tiene, y una lista cerrada aqui se quedaria vieja en
     // cuanto se anadiera un cargo.
-    private val _agentMode = MutableStateFlow<String>("build")
+    // El default es ORCHESTRATOR, no build. MEDIDO 2026-09-30: de los 3 agentes que
+    // OpenCode deja elegir (Build, Plan, orchestrator), `orchestrator` es el unico con
+    // modelo propio y el unico que delega en los cargos. Con "build" por defecto, escribir
+    // desde la app mandaba un agente distinto al que se esta trabajando en el resto del
+    // sistema, que es justo el efecto que el usuario quiere evitar: cambiar parametros y
+    // configuracion de Kaenor Inc. por escribir un mensaje.
+    //
+    // Esto solo aplica a lo que NO se sabe. Una sesion que ya tiene agente conserva el
+    // suyo —OpenCode primero, luego la copia local—, porque el requisito es que cada
+    // sesion guarde el agente que uso hasta que se cambie a mano.
+    private val _agentMode = MutableStateFlow<String>(AGENTE_POR_DEFECTO)
     val agentMode: StateFlow<String> = _agentMode
 
     // Los agentes reales, tal cual. Sin lista no hay selector: se muestran los 6 primary
@@ -358,6 +378,56 @@ class ChatViewModel : ViewModel() {
             return
         }
         _agentMode.value = limpio
+        // Se guarda por sesion. Sin esto, abrir el chat, elegir agente, salir y volver a
+        // entrar devolvia el de por defecto: el `ChatViewModel` muere con el
+        // `NavBackStackEntry` y un estado en memoria no recuerda nada.
+        val ctx = runCatching { AppContext.require() }.getOrNull()
+        // `_currentSessionId` y no un `sessionId`: ese es un PARAMETRO de send()/load() y
+        // dentro de selectAgent no existe (daria 'unresolved reference'). El StateFlow si
+        // es miembro y es la sesion en la que esta trabajando el ViewModel. En blanco
+        // significa chat nuevo todavia sin id, y entonces solo queda la "ultima eleccion".
+        val sid = (_currentSessionId.value ?: "").trim()
+        runCatching {
+            if (ctx != null) AgentPreferences.setAgent(ctx, sid, limpio)
+        }.onFailure { Log.w("AegisChat", "No se pudo guardar el agente de $sid: ${it.message}") }
+    }
+
+    /**
+     * Recupera el agente de una sesion al abrirla. Primero OpenCode, que es quien lo
+     * guardo de verdad; luego la copia local; y si no se sabe de ningun lado, el de por
+     * defecto.
+     *
+     * El orden importa: si se leyera primero la copia local, un agente cambiado DESDE EL
+     * CLI no se veria en la app, que es el mismo bug que se corrigio para el modelo.
+     */
+    private fun restoreAgentFor(sessionId: String) {
+        if (sessionId.isBlank()) {
+            _agentMode.value = AGENTE_POR_DEFECTO
+            return
+        }
+        viewModelScope.launch {
+            val ctx = runCatching { AppContext.require() }.getOrNull()
+            val delHub = runCatching { api.getSessionAgent(sessionId).data?.agent }
+                .onFailure { Log.w("AegisChat", "No se pudo leer el agente de $sessionId: ${it.message}") }
+                .getOrNull()
+            val guardado = runCatching { ctx?.let { AgentPreferences.agentFor(it, sessionId) } }.getOrNull()
+            val elegido = when {
+                !delHub.isNullOrBlank() -> delHub
+                !guardado.isNullOrBlank() -> guardado
+                else -> AGENTE_POR_DEFECTO
+            }
+            // Si el agente elegido ya no existe (se borro un cargo), se vuelve al de por
+            // defecto en vez de mandar un nombre que el Hub va a descartar: medido, un
+            // nombre que no existe produce un turno VACIO sin ningun error.
+            if (_agents.value.isNotEmpty() && _agents.value.none { it.name == elegido }) {
+                _agentMode.value = AGENTE_POR_DEFECTO
+                return@launch
+            }
+            if (_agentMode.value != elegido) _agentMode.value = elegido
+            if (!delHub.isNullOrBlank() && ctx != null) {
+                runCatching { AgentPreferences.setAgent(ctx, sessionId, delHub) }
+            }
+        }
     }
 
     fun loadAgents() {
@@ -898,6 +968,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             _selectedModel.value = null
         }
         restoreModelFor(sessionId, prov)
+        restoreAgentFor(sessionId)
         if (sessionId.isBlank()) {
             _sessionTitle.value = "Nuevo chat"
             loadModels(prov)
@@ -977,7 +1048,18 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         if (sendKey == inFlightSendKey) return
         inFlightSendKey = sendKey
 
-        if (text.isNotBlank() && (_sessionTitle.value.isNullOrBlank() || isTechnicalTitle(_sessionTitle.value))) {
+        // Titulo provisional, y SOLO si esta sesion no existe todavia. Es la MISMA
+        // condicion que decide mas abajo si hay que crearla (`activeSessionId.isBlank()`),
+        // y no la de "el titulo esta vacio": con esa, cualquier sesion cuyo titulo
+        // llegara tarde o fuera tecnico se renombraba aqui Y en el Hub, y el recorte del
+        // primer mensaje se quedaba puesto para siempre.
+        //
+        // MEDIDO 2026-09-30: ses_f15109400ffe se llama "quant-math" en OpenCode y salia en
+        // la app como "adjunto captura ee pantalla de…". Ademas el Hub guardaba ese texto
+        // en el mismo cubo que el renombrado a mano, asi que ganaba al nombre real; las dos
+        // mitades estan arregladas (esta aqui, y en server.js del lado del Hub).
+        val sesionEsNueva = sessionId.isBlank() && _currentSessionId.value.isNullOrBlank()
+        if (text.isNotBlank() && sesionEsNueva) {
             val clean = text.replace("\n", " ").trim()
             _sessionTitle.value = if (clean.length > 30) clean.take(30).trim() + "…" else clean
         }

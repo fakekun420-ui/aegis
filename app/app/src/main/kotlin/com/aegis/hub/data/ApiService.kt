@@ -90,6 +90,14 @@ interface ApiService {
     @GET("api/opencode/agents")
     suspend fun getOpencodeAgents(): Envelope<List<OpencodeAgent>>
 
+    // El agente REAL con el que esta trabajando la sesion. El Hub lo lee de OpenCode
+    // (`GET /api/session/:id` -> `.agent`), que es quien lo guardo al activar el agente.
+    // Sin esto la app no tenia de donde recuperarlo al reabrir un chat, y por eso salia
+    // el de por defecto. MEDIDO 2026-09-30: una sesion de este mismo dispositivo
+    // devolvia {agent: "orchestrator", model: "space-bunny-free"}.
+    @GET("api/sessions/{id}/agent")
+    suspend fun getSessionAgent(@Path("id") sessionId: String): Envelope<SessionAgentRef?>
+
     // System
     @GET("api/system/health")
     suspend fun getSystemHealth(): Response<HealthResponse>
