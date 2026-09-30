@@ -63,8 +63,27 @@ async function startHub(env = {}) {
     }
     try {
       const r = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(1000) });
-      if (r.status === 200) break;
-    } catch (_) { /* aun no escucha */ }
+      if (r.status === 200) {
+        // Un 200 NO basta: hay que comprobar que el Hub que contesta es NUESTRO hijo.
+        // MEDIDO 2026-09-30: este test fallo una vez de cuatro, solo cuando la maquina
+        // iba cargada, y la causa mas probable es que un Hub de una vuelta anterior
+        // siguiera vivo en un puerto efimero reutilizado: el nuevo no puede tomar el
+        // puerto, el test habla con el viejo —que ya tiene el cubo de rate-limit
+        // lleno— y recibe 429 sin que nada diga por que.
+        // Con el pid publicado, eso se ve en vez de ser un fallo fantasma.
+        const dicho = r.headers.get("X-Aegis-Pid");
+        if (dicho && Number(dicho) !== child.pid) {
+          throw new Error(
+            `el puerto ${port} lo responde un Hub que NO es nuestro hijo: pid ${dicho} ` +
+            `contra hijo ${child.pid}. Alguien mas esta ocupando el puerto efimero.`
+          );
+        }
+        break;
+      }
+    } catch (e) {
+      if (String(e.message || "").startsWith("el puerto")) throw e;   // identidad: fallo real
+      /* aun no escucha */
+    }
     await new Promise((r) => setTimeout(r, 250));
     if (Date.now() >= deadline) throw new Error(`hub no respondio en 20000ms\n${stderr}`);
   }

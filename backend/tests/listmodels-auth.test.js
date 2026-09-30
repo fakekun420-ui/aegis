@@ -7,7 +7,7 @@
 // Con la primera candidata mala no habia ninguna recuperacion posible, por muchas
 // veces que se reintentara.
 //
-// Que fija este fichero, por orden de fiabilidad:
+// Que fija este fichero:
 //
 //   L1 la fuente de verdad es la que escribe el propio serve al arrancar
 //      (/root/.local/state/opencode/service.json, lleva su `pid` y su `url`), y va
@@ -19,8 +19,8 @@
 //   L3 y para que L2 no sea verde por accidente: si TODAS las candidatas estan
 //      caducadas, la lista NO se puede autenticar y el resultado lo dice.
 //   L4 la ventana de rechazo CADUCA: si no caducara, en cuanto el serve rota su
-//      clave la lista se quedaria rota para siempre. Un candidate rechazado hoy es
-//      el bueno mañana, y el codigo tiene que volver a mirarlo.
+//      clave la lista se quedaria rota para siempre.
+//   L5 un 200 con cuerpo inesperado NO es un fallo de clave, y se distinguen.
 //
 // No toca el serve de verdad: cada test levanta el suyo en un puerto efimero.
 
@@ -30,17 +30,18 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { OpencodeAdapter } from "../providers.js";
+import { OpencodeAdapter, describeRespuesta } from "../providers.js";
 
 const servers = [];
 const dirs = [];
 
 /**
- * Serve falso: exige Basic opencode:<password> y sirve /api/model con 2 modelos.
- * Devuelve un objeto con la password MODIFICABLE, para poder simular la rotacion
- * que hace el serve de verdad en cada arranque.
+ * Serve falso: exige Basic opencode:<password> y sirve /api/model.
+ * Devuelve un objeto con la password MODIFICABLE, para simular la rotacion que hace
+ * el serve de verdad en cada arranque. `cuerpoModel` permite devolver algo que NO es
+ * la lista, que es el otro fallo (L5).
  */
-function serveFalso(passwordInicial) {
+function serveFalso(passwordInicial, cuerpoModel = null) {
   const estado = { password: passwordInicial };
   return new Promise((resolve) => {
     const srv = http.createServer((req, res) => {
@@ -52,7 +53,7 @@ function serveFalso(passwordInicial) {
       }
       res.writeHead(200, { "Content-Type": "application/json" });
       if (req.url.startsWith("/api/model")) {
-        res.end(JSON.stringify({
+        res.end(JSON.stringify(cuerpoModel || {
           data: [
             { id: "m-free", modelID: "m-free", providerID: "opencode", name: "M Free", cost: [{ input: 0, output: 0 }] },
             { id: "m-pago", modelID: "m-pago", providerID: "opencode", name: "M Pago", cost: [{ input: 5, output: 5 }] }
@@ -115,8 +116,7 @@ test("L1: la lista viene del serve, con el candidate bueno primero", async () =>
   const ids = (await a.listModels()).map((m) => m.id);
   assert.ok(ids.includes("m-free"), `la lista debe traer el modelo del serve. Vino: ${JSON.stringify(ids)}`);
 
-  // Y el ORDEN por fiabilidad de la lista de candidatas, verificado sobre el
-  // constructor de verdad (sin inyectar candidatas).
+  // Y el ORDEN por fiabilidad, verificado sobre el constructor de verdad.
   const porDefecto = new OpencodeAdapter({ host: "127.0.0.1", port }).passwordCandidates;
   assert.equal(
     porDefecto[0],
@@ -175,14 +175,10 @@ test("L4: la ventana de rechazo caduca — tras rotar la clave del serve, la lis
   // La UNICA candidata tiene la clave NUEVA, que el serve todavia no tiene: se rechaza.
   const a = adaptador(port, [candidate(NUEVA)]);
 
-  // 1) El serve tiene la clave VIEJA y el candidate ofrece la NUEVA: 401, la candidata
-  //    queda rechazada y la lista no sale. (La primera version de este test ponia en el
-  //    candidate justo la clave que el serve SI tenia, o sea que autenticaba a la
-  //    primera y la asercion de abajo era falsa.)
   const ids1 = (await a.listModels()).map((m) => m.id);
   assert.equal(ids1.includes("m-free"), false, "con la clave cambiada de sitio la lista no deberia salir");
 
-  // 2) El serve rota, como hace en cada arranque. Ahora la clave NUEVA es la buena.
+  // El serve rota, como hace en cada arranque. Ahora la clave NUEVA es la buena.
   estado.password = NUEVA;
   reinicia(a);
 
@@ -191,4 +187,39 @@ test("L4: la ventana de rechazo caduca — tras rotar la clave del serve, la lis
     ids2.includes("m-free"),
     `tras rotar la clave del serve y pasar la ventana, tiene que volver a listar. Vino: ${JSON.stringify(ids2)}`
   );
+});
+
+// ---------------------------------------------------------------- L5
+test("L5: un 200 con cuerpo inesperado NO es un fallo de clave, y se distinguen", async () => {
+  // Este era el OTRO fallo, distinto, que se mezclaba con el de autenticacion:
+  // MEDIDO 2026-09-30, el WARN de las 05:24:10 fue "This operation was aborted", un
+  // TIMEOUT ocurrido 11 s antes de que el serve arrancara. Y hubo otros dos (29-sep)
+  // que decian "GET /api/model -> 200:", o sea el fetch respondia y fallaba DESPUES.
+  //
+  // De aquellos ya no se puede decir que eran: los logs rotaron. Lo que si se puede
+  // hacer es que, cuando ocurran, DIGAN que son. Antes el mensaje era "-> 200:" y no
+  // decia nada de lo recibido, que es por lo que no se pudo diagnosticar.
+  assert.equal(
+    describeRespuesta({ json: { data: { id: "x" } } }),
+    'claves=["data"] tipo(data)=object',
+    "debe decir que data no es un array"
+  );
+  assert.equal(
+    describeRespuesta({ json: { error: "nope" } }),
+    'claves=["error"] tipo(data)=undefined',
+    "debe decir las claves y que no hay data"
+  );
+  assert.match(describeRespuesta({ text: "<!doctype html><html>" }), /^sin JSON/);
+  assert.equal(describeRespuesta({ json: null, text: "" }), "cuerpo vacio");
+
+  // Y en efecto: un 200 con `data` no-array NO lista. Y la clave NO se rechaza, que
+  // es justo la diferencia entre este fallo y el de autenticacion.
+  const BUENA = "pw-para-el-200-raro";
+  const { port } = await serveFalso(BUENA, { data: { id: "no-soy-una-lista" } });
+  const a = adaptador(port, [candidate(BUENA)]);
+  const ids = (await a.listModels()).map((m) => m.id);
+
+  assert.equal(ids.includes("no-soy-una-lista"), false, "un data que no es array no puede ser la lista de modelos");
+  assert.equal(a._pwRechazadas.size, 0, "la clave no fue rechazada: el problema no era de clave");
+  assert.equal(a._pw, BUENA, "la clave correcta sigue en uso: autentico bien");
 });

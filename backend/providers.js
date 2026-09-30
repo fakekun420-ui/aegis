@@ -184,6 +184,24 @@ export class BaseProviderAdapter {
 // OpenCode Adapter (HTTP Serve Mode)
 // ==========================================
 
+/**
+ * Describe la FORMA de una respuesta que llego con 200 pero no es la que se esperaba.
+ * Existe para que el log diga que paso de verdad. MEDIDO 2026-09-30: el mensaje era
+ * "GET /api/model -> 200:" y durante dos dias no se pudo diagnosticar, porque no decia
+ * nada de lo recibido y los WARNING antiguos ya habian rotado.
+ */
+export function describeRespuesta(r) {
+  if (r && r.json && typeof r.json === "object") {
+    const claves = Object.keys(r.json);
+    const d = r.json.data;
+    return `claves=${JSON.stringify(claves)} tipo(data)=${Array.isArray(d) ? "array" : typeof d}`;
+  }
+  if (r && typeof r.text === "string" && r.text) {
+    return `sin JSON (${r.text.slice(0, 60).replace(/\s+/g, " ")})`;
+  }
+  return "cuerpo vacio";
+}
+
 export class OpencodeAdapter extends BaseProviderAdapter {
   constructor(options = {}) {
     super("opencode", "OpenCode", "serve");
@@ -872,7 +890,13 @@ export class OpencodeAdapter extends BaseProviderAdapter {
           return this._modelsCache;
         }
       }
-      throw new Error(`GET /api/model -> ${r.status}${r.text ? `: ${String(r.text).slice(0, 100)}` : ""}`);
+      // MEDIDO 2026-09-30: este mensaje salia como "GET /api/model -> 200:" y no
+      // decia NADA de que habia llegado. Un 200 con el cuerpo que no toca NO es un
+      // fallo de autenticacion — la autenticacion ya paso, porque si no habria 401— y
+      // durante dos dias no se pudo decir de que era porque el mensaje no lo decia y
+      // los WARNING viejos ya habian rotado. Ahora dice la FORMA de lo recibido, que
+      // es lo unico que hace falta para diagnosticarlo.
+      throw new Error(`GET /api/model -> ${r.status} con cuerpo inesperado: ${describeRespuesta(r)}${r.text ? ` :: ${String(r.text).slice(0, 100)}` : ""}`);
     } catch (e) {
       log.warn("[opencode] listModels fetch error", { err: e.message });
     } finally {

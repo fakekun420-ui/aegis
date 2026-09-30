@@ -3,6 +3,10 @@ node_modules/
 hub.log
 opencode.log
 backend/logs/
+# Log de los tests: el logger lo separa por si el padre es un runner de tests
+# (src/core/logger.js, PADRE_ES_TEST_RUNNER), para que la suite no contamine el
+# diagnostico de produccion. MEDIDO 2026-09-30: 342 lineas de ruido antes.
+backend/logs-test/
 *.tmp
 tmp/
 .opencode-mem/

@@ -1388,6 +1388,9 @@ async function buildHealthData(opts = {}) {
   return {
     server: "running",           // Control Center: ONLINE si server ∈ {running, healthy, ok}
     port: HUB_PORT,
+    // SIN pid aqui a proposito: el contrato de HealthData son 10 claves exactas y hay
+    // un test que lo fija (tests/regression-correcciones.test.js). El pid va en la
+    // CABECERA X-Aegis-Pid, que no altera el JSON. Ver mas abajo por que hace falta.
     uptime: Math.floor(process.uptime()),   // segundos del hub (no del serve opencode)
     memory: { heapUsed: formatMb(mem.heapUsed), heapTotal: formatMb(mem.heapTotal) },
     workspace: PROJECTS_ROOT,
@@ -3597,6 +3600,15 @@ Do NOT modify \`/sdcard/projects/ponytail-global.md\`.
   // contrato app <-> backend. El diagnóstico rico (disk/bridge/ownership/activeProject) vive
   // en GET /api/system/health (con token), que incluye este mismo HealthData más el legacy.
   if(pathname==="/api/health" && req.method==="GET"){
+    // MEDIDO 2026-09-30: el pid va en una CABECERA y no en el cuerpo a proposito. El
+    // cuerpo es el contrato `HealthData`, con 10 claves fijadas por un test, y meter
+    // una clave mas lo rompe. En cabecera no se altera el JSON y aun asi quien hable
+    // con este Hub puede COMPROBAR que es el suyo: los tests eligen un puerto efimero,
+    // lo sueltan y arrancan su Hub encima; si algo se cuela en ese hueco, el Hub nuevo
+    // no puede tomar el puerto y el test acabaria hablando con el ajeno —que ya tiene
+    // su cubo de rate-limit lleno— sin enterarse de nada. Esto no es un secreto: /proc
+    // lo enseña cualquiera del mismo uid.
+    res.setHeader("X-Aegis-Pid", String(process.pid));
     return json(res, 200, { ok: true, data: await buildHealthData() });
   }
 
