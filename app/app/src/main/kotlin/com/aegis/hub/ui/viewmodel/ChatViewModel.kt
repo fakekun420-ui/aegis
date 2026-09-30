@@ -756,7 +756,8 @@ class ChatViewModel : ViewModel() {
         // sintomas a la vez (divisor, notificacion y circulo de carga), porque los
         // tres beben la misma decision de turno.
         //
-        // Se mira TODO el historial, no solo el ultimo mensaje: en un turno largo
+        // Se mira la cola de los ultimos TAIL_POLL (200) mensajes, no solo el ultimo: en un
+        // turno largo (asi, no literalmente "todo" el historial)
         // OpenCode genera varios mensajes del asistente, y el ultimo puede ser solo
         // texto mientras el bash sigue en marcha en el anterior.
 if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } }) {

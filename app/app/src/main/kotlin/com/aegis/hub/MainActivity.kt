@@ -6,6 +6,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.app.Activity
+import android.app.Application
+import android.app.Activity
+import android.app.Application
 import android.os.Bundle
 import android.provider.Settings
 import android.speech.RecognizerIntent
@@ -80,6 +84,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         // El ViewModel no tiene Context; se lo damos una vez para el aviso de
         // "respuesta final" en la barra de notificaciones.
         com.aegis.hub.ui.TurnNotifier.init(this)
+        // La senal de "hay algo a la vista" la da Android, no un booleano. Se registra UNA
+        // vez (el companion object lo cachea). Sin esto, `isAppVisible` se queda en 0 para
+        // siempre y el aviso de fin de turno no sale nunca: el fallo seria silencioso.
+        registerVisibleTracker()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
@@ -306,8 +314,40 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    /**
+     * Registra, una sola vez, el rastreador de Activities visibles.
+     *
+     * `ActivityLifecycleCallbacks` es la via canonica de Android para "hay alguna pantalla
+     * a la vista" y no anade ninguna dependencia. El registro se cachea en el companion
+     * porque abrir dos Activities sin cache lo registraria dos veces: entonces el
+     * `onStart` de la segunda sumaria 2 con la primera ya parada, y el contador miente.
+     */
+    private fun registerVisibleTracker() {
+        if (visibleTrackerRegistered) return
+        visibleTrackerRegistered = true
+        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityStarted(activity: Activity) {
+                com.aegis.hub.ui.TurnNotifier.onActivityStarted()
+            }
+
+            override fun onActivityStopped(activity: Activity) {
+                com.aegis.hub.ui.TurnNotifier.onActivityStopped()
+            }
+
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
+    }
+
     // ---- minimal retained helpers from previous WebView version (wake word gating, TTS, etc.) ----
     companion object {
+        /** El rastreador se registra UNA vez; dos registros harian mentir al contador. */
+        @Volatile
+        private var visibleTrackerRegistered = false
+
         const val PREF_WAKE = com.aegis.hub.data.VoicePreferences.PREFS_NAME
         const val KEY_WAKE_PHRASES = com.aegis.hub.data.VoicePreferences.KEY_WAKE_PHRASES
         val DEFAULT_WAKE = com.aegis.hub.data.VoicePreferences.DEFAULT_WAKE_PHRASES
@@ -316,8 +356,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         // decidir entre avisar DENTRO del chat (primer plano) o lanzar notificación
         // a la barra (segundo plano). @Volatile porque lo escribe el hilo del UI y lo
         // lee el hilo de un coroutine del ViewModel.
-        @Volatile
-        var isForeground: Boolean = false
+        // Ancla en un val delegando. El comentario de arriba explica por que un contador
+        // alimentado por ActivityLifecycleCallbacks es mas fiable que un booleano escrito
+        // a mano: un onStop que no llegaba dejaba el aviso de fin de turno muerto para
+        // siempre, y en silencio.
+        val isForeground: Boolean
+            get() = com.aegis.hub.ui.TurnNotifier.isAppVisible
     }
 
     // onStart/onStop, y NO onResume/onPause: `isForeground` decide entre el divisor
@@ -328,12 +372,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     // turno terminar y recibia ademas una notificacion de lo que estaba viendo.
     override fun onStart() {
         super.onStart()
-        isForeground = true
     }
 
     override fun onStop() {
         super.onStop()
-        isForeground = false
     }
 
     override fun onResume() {
