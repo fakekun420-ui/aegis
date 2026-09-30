@@ -35,6 +35,9 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
     // Sesiones con turno en curso, para el circulo de "ejecutando" en la lista.
     val inflightIds by vm.inflightIds.collectAsState()
     val finishedIds by vm.finishedIds.collectAsState()
+    // Si el ultimo poll de "quien esta trabajando" es tan viejo que ya no vale, la
+    // lista lo dice en vez de pintar un circulo que gira con datos rancios.
+    val inflightFiable by vm.inflightFiable.collectAsState()
 
     NavHost(navController = navController, startDestination = startDestination) {
         // F1 — Wizard de configuración inicial (sólo se entra como arranque de primer uso;
@@ -147,6 +150,7 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
             LaunchedEffect(Unit) { vm.refreshSessions() }
             ChatsScreen(
                 inflightIds = inflightIds,
+                inflightFiable = inflightFiable,
                 finishedIds = finishedIds,
                 sessions = sessions,
                 projects = projects,

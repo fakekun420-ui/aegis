@@ -58,10 +58,59 @@ class MainViewModel : ViewModel() {
     // funciona igual si el turno se lanzo desde la app o desde el CLI.
     /** Espera del poll de inflight: normal y maxima cuando el Hub no responde. */
     private val POLL_MIN_WAIT_MS = 3_000L
-    private val POLL_MAX_WAIT_MS = 30_000L
+    /**
+     * Techo del backoff. ANTES 30 s, y ese numero era el defecto: `/api/sessions/inflight`
+     * es O(1) en memoria en el Hub y un poll que responde bien NO escribe nada, asi que
+     * 30 s de espera no ahorraban recursos — solo dejaban el conjunto de "trabajando" 30 s
+     * viejo, y una sesion que empieza a trabajar durante esa ventana no aparece con
+     * circulo. Ese es el sintoma reportado.
+     *
+     * El 30 s venia de la tormenta del 27-sep (4367 peticiones mientras el Hub fallaba).
+     * MEDIDO entonces que lo que la generaba no eran los polls correctos sino los ERRORES:
+     * cada 500 escribia una linea en el log del Hub, que esta en /sdcard (FUSE), y de ahi
+     * venian los procesos en estado D que no aceptan senal. Bajar el techo a 8 s sigue
+     * cortando el runaway sin pagar frescura.
+     */
+    private val POLL_MAX_WAIT_MS = 8_000L
 
     /** Cuanto se mantiene la marca "terminado" antes de desaparecer sola. */
     private val FINISHED_TTL_MS = 12_000L
+
+    // Momento del ultimo poll de inflight que RESPONDIO. Usa `elapsedRealtime` y no
+    // `currentTimeMillis` a proposito: un cambio de zona horaria o un NTP mueven
+    // `currentTimeMillis`, y la edad saldria negativa, haciendo que un dato viejo pareciese
+    // recien hecho — que es justo el fallo que se esta arreglando.
+    @Volatile
+    private var ultimoAciertoMs = 0L
+
+    /** Cuanto viejo es el ultimo dato bueno, en ms. -1 si aun no ha habido ninguno. */
+    private fun inflightAntiguoMs(): Long {
+        val t = ultimoAciertoMs
+        if (t == 0L) return -1L
+        val d = android.os.SystemClock.elapsedRealtime() - t
+        return if (d < 0) 0L else d
+    }
+
+    /**
+     * El dato es tan viejo que ya no se puede pintar como verdad.
+     *
+     * Un circulo girando con datos rancios informa mal en las DOS direcciones: dice
+     * "trabajando" para una sesion que termino hace un minuto, y se calla para una que
+     * empezo hace un minuto. A 12 s —algo mas que la espera maxima del backoff (8 s)—
+     * solo se llega cuando el Hub lleva varios ciclos sin responder, y entonces la
+     * pantalla lo dice en vez de mentir.
+     */
+    private fun calcularEsFiable(): Boolean {
+        val edad = inflightAntiguoMs()
+        return edad >= 0 && edad < 12_000L
+    }
+
+    // Es un FLUJO y no una funcion consultada al pintar: `StateFlow` solo emite cuando el
+    // conjunto cambia, y si no hay ninguna sesion trabajando el conjunto se repite tal cual
+    // ciclo tras ciclo. Con una funcion, la pantalla no se recompone y el "es fiable" se
+    // queda viejo en la UI — el mismo fallo que se esta arreglando, un nivel mas abajo.
+    private val _inflightFiable = MutableStateFlow(false)
+    val inflightFiable: StateFlow<Boolean> = _inflightFiable
 
     private val _inflightIds = MutableStateFlow<Set<String>>(emptySet())
     val inflightIds: StateFlow<Set<String>> = _inflightIds
@@ -120,6 +169,9 @@ class MainViewModel : ViewModel() {
             // POLL_MAX_WAIT_MS y se baja solo cuando responde otra vez.
             var waitMs = POLL_MIN_WAIT_MS
             var consecutiveFailures = 0
+            // Conteo PROPIO de fallos del poll, solo para el log. No es el mismo que
+            // `consecutiveFailures`: aquel decide la espera, este explica por que.
+            var fallosDelPoll = 0
             while (isActive) {
                 var ok = false
                 try {
@@ -129,9 +181,29 @@ class MainViewModel : ViewModel() {
                         // turnOver es historia, no una sesion ocupada.
                         applyInflight(r.data)
                         ok = true
+                        ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
+                        if (fallosDelPoll > 0) {
+                            android.util.Log.i(
+                                "AegisChats",
+                                "poll de inflight vuelve a responder tras $fallosDelPoll fallos; " +
+                                    "trabajando ahora: " +
+                                    _inflightIds.value.joinToString { it.takeLast(6) }.ifBlank { "(ninguna)" }
+                            )
+                            fallosDelPoll = 0
+                        }
                     }
-                } catch (_: Exception) {
-                    // Fallo puntual de red: el siguiente ciclo reintenta solo.
+                } catch (e: Exception) {
+                    // El catch mudo es lo que hacia esto indebugable: `_inflightIds`
+                    // conserva el valor anterior y el `CircularProgressIndicator` es una
+                    // animacion infinita, de modo que un fallo de red se manifestaba como
+                    // "circulos correctos" durante minutos. MEDIDO el 30-sep: un fallo
+                    // puntual no dejaba NI UNA LINEA y habia que adivinar.
+                    fallosDelPoll++
+                    android.util.Log.w(
+                        "AegisChats",
+                        "poll de inflight fallo ($fallosDelPoll seguidos, dato viejo " +
+                            "${inflightAntiguoMs()} ms): ${e.javaClass.simpleName}: ${e.message}"
+                    )
                 }
                 if (ok) {
                     consecutiveFailures = 0
@@ -140,6 +212,8 @@ class MainViewModel : ViewModel() {
                     consecutiveFailures++
                     if (consecutiveFailures >= 3) waitMs = POLL_MAX_WAIT_MS
                 }
+                // La fiabilidad se juzga en cada ciclo, no solo cuando el conjunto cambia.
+                _inflightFiable.value = calcularEsFiable()
                 delay(waitMs)
             }
         }
@@ -151,8 +225,15 @@ class MainViewModel : ViewModel() {
                 val r = api.getInflight()
                 if (r.ok && r.data != null) {
                     applyInflight(r.data)
+                    ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                // Mismo motivo que el poll: mudo, un fallo de red no dejaba ni una linea.
+                android.util.Log.w(
+                    "AegisChats",
+                    "refreshInflightNow fallo: ${e.javaClass.simpleName}: ${e.message}"
+                )
+            }
         }
     }
 

@@ -44,6 +44,14 @@ fun ChatsScreen(
     // Sesiones con un turno en curso. Cada una lleva un circulo girando, para poder ver
     // de un vistazo cuales siguen trabajando SIN abrir cada chat.
     inflightIds: Set<String> = emptySet(),
+    // False = el ultimo poll de "quien esta trabajando" es tan viejo que ya no vale. Un
+    // `CircularProgressIndicator` es una animacion INFINITA: con datos rancios informa mal
+    // en las dos direcciones — dice "trabajando" para una sesion que termino hace un
+    // minuto, y se calla para una que empezo hace un minuto. Cuando esto es false, el
+    // circulo se pinta atenuado y con la etiqueta de que no hay datos recientes, en vez de
+    // desaparecer: que falte informacion y que la informacion sea vieja son dos cosas
+    // distintas, y el usuario nota una de las dos.
+    inflightFiable: Boolean = true,
     // Sesiones cuyo turno acaba de terminar. El circulo girando dice "trabajando"; esto
     // dice "ya termino" durante unos segundos. Sin esto, al acabar un turno el circulo
     // desaparecia y no habia forma de distinguir "acabo de terminar" de "no lo estaba
@@ -218,8 +226,16 @@ fun ChatsScreen(
                                                     CircularProgressIndicator(
                                                         modifier = Modifier.size(11.dp),
                                                         strokeWidth = 1.6.dp,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
+                                                        color = if (inflightFiable)
+                                                            MaterialTheme.colorScheme.primary
+                                                        else
+                                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                                    .semantics {
+                                                        contentDescription = if (inflightFiable)
+                                                            "Sesión trabajando"
+                                                        else
+                                                            "Sesión marcada como trabajando, pero el dato es antiguo: el Hub no responde"
+                                                    }
                                                 } else if (sess.resolvedId in finishedIds) {
                                                     // Check de "terminado". Un tique, no un
                                                     // icono grande: informa sin gritar.
