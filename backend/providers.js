@@ -201,64 +201,100 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     this.logPath = options.logPath || null;
     this._pw = null;
     this._pwTime = 0;
-    this._modelRefs = new Map();   // alias(id/modelID/providerID/id) -> Model.Ref
+    this._pwFrom = null;            // de que fichero salio la password que se esta usando
+    this._pwRechazadas = new Map(); // ruta -> instante en que el servidor la reboto con 401
+    this._pwRechazadasTime = 0;
+    // Fuentes de la password, POR FIABILIDAD y sobre todo por ORDEN. Cada una se
+    // VALIDA contra el servidor antes de darla por buena: un candidate que se sabe
+    // caducado se descarta solo, no el primero que se lee.
+    //
+    // MEDIDO 2026-09-30, contra el serve de verdad:
+    //   1) /root/.local/state/opencode/service.json -> la escribe el PROPIO serve en
+    //      cada arranque (lleva su `pid` y su `url`). Esta es la fuente de verdad.
+    //   2) this.logPath -> el log del serve que lanzo este Hub. Bueno si el Hub lo
+    //      lanzo; viejo si el serve lo relanzo otro.
+    //   3) /root/.local/share/opencode/log/opencode.log -> log global: MEZCLA las
+    //      lineas de `spawning process` con la de arranque del servicio (78
+    //      coincidencias de "server password", casi todas falsas). Solo si no hay
+    //      nada mejor.
+    //   4) /root/.config/opencode/service.json -> espejo antiguo: NADIE actualiza su
+    //      mtime cuando el serve arranca, asi que no dice nada de si la clave que
+    //      contiene es la vigente. ULTIMO recurso, nunca la primera.
+    this.passwordCandidates = options.passwordCandidates || [
+      "/root/.local/state/opencode/service.json",
+      ...(this.logPath ? [this.logPath] : []),
+      "/root/.local/share/opencode/log/opencode.log",
+      "/root/.config/opencode/service.json"
+    ];
     this._lastModel = new Map();   // sessionId -> "providerID/id" ya activo
     this._instrHash = new Map();   // sessionId -> hash del contexto inyectado
     // Pre-warm models cache in background
     setTimeout(() => { this.listModels().catch(() => {}); }, 1500);
   }
 
+  /**
+   * Devuelve la password que el Hub va a usar, o null.
+   *
+   * NO es "el primero que existe": es "el primero que el servidor NO ha rechazado".
+   * Un candidate se descarta solo en cuanto devuelve 401, y la lista entera se
+   * reexplora pasado un minuto, porque una rotacion del serve vuelve a valer la
+   * clave que un momento antes estaba caducada.
+   */
   _readPassword() {
     const now = Date.now();
     if (this._pw && now - (this._pwTime || 0) < 3000) return this._pw;
-    try {
-      const candidates = [];
-      if (this.port === 4096) {
-        if (this.logPath) candidates.push(this.logPath);
-        candidates.push("/root/.local/share/opencode/log/opencode.log");
-        candidates.push("/root/.config/opencode/service.json");
-      } else {
-        candidates.push("/root/.config/opencode/service.json");
-        if (this.logPath) candidates.push(this.logPath);
-        candidates.push("/root/.local/share/opencode/log/opencode.log");
-      }
-      for (const p of candidates) {
-        if (!p || !fs.existsSync(p)) continue;
-        if (p.endsWith(".json")) {
-          try {
-            const raw = JSON.parse(fs.readFileSync(p, "utf8"));
-            if (raw && raw.password) {
-              this._pw = raw.password;
-              break;
-            }
-          } catch (_) {}
-        } else {
-          const fd = fs.openSync(p, "r");
-          try {
-            const size = fs.fstatSync(fd).size;
-            const len = Math.min(size, 8192);
-            const buf = Buffer.alloc(len);
-            fs.readSync(fd, buf, 0, len, Math.max(0, size - len));
-            const matches = [...buf.toString("utf8").matchAll(/server password (\S+)/g)];
-            if (matches.length) {
-              this._pw = matches[matches.length - 1][1];
-              break;
-            }
-          } finally {
-            fs.closeSync(fd);
-          }
-        }
-      }
-    } catch (e) {
-      log.warn("[opencode] readPassword error", { err: e.message });
+
+    // La ventana de rechazo caduca: si el serve roto la clave, lo que hace un rato
+    // era incorrecto puede ser justo lo que vale ahora.
+    if (this._pwRechazadas.size && now - (this._pwRechazadasTime || 0) > 60000) {
+      this._pwRechazadas.clear();
+    }
+
+    for (const ruta of this.passwordCandidates) {
+      if (!ruta || this._pwRechazadas.has(ruta)) continue;
+      if (!fs.existsSync(ruta)) continue;
+      const pw = this._passwordFromFile(ruta);
+      if (pw) { this._pw = pw; this._pwFrom = ruta; break; }
     }
     this._pwTime = now;
     return this._pw || null;
   }
 
-  _invalidatePassword() {
+  /** Extrae la password de un fichero, sea .json o log. null si no la hay. */
+  _passwordFromFile(ruta) {
+    try {
+      if (ruta.endsWith(".json")) {
+        const raw = JSON.parse(fs.readFileSync(ruta, "utf8"));
+        if (raw && raw.password) return String(raw.password);
+        return null;
+      }
+      const fd = fs.openSync(ruta, "r");
+      try {
+        const size = fs.fstatSync(fd).size;
+        const len = Math.min(size, 8192);
+        const buf = Buffer.alloc(len);
+        fs.readSync(fd, buf, 0, len, Math.max(0, size - len));
+        const matches = [...buf.toString("utf8").matchAll(/server password (\S+)/g)];
+        return matches.length ? matches[matches.length - 1][1] : null;
+      } finally { fs.closeSync(fd); }
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** Cuantas candidatas siguen sin rechazo: eso define cuantos reintentos merece un 401. */
+  get intentosAuthRestantes() {
+    return Math.max(1, this.passwordCandidates.filter((r) => r && !this._pwRechazadas.has(r)).length);
+  }
+
+  _invalidatePassword(rutaRechazada) {
+    if (rutaRechazada) {
+      if (!this._pwRechazadas.size) this._pwRechazadasTime = Date.now();
+      this._pwRechazadas.set(rutaRechazada, Date.now());
+    }
     this._pw = null;
     this._pwTime = 0;
+    this._pwFrom = null;
   }
 
   _authHeader() {
@@ -268,7 +304,7 @@ export class OpencodeAdapter extends BaseProviderAdapter {
 
   // Cliente HTTP genérico de la API v2: auth, timeout, abort del cliente y
   // reintentos ante rotación de contraseña (401 una sola vez).
-  async _v2(pathname, { method = "GET", body = null, timeoutMs = 10000, signal = null, retried = false } = {}) {
+  async _v2(pathname, { method = "GET", body = null, timeoutMs = 10000, signal = null, reintentos = 0 } = {}) {
     const headers = { ...(body ? { "Content-Type": "application/json" } : {}), ...this._authHeader() };
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -292,13 +328,37 @@ export class OpencodeAdapter extends BaseProviderAdapter {
       clearTimeout(timer);
       if (signal) signal.removeEventListener("abort", onAbort);
       if (signal && signal.aborted) throw new Error("OpenCode request aborted by client");
-      throw new Error(`OpenCode v2 ${method} ${pathname} failed: ${e.message}`);
+      // MEDIDO 2026-09-30: "This operation was aborted" salia mezclado con los fallos
+      // de autenticacion en el mismo WARN, y son COSAS DISTINTAS. Este es un timeout
+      // (o un serve caido), no un 401. Se dice cual de los dos para que el log no
+      // haga pensar que la clave esta mal cuando lo que pasa es que no hay servidor.
+      const porTimeout = e.name === "AbortError" || /abort/i.test(e.message || "");
+      const porConexion = /ECONNREFUSED|ECONNRESET|fetch failed/i.test(e.message || "");
+      const porque = porTimeout
+        ? `timeout de ${timeoutMs} ms${porConexion ? " (el serve no esta escuchando: no es un problema de clave)" : ""}`
+        : e.message;
+      throw new Error(`OpenCode v2 ${method} ${pathname} failed: ${porque}`);
     }
     clearTimeout(timer);
     if (signal) signal.removeEventListener("abort", onAbort);
-    if (res.status === 401 && !retried) {
-      this._invalidatePassword();
-      return this._v2(pathname, { method, body, timeoutMs, signal, retried: true });
+    if (res.status === 401) {
+      // Se rechaza la CANDIDATA CONCRETA que se acaba de usar, no "la password".
+      // Antes solo se invalidaba la cache y el reintento volvia a elegir la misma
+      // primera de la lista, que era justo la caducada: con la primera candidata mala
+      // no habia ninguna recuperacion posible, por muchas veces que se reintentara.
+      //
+      // Se invalida SIEMPRE, tambien en el ultimo intento: si no, la password que
+      // acaba de fallar se queda cacheada 3 s y se vuelve a usar. MEDIDO: con tres
+      // candidatas todas caducadas, `_pw` acababa valiendo la ultima. Precisamente
+      // lo que este arreglo viene a evitar.
+      const quedan = this.intentosAuthRestantes;   // se cuenta ANTES de invalidar
+      const usada = this._pwFrom;
+      this._invalidatePassword(usada);
+      if (reintentos < quedan) {
+        log.info(`[opencode] ${usada || "candidata"} rechazada por el servidor (401); pruebo la siguiente`);
+        return this._v2(pathname, { method, body, timeoutMs, signal, reintentos: reintentos + 1 });
+      }
+      log.warn(`[opencode] ninguna de las ${quedan + reintentos} candidatas autentica en ${this.host}:${this.port}`);
     }
     const text = await res.text();
     let json = null;
