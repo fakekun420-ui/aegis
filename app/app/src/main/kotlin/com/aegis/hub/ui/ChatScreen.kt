@@ -300,7 +300,6 @@ fun ChatScreen(
             if (stripped.isNotBlank()) queueTts(stripped)
         }
     }
-    }
 
     Scaffold(
         topBar = {

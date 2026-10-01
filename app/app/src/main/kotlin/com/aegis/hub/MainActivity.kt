@@ -34,14 +34,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import com.aegis.hub.ui.AppNavHost
 import com.aegis.hub.ui.NavRoutes
 import com.aegis.hub.data.AppContext
+
 class MainActivity : ComponentActivity() {
-
-    // MEDIDO 2026-10-01: esta clase ya NO implementa la interfaz de motor de voz ni tiene un
-    // motor propio. `speak()` era su unico consumidor, y `speak()` era del wake word, que solo
-    // existia para el modo de duplex (retirado en este mismo cambio). Un motor de sintesis
-    // arrancado en cada onCreate y al que no se le pide nada es gasto puro: el TTS de verdad
-    // vive en ChatScreen y ahora lo dispara su interruptor de "leer en voz".
-
 
 
     private var systemReady by mutableStateOf(false)
@@ -486,13 +480,14 @@ class MainActivity : ComponentActivity() {
         val i = Intent(this, CompanionService::class.java)
         if(Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
     }
-    }
+
     private fun startListening(){ /* Phase 1: native STT handled via Compose voice FAB later */ }
     private fun toast(m:String)= Toast.makeText(this,m,Toast.LENGTH_SHORT).show()
-    // MEDIDO 2026-10-01: antes apagaba aqui el motor de voz y el reconocedor de esta Activity.
-    // Los dos se han ido con el wake word: `speak()` era su unico consumidor y el reconocedor solo
-    // lo usaba el listener de la frase de activacion. Sin ellos, `onDestroy` no tiene nada que
-    // liberar. La transcripcion vive en ChatScreen, que gestiona su propio ciclo de vida.
+    // MEDIDO 2026-10-01: antes apagaba aqui el motor de voz y el reconocedor de esta Activity,
+    // y paraba el listener de la frase de activacion. Los tres se han ido con el modo
+    // duplex: `speak()` era el unico consumidor del motor y el listener no tenia ningun otro
+    // disparador. Sin ellos, onDestroy no tiene nada que liberar. La transcripcion vive en
+    // ChatScreen, que gestiona su propio ciclo de vida.
     override fun onDestroy() { super.onDestroy() }
     private fun String.lowercase():String = this.lowercase(Locale.ROOT)
 }
