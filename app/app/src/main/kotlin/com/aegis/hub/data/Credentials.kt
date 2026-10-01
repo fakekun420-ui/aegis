@@ -1,6 +1,5 @@
 package com.aegis.hub.data
 
-import android.util.Base64
 import android.util.Log
 import com.aegis.hub.RootShell
 import com.google.gson.Gson
@@ -158,13 +157,18 @@ class Credentials(
 
     private fun buildBasicHeader(password: String): String {
         val credentials = "opencode:$password"
-        val encoded = try {
-            // Android android.util.Base64.NO_WRAP evita saltos de línea \n
-            Base64.encodeToString(credentials.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-        } catch (_: Exception) {
-            // Fallback para tests unitarios JVM donde android.util.Base64 no está mockeado
-            java.util.Base64.getEncoder().encodeToString(credentials.toByteArray(StandardCharsets.UTF_8))
-        }
+        // MEDIDO 2026-10-01: aqui habia un `try { android.util.Base64 } catch { java.util.Base64 }`.
+        // El catch nunca se activaba, y el motivo es que con `returnDefaultValues = true` el stub
+        // de android.jar NO LANZA: devuelve null. Es decir, la cabecera salia "Basic null" y
+        // OpenCode contestaba 401 en bucle, y el test de reintento fallaba sin que hubiera
+        // ningun stack trace — un fallo mudo en la autenticacion, que es lo peor que hay aqui.
+        //
+        // `java.util.Base64` es de la JVM, no de android.jar, asi que funciona igual en un test
+        // que en el movil. Y `minSdk = 26` (medido en build.gradle.kts), donde existe. No hace
+        // falta `NO_WRAP`: `getEncoder()` no inserta saltos de linea, que es justo lo que
+        // Hacia falta evitar.
+        val encoded = java.util.Base64.getEncoder()
+            .encodeToString(credentials.toByteArray(StandardCharsets.UTF_8))
         return "Basic $encoded"
     }
 
