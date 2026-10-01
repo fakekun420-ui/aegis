@@ -52,6 +52,20 @@ android {
             java.srcDirs("src/main/java", "src/main/kotlin")
         }
     }
+
+    // MEDIDO 2026-10-01: sin esto, los 9 tests de `CredentialsTest` y `NativeOpenCodeApiTest`
+    // fallaban todos con `RuntimeException at Log.java:-1`. Los stubs de `android.jar` lanzan
+    // "not mocked" en cualquier llamada, y las clases nuevas loguean mucho —que es justo lo que
+    // las hace diagnosticables cuando la lectura de la contraseña falla en un movil real.
+    //
+    // La alternativa era quitar el log de la capa de datos, y esa es la peor de las dos: un
+    // fallo mudo en la autenticacion significa volver a los cinco minutos de certificacion.
+    //
+    // Va DENTRO de `android {` y no junto a las dependencias: CI lo dijo el ciclo siguiente,
+    // `Unresolved reference: testOptions`, que es como se ve un bloque en el sitio equivocado.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 dependencies {
     // Core + legacy views (kept for existing non-Compose code path)
@@ -86,17 +100,6 @@ dependencies {
     // los fakes construyen retrofit2.Response a mano y no hay red real.
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1") // misma versión que coroutines-android
-
-    // MEDIDO 2026-10-01: sin esto, los 9 tests de `CredentialsTest` y `NativeOpenCodeApiTest`
-    // fallaban todos con `RuntimeException at Log.java:-1`. Los stubs de `android.jar` lanzan
-    // "not mocked" en cualquier llamada, y las clases nuevas loguean mucho —que es justo lo que
-    // las hace diagnosticables cuando la lectura de la contraseña falla en un movil real.
-    //
-    // La alternativa era quitar el log de la capa de datos, y esa es la peor de las dos: un
-    // fallo mudo en la autenticacion significa volver a los cinco minutos de certificacion.
-    testOptions {
-        unitTests.isReturnDefaultValues = true
-    }
     // Instrumentada (src/androidTest): ext junit + espresso + compose ui-test.
     // El BOM se REUTILIZA (el mismo de release, 2024.10.00): no se introduce una
     // segunda versión de compose-bom que pudiera desalinear ui-test y la app.
