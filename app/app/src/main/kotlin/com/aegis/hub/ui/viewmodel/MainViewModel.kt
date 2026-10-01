@@ -520,8 +520,19 @@ fun moveSession(sessionId: String, projectId: String) {
 
     private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
-            val pIdStr = if (!projectId.isNullOrBlank()) f'"{projectId}"' else "null"
-            val bodyJson = "{"title":"" + title.replace(""", "\"") + "","projectId":" + pIdStr + ","provider":"" + provider + ""}"
+            // MEDIDO 2026-10-01: aqui habia `f'"{projectId}"'` — una F y una COMILLA SIMPLE de
+            // Python metidas en Kotlin. Y la linea siguiente decia
+            //   "{""title"":"" + title.replace(""""", "\"") + ..."
+            // donde el `\"` de Kotlin se habia convertido en `""` y las comillas del JSON se
+            // habian comido las suyas. El parser se desincroniza en esa linea y TODO lo de
+            // abajo es eco: 'if must have both branches', 'Unresolved reference catch', 'e'...
+            //
+            // Son 12 errores de CI y uno solo de causa, y otra vez en una sola linea. Por eso
+            // el arreglo NO es tocar lo que falla linea a linea: es reescribir la linea entera
+            // con el JSON construido de forma que no dependa de escapar nada.
+            val pIdStr = projectId?.takeIf { it.isNotBlank() }?.let { "\"$it\"" } ?: "null"
+            val titulo = title.replace("\\", "\\\\").replace("\"", "\\\"")
+            val bodyJson = "{\"title\":\"$titulo\",\"projectId\":$pIdStr,\"provider\":\"$provider\"}"
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:8765/opencode/session")
                 .header("X-Provider", provider)
