@@ -7,6 +7,29 @@
 
 ---
 
+## DECISION DEL USUARIO (2026-10-01) — lee esto ANTES que la seccion 5
+
+> "el instalador tambien deberia estar en la aplicacion no en el hub. quiero que el hub se
+> elimine por completo. es completamente innecesario tener un hub"
+
+**El Hub se elimina ENTERO, y el asistente de instalacion se porta a la app.** La seccion 5 de
+este plan recomendaba justo lo contrario (dejar el Hub reducido a instalador): **esa
+recomendacion esta ANULADA**, y se conserva solo como explicacion de por que era mala.
+
+Tres consecuencias que cambian el plan, no solo su texto:
+
+1. **Se pierde la red de seguridad.** Con el Hub escuchando, si la app directa falla se vuelve
+   al flag. Sin el Hub **no hay adonde volver**. El orden construir -> comprobar -> eliminar ya
+   no es solo prudente: es la unica proteccion que queda.
+2. **El arranque de `opencode serve` en boot pasa a ser OBLIGATORIO** (seccion 7). Es lo unico
+   que pondria a OpenCode en marcha tras un reinicio, y `keepalive.sh` se borra al final.
+3. **Aparecen dos trabajos nuevos** que antes se delegaban en el Hub: el instalador
+   (`/api/setup/*`, `/api/bootstrap/*`) y el registro sesion<->proyecto (`/api/projects`).
+
+---
+
+---
+
 ## 1. Veredicto de viabilidad
 
 **Veredicto: viable, y el Hub sobra para el 80 % de lo que la app hace — pero no es un cambio de URL: es un cambio de forma de los datos, porque el Hub traduce el shape nativo al shape que la app entiende, y esa traducción hay que escribirla en Kotlin.**
@@ -133,16 +156,51 @@ Regla dura: **ningún paquete toca un fichero de otro.** Si hace falta, se avisa
 
 ## 5. Qué se hace con el asistente de instalación (`/api/setup/*`, `/api/bootstrap/*`)
 
-**Decisión: se QUEDA en el Hub durante la transición, y se acota a un problema concreto — no se porta a la app.**
+**DECISION DEL USUARIO (2026-10-01), que ANULA la recomendacion de esta seccion.**
 
-**Por qué:**
-1. **No es una app móvil: es un instalador de un stack de 4 piezas** (Node en chroot, `opencode serve`, proveedor Antigravity con su OAuth, `/sdcard/projects`). `setupRoutes.js` (422+ líneas) hace *smoke tests*, lanza procesos, escribe manifiestos, comprueba versions. **Portarlo a Kotlin es reimplementar un instalador de sistema**, y no es lo que se está haciendo.
-2. **Es de un solo uso y de la primera vez.** Solo se usa antes del primer chat. La app ya tiene `SetupWizardScreen.kt` (865 líneas) + `BootstrapViewModel` + tests. Es un flujo largo y raro.
-3. **El Hub puede seguir existiendo solo para esto.** Es el argumento central de por qué **la retirada del Hub (Fase 7) debe poder Happens independently**: se reduce el Hub a un instalador, y la app ya no lo necesita para el día a día.
+> "el instalador tambien deberia estar en la aplicacion no en el hub. quiero que el hub se elimine
+> por completo. es completamente innecesario tener un hub"
 
-**El plan, entonces:** `/api/setup/*` y `/api/bootstrap/*` **siguen en el Hub**; el `aegis-context` del usuario **sigue inyectándose en el Hub** (R5). La app, en el día a día, habla **solo** con `:49374`. Esto es lo que hace la transición **reversible en todo momento**: si la app directa falla, el flag de la Fase 2 vuelve al Hub y todo sigue como antes.
+**El asistente de instalacion se PORTA A LA APP, y el Hub desaparece entero.** No hay Hub reducido a
+instalador. La recomendacion original se conserva abajo porque su razonamiento es la unica explicacion
+de por que era mala, y hay tres cosas suyas que **siguen siendo ciertas** aunque la decision las anule.
 
-**⚠ Condición explícita:** si en algún momento hay que matar el Hub **y** aún se necesita instalar, hace falta un instalador替代. **No es problema de esta fase.** Se acepta como deuda.
+**Que cambia respecto a lo que este plan decia:**
+
+| | Recomendacion original | Decision del usuario |
+|---|---|---|
+| `/api/setup/*`, `/api/bootstrap/*` | quedan en el Hub | **se portan a la app** |
+| `/api/projects` | lo pone el Hub | **lo pone la app** (seccion 6) |
+| `aegis-context` | lo inyecta el Hub | **lo inyecta la app** |
+| `opencode serve` en boot | `service.d` nuevo | **igual, y pasa a ser OBLIGATORIO** (seccion 7) |
+| El Hub | se queda como instalador | **se elimina entero** |
+
+**Consecuencia que hay que aceptar por escrito: la reversibilidad.** Con el Hub escuchando, si la app
+directa falla se vuelve al flag y todo sigue como antes. **Sin el Hub eso deja de existir**: si la app
+directa falla, no hay adonde volver. Por eso el orden sigue siendo construir -> comprobar -> y solo
+entonces eliminar, y por eso **el arranque de `opencode serve` en boot (seccion 7) tiene que funcionar
+ANTES de borrar `keepalive.sh`**, no despues. El orden contrario deja el movil sin OpenCode tras un
+reinicio, y eso no lo detecta nadie hasta que hace falta.
+
+**Lo que el razonamiento original acerto, y sigue siendo verdad:**
+
+1. **Es un instalador de un stack de 4 piezas** (Node en chroot, `opencode serve`, proveedor Antigravity
+   con su OAuth, `/sdcard/projects`). `setupRoutes.js` (422+ lineas) hace *smoke tests*, lanza procesos,
+   escribe manifiestos y comprueba versiones. **Portarlo a Kotlin NO es mover un fichero:** la app tiene
+   que hacer ella lo que el Hub hacia con `su` y procesos. El trabajo es el mismo; lo que cambia es
+   **donde vive**, no **cuanto cuesta**.
+2. **Es de un solo uso**, asi que su codigo probablemente se simplifique al portarlo: la app ya tiene
+   `SetupWizardScreen.kt` (865 lineas) + `BootstrapViewModel` + tests, y ya sabe pintar los pasos.
+   **Ojo al tentarse de "simplificar":** lo que se puede quitar es el transporte HTTP, no el instalador.
+3. **El Hub no es lo que va a arrancar OpenCode.** `server.js` solo lo lanza como *fallback* si no hay
+   servicio registrado. Quitar el Hub **no** deja a nadie sin servidor (la seccion 7 ya lo tiene resuelto).
+
+**Lo que NO cambia, y es un riesgo NUEVO:** el `aegis-context` del usuario tiene que seguir inyectandose
+en cada mensaje, porque son sus instrucciones de sesion. La diferencia es que lo inyecta la app en lugar
+de dejarselo al Hub. **POR VERIFICAR:** cual es el endpoint nativo que hace lo mismo. Hoy es
+`_setSessionInstruction(sessionId, "aegis-context", ...)` en `providers.js`, en cada mensaje proxied; el
+evento `session.instructions.updated` que emiti una captura sugiere que existe un mecanismo, pero sin
+medir el endpoint no se puede escribir el codigo.
 
 ---
 
@@ -172,6 +230,10 @@ Regla dura: **ningún paquete toca un fichero de otro.** Si hace falta, se avisa
 ---
 
 ## 7. Orden de eliminación, y quién arranca `opencode serve` en el boot
+
+**DECISION DEL USUARIO: esto ya no es una fase opcional.** Con el Hub eliminado, este apartado es
+**la unica cosa** que pone a OpenCode en marcha tras un reinicio. Si se borra `keepalive.sh` sin
+que el `service.d` nuevo funcione, el movil arranca sin OpenCode y no hay nadie que lo avise.
 
 **Primero, el hallazgo que condiciona todo (§7 responde a "quién arranca"):**
 - **`keepalive.sh:184` es lo ÚNICO que arranca `opencode serve --service` en el boot** (medido: `HOME=/root nohup "$OPENCODE_BIN" serve --service >> opencode.log`).
