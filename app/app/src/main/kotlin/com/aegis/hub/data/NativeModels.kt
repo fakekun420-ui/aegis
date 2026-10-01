@@ -3,7 +3,11 @@ package com.aegis.hub.data
 import com.google.gson.annotations.SerializedName
 
 /**
- * Modelos de datos NATIVOS para la API v2 de OpenCode (`http://127.0.0.1:49374/api/*`).
+ * Modelos de datos NATIVOS para la API v2 de OpenCode (`http://127.0.0.1:49374/`, rutas bajo
+ * `/api/`). MEDIDO 2026-10-01: esta frase decía la ruta con los dos comodines de glob ("api"
+ * seguido de asterisco) y rompía la compilación. Kotlin ANIDA los comentarios de bloque, así que
+ * esa secuencia abría un comentario anidado dentro de este KDoc y el cierre lo cerraba a él,
+ * dejando el KDoc abierto hasta el fin del fichero.
  *
  * A diferencia del Hub de Aegis (que envuelve todo en `{ "ok": true, "data": ... }`),
  * OpenCode v2 devuelve las entidades de forma directa:

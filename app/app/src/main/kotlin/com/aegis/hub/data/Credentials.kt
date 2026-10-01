@@ -13,7 +13,14 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 
 /**
- * Proveedor thread-safe y canónico de credenciales HTTP Basic para OpenCode (`/api/*`).
+ * Proveedor thread-safe y canónico de credenciales HTTP Basic para OpenCode (rutas bajo /api/).
+ *
+ * MEDIDO 2026-10-01: esta frase decía la ruta con los dos comodines de glob ("api" seguido de
+ * asterisco) y rompía la compilación. Kotlin ANIDA los comentarios de bloque, a diferencia de
+ * Java: esa secuencia abría un comentario anidado DENTRO de este KDoc, y el cierre de abajo lo
+ * cerraba a él, dejando este KDoc abierto hasta el fin del fichero. De ahi el "Unclosed comment"
+ * que la CI reportaba en la ÚLTIMA línea, y los "Unresolved reference" de `OpenCodeApi.kt`, que
+ * no eran de ese fichero sino consecuencia: sus tipos habían quedado dentro de un comentario.
  *
  * OpenCode exige autenticación HTTP Basic con realm "Secure Area". La contraseña
  * se genera de forma aleatoria en cada arranque de `opencode serve` y vive en
