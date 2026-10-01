@@ -47,7 +47,19 @@ import com.aegis.hub.data.TurnState
 private const val AGENTE_POR_DEFECTO = "orchestrator"
 
 class ChatViewModel : ViewModel() {
-    private val api = ApiClient.service
+    /**
+     * MEDIDO 2026-10-01: esta era `ApiClient.service`, el cliente del Hub, en las 18 llamadas
+     * de este fichero. Ahora sale de [Conexion], que decide entre Hub y OpenCode nativo.
+     *
+     * **Esta es la costura, y por eso el cambio es de UNA LINEA.** `RutaNativa` implementa la
+     * misma interfaz `ApiService` que ya tenía inyectada, así que las 18 llamadas siguen
+     * compilando igual: no hay que tocar ninguna. Lo que cambia no es la lista de llamadas,
+     * es a quién se las hacen.
+     *
+     * Con `Conexion.NATIVO_DIRECTO = false` (el valor actual) esto sigue siendo exactamente el
+     * cliente del Hub de siempre. Ver la nota de por qué el valor por defecto NO es el nativo.
+     */
+    private val api = Conexion.api
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
