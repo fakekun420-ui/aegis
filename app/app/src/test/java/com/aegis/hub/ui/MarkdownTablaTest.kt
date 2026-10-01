@@ -125,7 +125,7 @@ class MarkdownTablaTest {
     }
 
     @Test
-    fun `el markdown que ya funcionaba sigue igual (sin regresion)` {
+    fun `el markdown que ya funcionaba sigue igual (sin regresion)`() {
         val texto = """
             # Titulo
 
