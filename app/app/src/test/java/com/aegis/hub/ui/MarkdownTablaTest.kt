@@ -119,9 +119,10 @@ class MarkdownTablaTest {
         val t = tablasDe(texto).single()
         assertEquals("la cabecera fija la anchura", 3, t.headers.size)
         assertEquals(listOf("1", "2", ""), t.rows[0])
-        // CONTRAEJEMPLO: la fila sobrante se recorta a la cabecera. Si no, la fila tendria una
-        // celda de mas y `repeat(headers.size)` la ocultaria sin avisar.
-        assertEquals(3, t.rows[1].size)
+        // CONTRAEJEMPLO: la fila sobrante se recorta a la cabecera, y se conservan las
+        // PRIMERAS celdas. Sin el recorte, `repeat(headers.size)` la ocultaria sin avisar;
+        // y si se recortara por el otro extremo, la cuarta celda se perderia al pintar.
+        assertEquals(listOf("1", "2", "3"), t.rows[1])
     }
 
     @Test

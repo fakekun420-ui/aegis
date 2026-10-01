@@ -598,6 +598,19 @@ internal fun filaDeSeparacion(linea: String): String? {
     return linea
 }
 
+/**
+ * Deja la fila con la MISMA anchura que la cabecera: rellena con vacio lo que falte y recorta
+ * lo que sobre. MEDIDO 2026-10-01 por un test propio: sin esto, una fila de 2 celdas bajo
+ * una cabecera de 3 llegaba al renderizador descuadrada, y una de 4 se recortaba ahi con un
+ * `repeat(headers.size)` que perdia la celda de más sin avisar.
+ *
+ * Que el dato sea consistente no es cosmetico: el renderizador puede asi Pintar celda a celda
+ * sin preguntar por el indice, y cualquier consumidor futuro del parser hereda la misma
+ * garantia.
+ */
+internal fun normalizarFila(celdas: List<String>, columnas: Int): List<String> =
+    (0 until columnas).map { celdas.getOrNull(it).orEmpty() }
+
 /** La alineacion de cada columna, leida de la fila de separacion. */
 internal fun alineacionesDe(separacion: String?): List<TableAlign> {
     if (separacion == null) return emptyList()
@@ -688,7 +701,7 @@ internal fun parseMarkdown(src: String): List<MdBlock> {
                     // Una tabla termina en la primera linea que no sea una fila suya. Blank
                     // linea vacia y una linea de texto suelta la cortan igual, que es lo correcto.
                     if (celdas == null) break
-                    filas.add(celdas)
+                    filas.add(normalizarFila(celdas, cabeceras.size))
                     i++
                 }
                 blocks += MdBlock.Table(cabeceras, filas, alineaciones)
