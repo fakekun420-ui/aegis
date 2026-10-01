@@ -86,6 +86,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         // vez (el companion object lo cachea). Sin esto, `isAppVisible` se queda en 0 para
         // siempre y el aviso de fin de turno no sale nunca: el fallo seria silencioso.
         registerVisibleTracker()
+        // MEDIDO 2026-09-30: sin esto el watchdog solo existia si el usuario pulsaba el
+        // boton de la pantalla de arranque (el unico llamador de startRootSystemAndPoll).
+        // Con el Hub arriba —el caso normal— ese boton ni siquiera aparece, asi que el Hub
+        // se quedaba sin vigilante sin que nada lo indicara. Se asegura en cada arranque;
+        // keepalive.sh se protege solo con su lock, asi que repetir el lanzamiento no
+        // duplica nada (medido: con el lock apuntando a un pid MUERTO, el guard deja pasar).
+        ensureWatchdog()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
@@ -199,37 +206,69 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         } catch (_: Exception) { false }
     }
 
+    /**
+     * Lanza keepalive.sh dentro del chroot de Ubuntu y devuelve el codigo de salida.
+     * SIN toast, SIN sondeo de 45 s: esto es "asegura que exista el watchdog", no "levanta
+     * el Hub y avisa". De ahi las dos funciones que la usan:
+     *   - [startRootSystemAndPoll], el boton del overlay (ademas espera y avisa), y
+     *   - [ensureWatchdog], el arranque automatico de la app (silencioso).
+     *
+     * Idempotente por construccion: keepalive.sh se protege solo con su lock y su
+     * `kill -0 $OLDPID`, asi que llamarla con el daemon ya vivo sale con "ya corre" y no
+     * duplica nada. Lo que decide es el propio daemon.
+     */
+    private suspend fun launchKeepalive(): Int {
+        return try {
+            val script = "/sdcard/projects/Aegis/backend/keepalive.sh"
+            val sysLog = "/sdcard/projects/Aegis/backend/hub-startup.log"
+            // chroot anchor: ubuntu init pid changes across reboots; find it by its
+            // unique root marker (/proc/PID/root/lib/ld-linux-aarch64.so.1 = ubuntu
+            // chroot with node+loader). Launch keepalive INSIDE the chroot so node,
+            // loader, server.js and ports all resolve in one namespace. No nsenter.
+            val stageResult = RootShell.exec("sh /sdcard/projects/Aegis/backend/find-ubuntu.sh")
+            android.util.Log.i("OpenCodeBoot", "find-ubuntu exit=${stageResult.code} out=${stageResult.stdout} err=${stageResult.stderr}")
+            val ubuntuPid = stageResult.stdout.trim().lines().firstOrNull { it.isNotBlank() }?.trim()
+            android.util.Log.i("OpenCodeBoot", "keepalive ubuntuPid=$ubuntuPid")
+            if (ubuntuPid.isNullOrBlank()) {
+                android.util.Log.e("OpenCodeBoot", "keepalive: no ubuntu chroot anchor found")
+                97
+            } else {
+                val directCmd = "chroot /proc/$ubuntuPid/root /bin/sh -c '/usr/bin/nohup /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'"
+                val result = RootShell.exec(directCmd)
+                android.util.Log.i("OpenCodeBoot", "keepalive exec exit=${result.code} out=${result.stdout.take(120)} err=${result.stderr.take(300)}")
+                if (!result.stdout.contains("launched")) 98 else result.code
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("OpenCodeBoot", "keepalive exec exception", e)
+            -1
+        }
+    }
+
+    /**
+     * MEDIDO 2026-09-30, y este es el arreglo de un fallo real: el watchdog NO se lanzaba
+     * salvo que el usuario pulsara el boton de la pantalla de arranque.
+     *
+     * El unico llamador de [startRootSystemAndPoll] estaba dentro de
+     * `if (!systemReady) { NativeOfflineOverlay(onStartSystem = ...) }`. Con el Hub ARRIBA —
+     * el caso normal, y el unico en el que importa— el overlay no aparece y el watchdog no
+     * se lanza nunca. El resultado medido: el Hub se queda sin quien lo vigile justo cuando
+     * todo va bien, que es cuando nadie se entera.
+     *
+     * Se lanza en cada arranque, y no solo si el Hub esta caido, porque la ventana del
+     * fallo era precisamente esa: Hub arriba + watchdog ausente.
+     */
+    private fun ensureWatchdog() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val code = launchKeepalive()
+            android.util.Log.i("OpenCodeBoot", "watchdog asegurado al arrancar (exit=$code)")
+        }
+    }
+
     private fun startRootSystemAndPoll() {
         if (isStartingSystem) return
         isStartingSystem = true
         lifecycleScope.launch(Dispatchers.IO) {
-            var execExit = -1
-            try {
-                val script = "/sdcard/projects/Aegis/backend/keepalive.sh"
-                val sysLog = "/sdcard/projects/Aegis/backend/hub-startup.log"
-                // chroot anchor: ubuntu init pid changes across reboots; find it by its
-                // unique root marker (/proc/PID/root/lib/ld-linux-aarch64.so.1 = ubuntu
-                // chroot with node+loader). Launch keepalive INSIDE the chroot so node,
-                // loader, server.js and ports all resolve in one namespace. No nsenter.
-                val stageResult = RootShell.exec("sh /sdcard/projects/Aegis/backend/find-ubuntu.sh")
-                android.util.Log.i("OpenCodeBoot", "find-ubuntu exit=${stageResult.code} out=${stageResult.stdout} err=${stageResult.stderr}")
-                val ubuntuPid = stageResult.stdout.trim().lines().firstOrNull { it.isNotBlank() }?.trim()
-                android.util.Log.i("OpenCodeBoot", "keepalive ubuntuPid=$ubuntuPid")
-                if (ubuntuPid.isNullOrBlank()) { 
-                    execExit = 97
-                    android.util.Log.e("OpenCodeBoot", "keepalive: no ubuntu chroot anchor found") 
-                } else {
-                    val directCmd = "chroot /proc/$ubuntuPid/root /bin/sh -c '/usr/bin/nohup /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'"
-                    val result = RootShell.exec(directCmd)
-                    execExit = result.code
-                    android.util.Log.i("OpenCodeBoot", "keepalive exec exit=$execExit out=${result.stdout.take(120)} err=${result.stderr.take(300)}")
-                    if (!result.stdout.contains("launched")) execExit = 98
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("OpenCodeBoot", "keepalive exec exception", e)
-                withContext(Dispatchers.Main) { isStartingSystem = false }
-                return@launch
-            }
+            val execExit = launchKeepalive()
             var attempts = 0
             var ready = false
             val maxAttempts = 90
