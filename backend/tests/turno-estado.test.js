@@ -59,6 +59,11 @@ const margen = 2500;          // holgura para no depender del reloj al limite
 
 const hijos = [];
 const hubs = [];
+// Los servidores falsos tambien se cierran aqui, no solo al final de cada test. MEDIDO: si un
+// assert salta antes del `srv.close()`, el servidor se queda con la conexion SSE del Hub viva
+// y el proceso del fichero no termina — un test que falla por una razon legitima tumba el
+// job entero en vez de reportar un fallo.
+const falsos = [];
 
 function puertoLibre() {
   return new Promise((resolve, reject) => {
@@ -86,6 +91,7 @@ async function startOpenCodeFalso() {
     req.on("close", () => clientes.delete(res));
   });
   await new Promise((r) => srv.listen(port, "127.0.0.1", r));
+  falsos.push(srv);
   const push = (type, sessionId) => {
     const linea = `data: ${JSON.stringify({ type, data: { sessionID: sessionId } })}\n\n`;
     for (const c of clientes) { try { c.write(linea); } catch (_) {} }
@@ -98,7 +104,14 @@ async function startHub(ocPort) {
   const port = await puertoLibre();
   const child = spawn(process.execPath, ["server.js"], {
     cwd: BACKEND_DIR,
-    env: { ...process.env, HUB_PORT: String(port), AEGIS_OC_SERVICE_PORT: String(ocPort) },
+    // MEDIDO 2026-10-01, y este fue un fallo mio que solo aparecia en CI. `OPENCODE_PORT` del
+    // entorno tiene prioridad MAXIMA (server.js:433) y por eso vale igual en los dos sitios.
+    // Antes usaba `AEGIS_OC_SERVICE_PORT`, que solo se mira cuando existe
+    // /root/.config/opencode/service.json: en el movil si, en un runner de GitHub no. Alli el
+    // vigilante no llegaba al OpenCode falso, el assert fallaba a los 15 s, el servidor falso
+    // se quedaba con la conexion SSE abierta y el proceso del fichero no salia nunca —
+    // el job se colgaba entero.
+    env: { ...process.env, HUB_PORT: String(port), OPENCODE_PORT: String(ocPort) },
     stdio: ["ignore", "pipe", "pipe"],
   });
   hubs.push(child);
@@ -141,8 +154,16 @@ async function esperarConexion(oc, limite = 15000) {
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 after(() => {
+  // Primero los hijos: al morir el Hub se sueltan las conexiones SSE que los servidores falsos
+  // tienen abiertas. `closeAllConnections` es la red de seguridad para el caso en que un hijo
+  // ya no existe; sin ella, `close()` solo deja de aceptar y espera a que las conexiones
+  // abiertas terminen solas, que es justo lo que colgaba el job.
   for (const c of hubs) { try { c.kill("SIGKILL"); } catch (_) {} }
   for (const c of hijos) { try { c.kill("SIGKILL"); } catch (_) {} }
+  for (const s of falsos) {
+    try { s.closeAllConnections(); } catch (_) {}
+    try { s.close(); } catch (_) {}
+  }
 });
 
 test("actividad despues de un 'succeeded' mantiene el turno EN MARCHA (la raiz de #1-3)", async () => {
