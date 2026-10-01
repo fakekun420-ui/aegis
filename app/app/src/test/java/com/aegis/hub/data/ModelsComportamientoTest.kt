@@ -188,7 +188,6 @@ class ModelsComportamientoTest {
     // ==================================================================
 
     /**
-    /**
      * Space Bunny Free es el modelo por defecto de una sesion nueva. Decision del usuario
      * 2026-10-01. MEDIDO sobre `/api/models`: de 475 modelos, `space-bunny-free` existe con
      * `free=true`, y el PRIMERO free de la lista es `longcat-2.5-preview-free`.
