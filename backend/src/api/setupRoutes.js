@@ -24,7 +24,6 @@
 //    devolvió a través de la maquinaria real (OpencodeAdapter del hub).
 
 import fs from "node:fs";
-import net from "node:net";
 import path from "node:path";
 import http from "node:http";
 import { execFile } from "node:child_process";
@@ -36,7 +35,6 @@ const log = createLogger("setup");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CHECK_TIMEOUT_MS = 2000;   // contrato F3: <=2s por check
-const A11Y_TIMEOUT_MS = 1500;    // margen por debajo del budget del check
 const SMOKE_TIMEOUT_MS = 60000;  // contrato F3: 60s para el smoke-test
 
 const HOME = process.env.HOME || "/root";
@@ -250,22 +248,6 @@ const CHECK_DEFS = [
         status: "fail",
         detail: `OpenCode no disponible: sin serve en ${OPENCODE_HOST}:${OPENCODE_PORT} ni binario "opencode" verificable`
       };
-    }
-  },
-  {
-    id: "a11y",
-    label: "Servicio de accesibilidad (:8766)",
-    run() {
-      // Bridge del CompanionService: basta con que ACEPTE la conexión TCP
-      // (mismo dato que reportaba el health antiguo: connect ECONNREFUSED 127.0.0.1:8766).
-      return new Promise(resolve => {
-        let settled = false;
-        const finish = (status, detail) => { if (settled) return; settled = true; try { sock.destroy(); } catch (_) {} resolve({ status, detail }); };
-        const sock = net.connect({ host: "127.0.0.1", port: 8766 });
-        sock.setTimeout(A11Y_TIMEOUT_MS, () => finish("fail", `timeout (${A11Y_TIMEOUT_MS}ms) al conectar con 127.0.0.1:8766 — Abre la app y concede accesibilidad`));
-        sock.once("connect", () => finish("ok", "bridge de accesibilidad escuchando en 127.0.0.1:8766"));
-        sock.once("error", e => finish("fail", `Abre la app y concede accesibilidad (127.0.0.1:8766 no responde: ${e.code || e.message})`));
-      });
     }
   },
   {

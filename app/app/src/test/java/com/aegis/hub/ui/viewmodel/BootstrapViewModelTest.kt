@@ -171,13 +171,12 @@ class BootstrapViewModelTest {
         assertTrue(fc!!.data!!.ready)
         assertFalse(ui.finalCheckLoading)
         assertEquals(
-            listOf("opencode", "a11y", "bootstrap"),
+            listOf("opencode", "bootstrap"),
             fc.data!!.checkList.map { it.id }
         )
         assertEquals(
             listOf(
                 "OpenCode (proxy4096)",
-                "Servicio de accesibilidad (:8766)",
                 "Instalación inicial (wizard)"
             ),
             fc.data!!.checkList.map { it.label }
@@ -455,7 +454,6 @@ private fun finalCheckAllOk(): FinalCheckResponse =
             ready = true,
             checks = listOf(
                 SetupCheck("opencode", "OpenCode (proxy4096)", SetupCheckStatus.ok, "OpenCode respondiendo en 127.0.0.1:4096"),
-                SetupCheck("a11y", "Servicio de accesibilidad (:8766)", SetupCheckStatus.ok, "bridge de accesibilidad escuchando"),
                 SetupCheck("bootstrap", "Instalación inicial (wizard)", SetupCheckStatus.ok, "wizard completado (phase=done)")
             )
         )
@@ -469,8 +467,7 @@ private fun finalCheckManual(): FinalCheckResponse =
             ready = false,
             checks = listOf(
                 SetupCheck("opencode", "OpenCode (proxy4096)", SetupCheckStatus.ok, "OpenCode respondiendo en 127.0.0.1:49374"),
-                SetupCheck("a11y", "Servicio de accesibilidad (:8766)", SetupCheckStatus.manual, "abre la app y concede accesibilidad"),
-                SetupCheck("bootstrap", "Instalación inicial (wizard)", SetupCheckStatus.ok, "wizard completado (phase=done)")
+                SetupCheck("bootstrap", "Instalación inicial (wizard)", SetupCheckStatus.manual, "wizard sin terminar: revísalo a mano"),
             )
         )
     )

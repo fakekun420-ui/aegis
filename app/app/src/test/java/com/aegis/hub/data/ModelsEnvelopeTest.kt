@@ -115,8 +115,7 @@ class ModelsEnvelopeTest {
                 "ready": true,
                 "checks": [
                   {"id":"opencode","label":"OpenCode (proxy4096)","status":"ok","detail":"responde en :4096"},
-                  {"id":"a11y","label":"Servicio de accesibilidad (:8766)","status":"manual","detail":"revísalo a mano"},
-                  {"id":"bootstrap","label":"Instalación inicial (wizard)","status":"ok","detail":"wizard done"}
+                  {"id":"bootstrap","label":"Instalación inicial (wizard)","status":"manual","detail":"revísalo a mano"},
                 ]
               }
             }
@@ -128,24 +127,17 @@ class ModelsEnvelopeTest {
         val data = res.data
         assertNotNull(data)
         assertTrue(data!!.ready)
-        // 3 checks: opencode, a11y, bootstrap. El `antigravity` salio con el motor
-        // (setupRoutes.js:224-273). El numero se comprueba de forma explicita porque si no,
-        // un check que desaparece por el camino pasa desapercibido.
-        assertEquals(3, data.checkList.size)
+        // MEDIDO del contrato real: 2 checks, opencode y bootstrap. Salieron dos, uno con
+        // el motor (antigravity) y otro con el puente de accesibilidad (a11y). El numero se
+        // comprueba de forma EXPLICITA porque si no, un check que desaparece por el camino
+        // pasa desapercibido: es exactamente lo que pasó con los dos anteriores.
+        assertEquals(2, data.checkList.size)
         // Labels EXACTOS de CHECK_DEFS (setupRoutes.js:224-273)
         assertEquals("opencode", data.checkList[0].id)
         assertEquals("OpenCode (proxy4096)", data.checkList[0].label)
-        // MEDIDO del contrato real (setupRoutes.js:224-273): opencode, a11y, bootstrap.
-        // El check `antigravity` salio con el motor, y con el los indices se corren: el
-        // que era el 2 (accesibilidad) es ahora el 1, y el bootstrap el 2.
-        assertEquals("Servicio de accesibilidad (:8766)", data.checkList[1].label)
-        assertEquals("Instalación inicial (wizard)", data.checkList[2].label)
-        // Con 3 checks, el que queda en "manual" es el de ACCESIBILIDAD (indice 1). Con
-        // los 4 de antes era el indice 2, porque por delante estaba el de antigravity: el
-        // JSON, el estado y el detalle se corrieron en bloque y no de uno en uno.
+        assertEquals("Instalación inicial (wizard)", data.checkList[1].label)
         assertEquals(SetupCheckStatus.ok, data.checkList[0].status)
         assertEquals(SetupCheckStatus.manual, data.checkList[1].status)
-        assertEquals(SetupCheckStatus.ok, data.checkList[2].status)
         assertEquals("revísalo a mano", data.checkList[1].detail)
     }
 
@@ -158,7 +150,6 @@ class ModelsEnvelopeTest {
                 "ready": false,
                 "checks": [
                   {"id":"opencode","label":"OpenCode (proxy4096)","status":"fail","detail":"sin respuesta"},
-                  {"id":"a11y","label":"Servicio de accesibilidad (:8766)","status":"fail","detail":"puerto 8766 caído"},
                   {"id":"bootstrap","label":"Instalación inicial (wizard)","status":"ok","detail":"wizard done"}
                 ]
               }
@@ -170,13 +161,9 @@ class ModelsEnvelopeTest {
 
         assertNotNull(data)
         assertFalse(data!!.ready)
-        // El JSON de este caso trae opencode=fail, a11y=fail y bootstrap=OK: el wizard
-        // instalado no es el motivo del fallo. Con el check de antigravity fuera, el
-        // ultimo indice es el 2 y su estado es ok, no fail.
         assertEquals(SetupCheckStatus.fail, data.checkList[0].status)
-        assertEquals(SetupCheckStatus.fail, data.checkList[1].status)
-        assertEquals(SetupCheckStatus.ok, data.checkList[2].status)
-        assertEquals(3, data.checkList.size)
+        assertEquals(SetupCheckStatus.ok, data.checkList[1].status)
+        assertEquals(2, data.checkList.size)
         // checks null → lista vacía
         val none = gson.fromJson(
             """{"ok": true, "data": {"ready": false, "checks": null}}""",

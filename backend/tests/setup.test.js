@@ -13,7 +13,7 @@
 //
 // Cobertura:
 //   1. las 3 rutas SIN token -> 403 FORBIDDEN (el middleware Fase 0 cubre /api/setup/*)
-//   2. GET  /api/setup/final-check       -> shape exacto: {ready, checks[3]} con
+//   2. GET  /api/setup/final-check       -> shape exacto: {ready, checks[2]} con
 //                                           ids/labels literales, statuses del
 //                                           enum y `ready` coherente (+ <5s)
 //   3. (retirada) POST /api/setup/auth/antigravity -> 404
@@ -47,7 +47,6 @@ seedTokenIfMissing();
 // Labels literales del contrato F3 — deben casar AL PIE DE LA LETRA
 const CHECK_CONTRACT = [
   { id: "opencode",    label: "OpenCode (proxy4096)" },
-  { id: "a11y",        label: "Servicio de accesibilidad (:8766)" },
   { id: "bootstrap",   label: "Instalación inicial (wizard)" }
 ];
 const STATUSES = ["ok", "fail", "manual"];
@@ -134,7 +133,7 @@ test("1. /api/setup/* sin token -> 403 FORBIDDEN (middleware Fase 0 cubre el pre
   }
 });
 
-test("2. GET /api/setup/final-check -> {ready, checks[3]} con labels exactos y ready coherente", async () => {
+test("2. GET /api/setup/final-check -> {ready, checks[2]} con labels exactos y ready coherente", async () => {
   const t0 = Date.now();
   const { status, body } = await api("/api/setup/final-check");
   const elapsed = Date.now() - t0;
@@ -145,7 +144,7 @@ test("2. GET /api/setup/final-check -> {ready, checks[3]} con labels exactos y r
 
   const checks = body.data.checks;
   assert.ok(Array.isArray(checks));
-  assert.equal(checks.length, 3, "el contrato define exactamente 3 checks (el de antigravity se retiro con el motor)");
+  assert.equal(checks.length, 2, "el contrato define exactamente 2 checks: opencode y bootstrap. Ni antigravity (motor retirado) ni a11y (el puente de accesibilidad salio de la app)");
   assert.deepEqual(
     checks.map(c => ({ id: c.id, label: c.label })),
     CHECK_CONTRACT,
