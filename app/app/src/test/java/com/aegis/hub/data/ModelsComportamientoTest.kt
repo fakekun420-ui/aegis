@@ -42,8 +42,12 @@ class ModelsComportamientoTest {
             OpencodeAgent(name = "general", mode = "subagent"),
             OpencodeAgent(name = "explore", mode = "subagent")
         )
+        // El orden es el de `sortedBy { it.name.lowercase() }`: build < orchestrator < plan.
+        // Lo escribi primero como "Build, Plan, orchestrator" y FALLO en la primera ejecucion
+        // del test: la expectativa estaba mal, no el codigo. El test 2 de este fichero ya
+        // afirmaba el orden correcto, asi que era una contradiccion MIA entre dos tests.
         assertEquals(
-            listOf("Build", "Plan", "orchestrator"),
+            listOf("Build", "orchestrator", "Plan"),
             lista.seleccionables().map { it.name }
         )
     }
