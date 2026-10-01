@@ -79,6 +79,24 @@ class TtsQueue(private val onSpeakingChanged: (Boolean) -> Unit) {
         return hablados
     }
 
+    /**
+     * Corta lo que este sonando y descarta lo encolado. MEDIDO 2026-10-01: sin esto, el boton
+     * de "leer en voz" podia ACTIVAR pero no CALLAR. `enqueue` es lo unico que habia, y
+     * `enqueue` solo anade: el interruptor dejaba de encolar y el motor seguia hablando lo que
+     * ya tenia, frase a frase, hasta el final de la respuesta.
+     *
+     * `TextToSpeech.stop()` cancela la locucion en curso y vacia la cola del sintetizador. El
+     * contador tambien se pone a cero, y `onSpeakingChanged(false)` se publica al hilo
+     * principal como los demas callbacks, que llegan por binder desde otro hilo.
+     *
+     * Idempotente: llamarlo sin nada sonando no hace nada ni falla.
+     */
+    fun stop() {
+        try { motor?.stop() } catch (_: Exception) {}
+        enVuelo.set(0)
+        main.post { onSpeakingChanged(false) }
+    }
+
     private fun termina() {
         val quedan = enVuelo.decrementAndGet()
         if (quedan <= 0) main.post { onSpeakingChanged(false) }

@@ -4371,6 +4371,17 @@ function markBusy(sid) {
 function touchSession(sid) {
   if (!sid) return;
   lastSeenAt.set(sid, Date.now());
+  // MEDIDO 2026-10-01: actividad DESPUES de un `succeeded` significa que el turno sigue.
+  // `session.execution.succeeded` marca el fin del TEXTO, no del turno: despues llegan
+  // `session.tool.called` y `session.step.*` mientras la herramienta se ejecuta. Como esta
+  // funcion no cancelaba la espera pendiente, el Hub marcaba la sesion LIBRE a los 5 s con un
+  // bash corriendo debajo — de ahi los tres sintomas del usuario: la notificacion que avisaba
+  // "ultimo mensaje" con trabajo en curso, el divisor de fin de turno, y las sesiones que se
+  // quedaban "en pausa" sin estarlo.
+  // No es un parche de un caso: `markIdle` se arma cuando OpenCode dice "acabo el texto", y
+  // eso NO es "acabe el turno". Cualquier actividad posterior lo desmiente.
+  const pendiente = pendingIdle.get(sid);
+  if (pendiente) { clearTimeout(pendiente); pendingIdle.delete(sid); }
   // A-3: touchSession significa "algo toco esta sesion", que es justo la condicion
   // para que sus mensajes puedan haber cambiado. Se invalida aqui y no solo en el
   // vigilante SSE porque touchSession tambien se llama desde el resto del Hub.
@@ -4382,7 +4393,10 @@ function markIdle(sid) {
   const t = setTimeout(() => {
     pendingIdle.delete(sid);
     inflightSessions.delete(sid);
-    lastSeenAt.delete(sid);
+    // NO se borra `lastSeenAt`: es la prueba de cuando se movio la sesion por ultima vez, y
+    // borrarla hacia que `isBusy` no pudiera distinguir "turno acabado" de "registro que se
+    // quedo pegado". Con `turnOver` ya a true la app no lo da por ocupado, asi que dejarlo no
+    // alarga nada: solo conserva la informacion para el reinicio del siguiente turno.
     deliveredInbox.set(sid, Date.now());
   }, TURN_END_GRACE_MS);
   if (t.unref) t.unref();
@@ -4392,7 +4406,15 @@ function isTurnOver(sid) {
   if (!sid) return false;
   if (inflightSessions.has(sid)) return false;
   const since = deliveredInbox.get(sid);
-  return typeof since === "number";
+  if (typeof since !== "number") return false;
+  // MEDIDO 2026-10-01: actividad POSTERIOR a "el turno se cerro" significa que hay otro turno
+  // en marcha. Sin esta comprobacion, entregar la notificacion y pintar el divisor dependia de
+  // que llegara un `started` que se pierde al reconectar el SSE — y el propio codigo de arriba
+  // reconoce que se pierde. Aqui no se espera a ningun evento: es la ultima actividad la que
+  // manda, y ya la tenemos.
+  const visto = lastSeenAt.get(sid);
+  if (typeof visto === "number" && visto > since) return false;
+  return true;
 }
 
 function startExecutionWatcher(adapter) {

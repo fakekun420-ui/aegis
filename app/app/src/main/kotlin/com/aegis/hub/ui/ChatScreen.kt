@@ -120,9 +120,18 @@ fun ChatScreen(
     val streamingTools by vm.streamingTools.collectAsState()
     val agentMode by vm.agentMode.collectAsState()
     val agents by vm.agents.collectAsState()
+    // MEDIDO 2026-10-01: la hoja se llenaba con una sola llamada hecha al crear el ViewModel.
+    // Si esa llamada fallaba, la hoja quedaba vacia PARA SIEMPRE: el boton no volvia a
+    // pedirla y no decia por que. Aqui se pide al abrir, que es cuando hace falta.
+    val agentsLoading by vm.agentsLoading.collectAsState()
+    val agentsError by vm.error.collectAsState()
     val agentsLoading by vm.agentsLoading.collectAsState()
     var showModelSheet by remember { mutableStateOf(false) }
     var showAgentSheet by remember { mutableStateOf(false) }
+    // Al abrir la hoja se pide la lista. Es idempotente: el ViewModel no hace nada si ya
+    // esta cargando, y la respuesta se cachea en el StateFlow, asi que abrirla dos veces
+    // seguidas no son dos peticiones.
+    LaunchedEffect(showAgentSheet) { if (showAgentSheet) vm.loadAgents() }
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -235,6 +244,13 @@ fun ChatScreen(
 
     fun queueTts(text: String) { colaTts.enqueue(text) }
 
+    // MEDIDO 2026-10-01: sin esto el interruptor solo dejaba de ENCOLAR. Lo ya encolado
+    // seguia sonando hasta el final de la respuesta, que es justo lo que reporto el usuario.
+    // Al apagar el interruptor se corta, y al salir de la pantalla tambien: si no, el motor
+    // sigue hablando con la pantalla cerrada.
+    LaunchedEffect(leerEnVoz) { if (!leerEnVoz) colaTts.stop() }
+    DisposableEffect(Unit) { onDispose { colaTts.stop() } }
+
     // Voice: STT push-to-talk. El modo de duplex salio el 2026-10-01: el microfono
     // transcribe una vez y ya no se reabre solo.
     // UX-04/A-5: rememberSaveable — el modo de conversación y el borrador del mensaje
@@ -263,11 +279,14 @@ fun ChatScreen(
         }
     }
 
-    val photoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            val f = uriToAttachedFile(context, uri)
-            if (f != null) attachedFiles = attachedFiles + f
-        }
+    // MEDIDO 2026-10-01: era `GetContent()`, que devuelve UN solo Uri. El selector de
+    // "Archivos" de al lado ya era multi (`OpenMultipleDocuments`), asi que depende de que
+    // boton pulses para poder adjuntar varias imagenes. `GetMultipleContents` devuelve la
+    // lista y no exige ninguna version de API. El tope de 6 es el mismo que usa el otro.
+    val photoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
+        val nuevas = uris.take(6 - attachedFiles.size).mapNotNull { uri -> uriToAttachedFile(context, uri) }
+        attachedFiles = attachedFiles + nuevas
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -726,12 +745,21 @@ fun ChatScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 if (agents.isEmpty()) {
+                    // Decir POR QUE. Antes era un texto fijo, y un fallo de red es
+                    // indistinguible de "no hay agentes": los dos se veian igual, y no habia
+                    // forma de reintentar.
                     Text(
-                        if (agentsLoading) "Cargando agentes\u2026"
-                        else "No se pudieron cargar los agentes. Revisa que OpenCode este activo.",
+                        when {
+                            agentsLoading -> "Cargando agentes\u2026"
+                            agentsError != null -> "No se pudieron cargar: ${agentsError!!}"
+                            else -> "No se pudieron cargar los agentes. Revisa que OpenCode este activo."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (!agentsLoading) {
+                        TextButton(onClick = { vm.loadAgents() }) { Text("Reintentar") }
+                    }
                 } else {
                     agents.forEach { ag ->
                                 ListItem(
@@ -1458,6 +1486,11 @@ private fun UnifiedFloatingComposer(
                         )
                     }
 
+                    // MEDIDO 2026-10-01: el microfono vivia en un `else if (listening)` /
+                    // `else` de `if (canSend)`, asi que con un adjunto puesto NUNCA se pintaba
+                    // —`canSend` era true y el microfono era la rama descartada. El boton que
+                    // responde a "hay algo que enviar" no puede decidir si se ve el microfono.
+                    // Aqui el microfono se pinta siempre y el enviar se anade a su lado.
                     val canSend = text.isNotBlank() || attachedFiles.isNotEmpty()
                     if (canSend) {
                         IconButton(
@@ -1475,7 +1508,8 @@ private fun UnifiedFloatingComposer(
                                 modifier = Modifier.size(18.dp)
                             )
                         }
-                    } else if (listening) {
+                    }
+                    if (listening) {
                         val infiniteTransition = rememberInfiniteTransition(label = "pulse_mic")
                         val scale by infiniteTransition.animateFloat(
                             initialValue = 1f,
@@ -1519,6 +1553,8 @@ private fun UnifiedFloatingComposer(
                             )
                         }
                     }
+                    // El microfono ya no esta en un `else` de nada: termina aqui su rama, y el
+                    // boton de voz (leer en voz alta) se pinta al lado, siempre.
                 }
             }
         }

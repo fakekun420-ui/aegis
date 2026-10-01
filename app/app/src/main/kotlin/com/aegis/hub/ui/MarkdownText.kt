@@ -34,6 +34,10 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.fillMaxWidth
 
 /**
  * Terminal / CLI Wizard Markdown Renderer for OpenCode & Antigravity.
@@ -162,6 +166,11 @@ private fun MarkdownTextContent(
                         )
                     }
                 }
+                is MdBlock.Table -> MarkdownTable(
+                    headers = block.headers,
+                    rows = block.rows,
+                    align = block.align
+                )
                 is MdBlock.Quote -> Surface(
                     color = Color(0xFF161B22).copy(alpha = 0.6f),
                     shape = RoundedCornerShape(4.dp),
@@ -456,7 +465,7 @@ private fun highlightCode(code: String, language: String): AnnotatedString {
     return builder.toAnnotatedString()
 }
 
-private sealed class MdBlock {
+internal sealed class MdBlock {
     data class Header(val level: Int, val text: String) : MdBlock()
     data class CodeBlock(val code: String, val language: String = "") : MdBlock()
     data class ToolExecution(
@@ -471,7 +480,24 @@ private sealed class MdBlock {
     data class BulletList(val items: List<String>) : MdBlock()
     data class OrderedList(val items: List<String>) : MdBlock()
     data class Paragraph(val text: String) : MdBlock()
+
+    /**
+     * Una tabla de markdown. MEDIDO 2026-10-01: no existia ningun tipo de tabla, asi que
+     * caia en [Paragraph] y se pintaba con los `|` dentro. En el CLI la misma tabla sale
+     * alineada, y de ahi la complaint de que "todo se ve desordenado".
+     *
+     * `align` va en el mismo orden que `headers`, y lo dice la fila de separacion: `:---`
+     * izquierda, `:---:` centro, `---:` derecha.
+     */
+    data class Table(
+        val headers: List<String>,
+        val rows: List<List<String>>,
+        val align: List<TableAlign> = emptyList()
+    ) : MdBlock()
 }
+
+/** Alineacion de una columna. Lo decide la fila de `|---|` que va bajo la cabecera. */
+enum class TableAlign { Left, Center, Right }
 
 /**
  * Cuantos bloques tiene un texto en markdown. Vive FUERA del composable a proposito: el
@@ -483,9 +509,112 @@ private sealed class MdBlock {
  * el subagente terminaba. Aqui la pregunta se responde con el mismo parser que pinta, sin
  * fotogramas y sin estado.
  */
+/**
+ * Pinta una tabla. MEDIDO 2026-10-01: no existia, y por eso las tablas salian como texto con
+ * pipes dentro. En movil la decision de diseno importante es el scroll HORIZONTAL: una tabla
+ * de la salida de una herramienta se sale de verdad del ancho de la pantalla, y sin scroll lo
+ * que no cabe no existe para el usuario — igual que la hoja de agentes que se recortaba sola.
+ */
+@Composable
+private fun MarkdownTable(
+    headers: List<String>,
+    rows: List<List<String>>,
+    align: List<TableAlign>
+) {
+    val borde = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+    fun alineacionDe(idx: Int): TextAlign = when (align.getOrNull(idx) ?: TableAlign.Left) {
+        TableAlign.Left -> TextAlign.Start
+        TableAlign.Center -> TextAlign.Center
+        TableAlign.Right -> TextAlign.End
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            headers.forEachIndexed { idx, h ->
+                Text(
+                    text = h,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = alineacionDe(idx),
+                    maxLines = 2,
+                    modifier = Modifier.widthIn(min = 84.dp).padding(horizontal = 6.dp)
+                )
+            }
+        }
+        HorizontalDivider(color = borde)
+        rows.forEachIndexed { rIdx, fila ->
+            Row(
+                modifier = Modifier
+                    .background(
+                        if (rIdx % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+                        else androidx.compose.ui.graphics.Color.Transparent
+                    )
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                // Una fila con menos celdas que la cabecera se rellena: el dato que falta no
+                // puede empujar las demas columnas de sitio.
+                repeat(headers.size) { idx ->
+                    Text(
+                        text = fila.getOrNull(idx).orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = alineacionDe(idx),
+                        maxLines = 4,
+                        modifier = Modifier.widthIn(min = 84.dp).padding(horizontal = 6.dp)
+                    )
+                }
+            }
+            if (rIdx < rows.lastIndex) HorizontalDivider(color = borde.copy(alpha = 0.3f))
+        }
+    }
+}
+
+/** Partir una fila de tabla en sus celdas, quitando las pipes de los extremos. */
+internal fun filaDeTabla(linea: String): List<String>? {
+    if (!linea.contains('|')) return null
+    val cruda = linea.trim().removePrefix("|").removeSuffix("|")
+    val celdas = cruda.split('|').map { it.trim() }
+    // Una fila de tabla tiene al menos dos celdas. Sin este filtro, cualquier linea con una
+    // sola pipe (por ejemplo un comando de shell) contaria como tabla.
+    if (celdas.size < 2) return null
+    return celdas
+}
+
+/**
+ * La fila de separacion `|---|---|`. MEDIDO: tiene que composed SOLO de `-`, `:` y `|`, y
+ * llevar al menos un `-`. Es lo que distingue una cabecera real de un texto con pipes.
+ */
+internal fun filaDeSeparacion(linea: String): Boolean? {
+    if (!linea.contains('-') || !linea.contains('|')) return null
+    if (!linea.all { it == '-' || it == ':' || it == '|' || it == ' ' }) return null
+    return linea
+}
+
+/** La alineacion de cada columna, leida de la fila de separacion. */
+internal fun alineacionesDe(separacion: String?): List<TableAlign> {
+    if (separacion == null) return emptyList()
+    return filaDeTabla(separacion)?.map { celda ->
+        val izq = celda.startsWith(':')
+        val der = celda.endsWith(':')
+        when {
+            izq && der -> TableAlign.Center
+            der -> TableAlign.Right
+            else -> TableAlign.Left
+        }
+    } ?: emptyList()
+}
+
 fun markdownBlockCount(text: String): Int = parseMarkdown(text).size
 
-private fun parseMarkdown(src: String): List<MdBlock> {
+internal fun parseMarkdown(src: String): List<MdBlock> {
     val blocks = mutableListOf<MdBlock>()
     val lines = src.replace("\r\n", "\n").split("\n")
     var i = 0
@@ -542,6 +671,28 @@ private fun parseMarkdown(src: String): List<MdBlock> {
             trimmed.startsWith("> ") -> { flushLists(); blocks += MdBlock.Quote(trimmed.removePrefix("> ").trim()); i++ }
             Regex("^[-*]\\s+").containsMatchIn(trimmed) -> { if (orderedBuf.isNotEmpty()) flushLists(); bulletBuf += trimmed.replace(Regex("^[-*]\\s+"), ""); i++ }
             Regex("^\\d+\\.\\s+").containsMatchIn(trimmed) -> { if (bulletBuf.isNotEmpty()) flushLists(); orderedBuf += trimmed.replace(Regex("^\\d+\\.\\s+"), ""); i++ }
+            // MEDIDO 2026-10-01: una tabla se reconoce por la fila de separacion que va
+            // justo debajo de la cabecera. Sin este brazo caia en `Paragraph` y se veian los
+            // `|` en crudo. Va antes del `else` porque ningun otro brazo la captura: sus
+            // lineas empiezan por `|`, no por `#`, `>`, `-` ni un digito.
+            filaDeTabla(trimmed) != null && i + 1 < lines.size &&
+                    filaDeSeparacion(lines[i + 1].trim()) -> {
+                flushLists()
+                val cabeceras = filaDeTabla(trimmed)!!
+                val alineaciones = alineacionesDe(filaDeSeparacion(lines[i + 1].trim()))
+                i += 2
+                val filas = mutableListOf<List<String>>()
+                while (i < lines.size) {
+                    val t = lines[i].trim()
+                    val celdas = filaDeTabla(t)
+                    // Una tabla termina en la primera linea que no sea una fila suya. Blank
+                    // line y una linea de texto suelta麓 ambos cortan, que es lo correcto.
+                    if (celdas == null) break
+                    filas.add(celdas)
+                    i++
+                }
+                blocks += MdBlock.Table(cabeceras, filas, alineaciones)
+            }
             else -> { flushLists(); blocks += MdBlock.Paragraph(trimmed); i++ }
         }
     }

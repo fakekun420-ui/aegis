@@ -1235,7 +1235,13 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     }
                     if (resp != null && resp.isSuccessful && resp.body != null) {
                         val reader = resp.body!!.charStream().buffered()
-                        val sb = java.lang.StringBuilder()
+                        // MEDIDO 2026-10-01: antes habia aqui un `StringBuilder` que ACUMULABA
+                        // los trozos. El evento `chunk` lleva el texto ACUMULADO —el Hub lo
+                        // emite entero en cada poll en que crece (providers.js, `emitir`)—, asi
+                        // que acumular lo duplicaria de arriba abajo en cuanto el streaming
+                        // dejase de ser un unico bloque al final. Se REEMPLAZA.
+                        // Y el acumulador desaparece entero: MEDIDO, `sb` no se usaba en ningun
+                        // otro sitio del fichero.
                         var line: String? = null
                         while (withContext(Dispatchers.IO) { reader.readLine() }.also { line = it } != null) {
                             val cur = line ?: break
@@ -1265,8 +1271,9 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                         "chunk" -> {
                                             if (jsonObj.has("text")) {
                                                 val chunk = jsonObj.get("text").asString
-                                                sb.append(chunk)
-                                                _streamingText.value = sb.toString()
+                                                // Reemplaza, no acumula: el Hub manda el
+                                                // acumulado (providers.js, `emitir`).
+                                                _streamingText.value = chunk
                                             }
                                         }
                                         "tool_start" -> {

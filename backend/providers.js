@@ -845,6 +845,14 @@ export class OpencodeAdapter extends BaseProviderAdapter {
     const deadline = Date.now() + TURN_TIMEOUT_MS;
     let stableKey = null;
     let stableCount = 0;
+    // MEDIDO 2026-10-01: el texto se emitia UNA vez, al final, y por eso Aegis lo pintaba
+    // de golpe. Este es el ultimo texto ya emitido, para no repetirlo en cada poll.
+    let ultimoTexto = "";
+    const emitir = (txt) => {
+      if (typeof opts.onChunk !== "function" || !txt || txt === ultimoTexto) return;
+      ultimoTexto = txt;
+      try { opts.onChunk(txt); } catch (_) {}
+    };
     while (Date.now() < deadline) {
       if (opts.signal?.aborted) throw new Error("OpenCode sendMessage aborted by client");
       await new Promise((res) => setTimeout(res, 1000));
@@ -868,6 +876,9 @@ export class OpencodeAdapter extends BaseProviderAdapter {
           hit = m; hitText = txt; break;
         }
         if (hit) {
+          // El texto CRECIO desde el ultimo poll: se emite el acumulado. Es lo que convierte
+          // la respuesta en un bloque en una progresion, que es lo que pedia el usuario.
+          if (hitText.length > ultimoTexto.length) emitir(hitText);
           const key = `${hit.id}:${hitText.length}`;
           const streamed = !!(hit.time && hit.time.streamed);
           if (key === stableKey) stableCount += 1;
@@ -875,9 +886,7 @@ export class OpencodeAdapter extends BaseProviderAdapter {
           const complete = streamed || stableCount >= STABLE_POLLS_REQUIRED;
           if (complete) {
             const normalized = this._mapV2Message(hit, sessionId, 0);
-            if (typeof opts.onChunk === "function" && normalized.text) {
-              try { opts.onChunk(normalized.text); } catch (_) {}
-            }
+            emitir(normalized.text);
             log.info(`[opencode] assistant turn completed for ${sessionId} (${normalized.text.length} chars)`);
             return normalized;
           }
