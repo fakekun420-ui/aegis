@@ -107,7 +107,7 @@ class ModelsEnvelopeTest {
     // GET /api/setup/final-check → 4 checks (CHECK_DEFS) + ready
     // ------------------------------------------------------------------
     @Test
-    fun `final check parsea los 3 CHECK_DEFS con estados mixtos`() {
+    fun `final check parsea los 2 CHECK_DEFS con estados mixtos`() {
         val json = """
             {
               "ok": true,
@@ -115,7 +115,7 @@ class ModelsEnvelopeTest {
                 "ready": true,
                 "checks": [
                   {"id":"opencode","label":"OpenCode (proxy4096)","status":"ok","detail":"responde en :4096"},
-                  {"id":"bootstrap","label":"Instalación inicial (wizard)","status":"manual","detail":"revísalo a mano"},
+                  {"id":"bootstrap","label":"Instalación inicial (wizard)","status":"manual","detail":"revísalo a mano"}
                 ]
               }
             }
