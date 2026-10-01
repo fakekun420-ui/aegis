@@ -589,10 +589,10 @@ internal fun filaDeTabla(linea: String): List<String>? {
 }
 
 /**
- * La fila de separacion `|---|---|`. MEDIDO: tiene que composed SOLO de `-`, `:` y `|`, y
+ * La fila de separacion `|---|---|`. MEDIDO: tiene que estar compuesta SOLO de `-`, `:` y `|`, y
  * llevar al menos un `-`. Es lo que distingue una cabecera real de un texto con pipes.
  */
-internal fun filaDeSeparacion(linea: String): Boolean? {
+internal fun filaDeSeparacion(linea: String): String? {
     if (!linea.contains('-') || !linea.contains('|')) return null
     if (!linea.all { it == '-' || it == ':' || it == '|' || it == ' ' }) return null
     return linea
@@ -676,7 +676,7 @@ internal fun parseMarkdown(src: String): List<MdBlock> {
             // `|` en crudo. Va antes del `else` porque ningun otro brazo la captura: sus
             // lineas empiezan por `|`, no por `#`, `>`, `-` ni un digito.
             filaDeTabla(trimmed) != null && i + 1 < lines.size &&
-                    filaDeSeparacion(lines[i + 1].trim()) -> {
+                    filaDeSeparacion(lines[i + 1].trim()) != null -> {
                 flushLists()
                 val cabeceras = filaDeTabla(trimmed)!!
                 val alineaciones = alineacionesDe(filaDeSeparacion(lines[i + 1].trim()))
@@ -686,7 +686,7 @@ internal fun parseMarkdown(src: String): List<MdBlock> {
                     val t = lines[i].trim()
                     val celdas = filaDeTabla(t)
                     // Una tabla termina en la primera linea que no sea una fila suya. Blank
-                    // line y una linea de texto suelta麓 ambos cortan, que es lo correcto.
+                    // linea vacia y una linea de texto suelta la cortan igual, que es lo correcto.
                     if (celdas == null) break
                     filas.add(celdas)
                     i++

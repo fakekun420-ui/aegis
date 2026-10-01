@@ -125,7 +125,6 @@ fun ChatScreen(
     // pedirla y no decia por que. Aqui se pide al abrir, que es cuando hace falta.
     val agentsLoading by vm.agentsLoading.collectAsState()
     val agentsError by vm.error.collectAsState()
-    val agentsLoading by vm.agentsLoading.collectAsState()
     var showModelSheet by remember { mutableStateOf(false) }
     var showAgentSheet by remember { mutableStateOf(false) }
     // Al abrir la hoja se pide la lista. Es idempotente: el ViewModel no hace nada si ya
@@ -244,18 +243,22 @@ fun ChatScreen(
 
     fun queueTts(text: String) { colaTts.enqueue(text) }
 
-    // MEDIDO 2026-10-01: sin esto el interruptor solo dejaba de ENCOLAR. Lo ya encolado
-    // seguia sonando hasta el final de la respuesta, que es justo lo que reporto el usuario.
-    // Al apagar el interruptor se corta, y al salir de la pantalla tambien: si no, el motor
-    // sigue hablando con la pantalla cerrada.
-    LaunchedEffect(leerEnVoz) { if (!leerEnVoz) colaTts.stop() }
-    DisposableEffect(Unit) { onDispose { colaTts.stop() } }
-
     // Voice: STT push-to-talk. El modo de duplex salio el 2026-10-01: el microfono
     // transcribe una vez y ya no se reabre solo.
     // UX-04/A-5: rememberSaveable — el modo de conversación y el borrador del mensaje
     // sobreviven a rotación/muerte del proceso (con remember puro se perdían al girar).
     var leerEnVoz by rememberSaveable { mutableStateOf(false) }
+
+    // MEDIDO 2026-10-01: sin esto el interruptor solo dejaba de ENCOLAR. Lo ya encolado
+    // seguia sonando hasta el final de la respuesta, que es justo lo que reporto el usuario.
+    // Al apagar el interruptor se corta, y al salir de la pantalla tambien: si no, el motor
+    // sigue hablando con la pantalla cerrada.
+    //
+    // Va DESPUES de la declaracion de `leerEnVoz` y no antes: en Kotlin un `val` local tiene
+    // que existir antes de su primer uso. Estaba 7 lineas por encima y la CI lo cazó con
+    // "Unresolved reference 'leerEnVoz'" — el error no decia nada del orden.
+    LaunchedEffect(leerEnVoz) { if (!leerEnVoz) colaTts.stop() }
+    DisposableEffect(Unit) { onDispose { colaTts.stop() } }
     var listening by remember { mutableStateOf(false) }
     var sttError by remember { mutableStateOf<String?>(null) }
     var composerText by rememberSaveable { mutableStateOf("") }
