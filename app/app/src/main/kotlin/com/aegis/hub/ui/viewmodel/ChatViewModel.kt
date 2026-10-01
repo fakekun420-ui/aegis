@@ -297,12 +297,15 @@ class ChatViewModel : ViewModel() {
                 }
             }
 
-            val last = runCatching { ctx?.let { ModelPreferences.lastModel(it) } }.getOrNull()
-            if (!last.isNullOrBlank() && _selectedModel.value.isNullOrBlank()) {
-                _selectedModel.value = last
-            }
-            // Aqui ya no se fuerza ningun modelo. Lo pone `loadModels` con el primer
-            // free de la lista de OpenCode, que es la unica fuente de verdad.
+            // MEDIDO 2026-10-01: aqui habia un `ModelPreferences.lastModel()` que ponia como
+            // modelo inicial el ULTIMO elegido en cualquier chat. Es lo que hacia que al abrir
+            // una sesion nueva se cambiara el modelo: esta linea corre ANTES que `loadModels`,
+            // dejaba `_selectedModel` relleno, y el default de la regla (Space Bunny Free) no
+            // llegaba a aplicarse nunca.
+            // Se quita. Lo que decide ahora el modelo inicial de una sesion nueva es la unica
+            // fuente de verdad: la lista de OpenCode, via `modeloPorDefecto`. Una sesion YA
+            // EXISTENTE no pasa por aqui: su modelo sale del servidor o de su propio registro
+            // en `ModelPreferences`, unas lineas mas arriba.
         }
     }
 

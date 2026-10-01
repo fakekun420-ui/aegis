@@ -375,20 +375,30 @@ data class ModelOption(
 )
 
 /**
- * El modelo por defecto de una sesion nueva: el PRIMERO FREE de la lista de OpenCode,
- * en el orden en que llega (el Hub ya la devuelve con los free de OpenCode primero).
+ * El modelo por defecto de una sesion nueva: **Space Bunny Free**.
  *
- * Es una regla, no un id fijo, a proposito. El id que se usaba antes
- * ("gemini-3.8-flash-high") no esta en el catalogo: MEDIDO 2026-09-29 entre los 472
- * modelos existen "gemini-3.8-flash", "google/gemini-3.8-flash" y
- * "antigravity-gemini-3.8-flash", pero no el "-high". El Hub lo confirmo en su log a
- * las 17:37 de ese mismo dia: "modelo no encontrado en el indice v2".
+ * Decision del usuario 2026-10-01. MEDIDO sobre `/api/models` el mismo dia: de 475 modelos,
+ * `space-bunny-free` existe y trae `free=true`, y el PRIMERO free de la lista —que es lo que
+ * devolvia esta regla— es `longcat-2.5-preview-free`. De ahi "al abrir nuevas sesiones se
+ * cambia el modelo".
  *
- * Si la lista no trae ninguno free, se devuelve null y deja que OpenCode elija: es
- * preferible a inventar un id.
+ * Sigue siendo una REGLA y no un id fijo a pelo, por el motivo que ya esta escrito aqui y
+ * que costo caro: el id que se hardcodeo antes ("gemini-3.8-flash-high") no existia entre los
+ * 472 modelos, y el Hub avisaba "modelo no encontrado en el indice v2". Si OpenCode deja de
+ * ofrecer Space Bunny Free, esta regla cae al primer free en vez de mandar un id que no
+ * existe — que es un fallo que se ve, y no uno que se cuela.
+ *
+ * Si la lista no trae ninguno free, se devuelve null y deja que OpenCode elija: es preferible
+ * a inventar un id.
  */
 val List<ModelOption>.modeloPorDefecto: String?
-    get() = firstOrNull { it.free }?.id
+    get() = firstOrNull { it.id == ID_MODELO_POR_DEFECTO && it.free }?.id
+        ?: firstOrNull { it.free }?.id
+
+/**
+ * El id del modelo que abre una sesion nueva. Verificado contra el catalogo vivo, no supuesto.
+ */
+const val ID_MODELO_POR_DEFECTO = "space-bunny-free"
 
 data class SendMessageRequestWithModel(
     val parts: List<Map<String, String>>,

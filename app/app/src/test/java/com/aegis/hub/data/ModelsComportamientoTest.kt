@@ -188,18 +188,53 @@ class ModelsComportamientoTest {
     // ==================================================================
 
     /**
-     * Devuelve el PRIMERO FREE, no el primero de la lista. MEDIDO: el id que se hardcodeo
-     * antes, `gemini-3.8-flash-high`, no existia entre los 472 modelos, y el Hub avisaba:
-     * "modelo no encontrado en el indice v2".
+    /**
+     * Space Bunny Free es el modelo por defecto de una sesion nueva. Decision del usuario
+     * 2026-10-01. MEDIDO sobre `/api/models`: de 475 modelos, `space-bunny-free` existe con
+     * `free=true`, y el PRIMERO free de la lista es `longcat-2.5-preview-free`.
+     *
+     * Contraejemplo 1: si la regla volviera al primer free, este test falla — devuelve
+     * "longcat-2.5-preview-free".
+     * Contraejemplo 2: si fuera `first().id`, devolveria "pago-1", o sea un default de pago.
+     */
+    @Test
+    fun `modeloPorDefecto de una sesion nueva es Space Bunny Free`() {
+        val lista = listOf(
+            ModelOption(id = "pago-1", name = "De pago", free = false),
+            ModelOption(id = "longcat-2.5-preview-free", name = "Longcat", free = true),
+            ModelOption(id = ID_MODELO_POR_DEFECTO, name = "Space Bunny Free", free = true)
+        )
+        assertEquals(ID_MODELO_POR_DEFECTO, lista.modeloPorDefecto)
+    }
+
+    /**
+     * Si Space Bunny Free no esta en la lista, cae al PRIMERO FREE, no al primero de la lista.
+     * Ese repliegue es el motivo de que esto sea una regla y no un id fijo: el id que se
+     * hardcodeo antes, `gemini-3.8-flash-high`, no existia entre los 472 modelos, y el Hub
+     * avisaba "modelo no encontrado en el indice v2".
      *
      * Contraejemplo: si volviera a `first().id`, este test falla — devuelve "pago-1".
      */
     @Test
-    fun `modeloPorDefecto devuelve el primero free, no el primero de la lista`() {
+    fun `si Space Bunny Free no esta, cae al primero free y no al primero de la lista`() {
         val lista = listOf(
             ModelOption(id = "pago-1", name = "De pago", free = false),
             ModelOption(id = "longcat-2.5-preview-free", name = "Longcat", free = true),
             ModelOption(id = "otro-free", name = "Otro", free = true)
+        )
+        assertEquals("longcat-2.5-preview-free", lista.modeloPorDefecto)
+    }
+
+    /**
+     * Un Space Bunny Free que NO sea gratis no debe ganar. El id se busca junto al `free` en el
+     * mismo elemento: un modelo de pago con ese id es otra cosa, y si se aceptara, el "default"
+     * seria de pago disfrazado de neutro — que es justo el defecto que este filtro evita.
+     */
+    @Test
+    fun `un Space Bunny Free de pago no es el default`() {
+        val lista = listOf(
+            ModelOption(id = ID_MODELO_POR_DEFECTO, name = "Space Bunny", free = false),
+            ModelOption(id = "longcat-2.5-preview-free", name = "Longcat", free = true)
         )
         assertEquals("longcat-2.5-preview-free", lista.modeloPorDefecto)
     }
