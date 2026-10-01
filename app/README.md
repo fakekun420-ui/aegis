@@ -72,5 +72,5 @@ nsenter -t 1 -m -- chmod 755 /data/adb/service.d/99-opencode-hub.sh
 
 ## Estructura
 - `../backend/` — hub Node sin deps (siempre funciona, base para WebView de la app)
-- `app/src/main/kotlin/com/aegis/hub/` — `MainActivity.kt`, `CompanionService.kt`, `OpencodeAccessibilityService.kt`, `RootShell.kt`
+- `app/src/main/kotlin/com/aegis/hub/` — `MainActivity.kt`, `RootShell.kt`
 - `install-su.sh` — instalador root (6 pasos)

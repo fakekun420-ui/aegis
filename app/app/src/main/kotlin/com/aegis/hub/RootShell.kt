@@ -41,6 +41,16 @@ object RootShell {
         return last ?: Result(-1, "", "no shell")
     }
 
+    /**
+     * Lee el contenido completo de un fichero usando root/shell.
+     * Escapa la ruta de forma segura para prevenir inyecciones.
+     *
+     * Devuelve [Result] con el código de salida, contenido stdout y stderr.
+     */
+    fun readFile(path: String, timeoutMs: Long = 5000): Result {
+        return exec("cat " + shQuote(path), timeoutMs)
+    }
+
     fun launchPackage(pkg: String): Result = exec("monkey -p $pkg -c android.intent.category.LAUNCHER 1 2>&1 | head -n 20")
     fun tap(x:Int, y:Int): Result = exec("input tap $x $y")
     fun keyEvent(code:Int): Result = exec("input keyevent $code")

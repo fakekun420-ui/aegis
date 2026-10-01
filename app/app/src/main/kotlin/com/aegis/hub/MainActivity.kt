@@ -35,6 +35,17 @@ import com.aegis.hub.ui.AppNavHost
 import com.aegis.hub.ui.NavRoutes
 import com.aegis.hub.data.AppContext
 
+/**
+ * Actividad principal de Aegis.
+ *
+ * NOTA DE ARQUITECTURA (2026-10-01 - Paquete F / Decisión del usuario):
+ * Se retiró el servicio en primer plano (CompanionService) para eliminar la notificación
+ * permanente solicitada por el usuario. Al no existir un Foreground Service, Android
+ * puede matar el proceso de la aplicación cuando ésta pasa a segundo plano o se cierra.
+ * Por diseño, el sondeo/polling de fin de turno y las notificaciones dejan de funcionar
+ * con la app cerrada (solo operan mientras la app permanece viva o en primer plano).
+ * Esto no es un bug, es el comportamiento aceptado y esperado.
+ */
 class MainActivity : ComponentActivity() {
 
 
@@ -121,7 +132,6 @@ class MainActivity : ComponentActivity() {
         }
 
         ensurePermissions()
-        startCompanionService()
         checkHubOnStart()
     }
 
@@ -474,11 +484,6 @@ class MainActivity : ComponentActivity() {
                 // Sin acceso a esa pantalla: se sigue con el respaldo por root.
             }
         }
-    }
-
-    private fun startCompanionService(){
-        val i = Intent(this, CompanionService::class.java)
-        if(Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
     }
 
     private fun startListening(){ /* Phase 1: native STT handled via Compose voice FAB later */ }

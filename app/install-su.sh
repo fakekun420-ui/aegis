@@ -61,18 +61,18 @@ nsenter -t 1 -m -- cmd appops set com.aegis.hub SYSTEM_ALERT_WINDOW allow 2>&1 |
 # quit battery optimization explicitly
 nsenter -t 1 -m -- dumpsys deviceidle whitelist 2>&1 | grep -i aegis || echo "  (whitelist grep vacío — verifica con: dumpsys deviceidle whitelist | grep aegis)"
 
-echo "[5/6] Iniciando CompanionService (foreground 8766) ..."
-nsenter -t 1 -m -- am start-foreground-service -n com.aegis.hub/.CompanionService 2>&1 | head -n 10 || \
-nsenter -t 1 -m -- am startservice -n com.aegis.hub/.CompanionService 2>&1 | head -n 10 || true
-sleep 1
-nsenter -t 1 -m -- dumpsys activity services 2>&1 | grep -i "aegis.hub" | head -n 5 || true
+# MEDIDO 2026-10-01: este paso arrancaba `.CompanionService`, un servicio en primer plano que
+# ya NO EXISTE — se retirar por decision del usuario (notificacion permanente fuera). Lanzar un
+# componente inexistente es un fallo silencioso en un instalador, asi que el paso desaparece en
+# vez de quedar commented.
+echo "[5/6] (sin servicio en primer plano: retirado el 2026-10-01)"
 
 echo "[6/6] Verificación ..."
 echo "  pm list:"; nsenter -t 1 -m -- pm list packages 2>&1 | grep aegis || echo "    (no)"
 echo "  a11y :"; nsenter -t 1 -m -- settings get secure enabled_accessibility_services 2>&1 | tr ':' '\n' | grep aegis || echo "    (no)"
 echo "  deviceidle whitelist:"; nsenter -t 1 -m -- dumpsys deviceidle whitelist 2>&1 | grep -i aegis | head -n 5 || echo "    (no)"
-echo "  bridge 8766:"; curl -m 3 -s http://127.0.0.1:8766/status 2>&1 | head -c 400; echo
 echo "  hub 8765:"; curl -m 3 -s http://127.0.0.1:8765/api/status 2>&1 | head -c 300; echo
 echo ""
-echo "Listo. Abre la app 'Aegis' para ver estado, o http://127.0.0.1:8765 para el hub voz."
-echo "Si el bridge 8766 no responde, abre la app manualmente una vez (dispara onCreate del CompanionService)."
+echo "Listo. Abre la app 'Aegis' para ver estado, o http://127.0.0.1:8765 para el hub."
+# MEDIDO 2026-10-01: la linea siguiente y la de "bridge 8766" eran del puente de accesibilidad,
+# que se retiro antes que este servicio. El 8766 ya no lo escucha nadie.
