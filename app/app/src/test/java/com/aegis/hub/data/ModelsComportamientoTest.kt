@@ -149,7 +149,7 @@ class ModelsComportamientoTest {
      * los dos lados del umbral.
      */
     @Test
-    fun `un silencio de 5 minutos sigue ocupado: el techo no son 45 segundos`() {
+    fun `un silencio de 5 minutos sigue ocupado, el techo no son 45 segundos`() {
         val ahora = 1_700_000_000_000L
         val haceCincoMinutos = InflightSession(lastSeen = ahora - 5L * 60L * 1000L)
         assertTrue(
