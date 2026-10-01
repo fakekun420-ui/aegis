@@ -64,7 +64,11 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                 onNavigateSkillManager = { navController.navigate("skill_manager") },
                 onNavigateWorkspace = { navController.navigate("workspace") },
                 onOpenProject = { id -> navController.navigate("project/$id") },
-                onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) }
+                onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) },
+                // El boton de auriculares de la pantalla principal. MEDIDO 2026-10-01: MainNavScreen
+                // lo recibia como lambda vacio y no hacia nada. Se cablea al MISMO destino que
+                // el otro ChatScreen, para que el mismo boton se comporte igual en las dos.
+                onOpenVoice = { sid -> navController.navigate(NavRoutes.voice(sid)) }
             )
         }
         composable(NavRoutes.PROJECTS) {
