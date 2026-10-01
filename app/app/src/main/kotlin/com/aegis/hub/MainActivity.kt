@@ -34,6 +34,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 import com.aegis.hub.ui.AppNavHost
 import com.aegis.hub.ui.NavRoutes
 import com.aegis.hub.data.AppContext
+class MainActivity : ComponentActivity() {
+
+    // MEDIDO 2026-10-01: esta clase ya NO implementa la interfaz de motor de voz ni tiene un
+    // motor propio. `speak()` era su unico consumidor, y `speak()` era del wake word, que solo
+    // existia para el modo de duplex (retirado en este mismo cambio). Un motor de sintesis
+    // arrancado en cada onCreate y al que no se le pide nada es gasto puro: el TTS de verdad
+    // vive en ChatScreen y ahora lo dispara su interruptor de "leer en voz".
 
 
 
