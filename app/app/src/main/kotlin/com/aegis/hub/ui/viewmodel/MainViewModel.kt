@@ -13,7 +13,16 @@ import kotlinx.coroutines.launch
 import com.aegis.hub.data.TurnState
 
 class MainViewModel : ViewModel() {
-    private val api = ApiClient.service
+    /**
+     * MEDIDO 2026-10-01: sale de [Conexion] por el mismo motivo que `ChatViewModel`, y aquí el
+     * motivo es más fuerte: este es el fichero que pinta la LISTA de sesiones, que es la que el
+     * usuario总的 de que a veces no reconocía.
+     *
+     * La costura no es solo el chat. Si solo se cambiara `ChatViewModel`, la lista seguiría
+     * viniendo del Hub y habría dos rutas para el mismo dato: el estado de una sesión en la lista
+     * y en su chat podrían discrepar. Un solo sitio decide de dónde vienen los datos.
+     */
+    private val api = Conexion.api
     private val openCodeApi: OpenCodeApi = OpenCodeApi.default
     private val projectsStore: ProjectsStore = ProjectsStore.default
 

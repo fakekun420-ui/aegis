@@ -65,6 +65,11 @@ object TurnNotifier {
     /** Hay alguna Activity a la vista? Un contador negativo se satura a 0, no se cuela. */
     val isAppVisible: Boolean get() = startedActivities.get() > 0
 
+    /** Decision pura sobre si un evento de stream termina un turno */
+    fun isTurnCompletedEvent(eventType: String?): Boolean {
+        return eventType == "session.execution.succeeded"
+    }
+
     private fun ensureChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
@@ -91,7 +96,7 @@ object TurnNotifier {
         }
         val ctx = appCtx
         if (ctx == null) {
-            Log.w(TAG, "NO se avisa: MainActivity todavia no ha inyectado el applicationContext")
+            Log.w(TAG, "NO se avisa: MainActivity todavia no ha inyectado el applicationContext (o proceso recreado sin Activity)")
             return
         }
         ensureChannel(ctx)
