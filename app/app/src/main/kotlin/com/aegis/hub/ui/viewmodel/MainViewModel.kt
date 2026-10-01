@@ -14,6 +14,8 @@ import com.aegis.hub.data.TurnState
 
 class MainViewModel : ViewModel() {
     private val api = ApiClient.service
+    private val openCodeApi: OpenCodeApi = OpenCodeApi.default
+    private val projectsStore: ProjectsStore = ProjectsStore.default
 
     private val _projects = MutableStateFlow<List<Project>>(emptyList())
     val projects: StateFlow<List<Project>> = _projects
@@ -50,95 +52,62 @@ class MainViewModel : ViewModel() {
     private var projectsRetryJob: Job? = null
     private var projectsRetries = 0
 
-    // Declarado DESPUÉS de las propiedades que usa: en Kotlin los init blocks y los
-    // initializers se ejecutan en orden de declaración, y con Dispatchers.Main.immediate
-    // el cuerpo de refreshProjects() puede correr de forma síncrona dentro de refreshAll().
-    // Ids de las sesiones con un turno EN CURSO ahora mismo. Lo mantiene el vigilante
-    // del Hub a partir de los eventos session.execution.* de OpenCode, asi que
-    // funciona igual si el turno se lanzo desde la app o desde el CLI.
-    /** Espera del poll de inflight: normal y maxima cuando el Hub no responde. */
+    // Sondeo de estado de turno desde /api/session/active (OpenCode nativo).
+    //
+    // Intervalo de sondeo con backoff adaptable: 3 s en regimen normal;
+    // 8 s cuando la sonda falla reiteradamente. Previene tormentas de peticiones.
     private val POLL_MIN_WAIT_MS = 3_000L
-    /**
-     * Techo del backoff. ANTES 30 s, y ese numero era el defecto: `/api/sessions/inflight`
-     * es O(1) en memoria en el Hub y un poll que responde bien NO escribe nada, asi que
-     * 30 s de espera no ahorraban recursos — solo dejaban el conjunto de "trabajando" 30 s
-     * viejo, y una sesion que empieza a trabajar durante esa ventana no aparece con
-     * circulo. Ese es el sintoma reportado.
-     *
-     * El 30 s venia de la tormenta del 27-sep (4367 peticiones mientras el Hub fallaba).
-     * MEDIDO entonces que lo que la generaba no eran los polls correctos sino los ERRORES:
-     * cada 500 escribia una linea en el log del Hub, que esta en /sdcard (FUSE), y de ahi
-     * venian los procesos en estado D que no aceptan senal. Bajar el techo a 8 s sigue
-     * cortando el runaway sin pagar frescura.
-     */
     private val POLL_MAX_WAIT_MS = 8_000L
-
-    /** Cuanto se mantiene la marca "terminado" antes de desaparecer sola. */
     private val FINISHED_TTL_MS = 12_000L
 
-    // Momento del ultimo poll de inflight que RESPONDIO. Usa `elapsedRealtime` y no
-    // `currentTimeMillis` a proposito: un cambio de zona horaria o un NTP mueven
-    // `currentTimeMillis`, y la edad saldria negativa, haciendo que un dato viejo pareciese
-    // recien hecho — que es justo el fallo que se esta arreglando.
+    // Momento del ultimo sondeo de active sessions que respondio con exito.
+    // Usa SystemClock.elapsedRealtime() para ser inmune a cambios horarios NTP.
     @Volatile
     private var ultimoAciertoMs = 0L
 
-    /** Cuanto viejo es el ultimo dato bueno, en ms. -1 si aun no ha habido ninguno. */
-    private fun inflightAntiguoMs(): Long {
+    /** Cuanto de viejo es el ultimo dato de turno, en ms. -1 si no ha habido sondeo exitoso */
+    fun inflightAntiguoMs(): Long {
         val t = ultimoAciertoMs
         if (t == 0L) return -1L
         val d = android.os.SystemClock.elapsedRealtime() - t
         return if (d < 0) 0L else d
     }
 
-    /**
-     * El dato es tan viejo que ya no se puede pintar como verdad.
-     *
-     * Un circulo girando con datos rancios informa mal en las DOS direcciones: dice
-     * "trabajando" para una sesion que termino hace un minuto, y se calla para una que
-     * empezo hace un minuto. A 12 s —algo mas que la espera maxima del backoff (8 s)—
-     * solo se llega cuando el Hub lleva varios ciclos sin responder, y entonces la
-     * pantalla lo dice en vez de mentir.
-     */
-    private fun calcularEsFiable(): Boolean {
+    /** Distingue 3 estados: sin datos (-1), dato viejo (>= 12 s), o dato fresco (< 12 s) */
+    fun calcularEsFiable(): Boolean {
         val edad = inflightAntiguoMs()
-        return edad >= 0 && edad < 12_000L
+        return edad in 0 until 12_000L
     }
 
-    // Es un FLUJO y no una funcion consultada al pintar: `StateFlow` solo emite cuando el
-    // conjunto cambia, y si no hay ninguna sesion trabajando el conjunto se repite tal cual
-    // ciclo tras ciclo. Con una funcion, la pantalla no se recompone y el "es fiable" se
-    // queda viejo en la UI — el mismo fallo que se esta arreglando, un nivel mas abajo.
     private val _inflightFiable = MutableStateFlow(false)
     val inflightFiable: StateFlow<Boolean> = _inflightFiable
 
     private val _inflightIds = MutableStateFlow<Set<String>>(emptySet())
     val inflightIds: StateFlow<Set<String>> = _inflightIds
 
-    // Sesiones cuyo turno ACABÓ hace nada. El Hub ya lo envía (`turnOver`) y antes se
-    // tiraba: el panel solo sabía decir "trabajando" y no "terminado", así que al
-    // acabarse un turno el círculo desaparecía sin ninguna confirmación de que
-    // terminó — el estado se confundía con "ya no está mirando".
-    //
-    // Caduca a los FINISHED_TTL_MS: si no, cualquier sesión que haya trabajado alguna
-    // vez en la sesión actual quedaría marcada como "terminada" para siempre, que es
-    // tan mentiroso como no marcar nada.
     private val _finishedIds = MutableStateFlow<Set<String>>(emptySet())
     val finishedIds: StateFlow<Set<String>> = _finishedIds
     private val finishedAt = mutableMapOf<String, Long>()
 
-    private fun applyInflight(rows: List<InflightSession>) {
-        _inflightIds.value = rows.filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
+    fun applyActiveSessions(activeMap: Map<String, ActiveSessionStatus>) {
+        // Sesiones ocupadas segun OpenCode: { type: "running" }
+        val busyNow = activeMap.filter { it.value.type == "running" }.keys
+        val previousBusy = _inflightIds.value
+        _inflightIds.value = busyNow
+
         val now = System.currentTimeMillis()
-        for (r in rows) {
-            val id = r.id ?: continue
-            if (TurnState.isOver(r)) finishedAt[id] = now
+        // Sesiones que estaban ocupadas y ya no lo estan pasan a terminadas temporalmente
+        for (sid in previousBusy) {
+            if (sid !in busyNow) {
+                finishedAt[sid] = now
+            }
         }
         finishedAt.keys.retainAll { id ->
             now - (finishedAt[id] ?: 0L) < FINISHED_TTL_MS
         }
         _finishedIds.value = finishedAt.keys.toSet()
     }
+
     private var inflightJob: Job? = null
 
     init {
@@ -147,64 +116,60 @@ class MainViewModel : ViewModel() {
     }
 
     /**
-     * Consulta periodica de las sesiones ocupadas.
-     *
-     * Es O(1) en el Hub (las tiene en memoria, no pregunta a OpenCode), asi que puede
-     * ir cada 3 s sin coste apreciable. Es lo que permite poner el circulo de
-     * "ejecutando" en la lista de chats: sin esto no hay forma de saber, desde fuera
-     * del chat abierto, que una conversacion sigue trabajando.
+     * Sondeo con backoff contra /api/session/active de OpenCode.
+     * Si falla, conmuta al fallback del Hub (/api/sessions/inflight) si estuviera disponible,
+     * y si ambos fallan marca desconocido con la edad real.
      */
     private fun startInflightPolling() {
         inflightJob?.cancel()
         inflightJob = viewModelScope.launch {
-            // Espera FIJA con espera fija: el fallo se repite cada 3 s para siempre.
-            // MEDIDO 2026-09-27: con el Hub devolviendo 500 en esta ruta, la app hizo
-            // 4367 peticiones en el rato que duró el fallo. Cada una costaba una linea
-            // de error en el Hub, escrita en /sdcard, que es FUSE — y un proceso
-            // bloqueado en FUSE se queda en estado D, que no se puede matar. Esa es la
-            // cadena que llenaba la RAM y colgaba el movil.
-            //
-            // Aqui se hace lo contrario: si el Hub no responde, se ESPERA MAS. El primer
-            // fallo se recupera al ritmo normal; a partir de tres seguidos se sube a
-            // POLL_MAX_WAIT_MS y se baja solo cuando responde otra vez.
             var waitMs = POLL_MIN_WAIT_MS
             var consecutiveFailures = 0
-            // Conteo PROPIO de fallos del poll, solo para el log. No es el mismo que
-            // `consecutiveFailures`: aquel decide la espera, este explica por que.
             var fallosDelPoll = 0
             while (isActive) {
                 var ok = false
                 try {
-                    val r = api.getInflight()
-                    if (r.ok && r.data != null) {
-                        // Solo las que NO han terminado cuentan como ocupadas: un
-                        // turnOver es historia, no una sesion ocupada.
-                        applyInflight(r.data)
-                        ok = true
-                        ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
-                        if (fallosDelPoll > 0) {
-                            android.util.Log.i(
-                                "AegisChats",
-                                "poll de inflight vuelve a responder tras $fallosDelPoll fallos; " +
-                                    "trabajando ahora: " +
-                                    _inflightIds.value.joinToString { it.takeLast(6) }.ifBlank { "(ninguna)" }
-                            )
-                            fallosDelPoll = 0
-                        }
+                    val activeMap = openCodeApi.getActiveSessions()
+                    applyActiveSessions(activeMap)
+                    ok = true
+                    ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
+                    if (fallosDelPoll > 0) {
+                        android.util.Log.i(
+                            "AegisChats",
+                            "poll de active sessions recuperado tras " + fallosDelPoll + " fallos; "
+                                + "trabajando ahora: "
+                                + _inflightIds.value.joinToString { it.takeLast(6) }.ifBlank { "(ninguna)" }
+                        )
+                        fallosDelPoll = 0
                     }
                 } catch (e: Exception) {
-                    // El catch mudo es lo que hacia esto indebugable: `_inflightIds`
-                    // conserva el valor anterior y el `CircularProgressIndicator` es una
-                    // animacion infinita, de modo que un fallo de red se manifestaba como
-                    // "circulos correctos" durante minutos. MEDIDO el 30-sep: un fallo
-                    // puntual no dejaba NI UNA LINEA y habia que adivinar.
-                    fallosDelPoll++
-                    android.util.Log.w(
-                        "AegisChats",
-                        "poll de inflight fallo ($fallosDelPoll seguidos, dato viejo " +
-                            "${inflightAntiguoMs()} ms): ${e.javaClass.simpleName}: ${e.message}"
-                    )
+                    try {
+                        val r = api.getInflight()
+                        if (r.ok && r.data != null) {
+                            val rows = r.data
+                            _inflightIds.value = rows.filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
+                            val now = System.currentTimeMillis()
+                            for (row in rows) {
+                                val id = row.id ?: continue
+                                if (TurnState.isOver(row)) finishedAt[id] = now
+                            }
+                            finishedAt.keys.retainAll { id -> now - (finishedAt[id] ?: 0L) < FINISHED_TTL_MS }
+                            _finishedIds.value = finishedAt.keys.toSet()
+                            ok = true
+                            ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
+                        }
+                    } catch (_: Exception) {}
+
+                    if (!ok) {
+                        fallosDelPoll++
+                        android.util.Log.w(
+                            "AegisChats",
+                            "poll de active sessions fallo (" + fallosDelPoll + " seguidos, dato viejo "
+                                + inflightAntiguoMs() + " ms): " + e.javaClass.simpleName + ": " + e.message
+                        )
+                    }
                 }
+
                 if (ok) {
                     consecutiveFailures = 0
                     if (waitMs != POLL_MIN_WAIT_MS) waitMs = POLL_MIN_WAIT_MS
@@ -212,7 +177,6 @@ class MainViewModel : ViewModel() {
                     consecutiveFailures++
                     if (consecutiveFailures >= 3) waitMs = POLL_MAX_WAIT_MS
                 }
-                // La fiabilidad se juzga en cada ciclo, no solo cuando el conjunto cambia.
                 _inflightFiable.value = calcularEsFiable()
                 delay(waitMs)
             }
@@ -222,22 +186,30 @@ class MainViewModel : ViewModel() {
     fun refreshInflightNow() {
         viewModelScope.launch {
             try {
-                val r = api.getInflight()
-                if (r.ok && r.data != null) {
-                    applyInflight(r.data)
-                    ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
-                }
+                val activeMap = openCodeApi.getActiveSessions()
+                applyActiveSessions(activeMap)
+                ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
+                _inflightFiable.value = calcularEsFiable()
             } catch (e: Exception) {
-                // Mismo motivo que el poll: mudo, un fallo de red no dejaba ni una linea.
-                android.util.Log.w(
-                    "AegisChats",
-                    "refreshInflightNow fallo: ${e.javaClass.simpleName}: ${e.message}"
-                )
+                try {
+                    val r = api.getInflight()
+                    if (r.ok && r.data != null) {
+                        val rows = r.data
+                        _inflightIds.value = rows.filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
+                        ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
+                        _inflightFiable.value = calcularEsFiable()
+                    }
+                } catch (_: Exception) {
+                    android.util.Log.w(
+                        "AegisChats",
+                        "refreshInflightNow fallo: " + e.javaClass.simpleName + ": " + e.message
+                    )
+                }
             }
         }
     }
 
-    fun refreshProjects() {
+        fun refreshProjects() {
         projectsRetries = 0
         projectsRetryJob?.cancel()
         projectsRetryJob = null
@@ -380,90 +352,86 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun moveSession(sessionId: String, projectId: String) {
+fun moveSession(sessionId: String, projectId: String) {
         viewModelScope.launch {
             try {
+                projectsStore.linkSessionToProject(sessionId, projectId)
                 val currentSession = _sessions.value.find { it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId }
                 val currentTitle = currentSession?.resolvedTitle
                 val currentProvider = currentSession?.provider
-                val resp = api.linkSession(
-                    projectId,
-                    LinkSessionRequest(sessionId = sessionId, title = currentTitle, provider = currentProvider)
-                )
-                if (resp.ok) refreshAll() else _error.value = resp.error?.message ?: resp.error?.code ?: "move failed"
-            } catch (e: Exception) { _error.value = e.message ?: "Error de red" }
+                try {
+                    api.linkSession(
+                        projectId,
+                        LinkSessionRequest(sessionId = sessionId, title = currentTitle, provider = currentProvider)
+                    )
+                } catch (_: Exception) {}
+                refreshAll()
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Error de red"
+            }
         }
     }
 
     fun renameSession(sessionId: String, newTitle: String) {
         viewModelScope.launch {
-            // Optimistic in-memory update
+            projectsStore.setSessionTitle(sessionId, newTitle)
             val current = _sessions.value
             _sessions.value = current.map {
                 if (it.resolvedId == sessionId) it.copy(title = newTitle, name = newTitle) else it
             }
             try {
                 val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    api.renameSession(sessionId, mapOf("title" to newTitle))
+                    openCodeApi.updateSession(sessionId, UpdateOpenCodeSessionRequest(title = newTitle))
                 }
-                if (resp.ok) {
+                if (resp.isSuccessful) {
                     refreshAll()
                 } else {
-                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error renombrando sesión"
+                    _error.value = "Error renombrando sesion (${resp.code()})"
                     refreshSessions()
                 }
             } catch (e: Exception) {
-                _error.value = e.message ?: "Error renombrando sesión"
-                refreshSessions()
+                try {
+                    val respHub = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        api.renameSession(sessionId, mapOf("title" to newTitle))
+                    }
+                    if (respHub.ok) refreshAll() else refreshSessions()
+                } catch (_: Exception) {
+                    _error.value = e.message ?: "Error renombrando sesion"
+                    refreshSessions()
+                }
             }
         }
     }
 
     fun pinSession(sessionId: String) {
         viewModelScope.launch {
-            // Optimistic update
+            projectsStore.setSessionPin(sessionId, true)
             val current = _sessions.value
             _sessions.value = current.map {
                 if (it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId) it.copy(pinned = true) else it
             }
             try {
-                val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     api.pinSession(sessionId)
                 }
-                if (resp.ok) {
-                    refreshSessions()
-                } else {
-                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error fijando sesión"
-                    refreshSessions()
-                }
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Error fijando sesión"
-                refreshSessions()
-            }
+            } catch (_: Exception) {}
+            refreshSessions()
         }
     }
 
     fun unpinSession(sessionId: String) {
         viewModelScope.launch {
-            // Optimistic update
+            projectsStore.setSessionPin(sessionId, false)
             val current = _sessions.value
             _sessions.value = current.map {
                 if (it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId) it.copy(pinned = false) else it
             }
             try {
-                val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     api.unpinSession(sessionId)
                 }
-                if (resp.ok) {
-                    refreshSessions()
-                } else {
-                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error desfijando sesión"
-                    refreshSessions()
-                }
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Error desfijando sesión"
-                refreshSessions()
-            }
+            } catch (_: Exception) {}
+            refreshSessions()
         }
     }
 
@@ -479,12 +447,10 @@ class MainViewModel : ViewModel() {
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
             _deletedSessionIds.add(sessionId)
-            // Optimistic in-memory removal from sessions list
             val current = _sessions.value
             _sessions.value = current.filter {
                 it.resolvedId != sessionId && it.id != sessionId && it.ID != sessionId && it.resolvedId !in _deletedSessionIds
             }
-            // Optimistic removal from projects sessions list
             _projects.value = _projects.value.map { proj ->
                 if (proj.sessions != null) {
                     proj.copy(sessions = proj.sessions.filter { it.sessionId != sessionId && it.sessionId !in _deletedSessionIds })
@@ -492,16 +458,16 @@ class MainViewModel : ViewModel() {
             }
             try {
                 val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    api.deleteSession(sessionId)
+                    openCodeApi.deleteSession(sessionId)
                 }
-                if (resp.ok) {
+                if (resp.isSuccessful) {
                     refreshAll()
                 } else {
-                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error eliminando sesión"
-                    refreshSessions()
+                    try { api.deleteSession(sessionId) } catch (_: Exception) {}
+                    refreshAll()
                 }
             } catch (e: Exception) {
-                _error.value = e.message ?: "Error eliminando sesión"
+                try { api.deleteSession(sessionId) } catch (_: Exception) {}
                 refreshSessions()
             }
         }
@@ -510,27 +476,43 @@ class MainViewModel : ViewModel() {
     suspend fun createSessionForProject(projectId: String, title: String, providerOverride: String? = null): String? {
         return try {
             val proj = _projects.value.find { it.id == projectId }
-            // providerOverride gana: desde la lista de chats no hay proyecto asociado
-            // (projectId = ""), así que sin esto el motor caia al default del Hub.
-            val provider = providerOverride?.takeIf { it.isNotBlank() }
-                ?: proj?.provider
-                ?: "opencode"
             val effectiveProjectId = projectId.trim().ifBlank { null }
-            val sid = createSessionViaHub(title, effectiveProjectId, provider)
+            val effectiveFolder = proj?.folder ?: proj?.resolvedFolder
+            val location = if (!effectiveFolder.isNullOrBlank()) OpenCodeLocation(directory = effectiveFolder) else null
+
+            val createdSession = try {
+                openCodeApi.createSession(
+                    CreateOpenCodeSessionRequest(
+                        title = title,
+                        location = location
+                    )
+                )
+            } catch (_: Exception) {
+                null
+            }
+
+            val sid = createdSession?.id ?: createSessionViaHub(title, effectiveProjectId, providerOverride ?: proj?.provider ?: "opencode")
+
             if (sid != null) {
                 if (effectiveProjectId != null) {
-                    try { api.linkSession(effectiveProjectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider)) } catch (_: Exception) {}
+                    projectsStore.linkSessionToProject(sid, effectiveProjectId)
+                    try { api.linkSession(effectiveProjectId, LinkSessionRequest(sessionId = sid, title = title, provider = "opencode")) } catch (_: Exception) {}
                 }
-                refreshSessions(); refreshProjects()
+                projectsStore.setSessionTitle(sid, title)
+                refreshSessions()
+                refreshProjects()
             }
             sid
-        } catch (e: Exception) { _error.value = e.message; null }
+        } catch (e: Exception) {
+            _error.value = e.message
+            null
+        }
     }
 
     private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
-            val pIdStr = if (!projectId.isNullOrBlank()) "\"$projectId\"" else "null"
-            val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":$pIdStr,\"provider\":\"$provider\"}"
+            val pIdStr = if (!projectId.isNullOrBlank()) f'"{projectId}"' else "null"
+            val bodyJson = "{"title":"" + title.replace(""", "\"") + "","projectId":" + pIdStr + ","provider":"" + provider + ""}"
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:8765/opencode/session")
                 .header("X-Provider", provider)
@@ -550,10 +532,7 @@ class MainViewModel : ViewModel() {
                 else -> null
             }
         } catch (e: Exception) {
-            // Antes devolvía null en silencio: el botón de nuevo chat no navegaba y el
-            // usuario no veía POR QUÉ. Ahora el motivo queda en _error, que ChatsScreen
-            // ya pinta.
-            _error.value = "No se pudo crear la sesión: ${e.message ?: e::class.simpleName}"
+            _error.value = "No se pudo crear la sesion: " + (e.message ?: e::class.simpleName)
             null
         }
     }

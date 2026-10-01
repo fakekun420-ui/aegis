@@ -2,6 +2,7 @@ package com.aegis.hub.data
 
 import android.util.Log
 import com.google.gson.Gson
+import retrofit2.Response
 
 /**
  * LA COSTURA: un solo punto por el que la app decide si habla con el Hub o con OpenCode.
