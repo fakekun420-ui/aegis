@@ -31,8 +31,7 @@ fun MainNavScreen(
     onNavigateSkillManager: () -> Unit,
     onNavigateWorkspace: () -> Unit,
     onOpenProject: (String) -> Unit,
-    onOpenSession: (String) -> Unit,
-    onOpenVoice: (String) -> Unit
+    onOpenSession: (String) -> Unit
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -138,29 +137,7 @@ fun MainNavScreen(
                     sessionId = "",
                     vm = draftVm,
                     onBack = { },
-                    // MEDIDO 2026-10-01: esto era `onVoice = { }`. El boton de auriculares
-                    // (el de "modo conversacion") no tenia a quien llamar, y como esta pantalla
-                    // va con `showTopBar = false` tampoco se ve el Switch que si lo alterna:
-                    // no habia ninguna via para activarlo. El mismo boton en AppNavHost si
-                    // navega, y por eso se cablea con el mismo criterio.
-                    onVoice = {
-                        scope.launch {
-                            // Se REUTILIZA la sesion del borrador si ya existe. Crear una a
-                            // ciegas partiria la conversacion en dos: lo que el usuario hubiera
-                            // escrito seguiria en una sesion y la voz en otra.
-                            val yaExiste = draftVm.currentSessionId.value?.takeIf { it.isNotBlank() }
-                            val destino = yaExiste ?: draftVm.createVoiceSession()?.takeIf { it.isNotBlank() }
-                            if (destino == null) {
-                                // Sin sesion NO se navega: `voice/` con id vacio no casa con la
-                                // ruta `voice/{sessionId}` y la navegacion fallaria en silencio,
-                                // que es el mismo sintoma que se esta arreglando. Aqui se dice.
-                                android.util.Log.w("OpenCodeBoot", "modo voz: no se pudo crear sesion, no se navega")
-                            } else {
-                                onOpenVoice(destino)
-                            }
-                        }
-                    },
-                    showTopBar = false
+                        showTopBar = false
                 )
             }
         }

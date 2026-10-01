@@ -11,8 +11,6 @@ import android.app.Application
 import android.os.Bundle
 import android.provider.Settings
 import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -37,10 +35,7 @@ import com.aegis.hub.ui.AppNavHost
 import com.aegis.hub.ui.NavRoutes
 import com.aegis.hub.data.AppContext
 
-class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
-    private var tts: TextToSpeech? = null
-    private var recognizer: SpeechRecognizer? = null
 
     private var systemReady by mutableStateOf(false)
     private var systemOwnership by mutableStateOf("unknown")
@@ -101,7 +96,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             window.isNavigationBarContrastEnforced = true
         }
 
-        tts = TextToSpeech(this, this)
 
         setContent {
             com.aegis.hub.ui.theme.OpenCodeCompanionTheme {
@@ -385,9 +379,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         @Volatile
         private var visibleTrackerRegistered = false
 
-        const val PREF_WAKE = com.aegis.hub.data.VoicePreferences.PREFS_NAME
-        const val KEY_WAKE_PHRASES = com.aegis.hub.data.VoicePreferences.KEY_WAKE_PHRASES
-        val DEFAULT_WAKE = com.aegis.hub.data.VoicePreferences.DEFAULT_WAKE_PHRASES
 
         // true solo mientras la Activity está visible. Lo consulta el ViewModel para
         // decidir entre avisar DENTRO del chat (primer plano) o lanzar notificación
@@ -425,71 +416,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             toast("Acceso al almacenamiento concedido: ya no hace falta root")
         }
     }
-    fun getWakePhrases(): Array<String> = com.aegis.hub.data.VoicePreferences.getWakePhrases(this)
-    fun saveWakePhrases(arr: Array<String>) = com.aegis.hub.data.VoicePreferences.saveWakePhrases(this, arr)
 
-    private var wakeRecognizer: SpeechRecognizer? = null
-    private var wakeListening = false
-    private var duplexEnabledInSession: Boolean = false
-    private fun containsWakeWord(text: String): Boolean = com.aegis.hub.data.VoicePreferences.containsWakeWord(this, text)
-    private fun isNativeOverlayVisible(): Boolean = !systemReady
-    private fun shouldWakeListen(): Boolean {
-        if (isNativeOverlayVisible()) return false
-        if (duplexEnabledInSession) return true
-        return false
-    }
-
-    @android.webkit.JavascriptInterface
-    fun onVoiceModeChanged(duplex: Boolean) {
-        duplexEnabledInSession = duplex
-        android.util.Log.i("OpenCodeWake", "onVoiceModeChanged duplex=$duplex")
-        if (duplex && !isNativeOverlayVisible()) lifecycleScope.launch { startWakeWordListener() } else if (!duplex) stopWakeWordListener()
-    }
-    fun startWakeWordListener() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) return
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
-        if (isNativeOverlayVisible()) return
-        if (!shouldWakeListen()) return
-        if (wakeListening) return
-        wakeListening = true
-        wakeRecognizer?.destroy()
-        wakeRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-            setRecognitionListener(object : android.speech.RecognitionListener {
-                override fun onReadyForSpeech(p: Bundle?) {}
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(v: Float) {}
-                override fun onBufferReceived(b: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-                override fun onError(e: Int) {
-                    wakeListening = false
-                    if (shouldWakeListen()) lifecycleScope.launch { delay(900); startWakeWordListener() }
-                }
-                override fun onResults(b: Bundle?) {
-                    val text = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
-                    if (containsWakeWord(text)) speak("Sí? Te escucho")
-                    wakeListening = false
-                    if (shouldWakeListen()) lifecycleScope.launch { delay(400); startWakeWordListener() }
-                }
-                override fun onPartialResults(b: Bundle?) {
-                    val p = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
-                    if (containsWakeWord(p)) android.util.Log.i("OpenCodeWake", "wake partial $p")
-                }
-                override fun onEvent(t: Int, b: Bundle?) {}
-            })
-        }
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-        }
-        try { wakeRecognizer?.startListening(intent) } catch (e:Exception) { wakeListening = false }
-    }
-    fun stopWakeWordListener() {
-        try { wakeRecognizer?.destroy() } catch (_:Exception) {}
-        wakeRecognizer = null
-        wakeListening = false
-    }
 
     private fun ensurePermissions(){
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED){
@@ -552,15 +479,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val i = Intent(this, CompanionService::class.java)
         if(Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
     }
-
-    override fun onInit(status: Int) {
-        if(status==TextToSpeech.SUCCESS){
-            tts?.language = Locale("es","ES")
-        }
     }
-    fun speak(text:String){ tts?.speak(text, TextToSpeech.QUEUE_ADD, null, "utt1") }
     private fun startListening(){ /* Phase 1: native STT handled via Compose voice FAB later */ }
     private fun toast(m:String)= Toast.makeText(this,m,Toast.LENGTH_SHORT).show()
-    override fun onDestroy() { tts?.shutdown(); recognizer?.destroy(); stopWakeWordListener(); super.onDestroy() }
+    // MEDIDO 2026-10-01: antes apagaba aqui el motor de voz y el reconocedor de esta Activity.
+    // Los dos se han ido con el wake word: `speak()` era su unico consumidor y el reconocedor solo
+    // lo usaba el listener de la frase de activacion. Sin ellos, `onDestroy` no tiene nada que
+    // liberar. La transcripcion vive en ChatScreen, que gestiona su propio ciclo de vida.
+    override fun onDestroy() { super.onDestroy() }
     private fun String.lowercase():String = this.lowercase(Locale.ROOT)
 }

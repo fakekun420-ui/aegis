@@ -13,7 +13,8 @@ import android.content.Context.MODE_PRIVATE
  * `mutableMapOf` dentro del ViewModel muere con él, así que no recuerda nada: es
  * precisamente el bug ("el modelo se me cambia al salir y volver a entrar").
  *
- * Se replica el patrón de `VoicePreferences` (SharedPreferences) en vez de inventar
+ * Se replica el patrón de preferencias por SharedPreferences que usaba `VoicePreferences`
+ * (retirado con el modo de voz el 2026-10-01),Preferences) en vez de inventar
  * otro mecanismo, porque es lo único que ya usa la app para preferencias.
  *
  * Modelo de datos:

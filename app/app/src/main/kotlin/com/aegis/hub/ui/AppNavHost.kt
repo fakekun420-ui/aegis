@@ -65,10 +65,6 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                 onNavigateWorkspace = { navController.navigate("workspace") },
                 onOpenProject = { id -> navController.navigate("project/$id") },
                 onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) },
-                // El boton de auriculares de la pantalla principal. MEDIDO 2026-10-01: MainNavScreen
-                // lo recibia como lambda vacio y no hacia nada. Se cablea al MISMO destino que
-                // el otro ChatScreen, para que el mismo boton se comporte igual en las dos.
-                onOpenVoice = { sid -> navController.navigate(NavRoutes.voice(sid)) }
             )
         }
         composable(NavRoutes.PROJECTS) {
@@ -205,7 +201,6 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                 sessionId = sid,
                 vm = chatVm,
                 onBack = { navController.popBackStack() },
-                onVoice = { navController.navigate(NavRoutes.voice(sid)) },
                 sessionProvider = prov,
                 onNavigateToSession = { nuevo ->
                     // Cambiar de motor abre una sesión nueva: se quita la actual del
@@ -215,20 +210,6 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                     navController.popBackStack(NavRoutes.CHATS, inclusive = false)
                     navController.navigate(NavRoutes.chat(nuevo)) {
                         launchSingleTop = true
-                    }
-                }
-            )
-        }
-        composable(NavRoutes.VOICE, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { backStack ->
-            val sid = backStack.arguments?.getString("sessionId") ?: ""
-            val chatVm: ChatViewModel = viewModel(key = "chat_$sid")
-            VoiceConversationScreen(
-                sessionId = sid,
-                vm = chatVm,
-                onBack = { navController.popBackStack() },
-                onNewSession = { newSid ->
-                    navController.navigate(NavRoutes.voice(newSid)) {
-                        popUpTo(NavRoutes.voice(sid)) { inclusive = true }
                     }
                 }
             )

@@ -72,7 +72,6 @@ fun ChatScreen(
     sessionId: String,
     vm: ChatViewModel,
     onBack: () -> Unit,
-    onVoice: () -> Unit = {},
     showTopBar: Boolean = sessionId.isNotBlank(),
     sessionProvider: String? = null,
     // Al cambiar de motor se crea una sesión nueva (el proveedor es el prefijo del
@@ -236,24 +235,17 @@ fun ChatScreen(
 
     fun queueTts(text: String) { colaTts.enqueue(text) }
 
-    // Voice: STT push-to-talk + duplex toggle
+    // Voice: STT push-to-talk. El modo de duplex salio el 2026-10-01: el microfono
+    // transcribe una vez y ya no se reabre solo.
     // UX-04/A-5: rememberSaveable — el modo de conversación y el borrador del mensaje
     // sobreviven a rotación/muerte del proceso (con remember puro se perdían al girar).
-    var duplex by rememberSaveable { mutableStateOf(false) }
+    var leerEnVoz by rememberSaveable { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     var sttError by remember { mutableStateOf<String?>(null) }
     var composerText by rememberSaveable { mutableStateOf("") }
     var attachedFiles by remember { mutableStateOf<List<AttachedFile>>(emptyList()) }
-    var duplexJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
 
-    // BUG-15 (wake word): shouldWakeListen() de MainActivity lee duplexEnabledInSession, que
-    // SOLO se actualiza desde onVoiceModeChanged(). En el código nativo nadie la llamaba
-    // (solo la referenciaba el WebView histórico) y devolvía siempre false. Aquí se notifica
-    // el modo de voz real: al alternar Conversación/Texto y al salir de la pantalla (false
-    // detiene el listener de wake word).
-    LaunchedEffect(duplex) { resolveMainActivity(context)?.onVoiceModeChanged(duplex) }
-    DisposableEffect(Unit) { onDispose { resolveMainActivity(context)?.onVoiceModeChanged(false) } }
 
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
@@ -296,32 +288,18 @@ fun ChatScreen(
         } else true
     }
 
-    // Duplex debounced restart: mirrors app.js scheduleDuplexRestart
-    fun scheduleDuplexRestart(delayMs: Long = 500) {
-        if (!duplex) return
-        if (speaking) return
-        if (listening) return
-        duplexJob?.cancel()
-        duplexJob = scope.launch {
-            delay(delayMs)
-            if (duplex && !listening && !speaking) startListeningInternal(
-                context, recognizer, { recognizer = it }, { listening = it }, { sttError = it },
-                duplex, scope, ::scheduleDuplexRestart,
-                onResult = { t ->
-                    composerText = if (composerText.isBlank()) t else "$composerText $t"
-                },
-                onQueueTts = {}
-            )
-        }
-    }
 
-    // When assistant message arrives and duplex on, speak it (with debounce)
-    LaunchedEffect(messages) {
+    // Cuando llega un mensaje del asistente, leerlo en voz si el interruptor esta activo.
+    // MEDIDO 2026-10-01: esto era `if (duplex && ...)`. Al quitar el modo duplex el TTS
+    // se quedaba sin disparador, asi que ahora depende del interruptor del compositor.
+    LaunchedEffect(messages, leerEnVoz) {
+        if (!leerEnVoz) return@LaunchedEffect
         val last = messages.lastOrNull()
-        if (duplex && last != null && last.role == "assistant") {
+        if (last != null && last.role == "assistant") {
             val stripped = last.strippedText().ifBlank { last.text }
             if (stripped.isNotBlank()) queueTts(stripped)
         }
+    }
     }
 
     Scaffold(
@@ -365,15 +343,6 @@ fun ChatScreen(
                     },
                     navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-                    actions = {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics { contentDescription = if (duplex) "Conversación" else "Texto" }) {
-                            Text(if (duplex) "Conversación" else "Texto", style = MaterialTheme.typography.labelSmall)
-                            Switch(checked = duplex, onCheckedChange = { v ->
-                                duplex = v
-                                if (v) scheduleDuplexRestart(600) else { duplexJob?.cancel(); try { recognizer?.cancel() } catch (_: Exception) {}; listening = false }
-                            }, modifier = Modifier.semantics { contentDescription = if (duplex) "Modo Conversación activado" else "Modo Texto activado" })
-                        }
-                    }
                 )
             }
         },
@@ -410,9 +379,7 @@ fun ChatScreen(
                         } else {
                             startListeningInternal(
                                 context, recognizer, { recognizer = it }, { listening = it }, { sttError = it },
-                                duplex, scope, ::scheduleDuplexRestart,
                                 onResult = { t -> composerText = if (composerText.isBlank()) t else "$composerText $t" },
-                                onQueueTts = {}
                             )
                         }
                     },
@@ -421,7 +388,8 @@ fun ChatScreen(
                     onRemoveFile = { idx -> attachedFiles = attachedFiles.filterIndexed { i, _ -> i != idx } },
                     selectedModelName = modelDisplayName,
                     onSelectModelClick = { showModelSheet = true },
-                    onVoice = onVoice,
+                    leerEnVoz = leerEnVoz,
+                    onToggleLeerEnVoz = { leerEnVoz = !leerEnVoz },
                     agentMode = agentMode,
                     agentIsPrimary = agents.firstOrNull { it.name == agentMode }?.mode != "subagent",
                     onSelectAgentClick = { showAgentSheet = true }
@@ -1290,7 +1258,8 @@ private fun UnifiedFloatingComposer(
     onRemoveFile: (Int) -> Unit,
     selectedModelName: String,
     onSelectModelClick: () -> Unit,
-    onVoice: () -> Unit,
+    leerEnVoz: Boolean,
+    onToggleLeerEnVoz: () -> Unit,
     agentMode: String = "build",
     // Antes `onToggleAgentMode`, un interruptor de dos. Ahora el boton ABRE una hoja con
     // los agentes que OpenCode publica de verdad (MEDIDO 2026-09-30: 40, no 2).
@@ -1468,16 +1437,24 @@ private fun UnifiedFloatingComposer(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     IconButton(
-                        onClick = onVoice,
+                        // MEDIDO 2026-10-01: aqui estaba el boton de auriculares, que abria
+                        // la pantalla de voz. Se sustituye por el interruptor de LEER EN VOZ:
+                        // el TTS antes solo se disparaba dentro del modo duplex, asi que
+                        // quitar ese modo lo dejaba muerto. Conectado aqui: pulsado lee la
+                        // respuesta; sin pulsar, callado y sin coste.
+                        onClick = onToggleLeerEnVoz,
                         modifier = Modifier
-                            // A-5: target táctil mínimo 48dp (antes 36dp)
                             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                            .semantics { contentDescription = "Modo voz" }
+                            .semantics {
+                                contentDescription = if (leerEnVoz) "Dejar de leer en voz alta"
+                                else "Leer la respuesta en voz alta"
+                            }
                     ) {
                         Icon(
-                            Icons.Outlined.Headphones,
-                            contentDescription = "Modo voz",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            if (leerEnVoz) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
+                            contentDescription = null,
+                            tint = if (leerEnVoz) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -1594,11 +1571,7 @@ private fun startListeningInternal(
     setRecognizer: (SpeechRecognizer?) -> Unit,
     setListening: (Boolean) -> Unit,
     setError: (String?) -> Unit,
-    duplex: Boolean,
-    scope: kotlinx.coroutines.CoroutineScope,
-    scheduleRestart: (Long) -> Unit,
-    onResult: (String) -> Unit,
-    onQueueTts: (String) -> Unit
+    onResult: (String) -> Unit
 ) {
     if (!SpeechRecognizer.isRecognitionAvailable(context)) { setError("STT no disponible"); return }
     try { current?.cancel() } catch (_: Exception) {}
@@ -1616,7 +1589,6 @@ private fun startListeningInternal(
             setListening(false)
             val msg = when (e) { SpeechRecognizer.ERROR_NO_MATCH -> "no-speech"; else -> "STT error $e" }
             setError(msg)
-            if (duplex) scheduleRestart(if (e == SpeechRecognizer.ERROR_NO_MATCH) 1200 else 1500)
         }
         override fun onResults(b: android.os.Bundle?) {
             setListening(false)
@@ -1624,7 +1596,6 @@ private fun startListeningInternal(
             val text = list?.firstOrNull()?.trim() ?: finalsBuf.trim()
             finalsBuf = ""
             if (text.isNotBlank()) onResult(text)
-            if (duplex) scheduleRestart(700)
         }
         override fun onPartialResults(b: android.os.Bundle?) {
             val p = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
@@ -1648,19 +1619,6 @@ private fun isTechnicalSessionId(t: String?): Boolean {
     if (s.startsWith("ses_") || s.startsWith("companion:") || s.startsWith("local_")) return true
     if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
     return false
-}
-
-/**
- * A-5 (BUG-15): resuelve la MainActivity anfitriona atravesando los ContextWrapper,
- * para notificarle el cambio de modo de voz (onVoiceModeChanged) desde Compose.
- */
-private fun resolveMainActivity(context: android.content.Context): com.aegis.hub.MainActivity? {
-    var ctx: android.content.Context? = context
-    while (ctx is android.content.ContextWrapper) {
-        if (ctx is com.aegis.hub.MainActivity) return ctx
-        ctx = ctx.baseContext
-    }
-    return null
 }
 
 /**
