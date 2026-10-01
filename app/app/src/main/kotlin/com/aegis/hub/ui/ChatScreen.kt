@@ -216,24 +216,25 @@ fun ChatScreen(
 
     // Voice: TTS
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
-    var ttsQueue by remember { mutableStateOf<List<String>>(emptyList()) }
     var speaking by remember { mutableStateOf(false) }
+    // MEDIDO 2026-10-01: una sola cola para las dos pantallas. Antes cada una tenia la suya
+    // y las dos hablaban SOLO la primera frase, con QUEUE_FLUSH. El porque del fallo esta
+    // en TtsQueue.kt, que es donde queda documentado y no aqui otra vez.
+    val colaTts = remember { TtsQueue { speaking = it } }
 
     DisposableEffect(Unit) {
         var engine: TextToSpeech? = null
         engine = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) engine?.language = Locale("es", "ES")
         }
+        // El listener de fin de locucion se instala aqui, UNA vez y sobre el motor: es lo que
+        // hace que `speaking` lo baje el sintetizador y no una estimacion de un instante.
+        colaTts.attach(engine)
         tts = engine
         onDispose { try { engine?.shutdown() } catch (_: Exception) {} }
     }
 
-    fun queueTts(text: String) {
-        if (text.isBlank()) return
-        val chunks = text.split(Regex("(?<=[.!?¡¿\\n])\\s+")).filter { it.isNotBlank() }
-        ttsQueue = ttsQueue + chunks
-        if (!speaking) drainTts(tts, ttsQueue, { speaking = it }, { ttsQueue = it })
-    }
+    fun queueTts(text: String) { colaTts.enqueue(text) }
 
     // Voice: STT push-to-talk + duplex toggle
     // UX-04/A-5: rememberSaveable — el modo de conversación y el borrador del mensaje
@@ -1586,20 +1587,6 @@ private fun uriToAttachedFile(context: android.content.Context, uri: Uri): Attac
 }
 
 // ---- helpers ----
-
-private fun drainTts(tts: TextToSpeech?, queue: List<String>, setSpeaking: (Boolean) -> Unit, setQueue: (List<String>) -> Unit) {
-    if (queue.isEmpty()) { setSpeaking(false); return }
-    val t = tts ?: return
-    setSpeaking(true)
-    val chunk = queue.first()
-    setQueue(queue.drop(1))
-    try {
-        t.speak(chunk, TextToSpeech.QUEUE_FLUSH, null, "utt")
-        // Naive: mark done after estimate; real onUtteranceProgressListener is more precise but stub here
-        // For Phase 2 we don't block; next chunk will be queued when duplex restart fires
-        setSpeaking(false)
-    } catch (_: Exception) { setSpeaking(false) }
-}
 
 private fun startListeningInternal(
     context: android.content.Context,

@@ -63,8 +63,10 @@ fun VoiceConversationScreen(
     DisposableEffect(Unit) { onDispose { resolveMainActivity(context)?.onVoiceModeChanged(false) } }
 
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
-    var ttsQueue by remember { mutableStateOf<List<String>>(emptyList()) }
     var speaking by remember { mutableStateOf(false) }
+    // Una sola cola, compartida con ChatScreen. Ver TtsQueue.kt: antes cada pantalla tenia la
+    // suya y las dos hablaban solo la primera frase, cancelando la anterior.
+    val colaTts = remember { TtsQueue { speaking = it } }
     var listening by remember { mutableStateOf(false) }
     var sttError by remember { mutableStateOf<String?>(null) }
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
@@ -93,6 +95,9 @@ fun VoiceConversationScreen(
                 engine?.setSpeechRate(VoicePreferences.getSpeechRate(context))
             }
         }
+        // El listener de fin de locucion, instalado UNA vez sobre el motor: es lo que hace
+        // que `speaking` lo baje el sintetizador y no una estimacion de un instante.
+        colaTts.attach(engine)
         tts = engine
         onDispose { try { engine?.shutdown() } catch (_: Exception) {} }
     }
@@ -103,19 +108,7 @@ fun VoiceConversationScreen(
         tts?.language = if (locale.language.isNotEmpty()) locale else Locale("es", "ES")
     }
 
-    fun queueTts(text: String) {
-        if (text.isBlank()) return
-        val chunks = text.split(Regex("(?<=[.!?¡¿\\n])\\s+")).filter { it.isNotBlank() }
-        ttsQueue = ttsQueue + chunks
-        if (!speaking) {
-            val t = tts ?: return
-            speaking = true
-            val chunk = ttsQueue.firstOrNull() ?: return
-            ttsQueue = ttsQueue.drop(1)
-            try { t.speak(chunk, TextToSpeech.QUEUE_FLUSH, null, "utt") } catch (_: Exception) {}
-            speaking = false
-        }
-    }
+    fun queueTts(text: String) { colaTts.enqueue(text) }
 
     fun scheduleDuplexRestart(delayMs: Long = 500) {
         if (speaking || listening) return
