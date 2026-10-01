@@ -57,12 +57,26 @@ object EventStream {
 
                 val reader = BufferedReader(InputStreamReader(responseBody.byteStream(), Charsets.UTF_8))
                 try {
-                    var line: String?
-                    while (coroutineContext.isActive && reader.readLine().also { line = it } != null) {
-                        val items = parser.processLine(line ?: "", targetSessionId)
+                    // MEDIDO 2026-10-01: aqui habia
+                    //   var line: String?
+                    //   while (activo && reader.readLine().also { line = it } != null) { ... line ... }
+                    // y la CI lo rechazo con `Variable 'line' must be initialized` (EventStream.kt:62).
+                    //
+                    // La causa no es que falte el tipo: es que Kotlin NO puede probar la ASIGNACION
+                    // cuando ocurre dentro de la condicion del while, en un `.also{}` anidado. El
+                    // compilador es conservador a proposito, asi que declara la variable sin
+                    // inicializar y se niega a leerla.
+                    //
+                    // Ademas el `line ?: ""` de dentro era una mentira util: si `line` fuera null el
+                    // bucle no habria entrado, luego la rama nunca se daba. Con el bucle normal, el
+                    // `line != null` del while hace el smart cast y la rama se va sola.
+                    var line: String? = reader.readLine()
+                    while (coroutineContext.isActive && line != null) {
+                        val items = parser.processLine(line, targetSessionId)
                         for (item in items) {
                             emit(item)
                         }
+                        line = reader.readLine()
                     }
                 } finally {
                     try { reader.close() } catch (_: Exception) {}
@@ -202,9 +216,14 @@ class EventStreamParser(
     fun processRawStream(rawSseStream: String, targetSessionId: String): List<OpenCodeStreamItem> {
         val reader = BufferedReader(StringReader(rawSseStream))
         val result = mutableListOf<OpenCodeStreamItem>()
-        var line: String?
-        while (reader.readLine().also { line = it } != null) {
-            result.addAll(processLine(line ?: "", targetSessionId))
+        // MEDIDO 2026-10-01: este bucle era IGUAL al de la conexion real —`var line: String?` sin
+        // inicializar y la asignacion dentro de un `.also{}` en la condicion del while. La CI solo
+        // cazo el primero; este lo.compile en un test JVM y por eso se libra. Mismo patron, misma
+        // fragilidad, y el `?: ""` es la misma mentira: si line fuera null el bucle no entraria.
+        var line: String? = reader.readLine()
+        while (line != null) {
+            result.addAll(processLine(line, targetSessionId))
+            line = reader.readLine()
         }
         return result
     }
