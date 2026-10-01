@@ -50,14 +50,20 @@ if [ -f "$LOCK" ]; then
   if [ -n "$OLDPID" ] && kill -0 "$OLDPID" 2>/dev/null; then
     MYPID="$$"
     if [ "$OLDPID" != "$MYPID" ]; then
-      echo "[keepalive] ya corre pid $OLDPID — no lanzo duplicado (yo $MYPID)" | tee -a "$LOG"
+      echo "[keepalive] ya corre pid $OLDPID — no lanzo duplicado (yo $MYPID)" >> "$LOG"
       exit 0
     fi
   fi
 fi
 echo $$ > "$LOCK"
 
-echo "[keepalive] loop iniciado $(date) pid $$ — intervalo ${INTERVAL}s" | tee -a "$HUB_DIR/keepalive.log"
+# `>>` y NO `| tee`. MEDIDO en keepalive.log: "loop iniciado" salia DOS veces seguidas,
+# identicas. La causa es que la linea 40 (el wrapper) ya redirige el stdout del daemon a
+# $LOG, de modo que `echo` escribe ahi Y `tee` vuelve a escribir ahi. En el log que es el
+# diagnostico de un watchdog, una linea duplicada por arranque enseña a ignorar la que
+# importa. La de la linea 27 (FATAL) SI conserva su `tee`: esa corre en el padre, antes del
+# wrapper, y ahi el `tee` es lo que hace que el mensaje llegue a los dos destinos.
+echo "[keepalive] loop iniciado $(date) pid $$ — intervalo ${INTERVAL}s" >> "$LOG"
 trap '' HUP
 trap 'echo "[keepalive] trap exit" >> "$LOG"; rm -f "$LOCK"; exit 0' TERM INT
 
