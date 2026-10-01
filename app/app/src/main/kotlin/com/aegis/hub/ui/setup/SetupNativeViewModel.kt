@@ -11,6 +11,7 @@ import com.aegis.hub.data.SetupCheckStatus
 import com.aegis.hub.data.SetupNative
 import com.aegis.hub.ui.viewmodel.BootstrapUiState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,8 +31,29 @@ import kotlinx.coroutines.launch
  * - Maneja verificación final y smoke test directo contra OpenCode.
  */
 class SetupNativeViewModel(
-    private val setupNative: SetupNative = SetupNative()
+    private val setupNative: SetupNative = SetupNative(),
+    /**
+     * MEDIDO 2026-10-01: scope inyectable, y no por gusto.
+     *
+     * Este ViewModel hace `stateFlow.collect { ... }` en su `init`, y eso **nunca termina**. En
+     * un `runTest`, el cuerpo del test espera a que TODAS las corrutinas del ambito terminen, luego
+     * el test se queda esperando un collect eterno y nunca sale. CI lo ENSENO asi: el primer test
+     * de `runFinalCheck` fallaba con `AssertionError` en su PROPIA declaracion (no en un assert)
+     * y el segundo con `UncaughtExceptionsBeforeTest`. Los dos son la misma causa, y ningun
+     * asercion estaba mal.
+     *
+     * Sin inyeccion no hay arreglo possible en el test: `viewModelScope` es final y no se puede
+     * sustituir. Con ella, el test le pasa un `backgroundScope`, que es la via que da la biblioteca
+     * para corrutinas que deben vivir mas que el test y se cancelan al terminar.
+     *
+     * No lo comparo con una teoria, lo comparo con `BootstrapViewModel`, cuyo test SI pasa: ese
+     * NO hace `collect` en su init, luego no deja ninguna corrutina colgando. La diferencia entre
+     * los dos ficheros explica los dos resultados.
+     */
+    scopeOverride: CoroutineScope? = null
 ) : ViewModel() {
+
+    private val scope: CoroutineScope = scopeOverride ?: viewModelScope
 
     private val _ui = MutableStateFlow(
         BootstrapUiState(
@@ -49,8 +71,11 @@ class SetupNativeViewModel(
 
     init {
         refresh()
-        // Escuchar cambios de estado reactivos desde SetupNative
-        viewModelScope.launch {
+        // Escuchar cambios de estado reactivos desde SetupNative.
+        // MEDIDO 2026-10-01: este era `viewModelScope.launch` y es el que hacia fallar los tests.
+        // Un `collect` no termina nunca, asi que en un `runTest` sin scope inyectable se colgaba.
+        // Ver la nota del constructor, que explica el fallo con su sintoma exacto de CI.
+        scope.launch {
             setupNative.stateFlow.collect { st ->
                 _ui.value = _ui.value.copy(
                     state = st,
@@ -86,7 +111,7 @@ class SetupNativeViewModel(
 
     private fun startPolling() {
         if (pollJob?.isActive == true) return
-        pollJob = viewModelScope.launch {
+        pollJob = scope.launch {
             while (isActive && _ui.value.state?.phaseOrIdle == BootstrapPhase.running) {
                 delay(1000)
                 refresh(silent = true)
@@ -96,7 +121,7 @@ class SetupNativeViewModel(
 
     fun start() {
         actionJob?.cancel()
-        actionJob = viewModelScope.launch {
+        actionJob = scope.launch {
             _ui.value = _ui.value.copy(loading = true, actionError = null)
             val result = setupNative.runBootstrap(resume = true)
             if (result.isFailure) {
@@ -111,7 +136,7 @@ class SetupNativeViewModel(
 
     fun retry(stepId: String) {
         actionJob?.cancel()
-        actionJob = viewModelScope.launch {
+        actionJob = scope.launch {
             _ui.value = _ui.value.copy(loading = true, actionError = null)
             val result = setupNative.runBootstrap(resume = true, retryStepId = stepId)
             if (result.isFailure) {
@@ -131,7 +156,7 @@ class SetupNativeViewModel(
 
     fun runFinalCheck() {
         finalCheckJob?.cancel()
-        finalCheckJob = viewModelScope.launch {
+        finalCheckJob = scope.launch {
             _ui.value = _ui.value.copy(finalCheckLoading = true, actionError = null)
             try {
                 val resp = setupNative.runFinalCheck()
@@ -156,7 +181,7 @@ class SetupNativeViewModel(
 
     fun runSmokeTest() {
         smokeJob?.cancel()
-        smokeJob = viewModelScope.launch {
+        smokeJob = scope.launch {
             _ui.value = _ui.value.copy(smokeLoading = true, smokeReply = null, smokeError = null)
             try {
                 val resp = setupNative.runSmokeTest()

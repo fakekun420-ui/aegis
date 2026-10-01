@@ -10,6 +10,7 @@ import com.aegis.hub.data.SetupNative
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -42,9 +43,32 @@ class SetupNativeViewModelTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
 
+    /**
+     * MEDIDO 2026-10-01, y la razon de este `backgroundScope` — CI: los DOS tests de
+     * `runFinalCheck` fallaban, el primero con `AssertionError` en su PROPIA declaración (línea 73)
+     * y el segundo con `UncaughtExceptionsBeforeTest`. Ninguno de los dos es una aserción mala.
+     *
+     * La causa: el `init` del ViewModel hace `setupNative.stateFlow.collect { ... }`, y eso
+     * **nunca termina**. En un `runTest`, el cuerpo del test espera a que TODAS las corrutinas
+     * del ambito terminen, luego `runTest` se queda esperando un `collect` eterno y nunca sale.
+     * De ahi el error en la declaración en vez de en un assert: el test no llego a comprobar nada.
+     *
+     * Y no lo comparo con una teoria, lo comparo con el ViewModel VIEJO, cuyo test SI pasa:
+     * `BootstrapViewModel` NO hace `collect` en su init, luego no deja ninguna corrutina
+     * colgando. La diferencia entre los dos ficheros explica los dos resultados sin inventar nada.
+     *
+     * `backgroundScope` es el mecanismo que da la biblioteca para esto: corrutinas que se espera
+     * que vivan mas que el test y que se cancelan al terminar. El `collect` del init se pasa ahi,
+     * y el test pasa a poder afirmar lo que afirma.
+     *
+     * El `UnconfinedTestDispatcher` es la mitad complementaria: ejecuta las corrutinas del Main
+     * de inmediato, para que `ui.value` este poblado cuando se llega al assert sin necesitar un
+     * `runCurrent` extra. `StandardTestDispatcher` —el que usa el `@Before`— las deja en cola, y
+     * en un objeto que se construye en una sola linea no hay quien las drene.
+     */
     @Before
     fun setUp() {
-        Dispatchers.setMain(StandardTestDispatcher())
+        Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
     @After
@@ -58,7 +82,7 @@ class SetupNativeViewModelTest {
         val bsNative = BootstrapNative(stateFile = stateFile)
         val setupNative = SetupNative(bootstrapNative = bsNative)
 
-        val vm = SetupNativeViewModel(setupNative)
+        val vm = SetupNativeViewModel(setupNative, backgroundScope)
         val ui = vm.ui.value
 
         assertTrue(ui.hubReachable)
@@ -87,7 +111,7 @@ class SetupNativeViewModelTest {
             }
         )
 
-        val vm = SetupNativeViewModel(setupNative)
+        val vm = SetupNativeViewModel(setupNative, backgroundScope)
         runCurrent()
 
         vm.runFinalCheck()
@@ -114,7 +138,7 @@ class SetupNativeViewModelTest {
             httpProbe = { _, _ -> SetupNative.HttpProbeResult(ok = true, statusCode = 200, body = "") }
         )
 
-        val vm = SetupNativeViewModel(setupNative)
+        val vm = SetupNativeViewModel(setupNative, backgroundScope)
         runCurrent()
 
         vm.runFinalCheck()
@@ -134,7 +158,7 @@ class SetupNativeViewModelTest {
         val bsNative = BootstrapNative(stateFile = stateFile)
         val setupNative = SetupNative(bootstrapNative = bsNative)
 
-        val vm = SetupNativeViewModel(setupNative)
+        val vm = SetupNativeViewModel(setupNative, backgroundScope)
         runCurrent()
 
         val onClearedMethod = ViewModel::class.java.getDeclaredMethod("onCleared")
