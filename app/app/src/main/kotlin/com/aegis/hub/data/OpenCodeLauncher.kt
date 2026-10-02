@@ -1,6 +1,7 @@
 package com.aegis.hub.data
 
 import android.util.Log
+import com.aegis.hub.RootShell
 
 /**
  * MEDIDO 2026-10-02: esto es lo que hace que el APK se sostenga solo DESPUES de un reinicio.
@@ -152,7 +153,7 @@ object OpenCodeLauncher {
      *   [Credentials] y no de este objeto.
      */
     fun asegurarAbierto(
-        comprobarSiVivo: () -> Boolean,
+        comprobarSiVivo: suspend () -> Boolean,
         shell: (String, Long) -> RootShell.Result = RootShell::exec
     ): Resultado {
         if (comprobarSiVivo()) {
