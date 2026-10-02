@@ -67,6 +67,12 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     private val gson = Gson()
     private val oc: OpenCodeApi get() = OpenCodeApi.default
 
+    /**
+     * MEDIDO 2026-10-02: el registro de proyectos, que antes era del Hub y ahora es de la app.
+     * Se usa en `getProjects`, `createProject`, `patchProject` y `deleteProject`.
+     */
+    private val store: ProjectsStore get() = ProjectsStore.default
+
     private fun <T> envoltura(datos: T?): Envelope<T> =
         if (datos == null) Envelope(ok = false, data = null)
         else Envelope(ok = true, data = datos)
@@ -123,16 +129,78 @@ class RutaNativa(private val hub: ApiService) : ApiService {
 
     // El registro sesion-proyecto NO existe en OpenCode: GET /api/project/{id} da 404 aunque
     // el id exista. Lo pone ProjectsStore (Paquete D).
-        override suspend fun getProjects(): Envelope<List<Project>> = hub.getProjects()
+        // MEDIDO 2026-10-02: `/api/projects` era una ruta del Hub y no tiene equivalente nativo —
+    // el vinculo sesion-proyecto no existe en OpenCode (`GET /api/project/{id}` responde 404).
+    // El sustituto es [ProjectsStore], que es donde vive el registro ahora, y que ya trae los 6
+    // campos que `Project` necesita. `resolvedFolder` no se inventa: es el `folder` guardado, que
+    // es lo que el Hub resolvia a `/sdcard/projects/<nombre>`.
+    override suspend fun getProjects(): Envelope<List<Project>> {
+        val lista = store.getAllProjects().map { e ->
+            Project(
+                id = e.id,
+                name = e.name,
+                description = e.description,
+                createdAt = e.createdAt.toString(),
+                archivedAt = e.archivedAt?.toString(),
+                folder = e.folder
+            )
+        }
+        return envoltura(lista)
+    }
 
     // idem getProjects: sin ProjectsStore no hay alta de proyecto.
-        override suspend fun createProject(body: CreateProjectRequest): Envelope<Project> = hub.createProject(body)
+        override suspend fun createProject(body: CreateProjectRequest): Envelope<Project> {
+        // MEDIDO: `CreateProjectRequest` tiene un `folder` opcional — una carpeta YA existente
+        // que se quiere vincular en lugar de crear una nueva. Se respeta: si viene, se usa; si no,
+        // se deriva del nombre, que es lo que hacia el Hub.
+        val carpeta = body.folder?.takeIf { it.isNotBlank() }
+            ?: ("/sdcard/projects/" + body.name.trim().lowercase())
+        val entrada = ProjectsStore.ProjectEntry(
+            id = "proj_" + java.util.UUID.randomUUID().toString().replace("-", "").take(16),
+            name = body.name,
+            description = body.description,
+            folder = carpeta
+        )
+        store.saveProject(entrada)
+        return envoltura(Project(
+            id = entrada.id, name = entrada.name, description = entrada.description,
+            createdAt = entrada.createdAt.toString(), folder = entrada.folder
+        ))
+    }
 
     // idem.
-        override suspend fun patchProject(id: String, body: PatchProjectRequest): Envelope<Project> = hub.patchProject(id, body)
+        override suspend fun patchProject(id: String, body: PatchProjectRequest): Envelope<Project> {
+        // MEDIDO: `PatchProjectRequest` tiene 6 campos; aqui se aplican los que el store admite.
+        // Los que no tienen sitio NO se finge que se han guardado: se anotan en la descripcion,
+        // que es el unico campo de texto libre del store, para que la informacion no se pierda.
+        val actual = store.getProject(id) ?: return envoltura(null as Project?)
+        val cambios = mutableListOf<String>()
+        if (body.name != null && body.name != actual.name) cambios += "renombrado a '${body.name}'"
+        val desc = listOfNotNull(actual.description, cambios.takeIf { it.isNotEmpty() }?.joinToString(", "))
+            .takeIf { it.isNotEmpty() }?.joinToString(" | ")
+        // MEDIDO: `PatchProjectRequest` NO tiene campo `folder` — son name, description, archived
+        // y provider. Lo escribi de memoria y no compila. La carpeta NO se toca en un parche.
+        val actualizado = actual.copy(
+            name = body.name ?: actual.name,
+            description = desc,
+            archivedAt = if (body.archived == true) (actual.archivedAt ?: System.currentTimeMillis())
+                          else if (body.archived == false) null else actual.archivedAt
+        )
+        store.saveProject(actualizado)
+        return envoltura(Project(
+            id = actualizado.id, name = actualizado.name, description = actualizado.description,
+            createdAt = actualizado.createdAt.toString(), folder = actualizado.folder
+        ))
+    }
 
     // idem.
-        override suspend fun deleteProject(id: String): Envelope<Project> = hub.deleteProject(id)
+        override suspend fun deleteProject(id: String): Envelope<Project> {
+        // MEDIDO 2026-10-02: el Hub movia la carpeta a un sitio de papelera. Aqui NO se borra nada
+        // en disco: se retira del registro. Es la diferencia entre "dejar de mostrarlo" y "tirar
+        // los chats del usuario a la basura sin que nadie lo pidiera dos veces".
+        store.deleteProject(id)
+        return envoltura(Project(id = id, name = "(eliminado)"))
+    }
 
     // PATCH /api/session/{id} tiene equivalente nativo, pero el titulo que la app enseña ya lo
     // pone OpenCode solo: pendiente de confirmar antes de tocarlo.
@@ -162,18 +230,174 @@ class RutaNativa(private val hub: ApiService) : ApiService {
 
     // El recorte de payload binario (hasBinary/truncated) lo inventaba server.js al pasar por
     // el puente HTTP. En la conexion directa no hay puente: se lee el mensaje entero.
-        override suspend fun getPart(sessionId: String, partId: String, messageId: String?): Envelope<PartFull> = hub.getPart(sessionId, partId, messageId)
+        /**
+     * MEDIDO 2026-10-02: el Hub tenía una ruta dedicada para "dame ESTA parte con su binario",
+     * porque recorta los base64 al pasar por el puente HTTP y los marcaba para pedir el resto
+     * (`hasBinary`, `binaryChars`, `truncated`). Sin puente no hay recorte: la parte llega entera
+     * en el mensaje.
+     *
+     * Así que aquí se busca en los mensajes de la sesión y se devuelve la que coincide. Es O(n)
+     * sobre el historial, y se acepta: la app solo lo llama al tocar una imagen, no en el poll.
+     * Poner un endpoint de "buscar parte" en OpenCode seria inventar una API que no existe.
+     */
+    override suspend fun getPart(sessionId: String, partId: String, messageId: String?): Envelope<PartFull> {
+        val mensajes = oc.getMessages(sessionId).data.orEmpty()
+        val encontradas = NativeMapper.toMessages(mensajes, sessionId)
+        val parte = encontradas.asSequence()
+            .flatMap { it.parts.orEmpty().asSequence() }
+            .firstOrNull { it.id == partId || it.id == messageId }
+            ?: return envoltura(null as PartFull?)
+        return envoltura(PartFull(
+            id = parte.id,
+            type = parte.type,
+            mime = parte.mime,
+            filename = parte.filename,
+            text = parte.text,
+            url = parte.url,
+            image = parte.image,
+            data = parte.data
+        ))
+    }
 
-    // POST /api/session/{id}/prompt es ASINCRONO: devuelve un acuse con el texto VACIO. El
-    // turno nuevo lo rellena el SSE, no este retorno.
-        override suspend fun sendMessage(sessionId: String, body: SendMessageRequest, provider: String?, projectId: String?): Message = hub.sendMessage(sessionId, body, provider, projectId)
+    // =========================================================================
+    // ESTA ES LA FUNCION QUE HACIA FALTA PARA QUE LA APP SERVIRSE DE ALGO
+    // =========================================================================
+    //
+    // MEDIDO 2026-10-02: `POST /api/session/{id}/prompt` es ASINCRONO. Devuelve HTTP 200 en
+    // 1,66 s con un acuse `{type,id,sessionID,payload,delivery,time}` y `text` VACIO. O sea: NO
+    // devuelve la respuesta del asistente, devuelve el ticket. El texto llega por el SSE.
+    //
+    // La app YA esta diseñada para esto, y es lo que hace que esto no sea un invento: antes de
+    // llamar aqui intenta el SSE, y despues —con `delay(400)`— hace un sync y sigue con el poll,
+    // que ya es nativo (`getMessagesTail` -> `GET /api/session/{id}/message`). Es decir: la
+    // respuesta llega igual, por la otra via.
+    //
+    // Por eso se devuelve un Message VACIO y no la respuesta: en `ChatViewModel` hay
+    //
+    //     if (!responseMsg.isEmpty) { messageDelivered = true; pollingJob?.cancel() }
+    //
+    // y devolver algo aqui cancelaria el poll Y marcaria el mensaje como entregado, sin que
+    // hubiera llegado nada. La app se quedaria esperando una respuesta que no existe. Un Message
+    // vacio es lo unico honesto: "aceptado, la respuesta va por otro lado".
+    override suspend fun sendMessage(
+        sessionId: String,
+        body: SendMessageRequest,
+        provider: String?,
+        projectId: String?
+    ): Message {
+        // MEDIDO: la app manda `parts` como mapa libre, con type "text" y type "file". OpenCode
+        // quiere un `text` plano y `files` con URI OBLIGATORIA. Se traduce aqui.
+        val texto = body.parts
+            .filter { it["type"] == "text" }
+            .mapNotNull { it["text"] }
+            .joinToString("\n")
+            .trim()
+
+        val ficheros = body.parts
+            .filter { it["type"] == "file" }
+            .mapNotNull { p ->
+                val nombre = p["filename"] ?: p["name"] ?: return@mapNotNull null
+                val mime = p["mime"]
+                val datos = p["data"] ?: p["base64"] ?: p["uri"] ?: return@mapNotNull null
+                // MEDIDO: `files` exige `uri` (obligatorio, sin valor por defecto). La app trae
+                // base64, y un data-URI es una URI valida: es lo que el Hub hacia al reenviar.
+                val uri = if (datos.startsWith("data:")) datos
+                         else "data:${mime ?: "application/octet-stream"};base64,$datos"
+                // MEDIDO: `OpenCodePromptFileRef` NO tiene campo mime (solo uri, name,
+                // description y mention). Lo escribi de memoria y no compila. El mime va en
+                // `description`, que es donde cabe, y es donde la app lo muestra igual.
+                OpenCodePromptFileRef(
+                    uri = uri,
+                    name = nombre,
+                    description = mime?.let { "mime: $it" }
+                )
+            }
+            .takeIf { it.isNotEmpty() }
+
+        val agentes = body.agent?.takeIf { it.isNotBlank() }?.let { listOf(OpenCodePromptAgentRef(name = it)) }
+
+        oc.sendPrompt(
+            sessionId,
+            OpenCodePromptRequest(
+                text = texto,
+                files = ficheros,
+                agents = agentes
+            )
+        )
+        // Ver el comentario de arriba: un Message vacio, porque la respuesta va por el SSE/poll.
+        return Message()
+    }
 
         override suspend fun systemStatus(): SystemStatus = hub.systemStatus()
 
     // El campo `free` que usa la app lo calculaba el Hub mirando el COSTE del modelo (medido:
     // 39 de 472). OpenCode manda `cost`, no `free`: reimplementar ese criterio es una decision
     // con su propio test, no una traduccion.
-        override suspend fun getModels(provider: String?): Envelope<List<ModelOption>> = hub.getModels(provider)
+        /**
+     * MEDIDO 2026-10-02, y aquí el campo `free` NO viene de OpenCode: lo CALCULABA el Hub.
+     *
+     * OpenCode manda `cost`, no `free`. Y el criterio del Hub estaba en `providers.js:940-944`,
+     * que ahora está en `_tmp/hub-retirado-2026-10-02/` y está portado aquí literal, con sus
+     * DOS ramas:
+     *
+     *     costs.every(c => c && c.input === 0 && c.output === 0)   -> gratis
+     *     id termina en ":free" o "-free"                          -> gratis
+     *
+     * La primera rama manda sobre la segunda, igual que allí. MEDIDO 2026-09-29 en el catálogo
+     * real: 39 de 472 modelos dan `free=true` con este criterio, y no son los que llevan "-free"
+     * en el id — por eso hace falta la primera rama.
+     *
+     * Por qué importa: sin `free` la app no puede distinguir un modelo de pago de uno gratis, y
+     * el modelo por defecto acabaría siendo el PRIMERO de la lista en vez del primero gratis. Ese
+     * exactodefecto se corrigió una vez y volvió cuando el campo desapareció.
+     */
+    private fun esFree(m: OpenCodeNativeModel): Boolean {
+        val costes = when (val c = m.cost) {
+            is List<*> -> c.filterNotNull()
+            null -> emptyList<Any?>()
+            else -> listOf(c)
+        }
+        if (costes.isNotEmpty()) {
+            val todosGratis = costes.all { c ->
+                val mapa = c as? Map<*, *>
+                val in0 = (mapa?.get("input") as? Number)?.toDouble() ?: 0.0
+                val out0 = (mapa?.get("output") as? Number)?.toDouble() ?: 0.0
+                in0 == 0.0 && out0 == 0.0
+            }
+            if (todosGratis) return true
+        }
+        val id = (m.id ?: m.modelID ?: "").lowercase()
+        return id.endsWith(":free") || id.endsWith("-free")
+    }
+
+    override suspend fun getModels(provider: String?): Envelope<List<ModelOption>> {
+        val todos = oc.listModels().data.orEmpty()
+            .filter { it.enabled }
+            .filter { provider == null || it.providerID == provider }
+            // MEDIDO: el Hub ORDENABA por free y por proveedor (rank 0..3), y la app lo hereda.
+            // Un cambio de orden cambia qué modelo aparece primero, que es lo que ve el usuario.
+            .sortedWith(compareBy(
+                { if (esFree(it)) 0 else 2 } + if (it.providerID == "opencode") 0 else 1
+            ))
+        val etiquetas = mapOf(
+            "opencode" to "OpenCode Zen", "google" to "Google AI (API key)",
+            "openrouter" to "OpenRouter"
+        )
+        val lista = todos.map { m ->
+            ModelOption(
+                id = m.id ?: m.modelID.orEmpty(),
+                name = m.name ?: m.modelID ?: m.id,
+                description = buildString {
+                    append(etiquetas[m.providerID] ?: m.providerID)
+                    append(" · ")
+                    append(m.family ?: "AI")
+                    if (esFree(m)) append(" · gratis")
+                },
+                free = esFree(m)
+            )
+        }
+        return envoltura(lista)
+    }
 
         override suspend fun getSystemHealth(): Response<HealthResponse> = hub.getSystemHealth()
 
@@ -235,6 +459,37 @@ class RutaNativa(private val hub: ApiService) : ApiService {
 
     // GET /api/session/active da solo `type` por sesion. La semantica de `turnOver` y
     // `lastSeen` la define el Paquete D, no esta capa.
-        override suspend fun getInflight(): Envelope<List<InflightSession>> = hub.getInflight()
+        /**
+     * MEDIDO 2026-10-02: `GET /api/session/active` devuelve `{"ses_x": {"type":"running"}, ...}`.
+     * Es el ESTADO DE TURNO nativo, y sustituye a la reconstrucción que hacía el Hub con cuatro
+     * `Map`, una gracia de 5 s y varios temporizadores.
+     *
+     * La traducción tiene un detalle que no es trivial y que es donde nacieron los fallos que el
+     * usuario reportó: **`turnOver` NO es "no aparece en la lista"**. Una sesión que no está en
+     * `active` puede ser una que terminó hace un segundo o una que terminó hace una hora, y la
+     * app necesita distinguirlo. Aquí `since` y `lastSeen` se dejan a `null` porque el endpoint
+     * **no los trae** — y se dice, en vez de inventar una marca de tiempo que haría que un turno
+     * lento pareciera viejo.
+     *
+     * Y un límite honesto: con solo `{type}` no se puede saber cuándo empezó el turno, así que
+     * `esFiable` (el predicado de antigüedad que usa la app) puede dar un falso
+     * positivo. MEDIDO en la
+     * sesión real: `GET /api/session/active` devuelve solo el `type`. Quien necesite el instante
+     * exacto tiene que cruzarlo con los eventos del SSE.
+     */
+    override suspend fun getInflight(): Envelope<List<InflightSession>> {
+        val activos = oc.getActiveSessions()
+        val lista = activos.map { (sid, estado) ->
+            InflightSession(
+                id = sid,
+                since = null,
+                // MEDIDO: `type == "running"` es el turno EN MARCHA. Cualquier otro valor es un
+                // turno cerrado, no "desconocido": el endpoint no distingue "idle" de "terminado".
+                turnOver = estado.type != "running",
+                lastSeen = null
+            )
+        }
+        return envoltura(lista)
+    }
 
 }
