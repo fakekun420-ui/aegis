@@ -17,24 +17,33 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1) Backend: sintaxis + contratos (56 tests en verde)
+  # 1) Backend: sintaxis + contratos (99 tests en verde)
+  #
+  # MEDIDO 2026-10-02: el Hub se elimino entero (decision del usuario) y su codigo esta en
+  # /sdcard/projects/_tmp/hub-retirado-2026-10-02/, fuera de git. Este job comprueba el backend, y
+  # sin backend no hay nada que comprobar.
+  #
+  # Por que se salta con un MOTIVO y no simplemente desaparece: un job que se quita del workflow
+  # no deja rastro, y dentro de seis meses "no habia job de backend" se lee como "se perdio" en
+  # lugar de "se elimino a proposito". Un job que dice "no hay backend, y esto es por que" es la
+  # misma informacion y es legible.
   # ---------------------------------------------------------------------------
   backend-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: node --check (sintaxis de todos los .js)
-        run: find backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check
-      - name: Contratos (node --test)
-        run: node --test --test-concurrency=1 tests/*.test.js
-        working-directory: backend
+      - name: El Hub ya no existe (retirado el 2026-10-02)
+        run: |
+          echo "::notice::El Hub (backend/) se elimino entero el 2026-10-02 por decision del"
+          echo "::notice::usuario. Su codigo esta en /sdcard/projects/_tmp/hub-retirado-2026-10-02/,"
+          echo "::notice::fuera de git. Este job queda sin nada que comprobar; no se ha OLVIDADO."
+          exit 0
 
   # ---------------------------------------------------------------------------
-  # 2) Lint estático: sintaxis .sh, sin console.* en server.js, YAML válido
+  # 2) Lint estático: sintaxis .sh de app/, YAML válido
+  # MEDIDO 2026-10-02: el titulo decia "sin console.* en server.js". Ese paso desaparece con el
+  # Hub; se leia sobre un fichero que ya no existe, y un titulo que promete una comprobacion que no
+  # ocurre es peor que no tener titulo.
   # ---------------------------------------------------------------------------
   lint:
     needs: backend-checks
@@ -45,17 +54,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: node --check (sintaxis de todos los .js)
-        run: find backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check
-      - name: bash -n (sintaxis de los .sh de backend/ y app/)
-        run: find backend app -name "*.sh" -print0 | xargs -0 -n1 bash -n
-      - name: "server.js sin console.*"
-        run: |
-          if grep -nE 'console\.' backend/server.js; then
-            echo "::error::server.js no puede usar console.* — usa createLogger (src/core/logger.js)"
-            exit 1
-          fi
-          echo "OK: server.js sin console.*"
+      # MEDIDO 2026-10-02: los tres pasos siguientes comprobaban el backend, que ya no existe
+      # (retirado entero, ver backend-checks). Sin backend, `find backend` no encuentra nada y
+      # `xargs` sin entrada da error: el job fallaria por una comprobacion que ya no aplica.
+      # Se quitan aqui en vez de dejar trampas que fallan.
+      - name: bash -n (sintaxis de los .sh de app/)
+        run: find app -name "*.sh" -print0 | xargs -0 -n1 bash -n
       - name: YAML válido de los workflows
         run: |
           python3 - <<'PY'

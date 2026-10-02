@@ -144,4 +144,69 @@ class BootstrapNativeTest {
         assertNull(readBack.lastError)
         assertTrue(stateFile.exists())
     }
+
+    // =========================================================================
+    // MEDIDO 2026-10-02: migración de `backend/bootstrap-state.json` a `app/state/`.
+    // Se añadió esa migración al RETIRAR el Hub, y no tenía ni un test. La razón
+    // de que me preocupe: el fichero real tiene `phase: "done"` con fecha de
+    // 2026-09, y sin migración el usuario entraría al instalador de cero aunque lo
+    // tuviera terminado months atrás. Un fallo aquí no se ve: se ve como "el
+    // instalador se reinició solo", que es el peor síntoma posible.
+    // =========================================================================
+
+    @Test
+    fun `migracion copia el estado heredado cuando el nuevo no existe`() {
+        val heredado = tempFolder.newFile("legacy-state.json")
+        heredado.writeText(
+            """{"phase":"done","currentStepId":null,"startedAt":"2026-09-15T10:00:00Z",
+               "updatedAt":"2026-09-15T10:05:00Z","lastError":null,"steps":[]}"""
+        )
+        val destino = File(tempFolder.root, "nuevo/state.json")
+        val manager = BootstrapNative(stateFile = destino)
+        manager.migrateLegacyFrom(heredado)
+
+        assertTrue(destino.exists())
+        val leido = BootstrapNative(stateFile = destino).readState()
+        assertEquals(BootstrapPhase.done, leido.phaseOrIdle)
+        assertEquals("2026-09-15T10:00:00Z", leido.startedAt)
+    }
+
+    @Test
+    fun `migracion NO pisa un estado nuevo que ya existe (CONTRASTE del anterior)`() {
+        // Sin este contraejemplo, el test anterior pasa aunque la migracion escriba siempre.
+        val heredado = tempFolder.newFile("legacy2.json")
+        heredado.writeText("""{"phase":"done","startedAt":"2026-09-15T10:00:00Z","steps":[]}""")
+        val destino = tempFolder.newFile("nuevo-state.json")
+        destino.writeText("""{"phase":"running","currentStepId":"node","steps":[]}""")
+
+        val manager = BootstrapNative(stateFile = destino)
+        assertNull(manager.migrateLegacyFrom(heredado))
+
+        val leido = manager.readState()
+        assertEquals(BootstrapPhase.running, leido.phaseOrIdle)
+        assertEquals("node", leido.currentStepId)
+    }
+
+    @Test
+    fun `migracion devuelve null si el heredado no existe, y readState no falla`() {
+        val destino = File(tempFolder.root, "no-existe/state.json")
+        val manager = BootstrapNative(stateFile = destino)
+        assertNull(manager.migrateLegacyFrom(File(tempFolder.root, "tampoco.json")))
+        // Y lo importante: una migración fallida NO rompe la app.
+        assertNotNull(manager.readState())
+    }
+
+    @Test
+    fun `migracion devuelve null si el heredado esta vacio o corrupto`() {
+        val vacio = tempFolder.newFile("vacio.json")
+        vacio.writeText("")
+        val destino = File(tempFolder.root, "x/state.json")
+        val manager = BootstrapNative(stateFile = destino)
+        assertNull(manager.migrateLegacyFrom(vacio))
+
+        val corrupto = tempFolder.newFile("corrupto.json")
+        corrupto.writeText("{ esto no es json")
+        assertNull(manager.migrateLegacyFrom(corrupto))
+        assertNotNull(manager.readState())
+    }
 }

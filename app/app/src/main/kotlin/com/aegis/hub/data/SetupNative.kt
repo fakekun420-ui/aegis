@@ -350,7 +350,11 @@ class SetupNative(
             "/usr/bin/node",
             "/data/local/ubuntu/usr/bin/node",
             "/data/data/com.termux/files/usr/bin/node",
-            "/sdcard/projects/Aegis/backend/node.bin"
+            // MEDIDO 2026-10-02: aquí estaba `backend/node.bin`, un binario que el Hub
+            // descargaba dentro de su propio directorio. Ese directorio ya no existe (el Hub se
+            // retiró el 2026-10-02), así que esta ruta estaba GARANTIZADA a fallar: no costaba
+            // nada visible, pero sí una llamada a `su` por sondeo del instalador.
+            "/sdcard/projects/Aegis/app/state/node.bin"
         )
 
         for (path in nodePaths) {

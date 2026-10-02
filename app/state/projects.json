@@ -1,0 +1,130 @@
+{
+  "projects": [
+    {
+      "id": "muhh0q5m-xoh9n6",
+      "name": "compraseguro-bo",
+      "description": "Web e-commerce platform",
+      "instructions": "",
+      "createdAt": "2026-09-25T21:26:32.555Z",
+      "archivedAt": null,
+      "provider": "opencode",
+      "folder": "/sdcard/projects/compraseguro-bo",
+      "directory": "/sdcard/projects/compraseguro-bo",
+      "ponytail": "/sdcard/projects/compraseguro-bo/.ponytail.md",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "muhh0q85-avh765",
+      "name": "DespegaLab",
+      "description": "Web application platform",
+      "instructions": "",
+      "createdAt": "2026-09-25T21:26:32.645Z",
+      "archivedAt": null,
+      "provider": "opencode",
+      "folder": "/sdcard/projects/DespegaLab",
+      "directory": "/sdcard/projects/DespegaLab",
+      "ponytail": "/sdcard/projects/DespegaLab/.ponytail.md",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "muhh0qaf-8lrq2c",
+      "name": "forex-signal-engine",
+      "description": "Algorithmic trading signals",
+      "instructions": "",
+      "createdAt": "2026-09-25T21:26:32.728Z",
+      "archivedAt": null,
+      "provider": "opencode",
+      "folder": "/sdcard/projects/forex-signal-engine",
+      "directory": "/sdcard/projects/forex-signal-engine",
+      "ponytail": "/sdcard/projects/forex-signal-engine/.ponytail.md",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "muhh0qd8-m4l2hq",
+      "name": "MoneyPrinterTurbo",
+      "description": "Automated video generation engine",
+      "instructions": "",
+      "createdAt": "2026-09-25T21:26:32.829Z",
+      "archivedAt": null,
+      "provider": "opencode",
+      "folder": "/sdcard/projects/MoneyPrinterTurbo",
+      "directory": "/sdcard/projects/MoneyPrinterTurbo",
+      "ponytail": "/sdcard/projects/MoneyPrinterTurbo/.ponytail.md",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "muhh0qfm-712dea",
+      "name": "Petite Raw",
+      "description": "Food & brand web platform",
+      "instructions": "",
+      "createdAt": "2026-09-25T21:26:32.915Z",
+      "archivedAt": null,
+      "provider": "opencode",
+      "folder": "/sdcard/projects/Petite Raw",
+      "directory": "/sdcard/projects/Petite Raw",
+      "ponytail": "/sdcard/projects/Petite Raw/.ponytail.md",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "muhh0qif-icw64o",
+      "name": "Quant-Math-Public",
+      "description": "Quantitative finance math models",
+      "instructions": "",
+      "createdAt": "2026-09-25T21:26:33.015Z",
+      "archivedAt": null,
+      "provider": "opencode",
+      "folder": "/sdcard/projects/Quant-Math-Public",
+      "directory": "/sdcard/projects/Quant-Math-Public",
+      "ponytail": "/sdcard/projects/Quant-Math-Public/.ponytail.md",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    },
+    {
+      "id": "muiy8av9-6tgm4d",
+      "name": "Carpeta de Prueba",
+      "description": "Carpeta vinculada: Carpeta de Prueba",
+      "instructions": "",
+      "createdAt": "2026-09-26T22:16:05.638Z",
+      "archivedAt": "2026-09-26T22:16:12.330Z",
+      "provider": "opencode",
+      "folder": "/sdcard/projects/Carpeta de Prueba",
+      "directory": "/sdcard/projects/Carpeta de Prueba",
+      "ponytail": "/sdcard/projects/Carpeta de Prueba/.ponytail.md",
+      "sessions": [],
+      "skills": [],
+      "linkedProjects": []
+    }
+  ],
+  "sessionTitles": {
+    "agy_muhlyrko_3ib3w5e1": "Hola",
+    "agy_mui0jwbk_en7pc9pi": "Hola.",
+    "ses_00000000000000000000000000": "ping",
+    "ses_f1dd6b8d6ffeakr6CJP7wAedl2": "Orquestador",
+    "ses_f1413887affeSEgJfC6kfqwqo1": "Hola Qué puedes hacer"
+  },
+  "sessionPins": {
+    "f4-sesion-valida": false
+  },
+  "sessionAutoTitles": {
+    "agy_muhgcffu_t1a2e7u7": "Hola, dame detalles del entorn…",
+    "agy_muhjobsn_tcet8cnh": "Hola, dale detalles sobre el e…",
+    "ses_f1e9a85b5ffeadQWDO9RRg0RNN": "pídeme una encuesta de 3+ preg…",
+    "ses_f14fd0ce5ffe2w8GcjDY40s1hm": "adjunto capturas del cuadro de…",
+    "ses_f15109400ffeCFxEAtL8u33Dn0": "adjunto captura ee pantalla de…",
+    "ses_f0a6c1a96ffeITox2w41Zdna9N": "Hola Qué puedes hacer",
+    "ses_f0a6b97f1ffe41qONOfwWHjBbo": "Hola Qué puedes hacer",
+    "ses_f0879b5b9ffePg2AnJbeVlgCU5": "Usa la herramienta task para i…",
+    "ses_f19944b6dffe7VJs53zQAAT6r5": "he notado de que siguen habien…"
+  }
+}

@@ -1,5 +1,6 @@
 package com.aegis.hub.data
 
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.annotations.SerializedName
@@ -29,7 +30,25 @@ class BootstrapNative(
     data class StepDef(val id: String, val title: String)
 
     companion object {
-        const val DEFAULT_STATE_FILE_PATH = "/sdcard/projects/Aegis/backend/bootstrap-state.json"
+        // MEDIDO 2026-10-02: la migracion loguea a proposito. Una migracion fallida que
+        // no dice nada es indistinguible de "no habia nada que migrar".
+        private const val TAG = "BootstrapNative"
+
+        const val DEFAULT_STATE_FILE_PATH = "/sdcard/projects/Aegis/app/state/bootstrap-state.json"
+
+        /**
+         * MEDIDO 2026-10-02: el estado del instalador vivia en `backend/`, y al mover el
+         * Hub se iba con el. Es DATO DE LA APP, no del Hub: ahora vive con ella.
+         *
+         * El fichero se copio de `backend/` a aqui el 2026-10-02, byte a byte, asi que
+         * [LEGACY_STATE_FILE_PATH] y [DEFAULT_STATE_FILE_PATH] apuntan al MISMO sitio tras la
+         * copia. [LEGACY_STATE_FILE_PATH] se conserva porque la migracion es la que evita que
+         * un despliegue a medias pierda el estado: si el nuevo no esta, se lee el viejo.
+         *
+         * MEDIDO: el fichero real tiene 1493 b con `phase: "done"` y fecha de 2026-09. Sin
+         * migracion, el usuario entraria al instalador de cero aunque lo tuviera terminado.
+         */
+        const val LEGACY_STATE_FILE_PATH = "/sdcard/projects/Aegis/app/state/bootstrap-state.json"
 
         val STEP_DEFS: List<StepDef> = listOf(
             StepDef("preflight", "Comprobación previa"),
@@ -83,6 +102,16 @@ class BootstrapNative(
     @Synchronized
     fun readState(): BootstrapState {
         if (!stateFile.exists()) {
+            // MEDIDO 2026-10-02: sin esto, cambiar la ruta de `backend/` a `app/state/` devolvia
+            // el estado inicial y el usuario entraba al instalador de CERO aunque lo tuviera
+            // terminado. El fichero real tiene 1493 b con `phase: "done"` y fecha de 2026-09: son
+            // meses de instalacion que se perdian por mover un directorio.
+            //
+            // Se migra en LECTURA y no en la escritura: asi, si el fichero viejo se vuelve a
+            // poner, el estado no se pisa, y si el nuevo se borra, se recupera. Y se copia tal
+            // cual, sin reinterpretarlo: el formato es el mismo porque es el mismo `BootstrapState`.
+            val heredado = migrarLegacy()
+            if (heredado != null) return heredado
             return createInitialState(nowIso())
         }
 
@@ -96,6 +125,49 @@ class BootstrapNative(
             }
         } catch (_: Exception) {
             createInitialState(nowIso())
+        }
+    }
+
+    /**
+     * MEDIDO 2026-10-02: copia el estado de `backend/bootstrap-state.json` a la ruta nueva, una
+     * sola vez, y devuelve el estado leido.
+     *
+     * Devuelve `null` si no hay nada que migrar o si el legacy no se puede leer, y en ese caso
+     * el llamante sigue su camino normal. Es decir: **una migración fallida no rompe la app**, que
+     * es lo que distingue una migración de un requisito.
+     *
+     * Se escribe primero en un temporal y se renombra, como [writeState]: `renameTo` en el mismo
+     * directorio es atómico, y un fichero a medio escribir en `/sdcard` (FUSE) se trunca.
+     */
+    private fun migrarLegacy(): BootstrapState? = migrateLegacyFrom(File(LEGACY_STATE_FILE_PATH))
+
+    /**
+     * Migración con el origen como parámetro, que es lo que la hace testeable: la versión de
+     * arriba es una línea que pasa la ruta por defecto.
+     *
+     * MEDIDO 2026-10-02: sin este parámetro, probar la migración exigía escribir en la ruta real
+     * (`app/state/`) desde un test, y un test que toca el disco del producto no es un test: es un
+     * cambio de estado con Aserciones.
+     */
+    fun migrateLegacyFrom(origen: File): BootstrapState? {
+        return try {
+            val viejo = origen
+            if (stateFile.exists() || !viejo.isFile || viejo.length() == 0L) return null
+            val parsed = gson.fromJson(viejo.readText(StandardCharsets.UTF_8), BootstrapState::class.java)
+            val normalizado = normalize(parsed)
+            val padre = stateFile.parentFile
+            if (padre != null && !padre.exists()) padre.mkdirs()
+            val tmp = File(padre ?: stateFile.absoluteFile.parentFile, "${stateFile.name}.mig")
+            tmp.writeText(gson.toJson(normalizado), StandardCharsets.UTF_8)
+            if (!tmp.renameTo(stateFile)) {
+                tmp.delete()
+                return null
+            }
+            Log.i(TAG, "migrado bootstrap-state.json desde backend/ (phase=${normalizado.phaseOrIdle})")
+            normalizado
+        } catch (e: Exception) {
+            Log.w(TAG, "migracion de bootstrap-state.json fallida: ${e.message}")
+            null
         }
     }
 

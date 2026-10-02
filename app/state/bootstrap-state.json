@@ -1,0 +1,54 @@
+{
+  "phase": "done",
+  "currentStepId": null,
+  "startedAt": "2026-09-25T16:29:38.056Z",
+  "updatedAt": "2026-09-29T07:49:41.799Z",
+  "lastError": null,
+  "steps": [
+    {
+      "id": "preflight",
+      "title": "Comprobación previa",
+      "status": "skipped",
+      "rollback": "none",
+      "progress": 100,
+      "detail": "privilegios: euid=0 (root) · arquitectura arm64 · espacio: 94.1GB libres en /sdcard/projects/Aegis/backend · red: HEAD https://registry.npmjs.org/ -> 200",
+      "error": null
+    },
+    {
+      "id": "ubuntu",
+      "title": "Ubuntu (chroot/proot)",
+      "status": "skipped",
+      "rollback": "none",
+      "progress": 100,
+      "detail": "rootfs local: Ubuntu 24.04.4 LTS (ID=ubuntu) — el hub corre dentro de Ubuntu/Debian",
+      "error": null
+    },
+    {
+      "id": "node",
+      "title": "Node.js",
+      "status": "skipped",
+      "rollback": "none",
+      "progress": 100,
+      "detail": "Node v24.21.0 ejecutable en /usr/bin/node",
+      "error": null
+    },
+    {
+      "id": "opencode",
+      "title": "OpenCode",
+      "status": "skipped",
+      "rollback": "none",
+      "progress": 100,
+      "detail": "OpenCode opencode v2.0.14 en /usr/local/bin/opencode",
+      "error": null
+    },
+    {
+      "id": "skills",
+      "title": "Skills y plugins",
+      "status": "skipped",
+      "rollback": "none",
+      "progress": 100,
+      "detail": "skills del manifiesto instalados 1/1: graphify (disco: graphify)",
+      "error": null
+    }
+  ]
+}

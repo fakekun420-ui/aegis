@@ -8,10 +8,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!-- ===== Almacenamiento: para dejar de usar root =====
-         Sin esto, con el almacenamiento con ámbito de Android 11+, la app NO puede leer
-         /sdcard/projects/Aegis/backend/.aegis_token por ninguna vía que no sea root, y
-         paraConseguirlo hacía `su -c cat` en cada petición (la caché duraba 2 s y los
-         polls son de 1,5 s): un prompt de root cada 1,5 segundos.
+         MEDIDO 2026-10-02: esto hablaba de `backend/.aegis_token`, el secreto compartido con el
+         Hub. Sin Hub no hay a quien autenticarle: ese fichero ya no existe, y con el la razon
+         original de este permiso.
+         PERO el permiso SE QUEDA, y hay que decir por que, porque quitarlo sin medir seria lo
+         contrario: la app lee y escribe en /sdcard/projects/ (estado del instalador en
+         app/state/, registro de proyectos, adjuntos de los chats) y con el almacenamiento con
+         ambito de Android 11+ no llega sin MANAGE_EXTERNAL_STORAGE. Lo que se quito fue el
+         uso de ROOT para leer un fichero; el acceso al almacenamiento se sigue necesitando.
          MANAGE_EXTERNAL_STORAGE es el permiso que realmente da acceso a todo
          /sdcard. NO se concede con un diálogo normal: hay que abrir Ajustes →
          "Acceso a todos los archivos", y por eso la app lanza ese intent explícitamente

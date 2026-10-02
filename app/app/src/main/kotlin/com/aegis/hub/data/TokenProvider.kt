@@ -27,6 +27,25 @@ import kotlinx.coroutines.withContext
  */
 object TokenProvider {
     private const val TAG = "AegisToken"
+
+    /**
+     * MEDIDO 2026-10-02: esta ruta ya no existe. El Hub se retiró entero y `.aegis_token` era el
+     * secreto COMPARTIDO con él — sin Hub no hay a quién autenticarle, así que el fichero no se
+     * migró y no se puede migrar: no tiene consumidor.
+     *
+     * Por qué esta clase sigue aquí, entonces: `ApiClient` la usa, y `ApiClient` es el destino de
+     * las 49 funciones que la costura aún delega en el Hub. Sus peticiones ya fallan —el puerto
+     * 8765 no escucha— pero fallan con token o sin él. Quitar el token no arregla ninguna.
+     *
+     * OJO al efecto secundario, y es lo que hay que saber antes de tocar esto: al no existir el
+     * fichero, `fetchToken` cae por la rama de root y **registra un aviso que pide conceder
+     * "Acceso a todos los archivos"**. Ese aviso describe un problema que ya no tiene solución
+     * desde aquí, porque el fichero no está. Es ruido, no un fallo.
+     *
+     * Lo que autentica a la app contra OpenCode es otra cosa: la contraseña de `serve`, que vive
+     * en `/root/.local/state/opencode/service.json` y lee [Credentials]. Son dos mecanismos
+     * distintos, y confundirlos es como se acaba buscando el token viejo cuando el nuevo falla.
+     */
     private const val TOKEN_FILE = "/sdcard/projects/Aegis/backend/.aegis_token"
     // 60 s en vez de 2 s. El token no cambia en la práctica: se invalida explícitamente
     // ante 401/403 y al hacer logout, así que una caché corta solo servía para gastar

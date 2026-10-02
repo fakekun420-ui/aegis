@@ -215,8 +215,16 @@ class ProjectsStore(
 
     companion object {
         private const val TAG = "ProjectsStore"
-        const val DEFAULT_STORE_PATH = "/sdcard/projects/Aegis/backend/projects-store.json"
-        const val DEFAULT_LEGACY_PATH = "/sdcard/projects/Aegis/backend/projects.json"
+        const val DEFAULT_STORE_PATH = "/sdcard/projects/Aegis/app/state/projects-store.json"
+        /**
+         * MEDIDO 2026-10-02: apuntaba a `backend/projects.json`, y al mover el Hub se iba el
+         * ORIGEN de la migracion — o sea, los 27 proyectos se perdian sin ruido. Ahora el
+         * legacy esta junto al store, en `app/state/`, y el fichero se copio ahi.
+         *
+         * El formato NO cambia: es el mismo que leia antes, y por eso la migracion lo
+         * interpreta sin transformacion.
+         */
+        const val DEFAULT_LEGACY_PATH = "/sdcard/projects/Aegis/app/state/projects.json"
 
         val default: ProjectsStore by lazy {
             ProjectsStore()
