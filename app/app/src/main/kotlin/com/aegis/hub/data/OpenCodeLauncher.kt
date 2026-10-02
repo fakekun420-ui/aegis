@@ -62,17 +62,23 @@ object OpenCodeLauncher {
     /**
      * MEDIDO, por orden de probabilidad, de donde sale el binario de verdad:
      *
-     *  - La ruta RELATIVA al chroot, que es como la ve el proceso cuando corre dentro. Es la que
-     *    devuelve `/proc/<pid>/exe` del opencode que esta corriendo (medido).
      *  - `/usr/local/bin/opencode`, que es un symlink DENTRO del chroot a
-     *    `/data/data/com.termux/files/usr/bin/opencode` — MEDIDO: **ese destino no existe**, o
-     *    sea que el symlink esta ROTO. Se deja en la lista por si alguien lo arregla, y no se
-     *    fia de el.
-     *  - Los de `node_modules/opencode-ai` y `@opencode/cli`, que es donde estuvo antes.
+     *    `/data/data/com.termux/files/usr/bin/opencode`. MEDIDO DENTRO del chroot: **funciona**
+     *    (control negativo: `test -x /no/existe/opencode` no devuelve OK, o sea que la sonda no
+     *    da OK por defecto).
+     *  - La ruta RELATIVA al chroot, que es la que devuelve `/proc/<pid>/exe` del opencode que
+     *    esta corriendo, recortada del prefijo `/data/local/ubuntu/`.
+     *  - La misma ruta en `node_modules/opencode-ai`, que es donde estuvo antes.
      *
-     * MEDIDO que el symlink roto es una trampa: invocarlo da un error de bun que no parece un
-     * "no existe", asi que sin esta lista el instalador diria "no encuentro OpenCode" con el
-     * fichero delante de sus ojos.
+     * ## MEDIDO Y CORREGIDO: el symlink NO esta roto, y yo dije que si
+     *
+     * Escribi que `/usr/local/bin/opencode` era un symlink ROTO porque desde el HOST,
+     * `ls /data/data/com.termux/files/usr/bin/opencode` dice "No such file or directory". Es
+     * verdad desde ahi, y da igual: **el symlink se resuelve DENTRO del chroot**, donde ese camino
+     * si existe. Dentro, `test -x /usr/local/bin/opencode` devuelve OK.
+     *
+     * Es el mismo error que el del namespace, por segunda vez: **medir una ruta desde donde no se
+     * usa**. Un symlink es relativo a quien lo resuelve, y solo lo resuelve quien va a ejecutarlo.
      */
     private val RUTAS_BINARIO = listOf(
         "/data/data/com.termux/files/usr/lib/node_modules/@opencode/cli/bin/opencode.exe",
@@ -125,7 +131,7 @@ object OpenCodeLauncher {
         for (ruta in RUTAS_BINARIO) {
             // Se prueba DENTRO del chroot, que es donde se va a ejecutar. Comprobarlo en el host
             // daria un falso positivo: el fichero existe pero su interprete no.
-            val r = shell("chroot $CHROOT test -x '$ruta' && echo OK", 3000)
+            val r = shell("chroot $CHROOT /bin/sh -c 'test -x \"$ruta\" && echo OK'", 3000)
             if (r.code == 0 && r.stdout.contains("OK")) return ruta
         }
         return null
@@ -141,7 +147,7 @@ object OpenCodeLauncher {
                 Log.w(TAG, "montarChroot: '$cmd' devolvio ${r.code}: ${r.stderr.take(120)}")
             }
         }
-        val r = shell("grep -c \" $CHROOT/\" /proc/mounts", 3000)
+        val r = shell("grep -c \"$CHROOT/\" /proc/mounts", 3000)
         return r
     }
 
