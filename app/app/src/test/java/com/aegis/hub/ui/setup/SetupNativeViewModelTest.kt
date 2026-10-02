@@ -76,6 +76,32 @@ class SetupNativeViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /**
+     * MEDIDO 2026-10-02: `addTearDown` NO EXISTE como metodo de una clase de test JUnit — es
+     * de `TestWatcher`, y la CI lo rechazo con `Unresolved reference 'addTearDown'` en las 4
+     * lineas. Lo escribi de memoria.
+     *
+     * Lo que SI funciona, y ya usa este repo en `BootstrapViewModelTest`, es un `@After` que
+     * invoca `onCleared()` por reflexion (es `protected` en `androidx.lifecycle.ViewModel`). Aqui
+     * hace falta una lista porque los 4 tests crean un ViewModel distinto y se registra cada uno.
+     */
+    private val vmsAbiertos = mutableListOf<SetupNativeViewModel>()
+
+    @After
+    fun cerrarViewModels() {
+        for (vm in vmsAbiertos) {
+            try {
+                val onCleared = androidx.lifecycle.ViewModel::class.java
+                    .getDeclaredMethod("onCleared")
+                onCleared.isAccessible = true
+                onCleared.invoke(vm)
+            } catch (_: Exception) {
+                // Un test que falla al cerrar no debe enmascarar el fallo real del test.
+            }
+        }
+        vmsAbiertos.clear()
+    }
+
     @Test
     fun `estado inicial refleja el snapshot persistido y hubReachable es true`() = runTest {
         val stateFile = File(tempFolder.root, "state.json")
@@ -86,12 +112,7 @@ class SetupNativeViewModelTest {
         // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo
         // en `backgroundScope` y `runTest` se queda esperandolo. Un ViewModel en un test hay
         // que cerrarlo como lo cerraria Android: llamando a `onCleared()`.
-        addTearDown {
-            val onCleared = androidx.lifecycle.ViewModel::class.java
-                .getDeclaredMethod("onCleared")
-            onCleared.isAccessible = true
-            onCleared.invoke(vm)
-        }
+        vmsAbiertos.add(vm)
         val ui = vm.ui.value
 
         assertTrue(ui.hubReachable)
@@ -124,12 +145,7 @@ class SetupNativeViewModelTest {
         // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo
         // en `backgroundScope` y `runTest` se queda esperandolo. Un ViewModel en un test hay
         // que cerrarlo como lo cerraria Android: llamando a `onCleared()`.
-        addTearDown {
-            val onCleared = androidx.lifecycle.ViewModel::class.java
-                .getDeclaredMethod("onCleared")
-            onCleared.isAccessible = true
-            onCleared.invoke(vm)
-        }
+        vmsAbiertos.add(vm)
         runCurrent()
 
         vm.runFinalCheck()
@@ -160,12 +176,7 @@ class SetupNativeViewModelTest {
         // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo
         // en `backgroundScope` y `runTest` se queda esperandolo. Un ViewModel en un test hay
         // que cerrarlo como lo cerraria Android: llamando a `onCleared()`.
-        addTearDown {
-            val onCleared = androidx.lifecycle.ViewModel::class.java
-                .getDeclaredMethod("onCleared")
-            onCleared.isAccessible = true
-            onCleared.invoke(vm)
-        }
+        vmsAbiertos.add(vm)
         runCurrent()
 
         vm.runFinalCheck()
@@ -189,12 +200,7 @@ class SetupNativeViewModelTest {
         // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo
         // en `backgroundScope` y `runTest` se queda esperandolo. Un ViewModel en un test hay
         // que cerrarlo como lo cerraria Android: llamando a `onCleared()`.
-        addTearDown {
-            val onCleared = androidx.lifecycle.ViewModel::class.java
-                .getDeclaredMethod("onCleared")
-            onCleared.isAccessible = true
-            onCleared.invoke(vm)
-        }
+        vmsAbiertos.add(vm)
         runCurrent()
 
         val onClearedMethod = ViewModel::class.java.getDeclaredMethod("onCleared")
