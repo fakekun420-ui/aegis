@@ -10,7 +10,6 @@ import com.aegis.hub.data.SetupNative
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -61,14 +60,27 @@ class SetupNativeViewModelTest {
      * que vivan mas que el test y que se cancelan al terminar. El `collect` del init se pasa ahi,
      * y el test pasa a poder afirmar lo que afirma.
      *
-     * El `UnconfinedTestDispatcher` es la mitad complementaria: ejecuta las corrutinas del Main
-     * de inmediato, para que `ui.value` este poblado cuando se llega al assert sin necesitar un
-     * `runCurrent` extra. `StandardTestDispatcher` —el que usa el `@Before`— las deja en cola, y
-     * en un objeto que se construye en una sola linea no hay quien las drene.
+     * Y el `StandardTestDispatcher` del `@Before` **no lleva `testScheduler`**, o sea que crea el
+     * suyo. MEDIDO: eso solo vale si nada depende de que el Main y el test compartan reloj, y
+     * como este ViewModel lanza trabajo a un dispatcher inyectado (ver `ioDispatcher`), el
+     * dispatcher del test es el que se pasa y el del Main es secundario.
      */
     @Before
     fun setUp() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
+        // MEDIDO 2026-10-02: esto era `Dispatchers.setMain(UnconfinedTestDispatcher())` y por eso
+        // los tests de `runFinalCheck` seguian fallando con `AssertionError` en la DECLARACION,
+        // sin ningun frame de stack — que es la firma de que `runTest` se queda esperando.
+        //
+        // La causa, y no es el ViewModel: **`UnconfinedTestDispatcher()` sin argumentos crea su
+        // PROPIO `TestScheduler`**, distinto del que usa `runTest`. Es decir, dos planificadores:
+        // el ViewModel corria en el de `UnconfinedTestDispatcher` y `runCurrent()` drena el de
+        // `runTest`. El trabajo se lanzaba en uno y se esperaba en el otro, y por eso nada llegaba
+        // nunca a tiempo — ni al assert, ni al final de `runTest`.
+        //
+        // El patron correcto es compartir el planificador del propio test, y es el que ya usa
+        // `BootstrapViewModelTest`. `UnconfinedTestDispatcher` sin scheduler no vale para un
+        // `runTest`: eso es lo que enseña el fallo.
+        Dispatchers.setMain(StandardTestDispatcher())
     }
 
     @After
@@ -106,7 +118,11 @@ class SetupNativeViewModelTest {
     fun `estado inicial refleja el snapshot persistido y hubReachable es true`() = runTest {
         val stateFile = File(tempFolder.root, "state.json")
         val bsNative = BootstrapNative(stateFile = stateFile)
-        val setupNative = SetupNative(bootstrapNative = bsNative)
+        // MEDIDO 2026-10-02: se le pasa el dispatcher del test. `SetupNative` hace
+        // `withContext(Dispatchers.IO)` en el final-check, y `Dispatchers.IO` es un dispatcher
+        // REAL: `runCurrent()` no lo esperaba y el test afirmaba antes de que terminara. El
+        // sintoma era `AssertionError` SIN NINGUN frame en la linea de la declaracion.
+        val setupNative = SetupNative(bootstrapNative = bsNative, ioDispatcher = StandardTestDispatcher(testScheduler))
 
         val vm = SetupNativeViewModel(setupNative, backgroundScope)
         // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo
@@ -131,6 +147,7 @@ class SetupNativeViewModelTest {
 
         val setupNative = SetupNative(
             bootstrapNative = bsNative,
+            ioDispatcher = StandardTestDispatcher(testScheduler),
             shellExecutor = { cmd, _ ->
                 if (cmd.contains("opencode --version")) RootShell.Result(0, "2.0.14", "")
                 else RootShell.Result(0, "", "")
@@ -169,6 +186,7 @@ class SetupNativeViewModelTest {
 
         val setupNative = SetupNative(
             bootstrapNative = bsNative,
+            ioDispatcher = StandardTestDispatcher(testScheduler),
             httpProbe = { _, _ -> SetupNative.HttpProbeResult(ok = true, statusCode = 200, body = "") }
         )
 
@@ -194,7 +212,11 @@ class SetupNativeViewModelTest {
     fun `onCleared cancela jobs sin fugar corutinas`() = runTest {
         val stateFile = File(tempFolder.root, "state.json")
         val bsNative = BootstrapNative(stateFile = stateFile)
-        val setupNative = SetupNative(bootstrapNative = bsNative)
+        // MEDIDO 2026-10-02: se le pasa el dispatcher del test. `SetupNative` hace
+        // `withContext(Dispatchers.IO)` en el final-check, y `Dispatchers.IO` es un dispatcher
+        // REAL: `runCurrent()` no lo esperaba y el test afirmaba antes de que terminara. El
+        // sintoma era `AssertionError` SIN NINGUN frame en la linea de la declaracion.
+        val setupNative = SetupNative(bootstrapNative = bsNative, ioDispatcher = StandardTestDispatcher(testScheduler))
 
         val vm = SetupNativeViewModel(setupNative, backgroundScope)
         // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo

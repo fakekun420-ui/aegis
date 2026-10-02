@@ -2,6 +2,7 @@ package com.aegis.hub.data
 
 import com.aegis.hub.RootShell
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,23 @@ import java.net.URL
  */
 class SetupNative(
     private val bootstrapNative: BootstrapNative = BootstrapNative(),
+    /**
+     * MEDIDO 2026-10-02: el dispatcher de trabajo, inyectable, y por el motivo exacto que dice
+     * el nombre de la variable — `io` en vez de `ioDispatcher`.
+     *
+     * Este fichero hace `withContext(ioDispatcher)` en 5 sitios: el sondeo de disponibilidad, la
+     * lectura de estado, la comprobacion de pasos, el final-check y el smoke test. `Dispatchers.IO`
+     * es un dispatcher REAL de la JVM, no el del test, y de ahi el fallo que me costo tres ciclos:
+     * `runCurrent()` no lo espera, el test afirmaba antes de que terminara, y el resultado era un
+     * `AssertionError` SIN NINGUN frame de stack en la linea de la DECLARACION del test — que es
+     * la firma de "esto no llego a ejecutarse", no de "una comprobacion fallo".
+     *
+     * Inyectarlo no cambia el comportamiento de produccion: por defecto es `Dispatchers.IO`, que
+     * es exactamente lo que se usaba antes. Lo que cambia es que un test puede le pasarlo su
+     * dispatcher y asi el trabajo queda en su planificador virtual, donde el test si puede
+     * esperarlo.
+     */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val shellExecutor: (String, Long) -> RootShell.Result = { cmd, timeout -> RootShell.exec(cmd, timeout) },
     private val fileReader: (String) -> RootShell.Result = { path ->
         try {
@@ -43,7 +61,7 @@ class SetupNative(
         }
     },
     private val httpProbe: suspend (String, Int) -> HttpProbeResult = { url, timeoutMs ->
-        withContext(Dispatchers.IO) {
+        withContext(ioDispatcher) {
             try {
                 val conn = URL(url).openConnection() as HttpURLConnection
                 conn.connectTimeout = timeoutMs
@@ -111,7 +129,7 @@ class SetupNative(
     suspend fun runBootstrap(
         resume: Boolean = true,
         retryStepId: String? = null
-    ): Result<BootstrapState> = withContext(Dispatchers.IO) {
+    ): Result<BootstrapState> = withContext(ioDispatcher) {
         if (!executionMutex.tryLock()) {
             return@withContext Result.failure(IllegalStateException("Ya hay una instalación en curso"))
         }
@@ -250,7 +268,7 @@ class SetupNative(
     /**
      * Comprobación individual de estado de cada paso del instalador.
      */
-    suspend fun checkStep(stepId: String): StepCheckResult = withContext(Dispatchers.IO) {
+    suspend fun checkStep(stepId: String): StepCheckResult = withContext(ioDispatcher) {
         when (stepId) {
             "preflight" -> checkPreflight()
             "ubuntu" -> checkUbuntu()
@@ -444,7 +462,7 @@ class SetupNative(
      * 1. id="opencode", label="OpenCode (proxy4096)"
      * 2. id="bootstrap", label="Instalación inicial (wizard)"
      */
-    suspend fun runFinalCheck(): FinalCheckResponse = withContext(Dispatchers.IO) {
+    suspend fun runFinalCheck(): FinalCheckResponse = withContext(ioDispatcher) {
         val checkList = mutableListOf<SetupCheck>()
 
         // Check 1: OpenCode
@@ -537,7 +555,7 @@ class SetupNative(
      * Ejecuta una prueba de vida (smoke test) contra OpenCode creando una sesión de prueba
      * y enviando un prompt directo.
      */
-    suspend fun runSmokeTest(): SmokeTestResponse = withContext(Dispatchers.IO) {
+    suspend fun runSmokeTest(): SmokeTestResponse = withContext(ioDispatcher) {
         try {
             // Verificar primero si el servidor está alcanzable
             val info = try {
