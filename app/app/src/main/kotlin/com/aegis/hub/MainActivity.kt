@@ -322,7 +322,10 @@ class MainActivity : ComponentActivity() {
 
             var attempts = 0
             var ready = arranque.ok && isHubReady()
-            val maxAttempts = 90
+            // MEDIDO 2026-10-02: eran 90 medias -> 45 s. En un arranque en frío no basta: el boot
+            // script entra por `bash --login` y OpenCode tarda en abrir su base de datos de 2 GB. Con
+            // 45 s la app se rendía y pintaba el overlay aunque el servidor fuera a levantarse.
+            val maxAttempts = 360
             while (attempts < maxAttempts && !ready) {
                 delay(500)
                 ready = isHubReady()
@@ -354,9 +357,9 @@ class MainActivity : ComponentActivity() {
                     // (namespace de node, exit de keepalive, "hub sin 200"). Los dos primeros ya
                     // no significan nada —el watchdog se elimino y launchKeepalive() siempre
                     // devuelve 99—, asi que se sustituyen por la unica causa real que queda.
-                    val reason = "OpenCode no responde en 127.0.0.1:49374 tras 45s. Arranca 'opencode serve --service' (Termux) o reinicia el servicio registrado."
+                    val reason = "OpenCode no responde en 127.0.0.1:49374 tras 3 minutos. Arranca 'opencode serve --service' (Termux) o reinicia el servicio registrado."
                     lastBootError = reason
-                    android.util.Log.e("OpenCodeBoot", "timeout 45s sin respuesta: $reason")
+                    android.util.Log.e("OpenCodeBoot", "timeout 3min sin respuesta: $reason")
                     toast("OpenCode no responde")
                 }
             }
@@ -376,11 +379,21 @@ class MainActivity : ComponentActivity() {
                 systemReady = true
                 android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=true ($info) — Compose ready setupPending=$pending")
             } else {
-                // Sin hub: ruta actual intacta (no bloquear) — el overlay gestiona la recuperación
+                // MEDIDO 2026-10-02: aquí solo se COMPROBABA. El lanzador existía, pero su único
+                // llamador era el botón "Reintentar" del overlay, así que al abrir la app tras un
+                // reinicio no se lanzaba nada: se esperaban 3 s, se pintaba el overlay y el usuario
+                // tenía que pulsar. Y `startRootSystemAndPoll` es idempotente —primero pregunta si
+                // ya responde— así que llamarla aquí no hace daño cuando todo va bien.
+                //
+                // MEDIDO del arranque real: la cadena de procesos tras un reinicio es
+                //     init -> magiskd -> /bin/bash --login -> opencode -> opencode
+                // o sea que el script de Magisk SÍ arranca el chroot y el servidor. Lo que no da
+                // tiempo es a OpenCode para abrir su base de datos de 2 GB.
                 initialRoute = NavRoutes.DRAFT_CHAT
                 systemReady = false
-                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=false ($info) — overlay")
                 if (result == null) android.util.Log.w("OpenCodeBoot", "checkHubOnStart timed out after 3s")
+                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=false ($info) — se intenta arrancar")
+                startRootSystemAndPoll()
             }
         }
     }
