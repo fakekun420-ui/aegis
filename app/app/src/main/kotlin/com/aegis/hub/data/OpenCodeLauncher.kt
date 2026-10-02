@@ -152,6 +152,18 @@ object OpenCodeLauncher {
     }
 
     /**
+     * La ruta del binario tal y como la necesita `chroot`: con una sola barra inicial.
+     *
+     * MEDIDO: concatenar `/$ruta` con una ruta ya absoluta daba `//usr/local/bin/opencode`.
+     * Funciona —MEDIDO: `//usr/local/bin/opencode --version` y `/usr/local/bin/opencode
+     * --version` dan los dos `opencode v2.0.14`, porque Linux resuelve `//` como `/`— pero es una
+     * construccion que depende de una regla POSIX marcada como *implementation-defined*, y no
+     * hace falta depender de ella.
+     */
+    private fun rutaEnChroot(ruta: String): String =
+        if (ruta.startsWith("/")) ruta else "/$ruta"
+
+    /**
      * Arranca `opencode serve --service` si no esta ya responding.
      *
      * @param comprobarSiVivo decision que se ya ha tomado por fuera (una sonda HTTP). Se recibe en
@@ -191,7 +203,7 @@ object OpenCodeLauncher {
         //
         // `nohup ... &` porque el proceso debe sobrevivir al shell que lo lanzo: la app abre un
         // `su` por orden, y si OpenCode cuelga de ese shell se muere con el.
-        val cmd = "chroot $CHROOT /bin/sh -c \"HOME=/root /$binario serve --service\" " +
+        val cmd = "chroot $CHROOT /bin/sh -c \"HOME=/root ${rutaEnChroot(binario)} serve --service\" " +
             ">/data/local/ubuntu/root/.local/share/opencode/app-launch.log 2>&1 &"
         Log.i(TAG, "asegurarAbierto: lanzo $binario")
         val r = shell(cmd, 5000)
