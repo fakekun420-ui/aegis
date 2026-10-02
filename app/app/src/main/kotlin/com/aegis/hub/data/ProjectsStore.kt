@@ -21,8 +21,12 @@ import java.nio.charset.StandardCharsets
  * Soporta migracion inicial automatica desde backend/projects.json si existe.
  */
 class ProjectsStore(
-    private val storeFile: File = File(DEFAULT_STORE_PATH),
-    private val legacyFile: File = File(DEFAULT_LEGACY_PATH),
+    // MEDIDO 2026-10-02: eran rutas ABSOLUTAS del arbol de compilacion. El store vivia en el
+    // repo, asi que sin el repo la lista de proyectos salia VACIA y sin error: `loadOrMigrate`
+    // no encontraba su fichero y empezaba con un registro en blanco. Ahora se resuelven en el
+    // directorio privado de la app, y el arbol queda como ORIGEN de la migracion.
+    private val storeFile: File = AppPaths.estado(NOMBRE_STORE),
+    private val legacyFile: File = AppPaths.estado(NOMBRE_LEGACY),
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
 
@@ -50,6 +54,42 @@ class ProjectsStore(
         loadOrMigrate()
     }
 
+    /**
+     * MEDIDO 2026-10-02: copia el store desde el arbol de compilacion al directorio privado, una
+     * sola vez.
+     *
+     * Las TRES condiciones se necesitan juntas, y por que:
+     *  - si el destino ya tiene algo, no se toca: esta migracion no puede pisar datos mas nuevos.
+     *  - si el origen no existe, no hay nada que migrar y no se dice nada.
+     *  - si el origen esta DAÑADO (existe pero vacio o ilegible), se avisa. Un origen que existe y
+     *    esta vacio es justo el estado que deja una copia fallida, y saltarselo en silencio
+     *    convertiria ese estado en "no habia nada", que es el que hace perder los proyectos sin
+     *    que nadie se entere.
+     */
+    private fun copiarDesdeArbolSiFalta() {
+        if (storeFile.exists() && storeFile.length() > 0L) return
+        for (nombre in listOf(NOMBRE_STORE, NOMBRE_LEGACY)) {
+            val origen = File(RUTA_ARBOL_ANTES, nombre)
+            val destino = File(storeFile.parentFile, nombre)
+            when {
+                !origen.exists() -> {
+                    Log.i(TAG, "migracion: '$nombre' no esta en $RUTA_ARBOL_ANTES. Sin datos previos.")
+                }
+                origen.length() == 0L -> {
+                    Log.w(TAG, "migracion: '$nombre' esta VACIO en el arbol. No se copia un " +
+                        "fichero de 0 b: seria indistinguishable de 'no hay datos'.")
+                }
+                else -> try {
+                    origen.copyTo(destino, overwrite = false)
+                    Log.i(TAG, "migracion: '$nombre' copiado de $RUTA_ARBOL_ANTES a " +
+                        "${storeFile.parentFile} (${origen.length()} b). El original NO se borra.")
+                } catch (e: Exception) {
+                    Log.e(TAG, "migracion: no se pudo copiar '$nombre' del arbol: ${e.message}", e)
+                }
+            }
+        }
+    }
+
     private fun loadOrMigrate() {
         synchronized(lock) {
             if (storeFile.exists() && storeFile.length() > 0L) {
@@ -64,6 +104,12 @@ class ProjectsStore(
                     Log.w(TAG, "Error leyendo storeFile, intentando fallback legacy: ${e.message}")
                 }
             }
+
+            // MEDIDO 2026-10-02: la migracion desde el ARBOL DE COMPILACION. Sin esto, instalar
+            // el APK en un movil donde el repo no este deja los 27 proyectos en el arbol y la
+            // app arranca con un registro VACIO, sin error. Con esto se copian una vez y se
+            // trabaja sobre la copia: el arbol no se borra, porque es la unica copia.
+            copiarDesdeArbolSiFalta()
 
             if (legacyFile.exists() && legacyFile.length() > 0L) {
                 try {
@@ -253,16 +299,28 @@ class ProjectsStore(
 
     companion object {
         private const val TAG = "ProjectsStore"
-        const val DEFAULT_STORE_PATH = "/sdcard/projects/Aegis/app/state/projects-store.json"
         /**
          * MEDIDO 2026-10-02: apuntaba a `backend/projects.json`, y al mover el Hub se iba el
-         * ORIGEN de la migracion — o sea, los 27 proyectos se perdian sin ruido. Ahora el
-         * legacy esta junto al store, en `app/state/`, y el fichero se copio ahi.
+         * ORIGEN de la migracion — o sea, los 27 proyectos se perdian sin ruido. El legacy esta
+         * ahora junto al store, en el directorio privado, y el fichero se copio ahi.
          *
          * El formato NO cambia: es el mismo que leia antes, y por eso la migracion lo
          * interpreta sin transformacion.
          */
-        const val DEFAULT_LEGACY_PATH = "/sdcard/projects/Aegis/app/state/projects.json"
+        const val NOMBRE_STORE = "projects-store.json"
+        const val NOMBRE_LEGACY = "projects.json"
+
+        /**
+         * MEDIDO 2026-10-02: el estado vivia en el ARBOL DE COMPILACION (`app/state/`), y ahi
+         * sigue estando el primer despliegue. Esta es la ruta de donde se COPIA la primera vez.
+         *
+         * Se conserva porque es la unica copia de los 27 proyectos: si el arbol desaparece, no hay
+         * de donde recuperarlos, y una app autonoma que borra los datos de su usuario al
+         * instalarse no es autonoma, es destructiva.
+         *
+         * Se lee UNA vez por instalacion (ver `loadOrMigrate`), no en cada arranque.
+         */
+        const val RUTA_ARBOL_ANTES = "/sdcard/projects/Aegis/app/state"
 
         val default: ProjectsStore by lazy {
             ProjectsStore()

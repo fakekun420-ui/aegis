@@ -382,10 +382,12 @@ class MainActivity : ComponentActivity() {
      */
     private suspend fun isBootstrapPending(): Boolean = withContext(Dispatchers.IO) {
         try {
-            // `stateFile` es privado en BootstrapNative, asi que se usa el constructor por
-            // defecto y se pregunta por el fichero a mano. MEDIDO: la ruta por defecto es
-            // /sdcard/projects/Aegis/backend/bootstrap-state.json
-            val f = java.io.File(com.aegis.hub.data.BootstrapNative.DEFAULT_STATE_FILE_PATH)
+            // MEDIDO 2026-10-02: `stateFile` sigue siendo privado, asi que se usa el constructor
+            // por defecto y se pregunta por el fichero a mano. Lo que cambia es DONDE esta: ya no
+            // es una ruta del arbol de compilacion, sino el directorio privado de la app. Con la
+            // ruta vieja, un movil sin el repo devolvia `false` por fichero inexistente y el
+            // usuario entraba al instalador de cero.
+            val f = com.aegis.hub.data.AppPaths.estado(com.aegis.hub.data.BootstrapNative.NOMBRE_STATE)
             if (!f.exists()) return@withContext false
             val phase = com.aegis.hub.data.BootstrapNative()
                 .readState().phaseOrIdle

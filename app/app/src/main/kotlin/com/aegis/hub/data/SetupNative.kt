@@ -426,8 +426,21 @@ class SetupNative(
                 if (check.satisfied) {
                     Result.success(check.detail)
                 } else {
-                    // Intentar stage-node.sh si existe
-                    val stageRes = shellExecutor("sh /sdcard/projects/Aegis/app/app/src/main/assets/stage-node.sh", 5000)
+                    // MEDIDO 2026-10-02: aqui se ejecutaba
+                    //     sh /sdcard/projects/Aegis/app/app/src/main/assets/stage-node.sh
+                    // que es la ruta de COMPILACION. En el movil los assets estan en
+                    // /data/app/~~<hash>/com.aegis.hub-*/assets/, y ese camino no existe: el
+                    // script fallaba con "No such file or directory" y el paso de node caia a su
+                    // plan B, que tampoco podia funcionar sin node. Dos fallos en silencio.
+                    //
+                    // Un asset no se ejecuta en sitio: se saca del APK a disco y se ejecuta desde ahi.
+                    val ruta = try {
+                        AppPaths.extraer("stage-node.sh")
+                    } catch (e: Exception) {
+                        return Result.failure(Exception(
+                            "El instalador no trae 'stage-node.sh' dentro del APK: ${e.message}"))
+                    }
+                    val stageRes = shellExecutor("sh \"$ruta\"", 5000)
                     val reCheck = checkNode()
                     if (reCheck.satisfied) {
                         Result.success(reCheck.detail)

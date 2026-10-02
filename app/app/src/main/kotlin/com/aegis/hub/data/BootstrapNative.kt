@@ -23,7 +23,9 @@ import java.nio.charset.StandardCharsets
  *   Permite inyección de ruta o File para tests JVM independientes sin tocar disco real.
  */
 class BootstrapNative(
-    private val stateFile: File = File(DEFAULT_STATE_FILE_PATH),
+    // MEDIDO 2026-10-02: era una ruta ABSOLUTA del arbol de compilacion. Sin el repo, el
+    // instalador perderia el `phase: done` y devolveria al usuario al asistente de cero.
+    private val stateFile: File = AppPaths.estado(NOMBRE_STATE),
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
 
@@ -34,21 +36,18 @@ class BootstrapNative(
         // no dice nada es indistinguible de "no habia nada que migrar".
         private const val TAG = "BootstrapNative"
 
-        const val DEFAULT_STATE_FILE_PATH = "/sdcard/projects/Aegis/app/state/bootstrap-state.json"
+        const val NOMBRE_STATE = "bootstrap-state.json"
 
         /**
-         * MEDIDO 2026-10-02: el estado del instalador vivia en `backend/`, y al mover el
-         * Hub se iba con el. Es DATO DE LA APP, no del Hub: ahora vive con ella.
+         * MEDIDO 2026-10-02: el estado del instalador vivia en el ARBOL DE COMPILACION, y ahi
+         * sigue estando el primer despliegue. Es la unica copia del `phase: "done"`, asi que se
+         * COPIA al directorio privado de la app en el primer arranque y no se borra el origen.
          *
-         * El fichero se copio de `backend/` a aqui el 2026-10-02, byte a byte, asi que
-         * [LEGACY_STATE_FILE_PATH] y [DEFAULT_STATE_FILE_PATH] apuntan al MISMO sitio tras la
-         * copia. [LEGACY_STATE_FILE_PATH] se conserva porque la migracion es la que evita que
-         * un despliegue a medias pierda el estado: si el nuevo no esta, se lee el viejo.
-         *
-         * MEDIDO: el fichero real tiene 1493 b con `phase: "done"` y fecha de 2026-09. Sin
-         * migracion, el usuario entraria al instalador de cero aunque lo tuviera terminado.
+         * MEDIDO: el fichero real tiene 1493 b con `phase: "done"` y fecha de 2026-09. Sin esta
+         * migracion, instalar el APK en un movil sin el repo devolveria al usuario al asistente
+         * de cero aunque lo tuviera terminado.
          */
-        const val LEGACY_STATE_FILE_PATH = "/sdcard/projects/Aegis/app/state/bootstrap-state.json"
+        const val RUTA_ARBOL_ANTES = "/sdcard/projects/Aegis/app/state/$NOMBRE_STATE"
 
         val STEP_DEFS: List<StepDef> = listOf(
             StepDef("preflight", "Comprobación previa"),
@@ -139,7 +138,10 @@ class BootstrapNative(
      * Se escribe primero en un temporal y se renombra, como [writeState]: `renameTo` en el mismo
      * directorio es atómico, y un fichero a medio escribir en `/sdcard` (FUSE) se trunca.
      */
-    private fun migrarLegacy(): BootstrapState? = migrateLegacyFrom(File(LEGACY_STATE_FILE_PATH))
+    // MEDIDO 2026-10-02: el legacy era el MISMO fichero que el destino (apuntaban a la misma
+    // ruta), asi que la migracion no podia hacer nada: se leia a si mismo. Ahora el legacy
+    // es de verdad el ARBOL de compilacion, y la copia al directorio privado ocurre aqui.
+    private fun migrarLegacy(): BootstrapState? = migrateLegacyFrom(File(RUTA_ARBOL_ANTES_PATH))
 
     /**
      * Migración con el origen como parámetro, que es lo que la hace testeable: la versión de
