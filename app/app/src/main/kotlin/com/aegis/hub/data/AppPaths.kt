@@ -84,9 +84,9 @@ object AppPaths {
      *
      * MEDIDO 2026-10-02: `stage-node.sh` se invocaba por su ruta de compilacion,
      * `sh /sdcard/projects/Aegis/app/app/src/main/assets/stage-node.sh`. En el movil los assets
-     * estan en `/data/app/~~<hash>/com.aegis.hub-*/assets/`, y esa ruta no existe: el script
-     * fallaba con "No such file or directory" sin que nadie lo supiera, porque el paso de node
-     * del instalador tenria un plan B y ese plan B tambien fallaba.
+     * estan en el directorio de instalacion de Android, bajo `data/app`, y esa ruta no existe:
+     * el script fallaba con "No such file or directory" sin que nadie lo supiera, porque el paso
+     * de node del instalador tendria un plan B y ese plan B tambien fallaba.
      *
      * Un asset NO se puede ejecutar en sitio: hay que sacarlo a disco. De ahi este directorio.
      */

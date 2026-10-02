@@ -754,11 +754,13 @@ class ChatViewModel : ViewModel() {
      *  1. Hay una herramienta en estado `running` (p. ej. un `bash`): el agente aún
      *     espera su salida.
      *  2. Hay un formulario pendiente: el agente está esperando a la persona.
-     */    /**
+     */
+
+    /**
      * Actualiza el indicador de "trabajando" y lanza el aviso de fin de turno UNA vez.
      *
      * La condición NO la decide esta función sino `turnIsReallyFinished()`, que se apoya
-     * solo en los eventos `session.execution.*` del vigilante. Aquí solo se应用到 la
+     * solo en los eventos `session.execution.*` del vigilante. Aquí solo se aplica a la
      * dedup: un mismo turno no debe de avisar cada 2 s.
      */
     private fun turnIsReallyFinished(messages: List<Message>): Boolean {

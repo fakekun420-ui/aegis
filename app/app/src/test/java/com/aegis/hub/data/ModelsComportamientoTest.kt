@@ -14,7 +14,7 @@ import org.junit.Test
  * que el usuario reporta sin funcionar, asi que su logica no estaba protegida por nada.
  *
  * Que un test pueda FALLAR es parte del diseno: cada afirmacion lleva un contraejemplo
- * concreto en el nombre, y hay tres al final que这三个 FALSE deliberados — si el codigo
+ * concreto en el nombre, y hay tres al final que son FALSE deliberados — si el codigo
  * cambia, tienen que romperse.
  */
 class ModelsComportamientoTest {
@@ -74,7 +74,7 @@ class ModelsComportamientoTest {
     }
 
     /**
-     * Los 34 subagentes se descartan aunque，中午 trabajo. MEDIDO: un turno con
+     * Los 34 subagentes se descartan aunque a midday trabajo. MEDIDO: un turno con
      * `agent=kaenor-ai-engineer` corre y contesta. Es que no son lo que el boton pregunta.
      *
      * Contraejemplo: si se quitara el filtro de `mode`, un subagent se colaria en la hoja.
