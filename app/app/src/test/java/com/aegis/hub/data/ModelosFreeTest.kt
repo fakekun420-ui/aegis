@@ -44,7 +44,7 @@ class ModelosFreeTest {
     }
 
     @Test
-    fun `coste no-cero CON sufijo -free SI es gratis: las dos ramas se suman, no se pisan`() {
+    fun `coste no-cero CON sufijo -free SI es gratis, las dos ramas se suman y no se pisan`() {
         // MEDIDO 2026-10-02: yo escribi este test afirmando `false` aqui, y FALLO. Ejecuté el
         // criterio original del Hub en node para no discutir de memoria:
         //
