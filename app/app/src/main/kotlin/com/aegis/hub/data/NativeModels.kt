@@ -144,6 +144,16 @@ data class OpenCodeMessage(
     @SerializedName("agent") val agent: String? = null,
     @SerializedName("model") val model: OpenCodeModelRef? = null,
     @SerializedName("content") val content: List<OpenCodeMessagePart>? = null,
+    // MEDIDO 2026-10-02: los mensajes de USUARIO no traen `content[]`. Traen el texto aqui, en un
+    // campo de primer nivel. MEDIDO sobre los 17 mensajes de usuario de la sesion —TODOS,
+    // antiguos incluidos—: `content` en 0 de 17, `text` en 17 de 17. Los de asistente si usan
+    // `content[]`.
+    //
+    // O sea que no es una excepcion de la app ni un mensaje raro: es la forma normal de un
+    // mensaje de usuario. No declararlo hacia que Gson lo descartara, el mensaje llegaba sin
+    // partes, `Message.isEmpty` daba true y el filtro lo borraba de la lista. Ese es el sintoma
+    // que reporto el usuario: "este mensaje no se visualiza en el chat".
+    @SerializedName("text") val text: String? = null,
     @SerializedName("time") val time: OpenCodeTime? = null,
     @SerializedName("error") val error: Map<String, Any?>? = null,
     // Adjuntos directos a nivel mensaje (v2 m.files)

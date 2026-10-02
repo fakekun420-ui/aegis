@@ -519,7 +519,11 @@ class RutaNativa(private val hub: ApiService) : ApiService {
             .mapNotNull { p ->
                 val nombre = p["filename"] ?: p["name"] ?: return@mapNotNull null
                 val mime = p["mime"]
-                val datos = p["data"] ?: p["base64"] ?: p["uri"] ?: return@mapNotNull null
+                // MEDIDO 2026-10-02: la app manda el adjunto con la clave "url", y las otras tres
+                // no existen nunca en sus peticiones. MEDIDO en el historial: los mensajes
+                // enviados desde la app llegan con `files: []` — el adjunto se perdia en silencio.
+                val datos = p["data"] ?: p["base64"] ?: p["url"] ?: p["uri"]
+                    ?: return@mapNotNull null
                 // MEDIDO: `files` exige `uri` (obligatorio, sin valor por defecto). La app trae
                 // base64, y un data-URI es una URI valida: es lo que el Hub hacia al reenviar.
                 val uri = if (datos.startsWith("data:")) datos

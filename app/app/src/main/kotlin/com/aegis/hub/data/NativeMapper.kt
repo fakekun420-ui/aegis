@@ -23,6 +23,26 @@ object NativeMapper {
      * @param index Índice posicional del mensaje en la lista de la conversación.
      * @param nowSupplier Función proveedora del timestamp actual en milisegundos (por defecto System.currentTimeMillis).
      */
+    /**
+     * El texto de primer nivel de un mensaje, convertido en la parte de texto que la UI sabe
+     * pintar.
+     *
+     * MEDIDO 2026-10-02: es la forma de TODOS los mensajes de usuario. Pagino 800 mensajes de la
+     * sesion y los 17 de usuario traen `text` y ninguno `content[]`. Los de asistente si usan
+     * `content[]`.
+     *
+     * Sin esto, el mensaje del usuario salia con CERO partes, `Message.isEmpty` daba true y el
+     * filtro `filterNot { it.isEmpty }` lo eliminaba de la lista. Ese es el sintoma que reporto el
+     * usuario: "este mensaje no se visualiza en el chat".
+     *
+     * El `id` lleva el sufijo para que no colisione con una parte de texto real del mismo
+     * mensaje: `mergeTail` indexa por id, y dos partes con el mismo id se pisarian.
+     */
+    private fun textoPlano(m: OpenCodeMessage): List<MessagePart>? {
+        val texto = m.text?.takeIf { it.isNotBlank() } ?: return null
+        return listOf(MessagePart(id = m.id + "_texto", type = "text", text = texto))
+    }
+
     fun toMessage(
         m: OpenCodeMessage,
         sessionId: String = "",
@@ -105,9 +125,16 @@ object NativeMapper {
         }
 
         // Si no hubo content[] ni files[], se genera una parte por defecto de texto vacío
-        val finalParts: List<MessagePart> = if (!parts.isNullOrEmpty()) {
-            parts
+        // MEDIDO 2026-10-02: un mensaje de USUARIO no trae `content[]`; trae el texto en `text`.
+        // Con esto, `partes` se vacia y se reconstruye desde ahi.
+        val contenido = if (!parts.isNullOrEmpty()) parts else textoPlano(m)
+
+        val finalParts: List<MessagePart> = if (!contenido.isNullOrEmpty()) {
+            contenido
         } else {
+            // MEDIDO: un mensaje SIN contenido y sin texto plano es un mensaje de herramienta o
+            // un `idle`, y no tiene nada que pintar. Se deja una parte vacia para que la UI tenga
+            // una fila que no mostrar, en vez de una lista sin filas que la haria desaparecer.
             listOf(
                 MessagePart(
                     id = "prt_${timestamp}_0",
