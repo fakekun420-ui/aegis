@@ -168,12 +168,21 @@ class EnvioDesdeLaAppTest {
                 )
             )
         )
+        // MEDIDO: `MAX_SILENCE_MS` son 6 HORAS (Models.kt:769), no un minuto ni una hora. Este
+        // test fallo al escribirse porque asumi una hora, y con una hora la respuesta es
+        // `true` — correctamente, porque 1 h < 6 h. El codigo tiene razon y la expectativa era
+        // mia.
+        assertEquals(
+            "el umbral de silencio medido en el codigo",
+            6L * 60L * 60L * 1000L, TurnState.MAX_SILENCE_MS
+        )
         assertFalse(
-            "pero si el registro es VIEJO, no: un turno que empezo hace una hora no esta trabajando",
+            "pasado el umbral el busy se apaga solo: asi se desatasca un turno abandonado",
             TurnState.isBusy(
                 InflightSession(
                     id = "ses_x", turnOver = false,
-                    lastSeen = System.currentTimeMillis() - 3_600_000L, since = null
+                    lastSeen = System.currentTimeMillis() - TurnState.MAX_SILENCE_MS - 1000L,
+                    since = null
                 )
             )
         )
