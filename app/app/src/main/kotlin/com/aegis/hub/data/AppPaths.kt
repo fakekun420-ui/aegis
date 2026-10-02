@@ -91,7 +91,9 @@ object AppPaths {
      * Un asset NO se puede ejecutar en sitio: hay que sacarlo a disco. De ahi este directorio.
      */
     fun assetsExtraidos(): File {
-        val dir = File(privado() ?: ESTADO_EN_ARBOL, "assets")
+        // `ESTADO_EN_ARBOL` se envuelve en File porque el elvis mezclaba `File?` con
+        // `String` y el tipo comun de los dos es `Any`: `File(Any, String)` no existe.
+        val dir = File(privado() ?: File(ESTADO_EN_ARBOL), "assets")
         if (!dir.exists()) dir.mkdirs()
         return dir
     }

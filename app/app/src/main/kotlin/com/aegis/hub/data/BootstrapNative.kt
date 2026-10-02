@@ -141,7 +141,7 @@ class BootstrapNative(
     // MEDIDO 2026-10-02: el legacy era el MISMO fichero que el destino (apuntaban a la misma
     // ruta), asi que la migracion no podia hacer nada: se leia a si mismo. Ahora el legacy
     // es de verdad el ARBOL de compilacion, y la copia al directorio privado ocurre aqui.
-    private fun migrarLegacy(): BootstrapState? = migrateLegacyFrom(File(RUTA_ARBOL_ANTES_PATH))
+    private fun migrarLegacy(): BootstrapState? = migrateLegacyFrom(File(RUTA_ARBOL_ANTES))
 
     /**
      * Migración con el origen como parámetro, que es lo que la hace testeable: la versión de
