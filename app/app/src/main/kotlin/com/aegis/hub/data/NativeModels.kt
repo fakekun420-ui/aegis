@@ -197,7 +197,18 @@ data class OpenCodeNativeAgent(
     @SerializedName("id") val id: String? = null,
     @SerializedName("name") val name: String,
     @SerializedName("mode") val mode: String = "primary", // "primary" | "subagent"
-    @SerializedName("model") val model: String? = null,
+    // MEDIDO 2026-10-02: esto estaba declarado como `String?` y es un OBJETO. El usuario lo
+    // vio al abrir la app: "Expected a string but was BEGIN_OBJECT at $.data[0].model".
+    //
+    // MEDIDO contra `GET /api/agent`: `"model": {"id": "space-bunny-free",
+    // "providerID": "opencode"}`. Es el MISMO tipo que el `model` de la sesion
+    // ([OpenCodeModelRef], linea 51), y de ahi el error: son dos data class con el mismo
+    // nombre de campo y tipos distintos, y Gson aplica el del que toque.
+    //
+    // Se corrigio aqui, y no en el traductor, porque el error ocurre AL DESERIALIZAR: un
+    // traductor nunca llega a verse. Arreglarlo solo donde peta deja el mismo fallo latente
+    // en cualquier otro consumidor del endpoint.
+    @SerializedName("model") val model: OpenCodeModelRef? = null,
     @SerializedName("description") val description: String? = null,
     @SerializedName("hidden") val hidden: Boolean = false,
     @SerializedName("permissions") val permissions: Map<String, Any?>? = null

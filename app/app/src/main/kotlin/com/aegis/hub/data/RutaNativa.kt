@@ -80,7 +80,38 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     // getOpencodeSessions: conversion estructural con Gson
     // Igual que los agentes: conversion estructural. El campo `model` de la app es `Any?` a
     // proposito, asi que la forma nativa del objeto modelo entra sin trabajo de mas.
-        override suspend fun getOpencodeSessions(): Envelope<List<OpencodeSession>> = envoltura(oc.listSessions().data?.map { gson.fromJson(gson.toJson(it), OpencodeSession::class.java) } ?: emptyList())
+        // MEDIDO 2026-10-02: `GET /api/session` devuelve `id`, `title`, `agent`, `model` (OBJETO),
+        // `time` (OBJETO con created/updated/idle), `cost`, `tokens`, `projectID` y `location`.
+        //
+        // Este mapa NO usa la conversion con Gson que si usaba en los agentes: alli el campo
+        // `model` es un objeto donde la app espera un `String`, y Gson fallaba al DESERIALIZAR.
+        // Aqui `OpencodeSession.model` es `Any?` a proposito, asi que el objeto entra sin drama —
+        // y por eso este mapeo es explicito campo a campo y el de agentes no lo podia ser.
+        override suspend fun getOpencodeSessions(): Envelope<List<OpencodeSession>> {
+            val lista = oc.listSessions().data.orEmpty().map { s ->
+                OpencodeSession(
+                    id = s.id,
+                    title = s.title,
+                    // MEDIDO: `OpencodeSession` (el de la app) NO tiene campo `agent` — son
+                    // id, ID, title, name, providerTitle, model, createdAt... Escribi `agent`
+                    // aqui de memoria y no compila. El agente de la sesion se lee por otra
+                    // via, `GET /api/session/{id}`, en `getSessionAgent`.
+                    model = s.model,
+                    // MEDIDO: `projectID` tampoco esta en `OpencodeSession` (la app). Es el
+                    // segundo campo de esta función que escribi de memoria. El vinculo
+                    // sesion-proyecto lo lleva `ProjectsStore`, no el modelo de la sesion.
+                    // MEDIDO: `time.created` es un numero en milisegundos, y la app espera un
+                    // String. Se pasa como ISO-8601 porque es lo que usaba el Hub, y lo que
+                    // ordena la lista de chats. Sin esto, `createdAt` sale null y el orden de la
+                    // lista deja de ser real.
+                    createdAt = s.time?.created?.let { java.time.Instant.ofEpochMilli(it).toString() },
+                    updatedAt = s.time?.updated?.let { java.time.Instant.ofEpochMilli(it).toString() },
+                    pinned = false,
+                    provider = s.model?.providerID
+                )
+            }
+            return envoltura(lista)
+        }
 
     // getMessages: content[] nativo -> parts[] de la app, via el traductor
     // MEDIDO: GET /api/session/{id}/message devuelve `content[]`, no `parts[]`. De ahi el
@@ -97,7 +128,37 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     // JSON (name, mode, model, description, hidden). Traducir a mano 6 campos es otra cosa.
     // Se conserva `hidden` a proposito: de 40 agentes, 37 son visibles y 3 no, y la hoja
     // depende de ese filtro.
-        override suspend fun getOpencodeAgents(): Envelope<List<OpencodeAgent>> = envoltura(oc.listAgents().data?.map { gson.fromJson(gson.toJson(it), OpencodeAgent::class.java) } ?: emptyList())
+        // MEDIDO 2026-10-02: aquí usaba `gson.fromJson(gson.toJson(nativo), OpencodeAgent::class.java)`
+        // con el comentario de que "los dos data class describen el mismo JSON". Es FALSO, y lo
+        // reportó el usuario al abrir la app:
+        //
+        //     No se pudieron cargar los agentes: Expected a string but was BEGIN_OBJECT
+        //     at line 1 column 95 path $.data[0].model
+        //
+        // MEDIDO contra `/api/agent`: `model` es un OBJETO `{id, providerID}` y la app lo espera
+        // como `String`. Gson encuentra el tipo y falla. El mapeo estructural solo es valido cuando
+        // las dos formas coinciden, y aquí no: es justo el campo que seTbien podría suponer igual.
+        //
+        // Y hay un segundo defecto en la misma linea: el Hub devolvia la lista YA FILTRADA
+        // (`primary && !hidden`), y `GET /api/agent` devuelve el catalogo entero. Con el mapeo
+        // anterior la hoja habria recibido los 40 y `seleccionables()` los habria dejado en 3, pero
+        // el filtro se queda aqui, que es donde estaba.
+        override suspend fun getOpencodeAgents(): Envelope<List<OpencodeAgent>> {
+            val lista = oc.listAgents().data.orEmpty().mapNotNull { a ->
+                OpencodeAgent(
+                    name = a.name,
+                    mode = a.mode ?: "primary",
+                    // MEDIDO: aquí viene el OBJETO {id, providerID}; lo que la app quiere es el
+                    // identificador. Se toma el `id`.
+                    model = a.model?.id,
+                    description = a.description,
+                    hidden = a.hidden ?: false
+                )
+            }
+            // El Hub filtraba antes de responder: `primary && !hidden` deja exactamente los 3
+            // que la hoja muestra (Build, Plan, orchestrator) de los 40 del catálogo.
+            return envoltura(lista.filter { it.mode == "primary" && !it.hidden })
+        }
 
     // getSessionAgent: GET /api/session/{id} trae agent
     // MEDIDO: el mismo `GET /api/session/{id}` trae `agent`. Con la sesion ausente se devuelve

@@ -1,0 +1,64 @@
+{
+  "projects": [
+    {
+      "createdAt": 1790917839766,
+      "description": "Web e-commerce platform",
+      "folder": "/sdcard/projects/compraseguro-bo",
+      "id": "muhh0q5m-xoh9n6",
+      "name": "compraseguro-bo"
+    },
+    {
+      "createdAt": 1790917839766,
+      "description": "Web application platform",
+      "folder": "/sdcard/projects/DespegaLab",
+      "id": "muhh0q85-avh765",
+      "name": "DespegaLab"
+    },
+    {
+      "createdAt": 1790917839766,
+      "description": "Algorithmic trading signals",
+      "folder": "/sdcard/projects/forex-signal-engine",
+      "id": "muhh0qaf-8lrq2c",
+      "name": "forex-signal-engine"
+    },
+    {
+      "createdAt": 1790917839766,
+      "description": "Automated video generation engine",
+      "folder": "/sdcard/projects/MoneyPrinterTurbo",
+      "id": "muhh0qd8-m4l2hq",
+      "name": "MoneyPrinterTurbo"
+    },
+    {
+      "createdAt": 1790917839766,
+      "description": "Food \u0026 brand web platform",
+      "folder": "/sdcard/projects/Petite Raw",
+      "id": "muhh0qfm-712dea",
+      "name": "Petite Raw"
+    },
+    {
+      "createdAt": 1790917839766,
+      "description": "Quantitative finance math models",
+      "folder": "/sdcard/projects/Quant-Math-Public",
+      "id": "muhh0qif-icw64o",
+      "name": "Quant-Math-Public"
+    },
+    {
+      "createdAt": 1790917839766,
+      "description": "Carpeta vinculada: Carpeta de Prueba",
+      "folder": "/sdcard/projects/Carpeta de Prueba",
+      "id": "muiy8av9-6tgm4d",
+      "name": "Carpeta de Prueba"
+    }
+  ],
+  "sessionPins": {
+    "f4-sesion-valida": false
+  },
+  "sessionProjects": {},
+  "sessionTitles": {
+    "agy_muhlyrko_3ib3w5e1": "Hola",
+    "agy_mui0jwbk_en7pc9pi": "Hola.",
+    "ses_00000000000000000000000000": "ping",
+    "ses_f1dd6b8d6ffeakr6CJP7wAedl2": "Orquestador",
+    "ses_f1413887affeSEgJfC6kfqwqo1": "Hola Qué puedes hacer"
+  }
+}
