@@ -83,6 +83,15 @@ class SetupNativeViewModelTest {
         val setupNative = SetupNative(bootstrapNative = bsNative)
 
         val vm = SetupNativeViewModel(setupNative, backgroundScope)
+        // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo
+        // en `backgroundScope` y `runTest` se queda esperandolo. Un ViewModel en un test hay
+        // que cerrarlo como lo cerraria Android: llamando a `onCleared()`.
+        addTearDown {
+            val onCleared = androidx.lifecycle.ViewModel::class.java
+                .getDeclaredMethod("onCleared")
+            onCleared.isAccessible = true
+            onCleared.invoke(vm)
+        }
         val ui = vm.ui.value
 
         assertTrue(ui.hubReachable)
@@ -112,6 +121,15 @@ class SetupNativeViewModelTest {
         )
 
         val vm = SetupNativeViewModel(setupNative, backgroundScope)
+        // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo
+        // en `backgroundScope` y `runTest` se queda esperandolo. Un ViewModel en un test hay
+        // que cerrarlo como lo cerraria Android: llamando a `onCleared()`.
+        addTearDown {
+            val onCleared = androidx.lifecycle.ViewModel::class.java
+                .getDeclaredMethod("onCleared")
+            onCleared.isAccessible = true
+            onCleared.invoke(vm)
+        }
         runCurrent()
 
         vm.runFinalCheck()
@@ -139,6 +157,15 @@ class SetupNativeViewModelTest {
         )
 
         val vm = SetupNativeViewModel(setupNative, backgroundScope)
+        // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo
+        // en `backgroundScope` y `runTest` se queda esperandolo. Un ViewModel en un test hay
+        // que cerrarlo como lo cerraria Android: llamando a `onCleared()`.
+        addTearDown {
+            val onCleared = androidx.lifecycle.ViewModel::class.java
+                .getDeclaredMethod("onCleared")
+            onCleared.isAccessible = true
+            onCleared.invoke(vm)
+        }
         runCurrent()
 
         vm.runFinalCheck()
@@ -159,6 +186,15 @@ class SetupNativeViewModelTest {
         val setupNative = SetupNative(bootstrapNative = bsNative)
 
         val vm = SetupNativeViewModel(setupNative, backgroundScope)
+        // MEDIDO 2026-10-02: sin esto, el `while` de sondeo de `startPolling()` sigue vivo
+        // en `backgroundScope` y `runTest` se queda esperandolo. Un ViewModel en un test hay
+        // que cerrarlo como lo cerraria Android: llamando a `onCleared()`.
+        addTearDown {
+            val onCleared = androidx.lifecycle.ViewModel::class.java
+                .getDeclaredMethod("onCleared")
+            onCleared.isAccessible = true
+            onCleared.invoke(vm)
+        }
         runCurrent()
 
         val onClearedMethod = ViewModel::class.java.getDeclaredMethod("onCleared")

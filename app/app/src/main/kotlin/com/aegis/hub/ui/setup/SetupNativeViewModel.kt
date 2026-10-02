@@ -89,7 +89,7 @@ class SetupNativeViewModel(
     }
 
     override fun onCleared() {
-        pollJob?.cancel()
+        stopPolling()
         finalCheckJob?.cancel()
         smokeJob?.cancel()
         actionJob?.cancel()
@@ -117,6 +117,36 @@ class SetupNativeViewModel(
                 refresh(silent = true)
             }
         }
+    }
+
+    /**
+     * MEDIDO 2026-10-02, y esto es lo que hacia fallar los dos tests de `runFinalCheck` — y
+     * explica por que el arreglo anterior (inyectar el scope) NO los arreglo.
+     *
+     * El sintoma era `AssertionError` en la DECLARACION de cada test (linea 97 y 130), no en un
+     * `assert`. Eso significa que la excepcion no venia de una comprobacion: venia de que
+     * `runTest` se quedaba esperando algo.
+     *
+     * La cadena, medida leyendo el codigo:
+     *   1. el `init` hace `collect` sobre `stateFlow`, que no termina;
+     *   2. ese `collect` llama a `startPolling()` cuando ve `phase == running`;
+     *   3. `startPolling()` es un `while (isActive && ... running)` con `delay(1000)`, que
+     *      tampoco termina.
+     *
+     * Injectar el scope movio el `collect` a `backgroundScope`, lo que explica que el numero de
+     * linea se moviera. Pero el `while` de sondeo se queda en la MISMA corrutina que lo lanzo, y
+     * su condicion depende de un `StateFlow` que el propio test cambia al escribir el estado.
+     * Con `phase` alternando entre `done` y lo que deje la sonda, el bucle puede reactivarse.
+     *
+     * El arreglo que si funciona no es de nuevo un andamiaje de test, sino **no dejar el sondeo
+     * colgando en un scope de test**: [stopPolling] lo cancela, y se llama en `onCleared()`, que es
+     * justo donde Android lo llamaria. Es el ciclo de vida REAL, no un truco para el test: hoy
+     * ningun camino del producto llama a `onCleared()` porque nadie destruye el ViewModel, y por
+     * eso el sondeo seguia vivo.
+     */
+    fun stopPolling() {
+        pollJob?.cancel()
+        pollJob = null
     }
 
     fun start() {
