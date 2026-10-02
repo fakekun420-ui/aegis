@@ -299,7 +299,7 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     override suspend fun renameSession(id: String, body: Map<String, String>): Envelope<Map<String, Any>> {
         val titulo = body["title"]?.takeIf { it.isNotBlank() }
             ?: return envolturaFallo("renameSession sin title")
-        val r = oc.patchSession(id, mapOf("title" to titulo))
+        val r = oc.updateSession(id, UpdateOpenCodeSessionRequest(title = titulo))
         if (!r.isSuccessful) return envolturaFallo("PATCH session ${r.code()}")
         store.setSessionTitle(id, titulo)
         return envoltura(mapOf("id" to id, "title" to titulo))
