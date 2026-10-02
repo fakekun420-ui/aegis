@@ -376,9 +376,15 @@ class RutaNativa(private val hub: ApiService) : ApiService {
             .filter { provider == null || it.providerID == provider }
             // MEDIDO: el Hub ORDENABA por free y por proveedor (rank 0..3), y la app lo hereda.
             // Un cambio de orden cambia qué modelo aparece primero, que es lo que ve el usuario.
-            .sortedWith(compareBy(
-                { if (esFree(it)) 0 else 2 } + if (it.providerID == "opencode") 0 else 1
-            ))
+            //
+            // MEDIDO 2026-10-02: aquí escribí `compareBy({ free } + { opencode })`, y `+` no
+            // funciona entre lambdas: `compareBy` toma selectores VARIADICOS, se pasan uno detrás
+            // de otro. Un cambio de orden de modelos es exactamente de los que el usuario no ve
+            // hasta que el modelo por defecto es otro.
+            .sortedWith(
+                compareBy<OpenCodeNativeModel> { if (esFree(it)) 0 else 2 }
+                    .thenBy { if (it.providerID == "opencode") 0 else 1 }
+            )
         val etiquetas = mapOf(
             "opencode" to "OpenCode Zen", "google" to "Google AI (API key)",
             "openrouter" to "OpenRouter"
