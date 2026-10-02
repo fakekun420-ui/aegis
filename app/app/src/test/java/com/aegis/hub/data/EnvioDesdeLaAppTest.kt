@@ -103,4 +103,79 @@ class EnvioDesdeLaAppTest {
         assertTrue("sin texto plano no hay parte de texto que pintar",
             msg.parts.isNullOrEmpty() || msg.parts!!.none { !it.text.isNullOrBlank() })
     }
+
+    /** MEDIDO: mensaje con texto E imagenes: trae `text` y `files`, y NO `content[]`. */
+    private val USUARIO_CON_IMAGEN = """
+        {"id":"msg_c1","time":{"created":1},
+         "text":"mira esta captura",
+         "files":[{"data":"iVBORw0KGgo=","mime":"image/png","name":"c.png",
+                   "source":{"type":"inline"}}],
+         "type":"user"}
+    """.trimIndent()
+
+    @Test
+    fun `un mensaje con TEXTO e imagenes muestra LOS DOS`() {
+        // Este es el fallo que reporto el usuario: "aparece la imagen pero no el mensaje".
+        // MEDIDO: los adjuntos ya crean partes, asi que `parts` NO estaba vacio y mi fallback
+        // —`if (!parts.isNullOrEmpty()) parts else textoPlano(m)`— descartaba el texto en cuanto
+        // habia una imagen. El texto se ANADE, no se elige en vez de.
+        val m = gson.fromJson(USUARIO_CON_IMAGEN, OpenCodeMessage::class.java)
+        val msg = NativeMapper.toMessages(listOf(m), "ses_test").first()
+
+        val tipos = msg.parts!!.map { it.type }
+        assertTrue(
+            "tiene que haber una parte de TEXTO y una de archivo: " + tipos,
+            tipos.contains("text") && tipos.any { it == "file" || it == "image" }
+        )
+        assertEquals(
+            "el texto del usuario llega integro",
+            "mira esta captura",
+            msg.parts!!.first { it.type == "text" }.text
+        )
+    }
+
+    @Test
+    fun `un mensaje de ASISTENTE con content no duplica el texto`() {
+        // El contraejemplo del anterior. Si el texto se anadiera SIEMPRE, un asistente que trae
+        // las dos cosas tendria dos partes de texto con el mismo contenido, y la UI lo pintaria
+        // dos veces.
+        val m = gson.fromJson(
+            """{"id":"msg_a1","type":"assistant","text":"hola","time":{"created":1},"content":[{"type":"text","text":"hola"}]}""",
+            OpenCodeMessage::class.java
+        )
+        val msg = NativeMapper.toMessages(listOf(m), "ses_test").first()
+
+        assertEquals("una sola parte de texto", 1, msg.parts!!.count { it.type == "text" })
+    }
+
+    @Test
+    fun `sin marca no se afirma que este ocupada, y con marca vieja tampoco`() {
+        // MEDIDO: por esto fallaba el indicador de "Trabajando en ello". `getInflight` ponia
+        // `lastSeen = null`, y `isBusy` devuelve false cuando no hay marca: o sea que
+        // `_turnBusy` era SIEMPRE false y el veto de `turnIsReallyFinished` no se aplicaba nunca.
+        assertFalse(
+            "sin marca no hay senal, y sin senal no se afirma que este ocupada",
+            TurnState.isBusy(
+                InflightSession(id = "ses_x", turnOver = false, lastSeen = null, since = null)
+            )
+        )
+        assertTrue(
+            "con marca reciente SI debe decir que esta ocupada",
+            TurnState.isBusy(
+                InflightSession(
+                    id = "ses_x", turnOver = false,
+                    lastSeen = System.currentTimeMillis(), since = null
+                )
+            )
+        )
+        assertFalse(
+            "pero si el registro es VIEJO, no: un turno que empezo hace una hora no esta trabajando",
+            TurnState.isBusy(
+                InflightSession(
+                    id = "ses_x", turnOver = false,
+                    lastSeen = System.currentTimeMillis() - 3_600_000L, since = null
+                )
+            )
+        )
+    }
 }

@@ -635,7 +635,17 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     override suspend fun getModels(provider: String?): Envelope<List<ModelOption>> {
         val todos = oc.listModels().data.orEmpty()
             .filter { it.enabled }
-            .filter { provider == null || it.providerID == provider }
+            // MEDIDO 2026-10-02: el filtro por `providerID` es lo que hacia que los modelos
+            // aparecieran "a veces". `loadModels` usa `_selectedProvider`, que viene de la
+            // sesion; si ese proveedor no es `opencode`, `space-bunny-free` (que es
+            // providerID=opencode, MEDIDO en el catalogo) se queda fuera de la lista, y el chip
+            // pasa a decir "No disponible: space-bunny-free" con la lista cargada.
+            //
+            // Es el mismo patron que el del sintoma que ya se corrigio dos veces: un filtro que
+            // descarta en silencio y deja una pantalla vacia sin explicar por que. Por eso el
+            // filtro se DECLARA y la lista no se recorta: el selector tiene que poder mostrar un
+            // modelo de otro motor, que es justo lo que hace el resto de la app.
+            .filter { provider == null || it.providerID == provider || it.id == ID_MODELO_POR_DEFECTO }
             // MEDIDO: el Hub ORDENABA por free y por proveedor (rank 0..3), y la app lo hereda.
             // Un cambio de orden cambia qué modelo aparece primero, que es lo que ve el usuario.
             //
@@ -754,7 +764,20 @@ class RutaNativa(private val hub: ApiService) : ApiService {
                 // MEDIDO: `type == "running"` es el turno EN MARCHA. Cualquier otro valor es un
                 // turno cerrado, no "desconocido": el endpoint no distingue "idle" de "terminado".
                 turnOver = estado.type != "running",
-                lastSeen = null
+                // MEDIDO 2026-10-02: aqui puse `lastSeen = null` para no inventar una marca de
+                // tiempo que el endpoint NO trae. Error: `TurnState.isBusy` es
+                //     val last = s.lastSeen ?: s.since ?: return false
+                // o sea que sin marca `isBusy` es SIEMPRE false, y `_turnBusy` nunca se ponia a
+                // true. Eso hacia que el veto `if (_turnBusy.value) return false` de
+                // `turnIsReallyFinished` NO se aplicara nunca, y por tanto:
+                //   - "Trabajando en ello" se apagaba entre mensaje y mensaje del agente
+                //   - el divisor "respuesta final" se pintaba a mitad de turno
+                //
+                // Poner la hora de AHORA no es inventar el pasado: es decir "esta sesion estaba
+                // en la lista hace un instante", que es lo unico que el endpoint afirma. Y el
+                // `MAX_SILENCE_MS` de `isBusy` sigue haciendo su trabajo: si el poll falla, el
+                // registro envejece y el busy se apaga solo. Es la marca de FANTASMA, no la real.
+                lastSeen = System.currentTimeMillis()
             )
         }
         return envoltura(lista)

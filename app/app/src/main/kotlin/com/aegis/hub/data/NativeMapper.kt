@@ -38,9 +38,9 @@ object NativeMapper {
      * El `id` lleva el sufijo para que no colisione con una parte de texto real del mismo
      * mensaje: `mergeTail` indexa por id, y dos partes con el mismo id se pisarian.
      */
-    private fun textoPlano(m: OpenCodeMessage): List<MessagePart>? {
+    private fun textoPlano(m: OpenCodeMessage): MessagePart? {
         val texto = m.text?.takeIf { it.isNotBlank() } ?: return null
-        return listOf(MessagePart(id = m.id + "_texto", type = "text", text = texto))
+        return MessagePart(id = m.id + "_texto", type = "text", text = texto)
     }
 
     fun toMessage(
@@ -127,7 +127,20 @@ object NativeMapper {
         // Si no hubo content[] ni files[], se genera una parte por defecto de texto vacío
         // MEDIDO 2026-10-02: un mensaje de USUARIO no trae `content[]`; trae el texto en `text`.
         // Con esto, `partes` se vacia y se reconstruye desde ahi.
-        val contenido = if (!parts.isNullOrEmpty()) parts else textoPlano(m)
+        // MEDIDO 2026-10-02: un mensaje con texto E imagenes trae `text` y `files`, y NO
+        // `content[]`. Los adjuntos ya han creado sus partes, asi que `parts` NO esta vacio, y mi
+        // version anterior de esta linea —`if (!parts.isNullOrEmpty()) parts else textoPlano(m)`—
+        // descartaba el texto en cuanto habia una imagen. Se veia la imagen y no el texto.
+        //
+        // El texto se ANADE, no se alternativa. Y solo si no hay ya una parte de texto, porque
+        // para un mensaje de asistente el texto viene en `content[]` y duplicarlo seria pintar
+        // dos veces la misma respuesta.
+        if (parts.isNullOrEmpty()) {
+            parts = textoPlano(m)?.let { mutableListOf(it) } ?: mutableListOf()
+        } else if (parts.none { it.type == "text" && !it.text.isNullOrBlank() }) {
+            textoPlano(m)?.let { partes -> partes.add(0, it) }
+        }
+        val contenido = parts
 
         val finalParts: List<MessagePart> = if (!contenido.isNullOrEmpty()) {
             contenido
