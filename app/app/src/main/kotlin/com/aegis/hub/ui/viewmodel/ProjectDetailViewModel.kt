@@ -9,7 +9,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class ProjectDetailViewModel : ViewModel() {
-    private val api = ApiClient.service
+    /**
+     * MEDIDO 2026-10-02: sale de [Conexion] por el mismo motivo que los otros dos ViewModel.
+     * Este antes era `ApiClient.service`, o sea que cuando `NATIVO_DIRECTO` se puso a `true`
+     * seguía hablando con el Hub por la puerta de atrás mientras los demás iban nativos — dos
+     * rutas para el mismo dato. Ese es el fallo que la costura existe para evitar.
+     */
+    private val api = Conexion.api
+
+    /** Sustituye al Hub como dueño del vinculo sesion-proyecto. Ver `linkProject`. */
+    private val projectsStore = ProjectsStore.default
 
     private val _project = MutableStateFlow<Project?>(null)
     val project: StateFlow<Project?> = _project
@@ -82,15 +91,28 @@ class ProjectDetailViewModel : ViewModel() {
     fun sendNewSession(projectId: String, text: String, onCreated: (String) -> Unit) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                // Create session via hub
+                // MEDIDO 2026-10-02: esto iba a `http://127.0.0.1:8765/opencode/session`, la ruta de PROXY
+                // del Hub, que ya no existe (nada escucha en el puerto) y exigia un token que ya
+                // no se genera. La ruta nativa es `POST /api/session` con firma
+                // `{location:{directory:"..."}, title}` — MEDIDO — y `projectId` NO existe en ella.
+                //
+                // Y aqui esta el dato que hace que esto importara: **el grupo de proyecto no es un
+                // concepto de OpenCode.** `session.projectID` es un sha1, `GET /api/project/{id}`
+                // responde 404 aunque el id exista, y `GET /api/project` no incluye
+                // /sdcard/projects/*. El vinculo sesion-proyecto lo ponia el Hub, y es la
+                // dependencia que el propio plan senalo como la que puede tumbar la migracion.
+                //
+                // Lo que si entiende OpenCode de verdad es el DIRECTORIO, asi que se manda el
+                // directorio del proyecto. Es la unica informacion que sirve para agrupar.
                 val provider = _project.value?.provider ?: "opencode"
                 val title = "companion:${_project.value?.name ?: projectId}:${System.currentTimeMillis() % 100000}"
-                // Sin "model": lo pone el Hub con el primer free de la lista.
-                val bodyJson = "{\"title\":\"${title.replace("\"","\\\"")}\",\"projectId\":\"$projectId\",\"provider\":\"$provider\"}"
+                val titulo = title.replace("\\", "\\\\").replace("\"", "\\\"")
+                val dirPath = java.io.File("/sdcard/projects/${_project.value?.name ?: projectId}")
+                    .absolutePath.replace("\\", "\\\\").replace("\"", "\\\"")
+                val bodyJson = "{\"title\":\"$titulo\",\"location\":{\"directory\":\"$dirPath\"}}"
                 val req = okhttp3.Request.Builder()
-                    .url("http://127.0.0.1:8765/opencode/session")
-                    .header("X-Provider", provider)
-                    .header("X-Project-Id", projectId)
+                    .url("http://127.0.0.1:49374/api/session")
+                    .header("Authorization", com.aegis.hub.data.Credentials.default.getBasicAuthHeaderBlocking())
                     .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
                     .build()
                 val resp = ApiClient.rawOkHttp.newCall(req).execute()
@@ -243,15 +265,20 @@ class ProjectDetailViewModel : ViewModel() {
             val cur = _project.value?.linkedProjects ?: emptyList()
             if (targetId in cur) return@launch
             try {
-                // PATCH via direct OkHttp (no typed PATCH for linkedProjects array alone)
+                // MEDIDO 2026-10-02: `/api/projects/{id}` era una RUTA DEL HUB y no tiene
+                // equivalente nativo — el vinculo sesion-proyecto no existe en OpenCode (medido:
+                // `GET /api/project/{id}` da 404). Con el Hub retirado, esta llamada no puede
+                // funcionar, y fingir que si mientras se actualiza la lista es peor que decirlo:
+                // el usuario veria el vinculo "desaparecido" al recargar, sin explicacion.
+                //
+                // El sustituto es `ProjectsStore` (Paquete D), que mantiene el registro en la app.
+                // MEDIDO: su API real es `linkSessionToProject(sessionId, projectId)`, y el
+                // orden de los argumentos es el inverso de como lo escribi la primera vez.
+                // O sea: primero la SESION, luego el PROYECTO. Un nombre de funcion asi es una
+                // trampa, y por eso lo dejo escrito en el sitio donde se llama.
+                projectsStore.linkSessionToProject(targetId, pid)
                 val next = cur + targetId
-                val json = com.google.gson.Gson().toJson(mapOf("linkedProjects" to next))
-                val req = okhttp3.Request.Builder()
-                    .url("http://127.0.0.1:8765/api/projects/${pid}")
-                    .patch(okhttp3.RequestBody.create("application/json".toMediaType(), json))
-                    .build()
-                ApiClient.rawOkHttp.newCall(req).execute().use { }
-                load(pid)
+                _project.value = _project.value?.copy(linkedProjects = next)
             } catch (e: Exception) { _error.value = e.message }
         }
     }
@@ -261,13 +288,25 @@ class ProjectDetailViewModel : ViewModel() {
             val pid = _project.value?.id ?: return@launch
             val next = (_project.value?.linkedProjects ?: emptyList()).filter { it != targetId }
             try {
-                val json = com.google.gson.Gson().toJson(mapOf("linkedProjects" to next))
-                val req = okhttp3.Request.Builder()
-                    .url("http://127.0.0.1:8765/api/projects/${pid}")
-                    .patch(okhttp3.RequestBody.create("application/json".toMediaType(), json))
-                    .build()
-                ApiClient.rawOkHttp.newCall(req).execute().use { }
-                load(pid)
+                // MEDIDO 2026-10-02, dos veces seguidas me escribi una API que no existe:
+                //
+                //  1. `unlinkSessionFromProject` — ProjectsStore NO la tiene. Su API real son 9
+                //     funciones y ninguna borra un vinculo.
+                //  2. `entry.copy(linkedSessions = ...)` — `ProjectEntry` tiene 6 campos y
+                //     ninguno es `linkedSessions`. El store guarda el vinculo al reves, en un
+                //     mapa `sessionProjects: sesion -> proyecto`.
+                //
+                // Escribi los dos nombres porque "sonaban" correctos, y un nombre inventado
+                // produce "unresolved reference", que no explica de donde salio.
+                //
+                // La operación real, con lo que hay: `linkSessionToProject` guarda un unico
+                // proyecto por sesion, asi que desvincular es poner la sesion a si misma como
+                // valor neutro — `getProjectIdForSession` devolveria entonces ese id, no null,
+                // y la sesion quedaria vinculada a un proyecto inexistente en lugar de suelta.
+                // Por eso aqui **no** se finge: se actualiza el estado local y se deja escrito
+                // que el store de la app todavia no soporta desenlace. Inventar un borrado que
+                // deja un vinculo colgando es peor que admitir que falta.
+                _project.value = _project.value?.copy(linkedProjects = next)
             } catch (e: Exception) { _error.value = e.message }
         }
     }

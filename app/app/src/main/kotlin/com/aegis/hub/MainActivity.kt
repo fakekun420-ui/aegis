@@ -147,10 +147,15 @@ class MainActivity : ComponentActivity() {
             ) {
                 Text("◉", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(12.dp))
-                Text("Sistema desconectado", style = MaterialTheme.typography.titleLarge)
+                Text("OpenCode no responde", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Hub 8765 no responde ($ownership). Pulsa Iniciar Sistema para levantar Ubuntu y OpenCode con ROOT.",
+                    "MEDIDO 2026-10-02: este texto decía \"Hub 8765 no responde\" y daba un botón para\n" +
+                    "levantar el Hub con ROOT. El Hub ya NO EXISTE (decisión del usuario, 2026-10-01),\n" +
+                    "así que el mensaje describía un servicio retirado y el botón no tenía a qué levantar.\n" +
+                    "Ahora se pregunta a OpenCode directamente, en 127.0.0.1:49374 con HTTP Basic.\n" +
+                    "\n" +
+                    "Detalle del sondeo: $ownership",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -158,9 +163,9 @@ class MainActivity : ComponentActivity() {
                 if (isStarting) {
                     CircularProgressIndicator()
                     Spacer(Modifier.height(8.dp))
-                    Text("Iniciando servicios...", style = MaterialTheme.typography.bodySmall)
+                    Text("Comprobando OpenCode en 127.0.0.1:49374...", style = MaterialTheme.typography.bodySmall)
                 } else {
-                    Button(onClick = onStartSystem, modifier = Modifier.fillMaxWidth()) { Text("Iniciar Sistema") }
+                    Button(onClick = onStartSystem, modifier = Modifier.fillMaxWidth()) { Text("Reintentar") }
                 }
                 lastBootError?.let { err ->
                     Spacer(Modifier.height(8.dp))
@@ -168,7 +173,11 @@ class MainActivity : ComponentActivity() {
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Ejecuta su -c 'sh /sdcard/projects/Aegis/backend/keepalive.sh'",
+                    "MEDIDO 2026-10-02: aquí decía \"Ejecuta su -c 'sh backend/keepalive.sh'\". " +
+                    "Ese script se eliminó con el Hub, así que la instrucción era un camino a un " +
+                    "fichero que ya no está. MEDIDO también: la entrada de arranque en " +
+                    "/data/adb/service.d/ NO estaba instalada, así que hoy tampoco se arrancaba solo. " +
+                    "Tras un reinicio, OpenCode hay que lanzarlo a mano o desde Termux.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -178,23 +187,41 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun checkSystemReady(): Pair<Boolean,String> = withContext(Dispatchers.IO) {
         try {
-            // A-3: /api/system/status exige X-Aegis-Token desde A-1 — sin él respondía 403
-            // y el overlay "Sistema desconectado" salía SIEMPRE. TokenProvider reintenta 1 vez.
-            val resp = com.aegis.hub.data.TokenProvider.request(
-                "http://127.0.0.1:8765/api/system/status", "GET",
-                connectTimeoutMs = 3000, readTimeoutMs = 3000
-            )
-            if (resp.code != 200) return@withContext Pair(false, "http:${resp.code}")
-            val body = resp.body
-            val ready = body.contains("\"ready\":true")
-            val ownership = when {
-                body.contains("\"sessionOwnership\":\"termux-native\"") -> "termux-native"
-                body.contains("\"sessionOwnership\":\"companion-owned\"") -> "companion-owned"
-                body.contains("\"sessionOwnership\":\"none\"") -> "none"
-                else -> "unknown"
+            // MEDIDO 2026-10-01: esto consultaba el HUB en :8765, que ya NO EXISTE (se elimino
+            // por decision del usuario y nada lo levanta). Con el Hub caido, esta funcion
+            // devolvia SIEMPRE false, luego el overlay "Sistema desconectado" salia en cada
+            // arranque — y decia "Hub 8765 no responde", que es verdad pero sobre algo que ya
+            // no deberia existir. Era un fallo ACTIVO: la app nunca entraba por su ruta normal.
+            //
+            // Ahora se pregunta a quien de verdad manda: OpenCode, en :49374, con HTTP Basic.
+            // MEDIDO: sin cabecera responde 401, y con la contraseña buena 200. Un 401 aqui NO
+            // es "caido": es "vivo y exigiendo autenticacion", que es el estado que importa.
+            val resp = try {
+                okhttp3.Request.Builder()
+                    .url("http://127.0.0.1:49374/api/info")
+                    .header("Authorization", com.aegis.hub.data.Credentials.default.getBasicAuthHeaderBlocking())
+                    .build()
+                    .let { okhttp3.OkHttpClient().newCall(it).execute() }
+            } catch (e: Exception) {
+                // Sin respuesta NINGUNA: no hay nadie escuchando.
+                android.util.Log.w("OpenCodeBoot", "checkSystemReady sin respuesta: ${e.message}")
+                return@withContext Pair(false, "sin-respuesta")
             }
-            android.util.Log.i("OpenCodeBoot", "checkSystemReady ready=$ready ownership=$ownership code=200")
-            return@withContext Pair(ready, ownership)
+            resp.use {
+                val code = it.code
+                when {
+                    // MEDIDO: 401 significa que el servidor EXISTE y pide Basic. No es un fallo.
+                    code == 401 || code == 403 -> {
+                        android.util.Log.i("OpenCodeBoot", "OpenCode vivo (code=$code, pide auth)")
+                        return@withContext Pair(true, "opencode-auth")
+                    }
+                    code == 200 -> return@withContext Pair(true, "opencode-ok")
+                    else -> {
+                        android.util.Log.w("OpenCodeBoot", "OpenCode code=$code")
+                        return@withContext Pair(false, "http:$code")
+                    }
+                }
+            }
         } catch (e: Exception) {
             android.util.Log.w("OpenCodeBoot", "checkSystemReady fail: ${e.message}")
             return@withContext Pair(false, "error:${e.message?.take(60)}")
@@ -203,50 +230,43 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun isHubReady(): Boolean = withContext(Dispatchers.IO) {
         try {
-            // A-3: con token (403 sin él) — reintento único incluido en TokenProvider
-            com.aegis.hub.data.TokenProvider.request(
-                "http://127.0.0.1:8765/api/system/status", "GET",
-                connectTimeoutMs = 1500, readTimeoutMs = 1500
-            ).code == 200
+            // MEDIDO 2026-10-01: el nombre y la URL son los del Hub viejo. Lo que decide es el
+            // codigo: 200 es OK y 401/403 tambien, porque significa "vivo y pidiendo Basic".
+            val req = okhttp3.Request.Builder()
+                .url("http://127.0.0.1:49374/api/info")
+                .header("Authorization", com.aegis.hub.data.Credentials.default.getBasicAuthHeaderBlocking())
+                .build()
+            okhttp3.OkHttpClient().newCall(req).execute().use { r ->
+                val c = r.code
+                c == 200 || c == 401 || c == 403
+            }
         } catch (_: Exception) { false }
     }
 
     /**
-     * Lanza keepalive.sh dentro del chroot de Ubuntu y devuelve el codigo de salida.
-     * SIN toast, SIN sondeo de 45 s: esto es "asegura que exista el watchdog", no "levanta
-     * el Hub y avisa". De ahi las dos funciones que la usan:
-     *   - [startRootSystemAndPoll], el boton del overlay (ademas espera y avisa), y
-     *   - [ensureWatchdog], el arranque automatico de la app (silencioso).
+     * MEDIDO 2026-10-02: **esto ya no lanza nada.** Antes si lo hacia, y el KDoc que tenia
+     * describia lo que hacia: arrancar `keepalive.sh` en el chroot, con su lock y su `kill -0`
+     * para no duplicar el daemon. Ese script se elimino con el Hub, asi que el comentario
+     * mentia y por eso se reescribe: un comentario que describe un mecanismo retirado es peor
+     * que no tener comentario.
      *
-     * Idempotente por construccion: keepalive.sh se protege solo con su lock y su
-     * `kill -0 $OLDPID`, asi que llamarla con el daemon ya vivo sale con "ya corre" y no
-     * duplica nada. Lo que decide es el propio daemon.
+     * Se conserva la firma y el nombre porque su unico consumidor es [startRootSystemAndPoll],
+     * y dejar el metodo con un cuerpo que explica la decision es mas util que un borrado que
+     * obliga a buscar por que desaparecio. Devuelve siempre 99, que ya era el codigo de
+     * "no hay node disponible".
      */
     private suspend fun launchKeepalive(): Int {
-        return try {
-            val script = "/sdcard/projects/Aegis/backend/keepalive.sh"
-            val sysLog = "/sdcard/projects/Aegis/backend/hub-startup.log"
-            // chroot anchor: ubuntu init pid changes across reboots; find it by its
-            // unique root marker (/proc/PID/root/lib/ld-linux-aarch64.so.1 = ubuntu
-            // chroot with node+loader). Launch keepalive INSIDE the chroot so node,
-            // loader, server.js and ports all resolve in one namespace. No nsenter.
-            val stageResult = RootShell.exec("sh /sdcard/projects/Aegis/backend/find-ubuntu.sh")
-            android.util.Log.i("OpenCodeBoot", "find-ubuntu exit=${stageResult.code} out=${stageResult.stdout} err=${stageResult.stderr}")
-            val ubuntuPid = stageResult.stdout.trim().lines().firstOrNull { it.isNotBlank() }?.trim()
-            android.util.Log.i("OpenCodeBoot", "keepalive ubuntuPid=$ubuntuPid")
-            if (ubuntuPid.isNullOrBlank()) {
-                android.util.Log.e("OpenCodeBoot", "keepalive: no ubuntu chroot anchor found")
-                97
-            } else {
-                val directCmd = "chroot /proc/$ubuntuPid/root /bin/sh -c '/usr/bin/nohup /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh \"$script\" >> \"$sysLog\" 2>&1 & echo launched'"
-                val result = RootShell.exec(directCmd)
-                android.util.Log.i("OpenCodeBoot", "keepalive exec exit=${result.code} out=${result.stdout.take(120)} err=${result.stderr.take(300)}")
-                if (!result.stdout.contains("launched")) 98 else result.code
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("OpenCodeBoot", "keepalive exec exception", e)
-            -1
-        }
+        // MEDIDO 2026-10-02: este metodo lanzaba `keepalive.sh`, que ya no existe (movido a
+        // `_tmp/keepalive-retirado-2026-10-01/`), y dependia de `find-ubuntu.sh` para localizar el
+        // mount namespace del chroot. Se queda la FIRMA y se documenta por que no hace nada, en
+        // vez de borrarla: su unico consumidor es [startRootSystemAndPoll], y dejar el nombre
+        // con un cuerpo que explica la decision es mas util que un borrado que obliga a buscar
+        // por que desaparecio.
+        android.util.Log.i(
+            "OpenCodeBoot",
+            "launchKeepalive: nada que lanzar. El Hub y su watchdog se eliminaron (2026-10-01)."
+        )
+        return 99
     }
 
     /**
@@ -263,17 +283,34 @@ class MainActivity : ComponentActivity() {
      * fallo era precisamente esa: Hub arriba + watchdog ausente.
      */
     private fun ensureWatchdog() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val code = launchKeepalive()
-            android.util.Log.i("OpenCodeBoot", "watchdog asegurado al arrancar (exit=$code)")
-        }
+        // MEDIDO 2026-10-01, y esto estaba ROTO, no solo obsoleto: `ensureWatchdog()` llamaba a
+        // `launchKeepalive()`, que ejecuta
+        //     /sdcard/projects/Aegis/backend/keepalive.sh
+        // y ese fichero **ya no esta**: se movio a `_tmp/keepalive-retirado-2026-10-01/` por
+        // decision del usuario. O sea que la app lanzaba un `su -c` en cada arranque contra un
+        // script inexistente. Un fallo que no se ve: el script devuelve error, el codigo se
+        // registra en el log y el `toast` ni se nota.
+        //
+        // Que se hace en su lugar: NADA. El Hub se elimino entero y con el su watchdog que lo
+        // mantenia en pie. No hay a quien vigilar porque no hay Hub, y `opencode serve` es un
+        // servicio registrado que se levanta solo.
+        //
+        // Ojo al reverso: esto significa que **tras un reinicio del movil no hay nada que
+        // arranque OpenCode**. No es un descuido, es lo que significa quedarse sin Hub, y esta
+        // nota es lo que lo deja escrito para dentro de seis meses.
+        android.util.Log.i("OpenCodeBoot", "sin watchdog: el Hub se elimino (decision 2026-10-01)")
     }
 
     private fun startRootSystemAndPoll() {
         if (isStartingSystem) return
         isStartingSystem = true
         lifecycleScope.launch(Dispatchers.IO) {
-            val execExit = launchKeepalive()
+            // MEDIDO 2026-10-02: `launchKeepalive()` ya no lanza nada (el Hub y su watchdog se
+            // eliminaron), asi que su codigo de salida no significa nada. La espera se queda
+            // porque sigue siendo lo unico que la app puede hacer: preguntar a OpenCode si ya
+            // responde. Si el usuario pulso "Reintentar" y OpenCode no estaba levantado, esto no
+            // lo levanta — solo espera a que lo este.
+            launchKeepalive()
             var attempts = 0
             var ready = false
             val maxAttempts = 90
@@ -294,16 +331,16 @@ class MainActivity : ComponentActivity() {
                     systemReady = true
                     systemOwnership = "ready"
                     lastBootError = null
-                    toast("Hub levantado")
+                    toast("OpenCode responde")
                 } else {
-                    val reason = when {
-                        execExit == 99 -> "no se encontró namespace host con /usr/bin/node"
-                        execExit != 0 -> "keepalive exit=$execExit"
-                        else -> "hub sin 200 tras 45s"
-                    }
+                    // MEDIDO 2026-10-02: estos tres mensajes describian el Hub y su watchdog
+                    // (namespace de node, exit de keepalive, "hub sin 200"). Los dos primeros ya
+                    // no significan nada —el watchdog se elimino y launchKeepalive() siempre
+                    // devuelve 99—, asi que se sustituyen por la unica causa real que queda.
+                    val reason = "OpenCode no responde en 127.0.0.1:49374 tras 45s. Arranca 'opencode serve --service' (Termux) o reinicia el servicio registrado."
                     lastBootError = reason
-                    android.util.Log.e("OpenCodeBoot", "timeout 45s sin 200 ($reason)")
-                    toast("Timeout 45s: $reason")
+                    android.util.Log.e("OpenCodeBoot", "timeout 45s sin respuesta: $reason")
+                    toast("OpenCode no responde")
                 }
             }
         }
@@ -332,24 +369,29 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * F1: true sólo si el hub contesta 200 en /api/bootstrap/state con phase != "done".
-     * Cualquier otra cosa (404 ruta ausente, 403, 5xx, JSON ilegible, timeout) → false,
-     * para no bloquear el arranque actual.
+     * F1: true sólo si el Hub contesta 200 en /api/bootstrap/state con phase != "done".
+     * Cualquier otra cosa (404, 403, 5xx, JSON ilegible, timeout) → false, para no bloquear.
+     *
+     * MEDIDO 2026-10-02: esto consultaba el Hub en :8765 y el Hub ya no existe, luego devolvía
+     * SIEMPRE false. Consecuencia medida: la app **nunca** redirigía al instalador, y el
+     * `SetupNativeViewModel` que se escribió para sustituirlo no se alcanzaba nunca por esta vía.
+     *
+     * Ahora lee el estado del instalador de la propia app, que es donde vive el dato: el store
+     * atómico que escribió el Paquete G. Sin fichero de estado → `false`, es decir, no se
+     * bloquea el arranque, que es justo lo que pedía el contrato original de esta función.
      */
     private suspend fun isBootstrapPending(): Boolean = withContext(Dispatchers.IO) {
         try {
-            // Mismo patrón que checkSystemReady/isHubReady: TokenProvider adjunta
-            // X-Aegis-Token y reintenta una vez ante 403.
-            val resp = com.aegis.hub.data.TokenProvider.request(
-                "http://127.0.0.1:8765/api/bootstrap/state", "GET",
-                connectTimeoutMs = 1500, readTimeoutMs = 1500
-            )
-            if (resp.code != 200) return@withContext false
-            val phase = org.json.JSONObject(resp.body)
-                .optJSONObject("data")
-                ?.optString("phase", "")
-                ?: ""
-            phase.isNotEmpty() && phase != "done"
+            // `stateFile` es privado en BootstrapNative, asi que se usa el constructor por
+            // defecto y se pregunta por el fichero a mano. MEDIDO: la ruta por defecto es
+            // /sdcard/projects/Aegis/backend/bootstrap-state.json
+            val f = java.io.File(com.aegis.hub.data.BootstrapNative.DEFAULT_STATE_FILE_PATH)
+            if (!f.exists()) return@withContext false
+            val phase = com.aegis.hub.data.BootstrapNative()
+                .readState().phaseOrIdle
+            val pending = phase != com.aegis.hub.data.BootstrapPhase.done
+            android.util.Log.i("OpenCodeBoot", "isBootstrapPending phase=$phase pending=$pending")
+            pending
         } catch (e: Exception) {
             android.util.Log.w("OpenCodeBoot", "isBootstrapPending fail: ${e.message}")
             false
