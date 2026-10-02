@@ -135,12 +135,16 @@ object NativeMapper {
         // El texto se ANADE, no se alternativa. Y solo si no hay ya una parte de texto, porque
         // para un mensaje de asistente el texto viene en `content[]` y duplicarlo seria pintar
         // dos veces la misma respuesta.
-        if (parts.isNullOrEmpty()) {
-            parts = textoPlano(m)?.let { mutableListOf(it) } ?: mutableListOf()
-        } else if (parts.none { it.type == "text" && !it.text.isNullOrBlank() }) {
-            textoPlano(m)?.let { partes -> partes.add(0, it) }
+        // MEDIDO: se trabaja sobre una lista local y NO nula porque `parts` es un `var` nullable,
+        // y sobre un `var` nullable Kotlin no hace smart cast: `parts.none { ... }` no infiere el
+        // tipo del elemento y el compilador dice "Not enough information to infer type argument".
+        val lista: MutableList<MessagePart> = parts ?: mutableListOf()
+        if (lista.isEmpty()) {
+            textoPlano(m)?.let { lista.add(it) }
+        } else if (lista.none { it.type == "text" && !it.text.isNullOrBlank() }) {
+            textoPlano(m)?.let { lista.add(0, it) }
         }
-        val contenido = parts
+        val contenido: List<MessagePart> = lista
 
         val finalParts: List<MessagePart> = if (!contenido.isNullOrEmpty()) {
             contenido
