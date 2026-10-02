@@ -2,6 +2,7 @@ package com.aegis.hub.data
 
 import com.google.gson.Gson
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -26,12 +27,23 @@ class FormaNativaTest {
 
     private val gson = Gson()
 
-    /** MEDIDO contra `GET /api/agent` en vivo. Copiado tal cual, sin arreglar. */
+    /**
+     * MEDIDO contra `GET /api/agent` en vivo. Copiado tal cual, sin arreglar.
+     *
+     * `permissions` es la version que MEDÍ: una lista de reglas `{action, resource, effect}`.
+     * La primera vez que escribi este fixture puse `{"bash": true}` —un mapa— porque es lo que
+     * yo suponia, y el test pasaba mientras la app fallaba con
+     * `Expected BEGIN_ARRAY but was BEGIN_OBJECT at $.data[0].permissions[0]`. Un fixture
+     * inventado verifica el invento.
+     */
     private val AGENTE_REAL = """
         {"id":"build","name":"build","mode":"primary",
          "model":{"id":"space-bunny-free","providerID":"opencode"},
          "description":"Construye cosas","hidden":false,
-         "permissions":{"bash":true}}
+         "permissions":[{"action":"*","resource":"*","effect":"allow"},
+                        {"action":"read","resource":"*.env","effect":"ask"},
+                        {"action":"execute","resource":"bash","effect":"ask"}],
+         "request":{"settings":{},"headers":{},"body":{}}}
     """.trimIndent()
 
     @Test
@@ -45,6 +57,43 @@ class FormaNativaTest {
             a.model is OpenCodeModelRef
         )
         assertEquals("space-bunny-free", a.model?.id)
+    }
+
+    @Test
+    fun `los permissions de un agente son una LISTA de reglas, no un mapa de banderas`() {
+        // MEDIDO 2026-10-02: SEGUNDO fallo del usuario sobre el MISMO endpoint, y el hecho de que
+        // el primero (`model`) estuviera ya arreglado demuestra que corregir campo a campo es
+        // un ciclo de CI por cada campo. De ahi el `chk_forma.py`, que los mide todos de una vez.
+        //
+        //     Expected BEGIN_ARRAY but was BEGIN_OBJECT at line 1 column 438
+        //     path $.data[0].permissions[0]
+        //
+        // Es una lista de objetos {action, resource, effect}. Lo tenía declarado como
+        // `Map<String, Any?>`, y Gson no puede deserializar un ARRAY en un mapa.
+        val a = gson.fromJson(AGENTE_REAL, OpenCodeNativeAgent::class.java)
+        val reglas = a.permissions
+        assertNotNull(
+            "MEDIDO: 'permissions' es una LISTA. Si esto es null, el tipo ha vuelto a Map, que es" +
+            " exactamente el fallo que dio el usuario: BEGIN_ARRAY vs BEGIN_OBJECT.",
+            reglas
+        )
+        assertEquals("3 reglas en el JSON medido, no banderas sueltas", 3, reglas!!.size)
+        assertEquals("*", reglas[0].action)
+        assertEquals("allow", reglas[0].effect)
+        assertEquals("*.env", reglas[1].resource)
+        // El CONTRAejemplo: con el tipo anterior (Map) esta aserción no compila siquiera. Y con un
+        // `List<String>` daría un ClassCastException aqui. Es la que distingue "lista" de "lo que sea".
+        assertTrue("cada elemento es una regla, no un texto", reglas[2] is OpenCodePermissionRule)
+    }
+
+    @Test
+    fun `un agente SIN permissions lo acepta, la lista es nullable`() {
+        // Sin esto, un agente sin reglas de permiso (o un endpoint que las omita) tumba la hoja
+        // entera de agentes por un NullPointerException en el mapeo.
+        val a = gson.fromJson("""{"id":"x","name":"x","mode":"primary"}""",
+            OpenCodeNativeAgent::class.java)
+        assertEquals(null, a.permissions)
+        assertEquals(null, a.request)
     }
 
     @Test

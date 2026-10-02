@@ -143,6 +143,23 @@ data class OpenCodeMessageListResponse(
     @SerializedName("cursor") val cursor: OpenCodeCursor? = null
 )
 
+/**
+ * MEDIDO 2026-10-02 contra `GET /api/agent`: una regla de permiso es un OBJETO con tres campos,
+ * no una bandera suelta. `effect` es "allow" | "ask" | "deny".
+ */
+data class OpenCodePermissionRule(
+    @SerializedName("action") val action: String? = null,
+    @SerializedName("resource") val resource: String? = null,
+    @SerializedName("effect") val effect: String? = null
+)
+
+/** MEDIDO 2026-10-02: `request` trae `settings`, `headers` y `body`, todos vacios en la practica. */
+data class OpenCodeAgentRequest(
+    @SerializedName("settings") val settings: Map<String, Any?>? = null,
+    @SerializedName("headers") val headers: Map<String, Any?>? = null,
+    @SerializedName("body") val body: Map<String, Any?>? = null
+)
+
 // ==========================================
 // 5. Envío de Prompt (Asíncrono v2)
 // ==========================================
@@ -211,7 +228,25 @@ data class OpenCodeNativeAgent(
     @SerializedName("model") val model: OpenCodeModelRef? = null,
     @SerializedName("description") val description: String? = null,
     @SerializedName("hidden") val hidden: Boolean = false,
-    @SerializedName("permissions") val permissions: Map<String, Any?>? = null
+    // MEDIDO 2026-10-02: esto estaba declarado como `Map<String, Any?>` y es una LISTA de
+    // objetos. El usuario lo vio al abrir la app:
+    //
+    //     Expected BEGIN_ARRAY but was BEGIN_OBJECT at $.data[0].permissions[0]
+    //
+    // MEDIDO contra el catalogo real (40 agentes, TODOS con la misma forma):
+    //     "permissions": [ {"action":"*","resource":"*","effect":"allow"},
+    //                      {"action":"read","resource":"*.env","effect":"ask"}, ... ]
+    //
+    // O sea: es la lista de REGLAS de permiso, no un diccionario de banderas. Un mapa no puede
+    // deserializar una lista, y Gson falla al hacerlo.
+    @SerializedName("permissions") val permissions: List<OpenCodePermissionRule>? = null,
+    // MEDIDO: `request` viene con `settings`, `headers` y `body`; no lo declaraba. Gson lo ignora
+    // sin problema, pero se declara para que la forma real este documentada en el codigo.
+    @SerializedName("request") val request: OpenCodeAgentRequest? = null,
+    // MEDIDO: `color` existe y es un string (o null), y `system` es el prompt de sistema del
+    // agente. Ninguno lo declara la app, pero dejarlo escrito evita el mismo despiste luego.
+    @SerializedName("color") val color: String? = null,
+    @SerializedName("system") val system: String? = null
 )
 
 data class OpenCodeNativeAgentListResponse(
