@@ -2,6 +2,7 @@ package com.aegis.hub.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -182,9 +183,19 @@ class BootstrapNativeTest {
         val manager = BootstrapNative(stateFile = destino)
         assertNull(manager.migrateLegacyFrom(heredado))
 
+        // MEDIDO 2026-10-02: yo esperaba `running` y el test falla con `paused`. Tenia RAZON
+        // el codigo: `normalize()` convierte `running` en `paused` a proposito (BootstrapNative:291)
+        // porque un estado en disco que dice "running" con nadie corriendo significa que el
+        // proceso murio — reinicio del movil, cierre de la app — y debe quedar reanudable, no
+        // fingir que sigue trabajando.
+        //
+        // O sea: la expectativa estaba mal, no el codigo. Y cambiar el codigo para satisfacer una
+        // asercion que nunca habia corrido seria inventarse un contrato nuevo.
         val leido = manager.readState()
-        assertEquals(BootstrapPhase.running, leido.phaseOrIdle)
-        assertEquals("node", leido.currentStepId)
+        assertEquals(BootstrapPhase.paused, leido.phaseOrIdle)
+        // Y que NO se pisa con los datos del heredado: el suyo decia `done` con fecha de
+        // 2026-09-15. Si la migracion escribiera, `startedAt` seria ese.
+        assertNotEquals("2026-09-15T10:00:00Z", leido.startedAt)
     }
 
     @Test
