@@ -19,7 +19,9 @@ import java.nio.charset.StandardCharsets
  *   5. "skills"    -> "Skills y plugins"
  *
  * Fichero persistente:
- *   Por defecto en `/sdcard/projects/Aegis/backend/bootstrap-state.json`.
+ *   Por defecto en el DIRECTORIO PRIVADO de la app (`AppPaths.estado`), no en una ruta fija.
+ *   Antes vivia en el arbol de compilacion —`backend/`, luego `app/state/`— asi que sin el repo
+ *   el instalador perdiaba su `phase: done` y el usuario volvia al asistente de cero.
  *   Permite inyección de ruta o File para tests JVM independientes sin tocar disco real.
  */
 class BootstrapNative(
