@@ -83,11 +83,29 @@ interface OpenCodeApi {
     // Mensajes
     // ==========================================
 
+    /**
+     * MEDIDO 2026-10-02 contra el endpoint vivo, con 2520 mensajes en la sesion:
+     *
+     *  - `order=asc`  -> devuelve los MAS ANTIGUOS (la CABEZA). Con limit=200 salen los indices
+     *                    0..199, y el resto de la conversacion no existe para quien pregunta.
+     *  - `order=desc` -> devuelve los MAS NUEVOS. Eso es lo que un chat necesita para avanzar.
+     *  - `limit > 200` -> devuelve **CERO mensajes**, en silencio y sin error. El tope es duro.
+     *
+     * Y un cuarto, el que hace el paginado inutilizable: **`cursor` no se puede combinar con
+     * `order`** (`400 InvalidCursorError: Cursor cannot be combined with order`). O sea que
+     * paginar solo es posible SIN `order`, y con `order` solo hay cabeza o cola.
+     *
+     * Por eso `order` NO tiene valor por defecto aqui. Antes era "asc", y fue la causa de que
+     * `getMessagesTail` devolviera la cabeza: la app llamaba a "la cola" y recibia el principio
+     * del chat, siempre los mismos 200 mensajes, con lo que el poll no podia aportar nunca nada
+     * nuevo. Un valor por defecto aqui no es una comodidad: es una decision sobre que parte del
+     * historial ve el usuario, y no debe tomarla sin querer.
+     */
     @GET("api/session/{id}/message")
     suspend fun getMessages(
         @Path("id") sessionId: String,
-        @Query("limit") limit: Int? = 200,
-        @Query("order") order: String? = "asc",
+        @Query("limit") limit: Int? = LIMITE_MAX_MENSAJES,
+        @Query("order") order: String? = null,
         @Query("cursor") cursor: String? = null
     ): OpenCodeMessageListResponse
 
@@ -177,6 +195,25 @@ interface OpenCodeApi {
     companion object {
         const val BASE_URL = "http://127.0.0.1:49374/"
         private const val TAG = "OpenCodeApi"
+
+        /**
+         * MEDIDO 2026-10-02: el tope de `limit` en `/api/session/{id}/message` es **200**, y es
+         * duro — lo que se pase devuelve **cero mensajes**, en silencio, sin error ni 400.
+         *
+         * MEDIDO con 2520 mensajes en la sesion: limit=50 -> 50, 100 -> 100, 200 -> 200,
+         * **201 -> 0**, 250 -> 0, 500 -> 0, 1000 -> 0.
+         *
+         * Esto convertia cualquier "subamos el limite para ver mas historial" en un chat VACIO, y
+         * sin una sola pista de por que. `TAIL_POLL = 200` en `ChatViewModel` estaba justo en el
+         * limite: funcionar, por casualidad.
+         */
+        const val LIMITE_MAX_MENSAJES = 200
+
+        /** MEDIDO: `order=desc` son los MAS NUEVOS. Es lo que necesita un chat para avanzar. */
+        const val ORDEN_COLA = "desc"
+
+        /** MEDIDO: `order=asc` son los MAS ANTIGUOS. Es la cabeza, y por lo tanto el congelamiento. */
+        const val ORDEN_CABECERA = "asc"
 
         /**
          * Crea el interceptor de autenticación HTTP Basic.

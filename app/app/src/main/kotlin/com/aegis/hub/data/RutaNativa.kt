@@ -73,6 +73,12 @@ class RutaNativa(private val hub: ApiService) : ApiService {
      */
     private val store: ProjectsStore get() = ProjectsStore.default
 
+    /** MEDIDO 2026-10-02: este fichero no logueaba NADA, y por eso un recorte de limite que
+     *  devolvia una lista VACIA pasaba sin dejar rastro. Un fallo mudo en la capa de datos es el
+     *  mas caro de diagnosticar en un movil: obliga a volver a las cinco minutos de
+     *  certificacion, que es exactamente lo que paso con el congelamiento del chat. */
+    private const val TAG = "AegisRutaNativa"
+
     private fun <T> envoltura(datos: T?): Envelope<T> =
         if (datos == null) Envelope(ok = false, data = null)
         else Envelope(ok = true, data = datos)
@@ -124,12 +130,64 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     // getMessages: content[] nativo -> parts[] de la app, via el traductor
     // MEDIDO: GET /api/session/{id}/message devuelve `content[]`, no `parts[]`. De ahi el
     // traductor (NativeMapper), que es el trabajo real de la migracion.
-        override suspend fun getMessages(sessionId: String): Envelope<List<Message>> = envoltura(NativeMapper.toMessages(oc.getMessages(sessionId).data, sessionId))
+        /**
+     * MEDIDO 2026-10-02, y es la causa de que el chat de la app estuviese CONGELADO:
+     *
+     * "Tail" significa "los ultimos N mensajes". Antes esta funcion pedia `order = "asc"`, y
+     * MEDIDO contra el endpoint vivo: `asc` devuelve los MAS ANTIGUOS. O sea que la app pedia la
+     * cola y recibia la cabeza, siempre los mismos 200 primeros mensajes, con lo que el poll no
+     * podia traer NUNCA un mensaje nuevo. La lista se quedaba donde estaba, para siempre.
+     *
+     * Concreto, en esta sesion: 2520 mensajes. `asc&limit=200` devuelve los indices 0..199, y el
+     * mensaje mas reciente esta en el 2519. El chat se quedaba en el 0.08% del historial.
+     *
+     * Y el `order=desc` se INVIERTE antes de devolverlo: `desc` llega del reves, y `mergeTail`
+     * (ChatViewModel:552) anade al final lo que no ha visto, asi que con la lista invertida los
+     * mensajes nuevos se apendirian en orden contrario. La app espera cronologico.
+     */
+    override suspend fun getMessagesTail(sessionId: String, tail: Int): Envelope<List<Message>> {
+        val limite = colaDe(tail)
+        val r = oc.getMessages(sessionId, limit = limite, order = OpenCodeApi.ORDEN_COLA)
+        return envoltura(NativeMapper.toMessages(r.data, sessionId).reversed())
+    }
 
-    // getMessagesTail: el limite se pide al servidor, no se recorta en memoria
-    // El "tail" del Hub era un recorte del historial. Aqui se pide el limite al servidor, que
-    // es lo que hace OpenCode de verdad, en vez de traerlo todo y cortar en memoria.
-        override suspend fun getMessagesTail(sessionId: String, tail: Int): Envelope<List<Message>> = envoltura(NativeMapper.toMessages(oc.getMessages(sessionId, limit = tail).data, sessionId))
+    /**
+     * MEDIDO: los cinco llamadores de esta funcion usan el resultado para lo MISMO — reemplazar
+     * la lista que se ve (ChatViewModel:685, 1014, 1153, 1431) — y ninguno quiere el principio
+     * del historial. Con `asc` los cuatro se quedaban con los primeros 200 de 2520.
+     *
+     * Por eso esta tambien devuelve la COLA. Y es un cambio de semantica que se dice aqui, no en
+     * silencio: `updateTitleFromFirstMessage` (ChatViewModel:264) saca el titulo del primer prompt
+     * de la lista, y con la cola ese primer prompt es uno reciente, no el original. Solo afecta
+     * cuando el titulo de la sesion esta vacio o es tecnico, porque el titulo REAL de OpenCode se
+     * lee antes (ChatViewModel:1015) y manda.
+     *
+     * LIMITACION REAL y no resuelta: con mas de 200 mensajes no se puede ir hacia atras. Se puede
+     * paginar por `cursor`, pero solo SIN `order` (MEDIDO: `400 InvalidCursorError`), o sea que
+     * haria falta un recorrido distinto para "cargar anteriores". Queda escrito para que no se lea
+     * como resuelto: hoy un chat largo muestra sus ultimos 200 mensajes y nada mas.
+     */
+    override suspend fun getMessages(sessionId: String): Envelope<List<Message>> {
+        val r = oc.getMessages(sessionId, limit = OpenCodeApi.LIMITE_MAX_MENSAJES, order = OpenCodeApi.ORDEN_COLA)
+        return envoltura(NativeMapper.toMessages(r.data, sessionId).reversed())
+    }
+
+    /**
+     * El limite pedido por el llamador, recortado al tope real del servidor.
+     *
+     * MEDIDO: por encima de 200 la respuesta viene VACIA, no con un error. Asi que recortar aqui
+     * no es defensa, es la diferencia entre un chat con 200 mensajes y un chat con CERO. Y el
+     * recorte se avisa por log, porque un `coerceIn` callado seria el mismo fallo reproduciendose
+     * en otra forma.
+     */
+    private fun colaDe(tail: Int): Int {
+        if (tail > OpenCodeApi.LIMITE_MAX_MENSAJES) {
+            Log.w(TAG, "colaDe(): se piden $tail mensajes y el tope del servidor es " +
+                "${OpenCodeApi.LIMITE_MAX_MENSAJES}. MEDIDO: por encima del tope la respuesta viene " +
+                "VACIA, sin error. Se recorta a ${OpenCodeApi.LIMITE_MAX_MENSAJES}.")
+        }
+        return tail.coerceIn(1, OpenCodeApi.LIMITE_MAX_MENSAJES)
+    }
 
     // getOpencodeAgents: conversion estructural con Gson; conserva 'hidden'
     // Conversion ESTRUCTURAL con Gson, no campo a campo: los dos data class describen el mismo
