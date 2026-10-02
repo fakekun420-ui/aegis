@@ -173,13 +173,25 @@ object OpenCodeLauncher {
                 "Rutas probadas: ${RUTAS_BINARIO.joinToString()}. Sin el, la app no puede " +
                 "arrancarlo sola.")
 
+        // MEDIDO 2026-10-02: `HOME=/root` va DENTRO del `sh -c`, no con `env`. Escribi
+        // `chroot $CHROOT env HOME=/root ...` y falla:
+        //
+        //     chroot: exec env: No such file or directory
+        //
+        // MEDIDO tambien que dentro del chroot no existe ni `env` ni `ls`: el `/bin` es minimo.
+        // O sea que ahi no se puede lanzar nada que no sea `/bin/sh` o el binario de opencode
+        // (que es un ELF estatico). Con `/bin/sh -c` la misma orden da `opencode v2.0.14`, y el
+        // control negativo —el mismo comando con un binario inexistente— falla como debe.
+        //
+        // MEDIDO: `serve --help` lista `--service`, y `service status` responde
+        // `http://127.0.0.1:49374` a traves de toda esta cadena.
         // MEDIDO: `serve --service` y no `serve --port`, por el motivo que ya esta escrito en el
         // ponytail §4.1: sin `--service` no hay entrada de registro, la contrasena se genera al
         // azar y no se anuncia, y el CLI da "Timed out waiting for the background service".
         //
         // `nohup ... &` porque el proceso debe sobrevivir al shell que lo lanzo: la app abre un
         // `su` por orden, y si OpenCode cuelga de ese shell se muere con el.
-        val cmd = "chroot $CHROOT env HOME=/root '/$binario' serve --service " +
+        val cmd = "chroot $CHROOT /bin/sh -c \"HOME=/root /$binario serve --service\" " +
             ">/data/local/ubuntu/root/.local/share/opencode/app-launch.log 2>&1 &"
         Log.i(TAG, "asegurarAbierto: lanzo $binario")
         val r = shell(cmd, 5000)
