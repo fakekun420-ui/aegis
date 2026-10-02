@@ -73,12 +73,6 @@ class RutaNativa(private val hub: ApiService) : ApiService {
      */
     private val store: ProjectsStore get() = ProjectsStore.default
 
-    /** MEDIDO 2026-10-02: este fichero no logueaba NADA, y por eso un recorte de limite que
-     *  devolvia una lista VACIA pasaba sin dejar rastro. Un fallo mudo en la capa de datos es el
-     *  mas caro de diagnosticar en un movil: obliga a volver a las cinco minutos de
-     *  certificacion, que es exactamente lo que paso con el congelamiento del chat. */
-    private const val TAG = "AegisRutaNativa"
-
     private fun <T> envoltura(datos: T?): Envelope<T> =
         if (datos == null) Envelope(ok = false, data = null)
         else Envelope(ok = true, data = datos)
@@ -737,4 +731,16 @@ class RutaNativa(private val hub: ApiService) : ApiService {
         return envoltura(lista)
     }
 
+
+    companion object {
+        /** MEDIDO 2026-10-02: este fichero no logueaba NADA, y por eso un recorte de limite que
+         *  devolvia una lista VACIA pasaba sin dejar rastro. Un fallo mudo en la capa de datos es el
+         *  mas caro de diagnosticar en un movil: obliga a volver a las cinco minutos de
+         *  certificacion, que es exactamente lo que paso con el congelamiento del chat.
+         *
+         *  Va en el companion y no en el cuerpo porque Kotlin solo admite `const val` en el
+         *  nivel superior, en objetos con nombre y en companions: en el cuerpo de una clase da
+         *  error de compilacion. */
+        private const val TAG = "AegisRutaNativa"
+    }
 }
