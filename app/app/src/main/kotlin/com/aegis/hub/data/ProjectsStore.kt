@@ -183,6 +183,44 @@ class ProjectsStore(
         saveInternal()
     }
 
+    /**
+     * MEDIDO 2026-10-02: esta funcion NO existia, y su ausencia la anote como "desvincular sigue
+     * sin estar soportado por el store" en un commit anterior. Era cierto entonces, y por eso
+     * `unlinkSession` delegaba en el Hub. Con el Hub retirado, esa delegacion no tiene a donde ir
+     * y `unlinkSession` era un `= hub.` mas: un boton que al pulsarse no hacia nada.
+     *
+     * El vinculo se guarda al reves (`sessionProjects: sesion -> proyecto`), asi que desvincular
+     * es quitar la entrada de la sesion. Se devuelve si estaba o no, para que el llamador pueda
+     * decir "no estaba vinculada" en vez de fingir un borrado.
+     *
+     * NO borra el titulo ni el pin: son de la SESION, no del vinculo. Si se borraran aqui,
+     * volver a vincular la misma sesion la devolveria sin nombre, que es peor que dejar un dato
+     * de mas.
+     */
+    fun unlinkSessionFromProject(sessionId: String, projectId: String): Boolean = synchronized(lock) {
+        val actual = data.sessionProjects[sessionId]
+        // Solo se quita si apunta a ESE proyecto. Si la sesion se movio a otro, quitar el vinculo
+        // desde el proyecto viejo la dejaria huerfana en el nuevo.
+        if (actual != projectId) return@synchronized false
+        data.sessionProjects.remove(sessionId)
+        saveInternal()
+        true
+    }
+
+    /**
+     * Las sesiones que un proyecto tiene vinculadas. El store guarda el vinculo al reves, asi que
+     * esto es la INVERSION del mapa: sin esto, `getProjectSessions` no tendria de donde sacar la
+     * lista y solo podria devolver un `projects.json` entero, que no es lo que la pantalla
+     * espera.
+     *
+     * El filtro es por proyecto, no por carpeta: `getProjectIdForSession` resuelve las dos cosas
+     * (vinculo explicito y carpeta que coincide), y aqui se invierte esa resolucion para no
+     * tener dos criterios distintos que puedan discrepar.
+     */
+    fun getSessionIdsForProject(projectId: String): List<String> = synchronized(lock) {
+        data.sessionProjects.filterValues { it == projectId }.keys.toList()
+    }
+
     fun getProjectIdForSession(sessionId: String, directory: String? = null): String? = synchronized(lock) {
         val explicit = data.sessionProjects[sessionId]
         if (!explicit.isNullOrBlank()) return explicit

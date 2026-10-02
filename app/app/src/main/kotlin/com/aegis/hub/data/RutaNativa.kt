@@ -77,9 +77,17 @@ class RutaNativa(private val hub: ApiService) : ApiService {
         if (datos == null) Envelope(ok = false, data = null)
         else Envelope(ok = true, data = datos)
 
-    // getOpencodeSessions: conversion estructural con Gson
-    // Igual que los agentes: conversion estructural. El campo `model` de la app es `Any?` a
-    // proposito, asi que la forma nativa del objeto modelo entra sin trabajo de mas.
+    /**
+     * Fallo CON MOTIVO. `envoltura(null)` devuelve `ok=false` y `data=null`, y en la UI eso es
+     * indistinguible de "no hay nada": la pantalla se queda vacia sin decir por que.
+     *
+     * Importa mas aqui que en el resto de la costura porque estas operaciones son las que el
+     * usuario PULSA —renombrar, desvincular— y un boton que no hace nada y ademas lo calla es la
+     * peor de las dosCombinaciones.
+     */
+    private fun <T> envolturaFallo(motivo: String): Envelope<T> =
+        Envelope(ok = false, data = null, error = ErrorBody(code = "nativo", message = motivo))
+
         // MEDIDO 2026-10-02: `GET /api/session` devuelve `id`, `title`, `agent`, `model` (OBJETO),
         // `time` (OBJETO con created/updated/idle), `cost`, `tokens`, `projectID` y `location`.
         //
@@ -263,23 +271,123 @@ class RutaNativa(private val hub: ApiService) : ApiService {
         return envoltura(Project(id = id, name = "(eliminado)"))
     }
 
-    // PATCH /api/session/{id} tiene equivalente nativo, pero el titulo que la app enseña ya lo
-    // pone OpenCode solo: pendiente de confirmar antes de tocarlo.
-        override suspend fun renameSession(id: String, body: Map<String, String>): Envelope<Map<String, Any>> = hub.renameSession(id, body)
+    // ==========================================================================================
+    // SESIONES DE UN PROYECTO, renombrar y borrar.
+    //
+    // Estas CINCO delegaban en el Hub con un comentario mio que decia "tiene equivalente nativo,
+    // pendiente de confirmar antes de tocarlo". Confirmado MEDIDO contra el OpenAPI de OpenCode
+    // (113 rutas): `/api/session/{sessionID}` tiene `GET, DELETE, PATCH`, y el PATCH acepta
+    // `{"title": string|null}`. Confirmado tambien que NO existe `/api/project/{id}/sessions`:
+    // el vinculo sesion-proyecto no lo tiene OpenCode, lo tiene el store de la app.
+    //
+    // POR QUE IMPORTA mas de lo que parece: estas cinco son las que usa `ProjectDetailViewModel`,
+    // que es la pantalla de proyecto con SU PROPIA lista de chats. O sea que "los chats no cargan"
+    // no era un fallo de la lista global —esa va bien, y lo verifique en el logcat del movil:
+    // `GET /api/session?limit=50 -> 200 OK (39ms)`— sino que esta pantalla pedia a un puerto que
+    // ya no escucha. Mi comentario anterior decia que las 40 que delegan eran "subsistemas que ya
+    // no existen: skills, jobs, workflows". Eso era cierto para 36 y FALSO para estas cinco.
+    // ==========================================================================================
 
-    // DELETE /api/session/{id} tiene equivalente nativo, pero el mismo aviso: la app muestra
-    // el titulo real de OpenCode y no el renombrado a mano.
-        override suspend fun deleteSession(id: String): Envelope<Map<String, Any>> = hub.deleteSession(id)
+    /**
+     * MEDIDO: el PATCH acepta `title`. Sin esto, renombrar un chat no tiene destino: el Hub se
+     * llevo `/api/sessions/{id}/rename` y con el Hub fuera solo queda esto.
+     *
+     * El titulo se guarda ALSO en el store, y no solo en OpenCode, porque `getProjectSessions`
+     * lee el store: si solo se guardara en OpenCode, el renombrado no se veria hasta que la
+     * pantalla volviera a pedir la lista completa, y el store no tendria de donde sacarlo.
+     */
+    override suspend fun renameSession(id: String, body: Map<String, String>): Envelope<Map<String, Any>> {
+        val titulo = body["title"]?.takeIf { it.isNotBlank() }
+            ?: return envolturaFallo("renameSession sin title")
+        val r = oc.patchSession(id, mapOf("title" to titulo))
+        if (!r.isSuccessful) return envolturaFallo("PATCH session ${r.code()}")
+        store.setSessionTitle(id, titulo)
+        return envoltura(mapOf("id" to id, "title" to titulo))
+    }
 
-        override suspend fun pinSession(id: String): Envelope<PinResponse> = hub.pinSession(id)
+    /**
+     * MEDIDO: `DELETE /api/session/{sessionID}` existe (OpenAPI, ruta 1 de 113).
+     *
+     * Se consulta `isSuccessful` y no se asume excepcion: un 404 significa que la sesion ya no
+     * esta, que para el usuario es el resultado que queria, no un fallo.
+     */
+    override suspend fun deleteSession(id: String): Envelope<Map<String, Any>> {
+        val r = oc.deleteSession(id)
+        return if (r.isSuccessful) envoltura(mapOf("id" to id, "deleted" to true))
+        else envolturaFallo("DELETE session ${r.code()}")
+    }
 
-        override suspend fun unpinSession(id: String): Envelope<PinResponse> = hub.unpinSession(id)
+    override suspend fun pinSession(id: String): Envelope<PinResponse> {
+        // MEDIDO: OpenCode no tiene "pin" en el modelo de sesion (`GET /api/session` no trae ese
+        // campo), asi que el pin es de la APP y vive en el store, que es donde ya se guardaba.
+        store.setSessionPin(id, true)
+        return envoltura(PinResponse(id = id, pinned = true))
+    }
 
-        override suspend fun linkSession(projectId: String, body: LinkSessionRequest): Envelope<SessionRef> = hub.linkSession(projectId, body)
+    override suspend fun unpinSession(id: String): Envelope<PinResponse> {
+        store.setSessionPin(id, false)
+        return envoltura(PinResponse(id = id, pinned = false))
+    }
 
-        override suspend fun unlinkSession(projectId: String, sessionId: String): Envelope<Map<String, String>> = hub.unlinkSession(projectId, sessionId)
+    override suspend fun linkSession(projectId: String, body: LinkSessionRequest): Envelope<SessionRef> {
+        store.linkSessionToProject(body.sessionId, projectId)
+        body.title?.takeIf { it.isNotBlank() }?.let { store.setSessionTitle(body.sessionId, it) }
+        return envoltura(
+            SessionRef(
+                sessionId = body.sessionId,
+                title = body.title ?: store.getSessionTitle(body.sessionId),
+                pinned = store.isSessionPinned(body.sessionId),
+                provider = body.provider
+            )
+        )
+    }
 
-        override suspend fun getProjectSessions(projectId: String): Envelope<List<SessionRef>> = hub.getProjectSessions(projectId)
+    override suspend fun unlinkSession(projectId: String, sessionId: String): Envelope<Map<String, String>> {
+        // MEDIDO 2026-10-02: `unlinkSessionFromProject` no existia en el store, y su ausencia la
+        // anote como "desvincular sigue sin estar soportado" en un commit anterior. Era verdad
+        // cuando lo escribi; con el Hub fuera era la razon de que este boton no hiciera nada.
+        val estaba = store.unlinkSessionFromProject(sessionId, projectId)
+        // No se borra la sesion: esto quita el VINCULO con el proyecto. Son dos cosas distintas y
+        // confundirlas aqui seria borrar el trabajo del usuario por desordenar una lista.
+        return envoltura(mapOf("sessionId" to sessionId, "unlinked" to estaba.toString()))
+    }
+
+    /**
+     * MEDIDO: NO existe `/api/project/{id}/sessions` en OpenCode. El vinculo sesion-proyecto lo
+     * lleva `ProjectsStore`, y el titulo/pin tambien. O sea que la lista sale de CRUZAR las
+     * sesiones que devuelve OpenCode con los vinculos del store.
+     *
+     * Y por que no sale solo del store: ahi esta el vinculo, pero no el titulo real de OpenCode ni
+     * la fecha. Sin `/api/session` la lista saldria con titulos vacios.
+     *
+     * LIMITACION, escrita porque es real: se piden las 50 primeras sesiones, que es el limite que
+     * usa el resto de la app. Un proyecto con mas de 50 sesiones no las muestra todas, y con
+     * paginacion por `cursor` se podria resolver. No lo hago aqui porque es la unica pantalla que
+     * paginaria, y anadir un bucle de paginas a una pantalla es un cambio de alcance que no es
+     * de este arreglo; queda dicho para que no se lea como si estuviera resuelto.
+     */
+    override suspend fun getProjectSessions(projectId: String): Envelope<List<SessionRef>> {
+        val ids = store.getSessionIdsForProject(projectId).toSet()
+        val todas = oc.listSessions().data.orEmpty()
+        val lista = todas.mapNotNull { s ->
+            // `getProjectIdForSession` resuelve el vinculo explicito Y la carpeta que coincide.
+            // Se usa el MISMO criterio que en el resto de la app: si aqui se filtrara por otra
+            // cosa, un chat apareceria en la lista global y no en la del proyecto.
+            val proyecto = store.getProjectIdForSession(s.id, s.location?.directory)
+            if (proyecto != projectId && s.id !in ids) return@mapNotNull null
+            SessionRef(
+                sessionId = s.id,
+                // El titulo guardado en el store tiene prioridad: es lo que el usuario escribio.
+                // El de OpenCode es el que el agente haya puesto.
+                title = store.getSessionTitle(s.id) ?: s.title,
+                createdAt = s.time?.created?.let { java.time.Instant.ofEpochMilli(it).toString() },
+                lastUsed = s.time?.updated?.let { java.time.Instant.ofEpochMilli(it).toString() },
+                pinned = store.isSessionPinned(s.id),
+                provider = s.model?.providerID
+            )
+        }.sortedByDescending { it.lastUsed ?: "" }
+        return envoltura(lista)
+    }
 
         override suspend fun getSkills(projectId: String?): Envelope<SkillListResponse> = hub.getSkills(projectId)
 

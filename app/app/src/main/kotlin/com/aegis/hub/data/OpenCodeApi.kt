@@ -55,6 +55,30 @@ interface OpenCodeApi {
         @Path("id") id: String
     ): OpenCodeSession
 
+    /**
+     * MEDIDO 2026-10-02 contra el OpenAPI de OpenCode (`/openapi.json`, 113 rutas): la sesion
+     * tiene `GET, DELETE, PATCH`. El PATCH acepta `{"title": string|null}` — es lo que usaba
+     * `/api/sessions/{id}/rename` del Hub, y sin esto renombrar un chat no tiene a donde ir.
+     *
+     * `Response<Unit>` y no `Unit`: un DELETE de OpenCode devuelve cuerpo vacio, y Retrofit con
+     * `Unit` funciona; pero el `Response` deja distinguir un 404 de un 200 sin lanzar, que es lo
+     * que necesita `deleteSession` para no borrar un vinculo por error.
+     *
+     * MEDIDO: el tipo va QUALIFICADO a proposito. Este fichero ya importa `okhttp3.Response` (lo
+     * usa el interceptor de reintento tras un 401), asi que un `Response<Unit>` a secas resolveria
+     * a la clase de okhttp —que no es generica— y el fallo seria un mensaje de compilacion que no
+     * senala el sitio. Importar `retrofit2.Response` no arregla nada: el clash se resuelve por el
+     * orden de los imports.
+     */
+    @PATCH("api/session/{id}")
+    suspend fun patchSession(
+        @Path("id") id: String,
+        @Body body: Map<String, String?>
+    ): retrofit2.Response<Unit>
+
+    @DELETE("api/session/{id}")
+    suspend fun deleteSession(@Path("id") id: String): retrofit2.Response<Unit>
+
     @POST("api/session")
     suspend fun createSession(
         @Body body: CreateOpenCodeSessionRequest
