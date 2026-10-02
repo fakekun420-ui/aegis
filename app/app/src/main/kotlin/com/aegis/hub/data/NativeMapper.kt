@@ -132,6 +132,18 @@ object NativeMapper {
         if (m.time?.idle != null) {
             timeMap["idle"] = m.time.idle
         }
+        // MEDIDO 2026-10-02: `streamed` y `completed` son las dos claves que faltaban, y
+        // `completed` es LA que decide si el turno ha terminado:
+        // `turnIsReallyFinished` (ChatViewModel) acaba en
+        //     last.info?.time?.containsKey("completed") == true
+        // Sin copiarla aqui, esa condicion nunca era true y el indicador de "Trabajando en ello..."
+        // se quedaba pegado con el turno ya cerrado. Es el sintoma que reporto el usuario.
+        if (m.time?.streamed != null) {
+            timeMap["streamed"] = m.time.streamed
+        }
+        if (m.time?.completed != null) {
+            timeMap["completed"] = m.time.completed
+        }
 
         val msgId = if (m.id.isNotEmpty()) {
             m.id

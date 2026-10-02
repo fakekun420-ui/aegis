@@ -32,10 +32,22 @@ data class OpenCodeServerInfo(
 // 2. Sesiones (OpenCode Session v2)
 // ==========================================
 
+/**
+ * MEDIDO 2026-10-02 contra `GET /api/session/{id}/message`: el `time` de un mensaje trae
+ * `created`, `streamed` y `completed`. Y el ultimo es el que decide si el turno TERMINO.
+ *
+ * Reportado por el usuario: "la barra de 'Trabajando en ello...' aparece cuando la sesion ya
+ * termino". Causa medida: `completed` no estaba declarado aqui, asi que Gson lo descartaba, y el
+ * mapa que recibe la app nunca tenia esa clave.
+ *
+ * `updated` e `idle` tambien constan, aunque no salen en los mensajes: vienen en las sesiones.
+ */
 data class OpenCodeTime(
     @SerializedName("created") val created: Long? = null,
     @SerializedName("updated") val updated: Long? = null,
-    @SerializedName("idle") val idle: Long? = null
+    @SerializedName("idle") val idle: Long? = null,
+    @SerializedName("streamed") val streamed: Long? = null,
+    @SerializedName("completed") val completed: Long? = null
 )
 
 data class OpenCodeTokens(
@@ -262,8 +274,24 @@ data class OpenCodeNativeModel(
     @SerializedName("enabled") val enabled: Boolean = true,
     @SerializedName("capabilities") val capabilities: Map<String, Any?>? = null,
     @SerializedName("cost") val cost: Any? = null, // puede ser número, objeto o lista
-    @SerializedName("variants") val variants: List<String>? = null,
+    // MEDIDO 2026-10-02: esto estaba declarado como `List<String>?` y cada elemento es un
+    // OBJETO. MEDIDO sobre el catalogo entero: 301 de 480 modelos traen `variants`, y el tipo de
+    // TODOS sus elementos es `dict`. Gson no puede deserializar un objeto en un texto y lanza,
+    // asi que el fallo tumbaba la lista COMPLETA de modelos, no solo este campo.
+    //
+    // Reportado por el usuario al abrir la app: los modelos no cargaban.
+    @SerializedName("variants") val variants: List<OpenCodeModelVariant>? = null,
     @SerializedName("status") val status: String? = null
+)
+
+/**
+ * MEDIDO 2026-10-02 contra `GET /api/model`: un "variant" es un objeto con `id` y `settings`, no
+ * un nombre. Ejemplo real: `{"id": "thinking", "settings": {"reasoning": {"enabled": true}}}`.
+ */
+data class OpenCodeModelVariant(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("settings") val settings: Map<String, Any?>? = null
 )
 
 data class OpenCodeNativeModelListResponse(
