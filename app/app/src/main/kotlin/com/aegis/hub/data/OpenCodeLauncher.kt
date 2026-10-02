@@ -109,8 +109,8 @@ object OpenCodeLauncher {
      * esta lista se queda obsoleta y este metodo no.
      */
     fun rutaDelProcesoVivo(shell: (String, Long) -> RootShell.Result = RootShell::exec): String? {
-        val r = shell("for p in \\$(pgrep -f '@opencode/cli/bin/opencode'); do " +
-            "readlink -f /proc/\\$p/exe 2>/dev/null; done | head -1", 3000)
+        val r = shell("for p in \$(pgrep -f '@opencode/cli/bin/opencode'); do " +
+            "readlink -f /proc/\${p}/exe 2>/dev/null; done | head -1", 3000)
         val ruta = r.stdout.trim().substringAfterLast('\n').trim()
         // `readlink -f` dentro del chroot puede devolver la ruta ya resuelta en el host
         // (/data/local/ubuntu/...), y `chroot` necesita la relativa. De ahi el recorte.
@@ -152,7 +152,7 @@ object OpenCodeLauncher {
      *   vez de hacerla aqui porque un `curl` con Basic necesita la contrasena, que es cosa de
      *   [Credentials] y no de este objeto.
      */
-    fun asegurarAbierto(
+    suspend fun asegurarAbierto(
         comprobarSiVivo: suspend () -> Boolean,
         shell: (String, Long) -> RootShell.Result = RootShell::exec
     ): Resultado {
