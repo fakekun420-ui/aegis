@@ -44,10 +44,29 @@ class ModelosFreeTest {
     }
 
     @Test
-    fun `un coste que NO es cero NO marca gratis aunque el id acabe en -free (rama 1 manda sobre la 2)`() {
-        // Este es el caso que hace que la primera rama exista. MEDIDO 2026-09-29 en el catálogo
-        // real: 39 de 472 dan free=true, y NO son los que llevan "-free" en el id.
-        assertEquals(false, esFree("opencode/algo-free", mapOf("input" to 3, "output" to 15)))
+    fun `coste no-cero CON sufijo -free SI es gratis: las dos ramas se suman, no se pisan`() {
+        // MEDIDO 2026-10-02: yo escribi este test afirmando `false` aqui, y FALLO. Ejecuté el
+        // criterio original del Hub en node para no discutir de memoria:
+        //
+        //     coste 0/0   + id normal  -> true
+        //     coste 3/15  + id '-free' -> true      <-- el que yo creia false
+        //     coste 3/15  + id normal   -> false
+        //     sin coste   + id '-free' -> true
+        //
+        // O sea: las dos ramas son un O. La primera PUEDE anadir gratis, pero nunca lo quita.
+        // Mi expectativa era la de un "el coste manda", que no es lo que hacia el Hub.
+        //
+        // Y esto es lo importante del test: fija el comportamiento REAL, que es el que decide
+        // qué modelo aparece primero. Si alguien "corrige" la logica para que el coste mande
+        // sobre el nombre, este test cae — y ese cambio HARIA lo que no se puede hacer, que es
+        // cobrar por un modelo que el proveedor da gratis.
+        assertTrue(esFree("opencode/algo-free", mapOf("input" to 3, "output" to 15)))
+    }
+
+    @Test
+    fun `lo que SI excluye un modelo de pago es el coste, sin depender del id`() {
+        // El contraejemplo del anterior: mismo coste, id que NO dice '-free' → no es gratis.
+        assertEquals(false, esFree("anthropic/claude-opus", mapOf("input" to 3, "output" to 15)))
     }
 
     @Test

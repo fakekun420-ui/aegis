@@ -343,9 +343,21 @@ class RutaNativa(private val hub: ApiService) : ApiService {
      *     costs.every(c => c && c.input === 0 && c.output === 0)   -> gratis
      *     id termina en ":free" o "-free"                          -> gratis
      *
-     * La primera rama manda sobre la segunda, igual que allí. MEDIDO 2026-09-29 en el catálogo
-     * real: 39 de 472 modelos dan `free=true` con este criterio, y no son los que llevan "-free"
-     * en el id — por eso hace falta la primera rama.
+     * MEDIDO 2026-10-02, y esto es un OR, no una prioridad: **las dos ramas se suman.** La
+     * primera PUEDE añadir gratis, pero nunca lo quita. Ejecuté el criterio original del Hub
+     * en node para no discutir de memoria:
+     *
+     *     coste 0/0  + id normal  -> true
+     *     coste 3/15 + id "-free" -> true      (yo creia false, y el test que escribi lo fijo
+     *                                                como false: por eso el test cayo)
+     *     coste 3/15 + id normal  -> false
+     *     sin coste  + id "-free" -> true
+     *
+     * Lo que EXCLUYE un modelo de pago es el coste, y el sufijo solo puede añadir. Cambiar eso
+     * para que "el coste mande sobre el nombre" haría que un modelo que el proveedor da gratis
+     * apareciera como de pago. MEDIDO 2026-09-29 en el catálogo real: 39 de 472 dan `free=true`
+     * con este criterio, y no son los que llevan "-free" en el id — de ahí que hagan falta las
+     * dos ramas y no una.
      *
      * Por qué importa: sin `free` la app no puede distinguir un modelo de pago de uno gratis, y
      * el modelo por defecto acabaría siendo el PRIMERO de la lista en vez del primero gratis. Ese
