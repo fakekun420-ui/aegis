@@ -306,18 +306,35 @@ class MainActivity : ComponentActivity() {
         isStartingSystem = true
         lifecycleScope.launch(Dispatchers.IO) {
             // MEDIDO 2026-10-02: `launchKeepalive()` ya no lanza nada (el Hub y su watchdog se
-            // eliminaron), asi que su codigo de salida no significa nada. La espera se queda
-            // porque sigue siendo lo unico que la app puede hacer: preguntar a OpenCode si ya
-            // responde. Si el usuario pulso "Reintentar" y OpenCode no estaba levantado, esto no
-            // lo levanta — solo espera a que lo este.
+            // eliminaron), asi que su codigo de salida no significa nada.
             launchKeepalive()
+
+            // MEDIDO 2026-10-02: esto antes NO levantaba nada. Preguntaba a OpenCode 90 veces y
+            // se rindia, con el boton etiquetado "Reintentar" que no reintentaba: solo esperaba.
+            // Con el Hub fuera, `opencode serve` hay que lanzarlo desde aqui, y se puede:
+            // el binario esta DENTRO del chroot (medido en /proc/<pid>/exe) y el chroot es un
+            // arbol de ficheros, no un namespace.
+            var arranque = com.aegis.hub.data.OpenCodeLauncher.asegurarAbierto(
+                comprobarSiVivo = { isHubReady() }
+            )
+            android.util.Log.i("OpenCodeBoot", "asegurarAbierto: ok=${arranque.ok} " +
+                "arrancoAhora=${arranque.arrancoAhora} detalle=${arranque.detalle}")
+
             var attempts = 0
-            var ready = false
+            var ready = arranque.ok && isHubReady()
             val maxAttempts = 90
             while (attempts < maxAttempts && !ready) {
                 delay(500)
                 ready = isHubReady()
                 attempts++
+                // Si el primer lanzamiento no prende, no se reintenta a lo loco: uno mas y ya esta
+                // dicho. Reintentar `serve` cada 500 ms con el puerto ocupado solo genera ruido.
+                if (!ready && attempts == 10 && !arranque.arrancoAhora) {
+                    arranque = com.aegis.hub.data.OpenCodeLauncher.asegurarAbierto(
+                        comprobarSiVivo = { isHubReady() }
+                    )
+                    android.util.Log.i("OpenCodeBoot", "reintento de arranque: ${arranque.detalle}")
+                }
             }
             withContext(Dispatchers.Main) {
                 isStartingSystem = false
