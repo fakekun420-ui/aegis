@@ -96,7 +96,27 @@ class RutaNativa(private val hub: ApiService) : ApiService {
         // Aqui `OpencodeSession.model` es `Any?` a proposito, asi que el objeto entra sin drama —
         // y por eso este mapeo es explicito campo a campo y el de agentes no lo podia ser.
         override suspend fun getOpencodeSessions(): Envelope<List<OpencodeSession>> {
-            val lista = oc.listSessions().data.orEmpty().map { s ->
+            // MEDIDO el 2026-10-02: `GET /api/session` devuelve las sesiones de
+            // primer nivel Y las que crean los subagentes, mezcladas y sin
+            // ningun flag que las separe. La lista de "Chats" por eso se
+            // llenaba de sesiones que nadie abrio: "Verificacion de
+            // directorio actual", "Nombres exactos de herramientas",
+            // "orquestador:master" y demas, que son los subagentes que lanza
+            // el orquestador.
+            //
+            // El campo que las distingue es `parentID`: null en una sesion
+            // normal, y el id de la madre en una creada por un subagente. No
+            // estaba en el modelo (`OpenCodeSession`), asi que el filtro no se
+            // podia escribir; ahora si.
+            //
+            // Se filtran en la app y no se pide al server filtrado, porque el
+            // filtro tiene que ser el mismo en las DOS listas (global y por
+            // proyecto): si se filtrara en un solo sitio, un chat apareceria en
+            // una lista y no en la otra, que es el mismo criterio que ya
+            // sustenta `getProjectSessions`.
+            val lista = oc.listSessions().data.orEmpty()
+                .filter { it.parentID.isNullOrBlank() }
+                .map { s ->
                 OpencodeSession(
                     id = s.id,
                     title = s.title,
@@ -421,6 +441,11 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     override suspend fun getProjectSessions(projectId: String): Envelope<List<SessionRef>> {
         val ids = store.getSessionIdsForProject(projectId).toSet()
         val todas = oc.listSessions().data.orEmpty()
+            // MEDIDO el 2026-10-02: mismo filtro que `getOpencodeSessions`, y
+            // por el mismo motivo. Las dos listas tienen que usar el MISMO
+            // criterio: si aqui no se filtrara, un subagente apareceria en la
+            // lista del proyecto pero no en la global.
+            .filter { it.parentID.isNullOrBlank() }
         val lista = todas.mapNotNull { s ->
             // `getProjectIdForSession` resuelve el vinculo explicito Y la carpeta que coincide.
             // Se usa el MISMO criterio que en el resto de la app: si aqui se filtrara por otra

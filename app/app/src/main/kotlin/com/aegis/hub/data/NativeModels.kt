@@ -69,6 +69,18 @@ data class OpenCodeModelRef(
 data class OpenCodeSession(
     @SerializedName("id") val id: String,
     @SerializedName("title") val title: String? = null,
+    // MEDIDO el 2026-10-02: falta aqui el campo que distingue una sesion de
+    // una sesion HIJA (la que crea un subagente). `GET /api/session` devuelve
+    // las dos mezcladas y `parentID` es null en las de primer nivel y trae el
+    // id de la madre en las de subagente.
+    //
+    // Sin este campo el problema no se puede arreglar en ninguna parte de la
+    // app: no es que el filtro falte, es que la INFORMACION para filtrar no
+    // llegaba. El sintoma era la lista de "Chats" llena de sesiones que
+    // nadie abrio ("Verificacion de directorio actual", "Nombres exactos de
+    // herramientas", "orquestador:master"...), que son los subagentes del
+    // orquestador.
+    @SerializedName("parentID") val parentID: String? = null,
     @SerializedName("agent") val agent: String? = null,
     @SerializedName("model") val model: OpenCodeModelRef? = null,
     @SerializedName("outcome") val outcome: String? = null,
