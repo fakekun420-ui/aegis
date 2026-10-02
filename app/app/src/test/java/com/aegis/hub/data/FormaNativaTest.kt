@@ -59,14 +59,20 @@ class FormaNativaTest {
 
     @Test
     fun `el model de una SESION tambien es un objeto, y ahi la app lo acepta como Any`() {
-        // MEDIDO contra `GET /api/session`: `model` es un objeto igual que en el agente. La
-        // diferencia es que `OpencodeSession.model` (app) es `Any?` y por eso no revienta — y por
-        // eso los chats cargan aunque los agentes no. Un `Any?` accidentalmente bien puesto.
+        // MEDIDO contra `GET /api/session`: `model` es un objeto igual que en el agente. Aqui el
+        // data class NATIVO ya lo declara como `OpenCodeModelRef?`, asi que deserializa bien.
+        //
+        // MEDIDO 2026-10-02, y este test fallo al escribirse: yo afirme que salia un `Map`, porque
+        // en el caso de los agentes Gson deja un objeto crudo. Aqui no: el tipo es `OpenCodeModelRef`
+        // porque el data class lo declara asi. Los dos casos son distintos y mi comentario los
+        // mezclaba — que es justo lo que hace dano por medido algo que no se ha medido.
         val s = gson.fromJson(
             """{"id":"ses_x","title":"aegis","model":{"id":"space-bunny-free","providerID":"opencode"}}""",
             OpenCodeSession::class.java)
         assertEquals("aegis", s.title)
-        assertTrue("el model de la sesion debe seguir siendo un objeto", s.model is Map<*, *>)
+        assertTrue("el model de la sesion debe seguir siendo un objeto",
+            s.model is OpenCodeModelRef)
+        assertEquals("space-bunny-free", s.model?.id)
     }
 
     @Test
