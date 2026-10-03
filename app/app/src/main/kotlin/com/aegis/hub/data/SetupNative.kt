@@ -598,10 +598,19 @@ class SetupNative(
                 )
             }
 
+            // MEDIDO 2026-10-03: crear responde envuelto en `data`; sin id no hay sesion a
+            // la que mandar el prompt. Fallo honesto en vez de un prompt a un id nulo.
+            val smokeSid = session.data?.id
+                ?: return@withContext SmokeTestResponse(
+                    ok = false,
+                    data = null,
+                    error = ErrorBody("SMOKE_FAILED", "OpenCode creo la sesion sin devolver su id")
+                )
+
             // Enviar prompt
             val ack = try {
                 openCodeApi.sendPrompt(
-                    sessionId = session.id,
+                    sessionId = smokeSid,
                     body = OpenCodePromptRequest(
                         text = "Responde exclusivamente: PONG"
                     )
