@@ -224,9 +224,16 @@ object OpenCodeLauncher {
         // ponytail §4.1: sin `--service` no hay entrada de registro, la contrasena se genera al
         // azar y no se anuncia, y el CLI da "Timed out waiting for the background service".
         //
+        // MEDIDO 2026-10-03: el servidor vivo corre con oom_score_adj=-1000 (heredado del
+        // boot), o sea que el LMK de Android no lo mata aunque se abra una app pesada. Se fija
+        // explicito en el lanzamiento para que valga igual cuando el padre es la app (con otro
+        // adj): un servidor matado a mitad de turno corta todas las sesiones de todos los
+        // clientes, incluido el TUI de Termux.
+        //
         // `nohup ... &` porque el proceso debe sobrevivir al shell que lo lanzo: la app abre un
         // `su` por orden, y si OpenCode cuelga de ese shell se muere con el.
-        val cmd = "chroot $CHROOT /bin/sh -c \"HOME=/root ${rutaEnChroot(binario)} serve --service\" " +
+        val cmd = "chroot $CHROOT /bin/sh -c \"echo -1000 > /proc/self/oom_score_adj; " +
+            "HOME=/root ${rutaEnChroot(binario)} serve --service\" " +
             ">/data/local/ubuntu/root/.local/share/opencode/app-launch.log 2>&1 &"
         Log.i(TAG, "asegurarAbierto: lanzo $binario")
         val r = shell(cmd, 5000)
