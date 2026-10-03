@@ -369,12 +369,41 @@ class RutaNativa(
             return if (ok) envoltura(true) else Envelope(ok = false, data = null)
         }
 
+    /**
+     * El modelo que un agente trae definido (`GET /api/agent` -> `model`), o null si el
+     * agente delega en el de la sesion. MEDIDO 2026-10-03: solo orchestrator lo tiene
+     * (muse-spark-1.3-contributor-free); Build y Plan lo dejan en null. Es `internal` para
+     * probarlo sin servidor.
+     */
+    internal fun modeloDelAgente(nombre: String?, agentes: List<OpenCodeNativeAgent>): OpenCodeModelRef? {
+        val n = nombre?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return agentes.firstOrNull { it.id == n || it.name == n }?.model
+    }
+
     // createSession: POST /api/session nativo (tambien envuelto en `data`).
     // MEDIDO 2026-10-03: los ViewModels la creaban con POST crudo al Hub en :8765.
+    // MEDIDO 2026-10-03 (2): crear sin agente ni modelo dejaba la sesion con los defaults
+    // del servidor (Space Bunny) aunque la app trabajara con orchestrator y su modelo. Por
+    // eso aqui se fija el agente (el del cuerpo o el de por defecto) y despues su modelo:
+    // el prompt no acepta modelo y POST /api/session tampoco lo garantiza, asi que se fija
+    // despues de crear, igual que al enviar. Si fijar falla, la sesion creada igual vale:
+    // fallar la creacion entera por el modelo seria peor.
         override suspend fun createSession(body: CreateOpenCodeSessionRequest): Envelope<OpencodeSession> {
             return try {
                 val creado = oc.createSession(body).data
                     ?: return Envelope(ok = false, data = null)
+                val sid = creado.id
+                val agente = body.agent?.trim()?.takeIf { it.isNotBlank() } ?: AGENTE_POR_DEFECTO
+                try {
+                    oc.setSessionAgent(sid, SetSessionAgentRequest(agente))
+                } catch (e: Exception) {
+                    Log.w(TAG, "createSession: no se pudo fijar agente $agente en $sid: ${e.message}")
+                }
+                val modelo = body.model
+                    ?: runCatching { modeloDelAgente(agente, oc.listAgents().data.orEmpty()) }.getOrNull()
+                if (modelo != null) {
+                    fijarModelo(sid, modelo.id, modelo.providerID, modelo.variant)
+                }
                 envoltura(
                     OpencodeSession(
                         id = creado.id,
@@ -1880,5 +1909,15 @@ class RutaNativa(
          *  nivel superior, en objetos con nombre y en companions. Es el mismo error que el del
          *  TAG de este fichero, y el segundo: por eso esta escrito. */
         const val RAIZ_PROYECTOS = "/sdcard/projects"
+
+        /**
+         * El agente con el que nace una sesion creada desde la app.
+         *
+         * MEDIDO 2026-10-03: es el mismo valor que `AGENTE_POR_DEFECTO` de ChatViewModel (ahi es
+         * `private`, no se puede importar). La app ya trabajaba con orchestrator en todas
+         * partes menos al crear: la sesion nacia con los defaults del servidor. Duplicar el
+         * literal aqui con el motivo escrito es mejor que dejar la creacion sin agente.
+         */
+        const val AGENTE_POR_DEFECTO = "orchestrator"
     }
 }

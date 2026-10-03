@@ -113,7 +113,12 @@ data class OpenCodeCursor(
 
 data class CreateOpenCodeSessionRequest(
     @SerializedName("title") val title: String? = null,
-    @SerializedName("location") val location: OpenCodeLocation? = null
+    @SerializedName("location") val location: OpenCodeLocation? = null,
+    // MEDIDO 2026-10-03 en el OpenAPI: POST /api/session acepta `agent` y `model` ademas de
+    // titulo y ubicacion. La app no los mandaba nunca: la sesion nacia con los defaults del
+    // servidor (Space Bunny) aunque la app trabajara con otro agente y otro modelo.
+    @SerializedName("agent") val agent: String? = null,
+    @SerializedName("model") val model: OpenCodeModelRef? = null
 )
 
 data class UpdateOpenCodeSessionRequest(

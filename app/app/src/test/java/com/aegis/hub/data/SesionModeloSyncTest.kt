@@ -77,8 +77,7 @@ class SesionModeloSyncTest {
     }
 
     @Test
-    fun `max se elige cuando el catalogo lo ofrece y si no es null`() {
-        val conMax = listOf(
+    fun `max se elige cuando el catalogo lo ofrece y si no es null`() {        val conMax = listOf(
             OpenCodeNativeModel(
                 id = "muse-spark-1.3-contributor-free",
                 variants = listOf(OpenCodeModelVariant(id = "low"), OpenCodeModelVariant(id = "max"))
@@ -92,5 +91,24 @@ class SesionModeloSyncTest {
         )
         assertEquals(null, ruta.resolveVariantFor("otro", sinMax))
         assertEquals(null, ruta.resolveVariantFor("ausente", conMax))
+    }
+
+    @Test
+    fun `el modelo del agente sale de su definicion y si no tiene es null`() {
+        // Forma real medida en GET /api/agent para orchestrator.
+        val agentes = listOf(
+            OpenCodeNativeAgent(
+                id = "orchestrator",
+                name = "orchestrator",
+                model = OpenCodeModelRef(id = "muse-spark-1.3-contributor-free", providerID = "opencode")
+            ),
+            OpenCodeNativeAgent(id = "build", name = "Build", model = null)
+        )
+        val mod = ruta.modeloDelAgente("orchestrator", agentes)
+        assertEquals("muse-spark-1.3-contributor-free", mod?.id)
+        assertEquals("opencode", mod?.providerID)
+        assertEquals(null, ruta.modeloDelAgente("build", agentes))
+        assertEquals(null, ruta.modeloDelAgente("inexistente", agentes))
+        assertEquals(null, ruta.modeloDelAgente(null, agentes))
     }
 }

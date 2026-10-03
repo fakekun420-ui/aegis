@@ -489,7 +489,11 @@ fun moveSession(sessionId: String, projectId: String) {
             val location = if (!effectiveFolder.isNullOrBlank()) OpenCodeLocation(directory = effectiveFolder) else null
 
             val createdSession = try {
-                openCodeApi.createSession(
+                // MEDIDO 2026-10-03: antes se llamaba a OpenCode directo y, si fallaba, a la
+                // via vieja del Hub. Las dos hacian lo mismo menos el agente y el modelo: la
+                // sesion nacia sin ellos. Una sola via por la costura, que fija agente (el de
+                // por defecto si no se dice otro) y su modelo tras crear.
+                api.createSession(
                     CreateOpenCodeSessionRequest(
                         title = title,
                         location = location
