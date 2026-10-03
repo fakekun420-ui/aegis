@@ -183,6 +183,24 @@ object OpenCodeLauncher {
             return Resultado(true, "OpenCode ya responde; no se toca nada.")
         }
 
+        // MEDIDO 2026-10-03: habia DOS servidores `opencode serve` vivos a la vez (~660 MB cada
+        // uno) y el movil se quedaba sin RAM. La sonda HTTP dice "no responde" tambien cuando el
+        // servidor esta ARRANCANDO (puerto aun sin ligar), asi que lanzar ahi crea el duplicado.
+        // Por eso antes de lanzar se mira si ya hay un PROCESO `serve --service`: si lo hay, no
+        // se lanza otro — se informa y quien llama espera a que abra el puerto.
+        val yaProceso = shell("pgrep -f 'opencode serve --service' 2>/dev/null", 3000)
+        val pids = yaProceso.stdout.split(Regex("\\s+")).mapNotNull { it.trim().toIntOrNull() }
+        if (pids.isNotEmpty()) {
+            Log.i(TAG, "asegurarAbierto: hay proceso serve vivo (pids=${pids.joinToString()}), " +
+                "pero aun no responde. No se lanza otro.")
+            return Resultado(
+                ok = false,
+                detalle = "Hay un servidor arrancando (pids=${pids.joinToString()}); " +
+                    "espera a que abra el puerto en vez de lanzar otro.",
+                arrancoAhora = false
+            )
+        }
+
         montarChroot(shell)
 
         val binario = primerBinarioQueExista(shell)
