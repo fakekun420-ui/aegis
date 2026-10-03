@@ -140,5 +140,26 @@ if [ -f "$COMPO" ]; then
   fi
 fi
 
+# ---- 2b) formas del CLI vs NativeModels (aviso, NUNCA bloquea) -----------------
+#
+# MEDIDO 2026-10-03: dos fallos seguidos vinieron de declarar un campo con el tipo
+# equivocado (`model` como String, `permissions` como mapa) y enterarse en el movil o en
+# la CI. `tools/chk_forma.py` compara lo declarado contra el JSON vivo de :49374.
+# Es aviso y no bloqueo a proposito: sin servidor (apagado, reiniciando) no hay nada
+# que comparar y el script sale 0 igual; y si hay incompatibles, el commit pasa pero el
+# aviso queda en el log para que nadie lo suba a ciegas. La puerta dura sigue siendo CI.
+FORMA="$ROOT/tools/chk_forma.py"
+if [ -f "$FORMA" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    if ! FOUT=$(python3 "$FORMA" 2>&1); then
+      echo "----------------------------------------------------------------" >&2
+      echo " aviso: NativeModels no cuadra con el CLI vivo (ver arriba)" >&2
+      echo "$FOUT" | tail -8 >&2
+      echo " (no bloquea: la puerta dura es CI)" >&2
+      echo "----------------------------------------------------------------" >&2
+    fi
+  fi
+fi
+
 # ---- 3) staleness del mapa de graphify ----------------------------------------
 exec "$GPY" "$CHECK" --root "$ROOT"

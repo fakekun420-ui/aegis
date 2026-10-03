@@ -476,7 +476,7 @@ class SetupNative(
 
     /**
      * Ejecuta las 2 comprobaciones finales del contrato CHECK_DEFS:
-     * 1. id="opencode", label="OpenCode (proxy4096)"
+     * 1. id="opencode", label="OpenCode (:49374)"
      * 2. id="bootstrap", label="Instalación inicial (wizard)"
      */
     suspend fun runFinalCheck(): FinalCheckResponse = withContext(ioDispatcher) {
@@ -528,7 +528,7 @@ class SetupNative(
         if (probe.ok) {
             return SetupCheck(
                 id = "opencode",
-                label = "OpenCode (proxy4096)",
+                label = "OpenCode (:49374)",
                 status = SetupCheckStatus.ok,
                 detail = "OpenCode respondiendo en 127.0.0.1:49374"
             )
@@ -539,7 +539,7 @@ class SetupNative(
         if (apiProbe.statusCode == 401 || apiProbe.statusCode == 200) {
             return SetupCheck(
                 id = "opencode",
-                label = "OpenCode (proxy4096)",
+                label = "OpenCode (:49374)",
                 status = SetupCheckStatus.ok,
                 detail = "OpenCode v2 respondiendo en 127.0.0.1:49374 (Basic Auth protegido)"
             )
@@ -550,7 +550,7 @@ class SetupNative(
         if (ocBin.satisfied) {
             return SetupCheck(
                 id = "opencode",
-                label = "OpenCode (proxy4096)",
+                label = "OpenCode (:49374)",
                 status = SetupCheckStatus.manual,
                 detail = "OpenCode instalado (${ocBin.detail}) pero el servicio no responde en :49374 — arráncalo con 'opencode serve --service'"
             )
@@ -558,7 +558,7 @@ class SetupNative(
 
         return SetupCheck(
             id = "opencode",
-            label = "OpenCode (proxy4096)",
+            label = "OpenCode (:49374)",
             status = SetupCheckStatus.fail,
             detail = "OpenCode no disponible: sin daemon en 127.0.0.1:49374 ni binario ejecutable"
         )

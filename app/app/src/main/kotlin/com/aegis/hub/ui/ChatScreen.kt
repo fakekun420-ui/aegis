@@ -1193,20 +1193,44 @@ private fun TerminalConsoleTurn(
     }
 }
 
+/**
+ * MEDIDO 2026-10-03: habia DOS bucles `while(true){delay(500)}` identicos, uno en cada
+ * componente de abajo, y el estado `cursorVisible` se leia en el cuerpo del padre: 2
+ * recomposiciones por segundo de las tarjetas de herramienta enteras. El parpadeo vive
+ * ahora en estas hojas: solo el glifo se recompone, nunca las tarjetas ni la columna.
+ */
+@Composable
+private fun CursorParpadeanteCadena(): String {
+    var visible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(500)
+            visible = !visible
+        }
+    }
+    return if (visible) " ▋" else ""
+}
+
+@Composable
+private fun GlifoCursor() {
+    Text(
+        CursorParpadeanteCadena(),
+        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+        color = Color(0xFF58A6FF),
+        fontWeight = FontWeight.Bold
+    )
+}
+
+@Composable
+private fun TextoConCursorParpadeante(text: String) {
+    MarkdownText(text = text, cursor = CursorParpadeanteCadena())
+}
+
 @Composable
 private fun TerminalStreamingTurn(
     streamText: String,
     streamingTools: List<LiveToolExecution>
 ) {
-    var cursorVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(500)
-            cursorVisible = !cursorVisible
-        }
-    }
-    val cursor = if (cursorVisible) " ▋" else ""
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1234,30 +1258,17 @@ private fun TerminalStreamingTurn(
                         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
                         color = Color(0xFF8B949E)
                     )
-                    Text(
-                        cursor,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                        color = Color(0xFF58A6FF),
-                        fontWeight = FontWeight.Bold
-                    )
+                    GlifoCursor()
                 }
             }
         } else {
-            MarkdownText(text = streamText, cursor = cursor)
+            TextoConCursorParpadeante(streamText)
         }
     }
 }
 
 @Composable
 private fun TerminalActivityCursor() {
-    var cursorVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(500)
-            cursorVisible = !cursorVisible
-        }
-    }
-    val cursor = if (cursorVisible) " ▋" else ""
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1270,12 +1281,7 @@ private fun TerminalActivityCursor() {
             style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
             color = Color(0xFF8B949E)
         )
-        Text(
-            cursor,
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-            color = Color(0xFF58A6FF),
-            fontWeight = FontWeight.Bold
-        )
+        GlifoCursor()
     }
 }
 

@@ -55,7 +55,14 @@ object Conexion {
  * No es una clase abstracta ni una interfaz: implementa las 57, porque `ApiService` es lo que
  * `ChatViewModel` ya tiene inyectado. Por eso el cambio en el ViewModel es de una linea.
  */
-class RutaNativa : ApiService {
+class RutaNativa(
+    /**
+     * MEDIDO 2026-10-03: habia 11 lambdas identicas repartidas por los metodos, ninguna
+     * inyectable, y por eso el codigo que habla con el shell no tenia ni un test. Una sola
+     * propiedad con el mismo valor por defecto: produccion igual, tests con fake posible.
+     */
+    private val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+) : ApiService {
 
     private val gson = Gson()
     private val oc: OpenCodeApi get() = OpenCodeApi.default
@@ -616,7 +623,6 @@ class RutaNativa : ApiService {
      */
     override suspend fun getSkills(projectId: String?): Envelope<SkillListResponse> {
         val base = rutaDeSkills()
-        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
         val listado = shell("ls -1 '$base' 2>/dev/null", 5000)
         if (listado.code != 0) {
             return envolturaFallo("No se pudo leer $base (exit ${listado.code})")
@@ -655,8 +661,10 @@ class RutaNativa : ApiService {
      * ambito por proyecto que luego no se puede seleccionar.
      */
     private fun scopeDe(nombre: String, base: String): String {
-        val deProyecto = base + "/../project"
-        return if (nombre.isNotEmpty() && deProyecto.isNotEmpty()) "global" else "global"
+        // MEDIDO: las dos ramas devolvian "global" siempre (la condicion era tautologica).
+        // Se deja la firma porque hay llamadas, y el comentario de arriba explica por que
+        // no hay ambitos por proyecto en este movil.
+        return "global"
     }
 
     /**
@@ -673,7 +681,6 @@ class RutaNativa : ApiService {
         require(!name.contains("..") && !name.contains("/")) {
             "Nombre de skill invalido: $name"
         }
-        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
         val base = rutaDeSkills()
         val origen = "$base/$name"
         val comprobacion = shell("test -d '$origen' && echo SI", 3000)
@@ -702,7 +709,6 @@ class RutaNativa : ApiService {
         }
         val base = rutaDeSkills()
         val dir = "$base/$name"
-        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
         val check = shell("test -d '$dir' && echo SI", 3000)
         if (check.stdout.trim() == "SI") {
             return envolturaFallo("El skill '$name' ya existe")
@@ -739,7 +745,6 @@ class RutaNativa : ApiService {
         val base = rutaDeSkills()
         val dir = "$base/$skillName"
         val file = "$dir/SKILL.md"
-        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
         val check = shell("test -f '$file' && echo SI", 3000)
         if (check.stdout.trim() != "SI") {
             return envolturaFallo("No existe el skill '$skillName'")
@@ -880,15 +885,8 @@ class RutaNativa : ApiService {
 
     private val setupNative: SetupNative by lazy { SetupNative() }
 
-    override suspend fun systemStatus(): SystemStatus {
-        val health = getSystemHealth().body()?.data
-        val ready = health?.server == "running" || health?.server == "ok"
-        return SystemStatus(ready = ready, sessionOwnership = "native")
-    }
-
     override suspend fun getSystemHealth(): Response<HealthResponse> {
         return try {
-            val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
             val upRes = shell("cat /proc/uptime 2>/dev/null", 2000)
             val uptimeSec = upRes.stdout.trim().split("\\s+".toRegex()).firstOrNull()?.toDoubleOrNull()?.toLong() ?: 0L
 
@@ -945,7 +943,6 @@ class RutaNativa : ApiService {
 
     override suspend fun getSystemLogs(limit: Int): Response<LogsResponse> {
         return try {
-            val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
             val n = if (limit in 1..500) limit else 100
             val res = shell("logcat -d -t $n 2>/dev/null", 4000)
             if (res.code == 0 && res.stdout.isNotBlank()) {
@@ -962,7 +959,6 @@ class RutaNativa : ApiService {
 
     override suspend fun getSystemMemory(): Response<MemoryResponse> {
         return try {
-            val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
             val memRes = shell("cat /proc/meminfo 2>/dev/null", 2000)
             val lines = memRes.stdout.lines()
             var totalKb = 0L
@@ -1227,7 +1223,6 @@ class RutaNativa : ApiService {
 
     override suspend fun getSystemSkills(): Response<SkillsResponse> {
         val base = rutaDeSkills()
-        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
         val listado = shell("ls -1 '$base' 2>/dev/null", 5000)
         val carpetas = if (listado.code == 0) {
             listado.stdout.split("\n")
@@ -1330,7 +1325,6 @@ class RutaNativa : ApiService {
             )
         }
         val base = rutaDeSkills()
-        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
         val r = shell("cat '$base/$id.json' 2>/dev/null", 3000)
         return if (r.code == 0 && r.stdout.isNotBlank()) {
             try {
@@ -1361,7 +1355,6 @@ class RutaNativa : ApiService {
         val base = rutaDeSkills()
         val jsonStr = com.google.gson.Gson().toJson(config)
         val encoded = android.util.Base64.encodeToString(jsonStr.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
         val cmd = "mkdir -p '$base' && echo '$encoded' | base64 -d > '$base/$id.json'"
         val r = shell(cmd, 5000)
         return if (r.code == 0) {
@@ -1392,7 +1385,6 @@ class RutaNativa : ApiService {
     // ==========================================================================================
 
     override suspend fun getWorkspaceProjects(): Response<ProjectsResponse> {
-        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
         // `-d` para quedarse solo con directorios: la pantalla lista carpetas, y un fichero suelto
         // en la raiz no es un proyecto.
         val r = shell("ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null", 8000)

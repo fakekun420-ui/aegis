@@ -13,3 +13,8 @@ app/app/build/
 *.aab
 *.log
 *.log.wedged-*
+
+# Payloads historicos del flujo Gemini-orquesta/Mimo-ejecuta (2026-09-25), sustituido por
+# OpenCode + cargos. Se mueven a docs/_archivo (legibles, sin borrar) y salen del grafo:
+# eran ~130 nodos (35% de docs) de contexto que ya no dirige nada.
+docs/_archivo/

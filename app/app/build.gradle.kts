@@ -15,6 +15,9 @@ android {
         versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 2
         versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // MEDIDO 2026-10-03: POCO F3 arm64. Sin filtro el APK trae 4 ABIs de
+        // libandroidx.graphics.path.so; solo se ejecuta una.
+        ndk { abiFilters += "arm64-v8a" }
     }
     signingConfigs {
         create("release") {
@@ -45,7 +48,9 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures {
         compose = true
-        viewBinding = true
+        // MEDIDO 2026-10-03: 0 ficheros en res/layout y 0 refs a ViewBinding en todo
+        // el codigo. Era verdadero por defecto heredado, no por uso.
+        viewBinding = false
     }
     sourceSets {
         getByName("main") {
@@ -73,14 +78,14 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.webkit:webkit:1.12.1")
-    implementation("androidx.coordinatorlayout:coordinatorlayout:1.2.0")
+    // MEDIDO 2026-10-03: webkit y coordinatorlayout con 0 referencias en todo el codigo
+    // (ni imports ni layouts que los usen). Se quitan del binario, no de la historia.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     // Compose BOM — Kotlin 2.0.21 compatible (1.5.14 compiler, BOM 2024.10.00)
     val composeBom = platform("androidx.compose:compose-bom:2024.10.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
+    // MEDIDO 2026-10-03: 0 @Preview en el codigo. Solo servia al IDE, no al APK.
     implementation("androidx.compose.material3:material3:1.3.1")
     implementation("androidx.compose.material:material-icons-extended:1.7.3")
     implementation("androidx.activity:activity-compose:1.9.3")

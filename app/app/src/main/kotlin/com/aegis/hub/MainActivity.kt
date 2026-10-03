@@ -204,7 +204,7 @@ class MainActivity : ComponentActivity() {
                     .let { okhttp3.OkHttpClient().newCall(it).execute() }
             } catch (e: Exception) {
                 // Sin respuesta NINGUNA: no hay nadie escuchando.
-                android.util.Log.w("OpenCodeBoot", "checkSystemReady sin respuesta: ${e.message}")
+                android.util.Log.w(TAG, "checkSystemReady sin respuesta: ${e.message}")
                 return@withContext Pair(false, "sin-respuesta")
             }
             resp.use {
@@ -212,18 +212,18 @@ class MainActivity : ComponentActivity() {
                 when {
                     // MEDIDO: 401 significa que el servidor EXISTE y pide Basic. No es un fallo.
                     code == 401 || code == 403 -> {
-                        android.util.Log.i("OpenCodeBoot", "OpenCode vivo (code=$code, pide auth)")
+                        android.util.Log.i(TAG, "OpenCode vivo (code=$code, pide auth)")
                         return@withContext Pair(true, "opencode-auth")
                     }
                     code == 200 -> return@withContext Pair(true, "opencode-ok")
                     else -> {
-                        android.util.Log.w("OpenCodeBoot", "OpenCode code=$code")
+                        android.util.Log.w(TAG, "OpenCode code=$code")
                         return@withContext Pair(false, "http:$code")
                     }
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.w("OpenCodeBoot", "checkSystemReady fail: ${e.message}")
+            android.util.Log.w(TAG, "checkSystemReady fail: ${e.message}")
             return@withContext Pair(false, "error:${e.message?.take(60)}")
         }
     }
@@ -263,7 +263,7 @@ class MainActivity : ComponentActivity() {
         // con un cuerpo que explica la decision es mas util que un borrado que obliga a buscar
         // por que desaparecio.
         android.util.Log.i(
-            "OpenCodeBoot",
+            TAG,
             "pasoHubRetirado: nada que lanzar. El Hub y su watchdog se eliminaron (2026-10-01)."
         )
         return 99
@@ -298,7 +298,7 @@ class MainActivity : ComponentActivity() {
         // Ojo al reverso: esto significa que **tras un reinicio del movil no hay nada que
         // arranque OpenCode**. No es un descuido, es lo que significa quedarse sin Hub, y esta
         // nota es lo que lo deja escrito para dentro de seis meses.
-        android.util.Log.i("OpenCodeBoot", "sin watchdog: el Hub se elimino (decision 2026-10-01)")
+        android.util.Log.i(TAG, "sin watchdog: el Hub se elimino (decision 2026-10-01)")
     }
 
     private fun startRootSystemAndPoll() {
@@ -317,7 +317,7 @@ class MainActivity : ComponentActivity() {
             var arranque = com.aegis.hub.data.OpenCodeLauncher.asegurarAbierto(
                 comprobarSiVivo = { isOpenCodeReady() }
             )
-            android.util.Log.i("OpenCodeBoot", "asegurarAbierto: ok=${arranque.ok} " +
+            android.util.Log.i(TAG, "asegurarAbierto: ok=${arranque.ok} " +
                 "arrancoAhora=${arranque.arrancoAhora} detalle=${arranque.detalle}")
 
             var attempts = 0
@@ -336,7 +336,7 @@ class MainActivity : ComponentActivity() {
                     arranque = com.aegis.hub.data.OpenCodeLauncher.asegurarAbierto(
                         comprobarSiVivo = { isOpenCodeReady() }
                     )
-                    android.util.Log.i("OpenCodeBoot", "reintento de arranque: ${arranque.detalle}")
+                    android.util.Log.i(TAG, "reintento de arranque: ${arranque.detalle}")
                 }
             }
             withContext(Dispatchers.Main) {
@@ -359,7 +359,7 @@ class MainActivity : ComponentActivity() {
                     // devuelve 99—, asi que se sustituyen por la unica causa real que queda.
                     val reason = "OpenCode no responde en 127.0.0.1:49374 tras 3 minutos. Arranca 'opencode serve --service' (Termux) o reinicia el servicio registrado."
                     lastBootError = reason
-                    android.util.Log.e("OpenCodeBoot", "timeout 3min sin respuesta: $reason")
+                    android.util.Log.e(TAG, "timeout 3min sin respuesta: $reason")
                     toast("OpenCode no responde")
                 }
             }
@@ -377,7 +377,7 @@ class MainActivity : ComponentActivity() {
                 val pending = withTimeoutOrNull(2500L) { isBootstrapPending() } ?: false
                 initialRoute = if (pending) NavRoutes.SETUP else NavRoutes.DRAFT_CHAT
                 systemReady = true
-                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=true ($info) — Compose ready setupPending=$pending")
+                android.util.Log.i(TAG, "checkHubOnStart ready=true ($info) — Compose ready setupPending=$pending")
             } else {
                 // MEDIDO 2026-10-02: aquí solo se COMPROBABA. El lanzador existía, pero su único
                 // llamador era el botón "Reintentar" del overlay, así que al abrir la app tras un
@@ -391,8 +391,8 @@ class MainActivity : ComponentActivity() {
                 // tiempo es a OpenCode para abrir su base de datos de 2 GB.
                 initialRoute = NavRoutes.DRAFT_CHAT
                 systemReady = false
-                if (result == null) android.util.Log.w("OpenCodeBoot", "checkHubOnStart timed out after 3s")
-                android.util.Log.i("OpenCodeBoot", "checkHubOnStart ready=false ($info) — se intenta arrancar")
+                if (result == null) android.util.Log.w(TAG, "checkHubOnStart timed out after 3s")
+                android.util.Log.i(TAG, "checkHubOnStart ready=false ($info) — se intenta arrancar")
                 startRootSystemAndPoll()
             }
         }
@@ -422,10 +422,10 @@ class MainActivity : ComponentActivity() {
             val phase = com.aegis.hub.data.BootstrapNative()
                 .readState().phaseOrIdle
             val pending = phase != com.aegis.hub.data.BootstrapPhase.done
-            android.util.Log.i("OpenCodeBoot", "isBootstrapPending phase=$phase pending=$pending")
+            android.util.Log.i(TAG, "isBootstrapPending phase=$phase pending=$pending")
             pending
         } catch (e: Exception) {
-            android.util.Log.w("OpenCodeBoot", "isBootstrapPending fail: ${e.message}")
+            android.util.Log.w(TAG, "isBootstrapPending fail: ${e.message}")
             false
         }
     }
@@ -460,6 +460,8 @@ class MainActivity : ComponentActivity() {
 
     // ---- minimal retained helpers from previous WebView version (wake word gating, TTS, etc.) ----
     companion object {
+        /** MEDIDO 2026-10-03: 14 literales sueltos decian lo mismo. Uno solo. */
+        private const val TAG = "OpenCodeBoot"
         /** El rastreador se registra UNA vez; dos registros harian mentir al contador. */
         @Volatile
         private var visibleTrackerRegistered = false

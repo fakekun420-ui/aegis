@@ -11,7 +11,7 @@ object RootShell {
      * por lo que neutraliza `;`, `|`, `&`, `<`, `>`, backticks, `$`, `\n` y `\`.
      * El único carácter especial es la comilla simple, que se cierra y reabre con '\''.
      */
-    fun shQuote(arg: String): String = "'" + arg.replace("'", "'\\''") + "'"
+    private fun shQuote(arg: String): String = "'" + arg.replace("'", "'\\''") + "'"
 
     fun exec(cmd: String, timeoutMs: Long = 15000): Result {
         // intenta su -c, si falla sh -c
@@ -49,15 +49,5 @@ object RootShell {
      */
     fun readFile(path: String, timeoutMs: Long = 5000): Result {
         return exec("cat " + shQuote(path), timeoutMs)
-    }
-
-    fun launchPackage(pkg: String): Result = exec("monkey -p $pkg -c android.intent.category.LAUNCHER 1 2>&1 | head -n 20")
-    fun tap(x:Int, y:Int): Result = exec("input tap $x $y")
-    fun keyEvent(code:Int): Result = exec("input keyevent $code")
-    fun inputText(text:String): Result {
-        // %s = espacio para `input text`; shQuote (comillas simples) hace literal cualquier
-        // metacarácter: `;`, `|`, `&`, `<`, `>`, backticks, `$`, salto de línea y `\`.
-        val esc = text.replace(" ", "%s")
-        return exec("input text " + shQuote(esc))
     }
 }

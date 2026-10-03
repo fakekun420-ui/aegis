@@ -55,7 +55,7 @@ class SetupNativeTest {
 
         val check0 = data.checkList[0]
         assertEquals("opencode", check0.id)
-        assertEquals("OpenCode (proxy4096)", check0.label)
+        assertEquals("OpenCode (:49374)", check0.label)
         assertEquals(SetupCheckStatus.ok, check0.statusOrManual)
 
         val check1 = data.checkList[1]
