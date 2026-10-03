@@ -681,7 +681,250 @@ class RutaNativa(private val hub: ApiService) : ApiService {
         return Message()
     }
 
-        override suspend fun systemStatus(): SystemStatus = hub.systemStatus()
+    private val setupNative: SetupNative by lazy { SetupNative() }
+
+    override suspend fun systemStatus(): SystemStatus {
+        val health = getSystemHealth().body()?.data
+        val ready = health?.server == "running" || health?.server == "ok"
+        return SystemStatus(ready = ready, sessionOwnership = "native")
+    }
+
+    override suspend fun getSystemHealth(): Response<HealthResponse> {
+        return try {
+            val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+            val upRes = shell("cat /proc/uptime 2>/dev/null", 2000)
+            val uptimeSec = upRes.stdout.trim().split("\\s+".toRegex()).firstOrNull()?.toDoubleOrNull()?.toLong() ?: 0L
+
+            val memRes = shell("cat /proc/meminfo 2>/dev/null", 2000)
+            val lines = memRes.stdout.lines()
+            var totalKb = 0L
+            var freeKb = 0L
+            var availableKb = 0L
+            for (line in lines) {
+                if (line.startsWith("MemTotal:")) {
+                    totalKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
+                } else if (line.startsWith("MemAvailable:")) {
+                    availableKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
+                } else if (line.startsWith("MemFree:")) {
+                    freeKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
+                }
+            }
+            val usedKb = if (availableKb > 0) (totalKb - availableKb) else (totalKb - freeKb)
+            val memData = MemoryData(
+                heapUsed = "${usedKb / 1024}MB",
+                heapTotal = "${totalKb / 1024}MB"
+            )
+
+            val pRes = shell("ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null | wc -l", 3000)
+            val projectCount = pRes.stdout.trim().toIntOrNull() ?: 0
+
+            val baseSkills = rutaDeSkills()
+            val skRes = shell("ls -1d '$baseSkills'/*/ 2>/dev/null", 3000)
+            val skillNames = skRes.stdout.lines()
+                .map { it.trim().trimEnd('/') }
+                .filter { it.isNotEmpty() }
+                .map { it.substringAfterLast('/') }
+                .filter { !it.startsWith(".") }
+
+            val adaptersMap = mapOf("rootshell" to "healthy", "opencode" to "healthy")
+            val healthData = HealthData(
+                server = "running",
+                port = 49374,
+                uptime = uptimeSec,
+                memory = memData,
+                workspace = RAIZ_PROYECTOS,
+                projects = projectCount,
+                agents = AgentsSummary(active = 0, registered = 0),
+                jobs = JobsSummary(active = 0, lastRun = null),
+                skills = SkillsSummary(installed = skillNames),
+                adapters = adaptersMap
+            )
+            Response.success(HealthResponse(ok = true, data = healthData))
+        } catch (e: Exception) {
+            Log.w(TAG, "getSystemHealth fallo: ${e.message}")
+            Response.success(HealthResponse(ok = false, data = null))
+        }
+    }
+
+    override suspend fun getSystemLogs(limit: Int): Response<LogsResponse> {
+        return try {
+            val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+            val n = if (limit in 1..500) limit else 100
+            val res = shell("logcat -d -t $n 2>/dev/null", 4000)
+            if (res.code == 0 && res.stdout.isNotBlank()) {
+                val logLines = res.stdout.lines().filter { it.isNotBlank() }
+                Response.success(LogsResponse(ok = true, data = logLines))
+            } else {
+                Response.success(LogsResponse(ok = false, data = emptyList()))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "getSystemLogs fallo: ${e.message}")
+            Response.success(LogsResponse(ok = false, data = emptyList()))
+        }
+    }
+
+    override suspend fun getSystemMemory(): Response<MemoryResponse> {
+        return try {
+            val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+            val memRes = shell("cat /proc/meminfo 2>/dev/null", 2000)
+            val lines = memRes.stdout.lines()
+            var totalKb = 0L
+            var freeKb = 0L
+            var availableKb = 0L
+            for (line in lines) {
+                if (line.startsWith("MemTotal:")) {
+                    totalKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
+                } else if (line.startsWith("MemAvailable:")) {
+                    availableKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
+                } else if (line.startsWith("MemFree:")) {
+                    freeKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
+                }
+            }
+            val usedKb = if (availableKb > 0) (totalKb - availableKb) else (totalKb - freeKb)
+            val memData = MemoryData(
+                heapUsed = "${usedKb / 1024}MB",
+                heapTotal = "${totalKb / 1024}MB"
+            )
+            Response.success(MemoryResponse(ok = true, data = memData))
+        } catch (e: Exception) {
+            Log.w(TAG, "getSystemMemory fallo: ${e.message}")
+            Response.success(MemoryResponse(ok = false, data = null))
+        }
+    }
+
+    override suspend fun getBootstrapState(): Response<BootstrapResponse> {
+        return try {
+            val snapshot = setupNative.getSnapshot()
+            Response.success(BootstrapResponse(ok = true, data = snapshot))
+        } catch (e: Exception) {
+            Log.w(TAG, "getBootstrapState fallo: ${e.message}")
+            Response.success(
+                BootstrapResponse(
+                    ok = false,
+                    data = null,
+                    error = ErrorBody(code = "BOOTSTRAP_STATE_ERROR", message = e.message ?: "error leyendo estado")
+                )
+            )
+        }
+    }
+
+    override suspend fun runBootstrap(body: BootstrapRunRequest): Response<BootstrapActionResponse> {
+        return try {
+            val result = setupNative.runBootstrap(resume = body.resume)
+            if (result.isSuccess) {
+                val state = result.getOrNull()
+                Response.success(
+                    BootstrapActionResponse(
+                        ok = true,
+                        data = BootstrapActionData(phase = state?.phaseOrIdle ?: BootstrapPhase.running)
+                    )
+                )
+            } else {
+                val err = result.exceptionOrNull()
+                Response.success(
+                    BootstrapActionResponse(
+                        ok = false,
+                        data = null,
+                        error = ErrorBody(code = "BOOTSTRAP_RUN_FAILED", message = err?.message ?: "error ejecutando bootstrap")
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Response.success(
+                BootstrapActionResponse(
+                    ok = false,
+                    data = null,
+                    error = ErrorBody(code = "BOOTSTRAP_RUN_ERROR", message = e.message ?: "error")
+                )
+            )
+        }
+    }
+
+    override suspend fun retryBootstrapStep(id: String): Response<BootstrapActionResponse> {
+        return try {
+            val result = setupNative.runBootstrap(resume = true, retryStepId = id)
+            if (result.isSuccess) {
+                val state = result.getOrNull()
+                Response.success(
+                    BootstrapActionResponse(
+                        ok = true,
+                        data = BootstrapActionData(phase = state?.phaseOrIdle ?: BootstrapPhase.running)
+                    )
+                )
+            } else {
+                val err = result.exceptionOrNull()
+                Response.success(
+                    BootstrapActionResponse(
+                        ok = false,
+                        data = null,
+                        error = ErrorBody(code = "BOOTSTRAP_RETRY_FAILED", message = err?.message ?: "error reintentando paso $id")
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Response.success(
+                BootstrapActionResponse(
+                    ok = false,
+                    data = null,
+                    error = ErrorBody(code = "BOOTSTRAP_RETRY_ERROR", message = e.message ?: "error")
+                )
+            )
+        }
+    }
+
+    override suspend fun cancelBootstrap(): Response<BootstrapActionResponse> {
+        val cancelled = setupNative.cancelExecution()
+        val snapshot = setupNative.getSnapshot()
+        return Response.success(
+            BootstrapActionResponse(
+                ok = cancelled,
+                data = BootstrapActionData(phase = snapshot.phaseOrIdle)
+            )
+        )
+    }
+
+    override suspend fun getFinalCheck(): Response<FinalCheckResponse> {
+        return try {
+            val resp = setupNative.runFinalCheck()
+            Response.success(resp)
+        } catch (e: Exception) {
+            Response.success(
+                FinalCheckResponse(
+                    ok = false,
+                    data = null,
+                    error = ErrorBody(code = "FINAL_CHECK_ERROR", message = e.message ?: "error")
+                )
+            )
+        }
+    }
+
+    override suspend fun runSmokeTest(): Response<SmokeTestResponse> {
+        return try {
+            val resp = setupNative.runSmokeTest()
+            Response.success(resp)
+        } catch (e: Exception) {
+            Response.success(
+                SmokeTestResponse(
+                    ok = false,
+                    data = null,
+                    error = ErrorBody(code = "SMOKE_FAILED", message = e.message ?: "error")
+                )
+            )
+        }
+    }
+
+    override suspend fun runAuthGuide(): Response<AuthGuideResponse> {
+        return Response.success(
+            AuthGuideResponse(
+                ok = true,
+                data = AuthGuideData(
+                    mode = "command",
+                    command = "opencode serve --service",
+                    status = "unauthenticated"
+                )
+            )
+        )
+    }
 
     // El campo `free` que usa la app lo calculaba el Hub mirando el COSTE del modelo (medido:
     // 39 de 472). OpenCode manda `cost`, no `free`: reimplementar ese criterio es una decision
@@ -780,11 +1023,7 @@ class RutaNativa(private val hub: ApiService) : ApiService {
         return envoltura(lista)
     }
 
-        override suspend fun getSystemHealth(): Response<HealthResponse> = hub.getSystemHealth()
 
-        override suspend fun getSystemLogs(limit: Int): Response<LogsResponse> = hub.getSystemLogs(limit)
-
-        override suspend fun getSystemMemory(): Response<MemoryResponse> = hub.getSystemMemory()
 
         override suspend fun getSystemSkills(): Response<SkillsResponse> = hub.getSystemSkills()
 
@@ -898,19 +1137,7 @@ class RutaNativa(private val hub: ApiService) : ApiService {
 
         override suspend fun runJob(jobId: String): Response<BaseResponse> = hub.runJob(jobId)
 
-        override suspend fun getBootstrapState(): Response<BootstrapResponse> = hub.getBootstrapState()
 
-        override suspend fun runBootstrap(body: BootstrapRunRequest): Response<BootstrapActionResponse> = hub.runBootstrap(body)
-
-        override suspend fun retryBootstrapStep(id: String): Response<BootstrapActionResponse> = hub.retryBootstrapStep(id)
-
-        override suspend fun cancelBootstrap(): Response<BootstrapActionResponse> = hub.cancelBootstrap()
-
-        override suspend fun getFinalCheck(): Response<FinalCheckResponse> = hub.getFinalCheck()
-
-        override suspend fun runSmokeTest(): Response<SmokeTestResponse> = hub.runSmokeTest()
-
-        override suspend fun runAuthGuide(): Response<AuthGuideResponse> = hub.runAuthGuide()
 
     // ==========================================================================================
     // FORMULARIOS Y PERMISOS
