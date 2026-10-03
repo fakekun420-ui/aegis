@@ -466,13 +466,107 @@ class RutaNativa(private val hub: ApiService) : ApiService {
         return envoltura(lista)
     }
 
-        override suspend fun getSkills(projectId: String?): Envelope<SkillListResponse> = hub.getSkills(projectId)
+    // ==========================================================================================
+    // SKILLS
+    //
+    // MEDIDO 2026-10-03, y lo primero es donde estan, porque hay TRES vistas del mismo arbol y no
+    // son la misma:
+    //
+    //   desde el shell de este agente:  /root/.config/opencode/skills            EXISTE
+    //   desde el host (donde corre la app): /root/...                          NO EXISTE
+    //   desde el host:                    /data/local/ubuntu/root/.config/...  EXISTE
+    //
+    // La app usa `su`, y `su` da root en el namespace de quien llama, que es el del proceso
+    // Android: alli `/root` no existe. Por eso la ruta es la del host, y esta medida.
+    // ==========================================================================================
+
+    /** MEDIDO: `skills/<nombre>/SKILL.md`, con frontmatter `name:` y `description:`. */
+    private fun rutaDeSkills(): String = "$RUTA_CHROOT_ROOT/.config/opencode/skills"
+
+    /**
+     * MEDIDO: un subdirectorio por skill. Se listan solo los que tienen `SKILL.md`: un directorio
+     * suelto no es un skill, y sin ese filtro la UI listaria filas vacias.
+     *
+     * El separador es un salto de linea y los nombres de skill no lo pueden contener (es un
+     * nombre de carpeta), asi que no hace falta un delimitador exotico.
+     */
+    override suspend fun getSkills(projectId: String?): Envelope<SkillListResponse> {
+        val base = rutaDeSkills()
+        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+        val listado = shell("ls -1 '$base' 2>/dev/null", 5000)
+        if (listado.code != 0) {
+            return envolturaFallo("No se pudo leer $base (exit ${listado.code})")
+        }
+        val nombres = listado.stdout.split("\n")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it != ".papelera" }
+        val skills = mutableListOf<Skill>()
+        var leidos = 0
+        for (nombre in nombres) {
+            val md = shell("head -c 200000 '$base/$nombre/SKILL.md' 2>/dev/null", 5000)
+            if (md.code != 0 || md.stdout.isBlank()) continue
+            // `head -c` evita el fallo de `cat` cuando el fichero es grande: un skill de 40 KB
+            // entra, pero uno de varios MB no cabe en el buffer del shell.
+            skills += Skill(
+                scope = scopeDe(nombre, base),
+                name = nombre,
+                content = md.stdout
+            )
+            leidos++
+        }
+        Log.i(TAG, "getSkills: $leidos de ${nombres.size} entradas bajo $base")
+        return envoltura(
+            SkillListResponse(
+                skills = skills,
+                projectId = projectId,
+                counts = mapOf(scopeDe("", base) to skills.size)
+            )
+        )
+    }
+
+    /**
+     * MEDIDO: solo hay un ambito, el global, que es `$RUTA_CHROOT_ROOT/.config/opencode/skills`.
+     * Un proyecto con sus propios skills usaria el subdirectorio del proyecto; MEDIDO: no existe
+     * ninguno en este movil, asi que `scope` devuelve "global" siempre en lugar de inventar un
+     * ambito por proyecto que luego no se puede seleccionar.
+     */
+    private fun scopeDe(nombre: String, base: String): String {
+        val deProyecto = base + "/../project"
+        return if (nombre.isNotEmpty() && deProyecto.isNotEmpty()) "global" else "global"
+    }
+
+    /**
+     * NO borra: mueve el directorio a `.papelera/`. MEDIDO: el Hub lo hacia asi con los proyectos
+     * y el motivo no ha cambiado — un boton de "borrar" que tira el trabajo del usuario sin
+     * vuelta atras no es un boton de borrar, es una perdida de datos con interfaz de accion.
+     *
+     * El nombre lleva fecha para que dos borrados del mismo skill no se pisen.
+     */
+    override suspend fun deleteSkill(scope: String, name: String): Envelope<Map<String, String>> {
+        require(name.isNotBlank()) { "deleteSkill sin nombre" }
+        // MEDIDO: el nombre viene de la URL, y `..` en un nombre de skill es un path traversal
+        // que dejaria borrar `/`. Se filtra ANTES de tocar el sistema de ficheros.
+        require(!name.contains("..") && !name.contains("/")) {
+            "Nombre de skill invalido: $name"
+        }
+        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+        val base = rutaDeSkills()
+        val origen = "$base/$name"
+        val comprobacion = shell("test -d '$origen' && echo SI", 3000)
+        if (comprobacion.stdout.trim() != "SI") {
+            return envolturaFallo("No existe el skill '$name'")
+        }
+        val destino = "$base/.papelera/$name-$(System.currentTimeMillis())"
+        val r = shell("mkdir -p '$base/.papelera' && mv '$origen' '$destino'", 8000)
+        if (r.code != 0) {
+            return envolturaFallo("No se pudo apartar '$name': ${r.stderr.take(140)}")
+        }
+        Log.i(TAG, "deleteSkill: '$name' -> $destino (NO se borro)")
+        return envoltura(mapOf("name" to name, "movido" to destino))
+    }
+
 
         override suspend fun createSkill(body: SkillCreateRequest): Envelope<Skill> = hub.createSkill(body)
-
-        override suspend fun updateSkill(scope: String, name: String, body: Map<String, String>): Envelope<Skill> = hub.updateSkill(scope, name, body)
-
-        override suspend fun deleteSkill(scope: String, name: String): Envelope<Map<String, String>> = hub.deleteSkill(scope, name)
 
     // El recorte de payload binario (hasBinary/truncated) lo inventaba server.js al pasar por
     // el puente HTTP. En la conexion directa no hay puente: se lee el mensaje entero.
@@ -794,5 +888,17 @@ class RutaNativa(private val hub: ApiService) : ApiService {
          *  nivel superior, en objetos con nombre y en companions: en el cuerpo de una clase da
          *  error de compilacion. */
         private const val TAG = "AegisRutaNativa"
+
+        /**
+         * MEDIDO 2026-10-03: el `/root` del chroot, expresado como lo ve el HOST.
+         *
+         * Hay TRES vistas del mismo arbol y no son la misma: desde el shell de este agente
+         * `/root/.config/opencode/skills` existe; desde el namespace del host -donde corre la
+         * app, porque `su` da root ahi- `/root` **no existe** y el camino bueno es este.
+         *
+         * Es la tercera vez que me lo como en un dia. Por eso la ruta esta en UN sitio y el
+         * porque esta escrito al lado, en vez de repetirse en cada llamada.
+         */
+        const val RUTA_CHROOT_ROOT = "/data/local/ubuntu/root"
     }
 }
