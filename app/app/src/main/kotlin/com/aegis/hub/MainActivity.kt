@@ -99,7 +99,7 @@ class MainActivity : ComponentActivity() {
         // se quedaba sin vigilante sin que nada lo indicara. Se asegura en cada arranque;
         // keepalive.sh se protege solo con su lock, asi que repetir el lanzamiento no
         // duplica nada (medido: con el lock apuntando a un pid MUERTO, el guard deja pasar).
-        ensureWatchdog()
+        anotarArranqueSinHub()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
@@ -228,10 +228,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun isHubReady(): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun isOpenCodeReady(): Boolean = withContext(Dispatchers.IO) {
         try {
-            // MEDIDO 2026-10-01: el nombre y la URL son los del Hub viejo. Lo que decide es el
-            // codigo: 200 es OK y 401/403 tambien, porque significa "vivo y pidiendo Basic".
+            // MEDIDO 2026-10-01: lo que decide es el codigo, no el texto. 200 es OK y
+            // 401/403 tambien, porque significa "vivo y pidiendo Basic".
             val req = okhttp3.Request.Builder()
                 .url("http://127.0.0.1:49374/api/info")
                 .header("Authorization", com.aegis.hub.data.Credentials.default.getBasicAuthHeaderBlocking())
@@ -255,7 +255,7 @@ class MainActivity : ComponentActivity() {
      * obliga a buscar por que desaparecio. Devuelve siempre 99, que ya era el codigo de
      * "no hay node disponible".
      */
-    private suspend fun launchKeepalive(): Int {
+    private suspend fun pasoHubRetirado(): Int {
         // MEDIDO 2026-10-02: este metodo lanzaba `keepalive.sh`, que ya no existe (movido a
         // `_tmp/keepalive-retirado-2026-10-01/`), y dependia de `find-ubuntu.sh` para localizar el
         // mount namespace del chroot. Se queda la FIRMA y se documenta por que no hace nada, en
@@ -264,7 +264,7 @@ class MainActivity : ComponentActivity() {
         // por que desaparecio.
         android.util.Log.i(
             "OpenCodeBoot",
-            "launchKeepalive: nada que lanzar. El Hub y su watchdog se eliminaron (2026-10-01)."
+            "pasoHubRetirado: nada que lanzar. El Hub y su watchdog se eliminaron (2026-10-01)."
         )
         return 99
     }
@@ -282,9 +282,9 @@ class MainActivity : ComponentActivity() {
      * Se lanza en cada arranque, y no solo si el Hub esta caido, porque la ventana del
      * fallo era precisamente esa: Hub arriba + watchdog ausente.
      */
-    private fun ensureWatchdog() {
-        // MEDIDO 2026-10-01, y esto estaba ROTO, no solo obsoleto: `ensureWatchdog()` llamaba a
-        // `launchKeepalive()`, que ejecuta
+    private fun anotarArranqueSinHub() {
+        // MEDIDO 2026-10-01, y esto estaba ROTO, no solo obsoleto: `anotarArranqueSinHub()` llamaba a
+        // `pasoHubRetirado()`, que ejecuta
         //     /sdcard/projects/Aegis/backend/keepalive.sh
         // y ese fichero **ya no esta**: se movio a `_tmp/keepalive-retirado-2026-10-01/` por
         // decision del usuario. O sea que la app lanzaba un `su -c` en cada arranque contra un
@@ -305,9 +305,9 @@ class MainActivity : ComponentActivity() {
         if (isStartingSystem) return
         isStartingSystem = true
         lifecycleScope.launch(Dispatchers.IO) {
-            // MEDIDO 2026-10-02: `launchKeepalive()` ya no lanza nada (el Hub y su watchdog se
+            // MEDIDO 2026-10-02: `pasoHubRetirado()` ya no lanza nada (el Hub y su watchdog se
             // eliminaron), asi que su codigo de salida no significa nada.
-            launchKeepalive()
+            pasoHubRetirado()
 
             // MEDIDO 2026-10-02: esto antes NO levantaba nada. Preguntaba a OpenCode 90 veces y
             // se rindia, con el boton etiquetado "Reintentar" que no reintentaba: solo esperaba.
@@ -315,26 +315,26 @@ class MainActivity : ComponentActivity() {
             // el binario esta DENTRO del chroot (medido en /proc/<pid>/exe) y el chroot es un
             // arbol de ficheros, no un namespace.
             var arranque = com.aegis.hub.data.OpenCodeLauncher.asegurarAbierto(
-                comprobarSiVivo = { isHubReady() }
+                comprobarSiVivo = { isOpenCodeReady() }
             )
             android.util.Log.i("OpenCodeBoot", "asegurarAbierto: ok=${arranque.ok} " +
                 "arrancoAhora=${arranque.arrancoAhora} detalle=${arranque.detalle}")
 
             var attempts = 0
-            var ready = arranque.ok && isHubReady()
+            var ready = arranque.ok && isOpenCodeReady()
             // MEDIDO 2026-10-02: eran 90 medias -> 45 s. En un arranque en frío no basta: el boot
             // script entra por `bash --login` y OpenCode tarda en abrir su base de datos de 2 GB. Con
             // 45 s la app se rendía y pintaba el overlay aunque el servidor fuera a levantarse.
             val maxAttempts = 360
             while (attempts < maxAttempts && !ready) {
                 delay(500)
-                ready = isHubReady()
+                ready = isOpenCodeReady()
                 attempts++
                 // Si el primer lanzamiento no prende, no se reintenta a lo loco: uno mas y ya esta
                 // dicho. Reintentar `serve` cada 500 ms con el puerto ocupado solo genera ruido.
                 if (!ready && attempts == 10 && !arranque.arrancoAhora) {
                     arranque = com.aegis.hub.data.OpenCodeLauncher.asegurarAbierto(
-                        comprobarSiVivo = { isHubReady() }
+                        comprobarSiVivo = { isOpenCodeReady() }
                     )
                     android.util.Log.i("OpenCodeBoot", "reintento de arranque: ${arranque.detalle}")
                 }
@@ -355,7 +355,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     // MEDIDO 2026-10-02: estos tres mensajes describian el Hub y su watchdog
                     // (namespace de node, exit de keepalive, "hub sin 200"). Los dos primeros ya
-                    // no significan nada —el watchdog se elimino y launchKeepalive() siempre
+                    // no significan nada —el watchdog se elimino y pasoHubRetirado() siempre
                     // devuelve 99—, asi que se sustituyen por la unica causa real que queda.
                     val reason = "OpenCode no responde en 127.0.0.1:49374 tras 3 minutos. Arranca 'opencode serve --service' (Termux) o reinicia el servicio registrado."
                     lastBootError = reason

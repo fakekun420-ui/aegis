@@ -47,14 +47,3 @@ fun relativeTime(isoOrMillis: String?): String {
         }
     }
 }
-
-/** Picks most recent timestamp string from a model: updatedAt/updated_at/createdAt etc. */
-fun pickEpochMillis(vararg candidates: String?): Long? {
-    for (c in candidates) {
-        if (c.isNullOrBlank()) continue
-        c.toLongOrNull()?.let { return it }
-        try { return Instant.parse(c).toEpochMilli() } catch (_: Exception) {}
-        try { return Instant.parse(c + "Z").toEpochMilli() } catch (_: Exception) {}
-    }
-    return null
-}

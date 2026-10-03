@@ -404,11 +404,6 @@ val List<ModelOption>.modeloPorDefecto: String?
  */
 const val ID_MODELO_POR_DEFECTO = "space-bunny-free"
 
-data class SendMessageRequestWithModel(
-    val parts: List<Map<String, String>>,
-    val model: String? = null
-)
-
 // System status for overlay gate
 data class SystemStatus(
     val ready: Boolean = false,

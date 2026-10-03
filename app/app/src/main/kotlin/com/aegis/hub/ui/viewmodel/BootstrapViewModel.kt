@@ -118,7 +118,7 @@ class BootstrapViewModel(
                     pendingActionError = false
                     _ui.value = _ui.value.copy(
                         loading = false,
-                        actionError = "El hub respondió con error (HTTP ${resp.code()})"
+                        actionError = "OpenCode respondió con error (HTTP ${resp.code()})"
                     )
                 }
             }
@@ -244,7 +244,7 @@ class BootstrapViewModel(
                         pendingActionError = true
                         _ui.value = _ui.value.copy(
                             finalCheckLoading = false,
-                            actionError = "El hub no devolvió la verificación (respuesta vacía)"
+                            actionError = "OpenCode no devolvió la verificación (respuesta vacía)"
                         )
                     }
                     else -> {
@@ -262,7 +262,7 @@ class BootstrapViewModel(
                 pendingActionError = true
                 _ui.value = _ui.value.copy(
                     finalCheckLoading = false,
-                    actionError = "Sin conexión con el hub (127.0.0.1:8765): ${e.message ?: "error de red"}"
+                    actionError = "Sin conexión con OpenCode (127.0.0.1:49374): ${e.message ?: "error de red"}"
                 )
             }
         }
@@ -297,7 +297,7 @@ class BootstrapViewModel(
                     resp.isSuccessful ->
                         _ui.value = _ui.value.copy(
                             smokeLoading = false,
-                            smokeError = "El hub no confirmó el mensaje de prueba (respuesta vacía)"
+                            smokeError = "OpenCode no confirmó el mensaje de prueba (respuesta vacía)"
                         )
                     else -> {
                         val err = parseErrorBody(resp)
@@ -312,7 +312,7 @@ class BootstrapViewModel(
             } catch (e: Exception) {
                 _ui.value = _ui.value.copy(
                     smokeLoading = false,
-                    smokeError = "Sin conexión con el hub (127.0.0.1:8765): ${e.message ?: "error de red"}"
+                    smokeError = "Sin conexión con OpenCode (127.0.0.1:49374): ${e.message ?: "error de red"}"
                 )
             }
         }
@@ -340,7 +340,7 @@ class BootstrapViewModel(
                         pendingActionError = true
                         _ui.value = _ui.value.copy(
                             authGuideLoading = false,
-                            actionError = "El hub no devolvió el comando de autorización"
+                            actionError = "OpenCode no devolvió el comando de autorización"
                         )
                     }
                     else -> {
@@ -358,7 +358,7 @@ class BootstrapViewModel(
                 pendingActionError = true
                 _ui.value = _ui.value.copy(
                     authGuideLoading = false,
-                    actionError = "Sin conexión con el hub (127.0.0.1:8765): ${e.message ?: "error de red"}"
+                    actionError = "Sin conexión con OpenCode (127.0.0.1:49374): ${e.message ?: "error de red"}"
                 )
             }
         }
@@ -389,7 +389,7 @@ class BootstrapViewModel(
         else -> err?.message?.let { m ->
             val guide = friendlyError(m)
             if (guide != m) "$guide\n$m" else m
-        } ?: "Error del hub (HTTP $httpCode)"
+        } ?: "Error de OpenCode (HTTP $httpCode)"
     }
 
     /**
@@ -402,8 +402,8 @@ class BootstrapViewModel(
         err?.message?.let { m ->
             val guide = friendlyError(m)
             if (guide != m) "$guide\n$m" else m
-        } ?: err?.code?.let { "Error del hub ($it)" }
-            ?: "Error del hub (HTTP $httpCode)"
+        } ?: err?.code?.let { "Error de OpenCode ($it)" }
+            ?: "Error de OpenCode (HTTP $httpCode)"
 
     /**
      * F3 — error de /api/setup/smoke-test → guía en español SIN perder el raw

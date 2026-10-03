@@ -1338,8 +1338,6 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         }
     }
 
-    suspend fun createVoiceSession(provider: String = "opencode"): String? = createNewSession(provider)
-
     private suspend fun createNewSession(provider: String = "opencode"): String? = withContext(Dispatchers.IO) {
         // MEDIDO 2026-10-03: esto era un POST crudo al Hub en :8765, que ya no escucha, asi que
         // crear un chat desde cero fallaba siempre en silencio (null). Ahora va por la costura,

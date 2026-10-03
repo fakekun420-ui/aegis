@@ -119,7 +119,7 @@ fun SetupWizardScreen(
                     CircularProgressIndicator(color = ClaudePrimary)
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        "Esperando el hub (127.0.0.1:8765)…",
+                        "Esperando OpenCode (127.0.0.1:49374)…",
                         style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace,
                         color = ClaudeOnSurfaceVariant
@@ -849,7 +849,7 @@ private fun AuthGuideBlock(
                 }
             }
             authGuide != null -> Text(
-                "El hub no devolvió el comando de autorización",
+                "OpenCode no devolvió el comando de autorización",
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
                 color = ClaudeError
