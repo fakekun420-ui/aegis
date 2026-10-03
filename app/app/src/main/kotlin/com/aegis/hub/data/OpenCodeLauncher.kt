@@ -98,7 +98,12 @@ object OpenCodeLauncher {
         "grep -q \" \$U/dev \" /proc/mounts || mount -o bind /dev \$U/dev",
         "grep -q \" \$U/dev/pts \" /proc/mounts || mount -o bind /dev/pts \$U/dev/pts",
         "grep -q \" \$U/proc \" /proc/mounts || mount -t proc proc \$U/proc",
-        "grep -q \" \$U/sys \" /proc/mounts || mount -t sysfs sysfs \$U/sys"
+        "grep -q \" \$U/sys \" /proc/mounts || mount -t sysfs sysfs \$U/sys",
+        // MEDIDO 2026-10-03: sin este bind el chroot ve su propia carpeta aislada en vez del
+        // almacenamiento real, y OpenCode escribe en el arbol equivocado. Solo se monta si
+        // /sdcard esta listo (en el boot temprano aun no existe FUSE); si no esta, se registra
+        // y el script de arranque lo reintenta con espera.
+        "grep -q \" \$U/sdcard \" /proc/mounts || { [ -d /sdcard/projects ] && mount -o bind /sdcard \$U/sdcard || echo SIN_SDCARD; }"
     )
 
     data class Resultado(
