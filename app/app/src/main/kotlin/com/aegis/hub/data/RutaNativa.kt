@@ -1,6 +1,10 @@
 package com.aegis.hub.data
 
 import android.util.Log
+// MEDIDO 2026-10-03: `RootShell` esta en el paquete `com.aegis.hub`, no en `data/`.
+// Es el segundo vez que lo doy por hecho; lo pillo el mismo comprobador de simbolos
+// que lo pillo la primera, asi que el control positivo existe y funciona.
+import com.aegis.hub.RootShell
 import com.google.gson.Gson
 import retrofit2.Response
 
@@ -567,6 +571,11 @@ class RutaNativa(private val hub: ApiService) : ApiService {
 
 
         override suspend fun createSkill(body: SkillCreateRequest): Envelope<Skill> = hub.createSkill(body)
+
+        // MEDIDO 2026-10-03: sigue delegando. Esta funcion reescribe el SKILL.md entero, y el
+        // Hub lo hacia fusionando con el contenido que ya venia en el cuerpo. Hacerlo aqui sin
+        // medir esa fusion es escribir a ciegas, que es como han salido los tres fallos de hoy.
+        override suspend fun updateSkill(scope: String, name: String, body: Map<String, String>): Envelope<Skill> = hub.updateSkill(scope, name, body)
 
     // El recorte de payload binario (hasBinary/truncated) lo inventaba server.js al pasar por
     // el puente HTTP. En la conexion directa no hay puente: se lee el mensaje entero.
