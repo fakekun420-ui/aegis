@@ -374,11 +374,14 @@ fun ChatScreen(
                 // fuera un nombre de modelo. Ese fallback hacia que el chip pareciera
                 // correcto mientras ningun radio podia marcarse — que es exactamente
                 // lo que pasaba con el id caducado que se usaba por defecto.
-                val modelDisplayName = models.find { it.id == selectedModel }?.name
+                // MEDIDO 2026-10-03: el valor puede venir con prefijo `proveedor/id` de
+                // prefs viejas; se compara sin el para que la lista (ids cortos) coincida.
+                val modeloCorto = selectedModel?.trim()?.substringAfterLast("/")?.trim().orEmpty()
+                val modelDisplayName = models.find { it.id == modeloCorto }?.name
                     ?: when {
-                        selectedModel.isNullOrBlank() && !modelsLoading -> "Elige un modelo"
-                        selectedModel.isNullOrBlank() -> "Cargando modelos…"
-                        else -> "No disponible: $selectedModel"
+                        modeloCorto.isBlank() && !modelsLoading -> "Elige un modelo"
+                        modeloCorto.isBlank() -> "Cargando modelos…"
+                        else -> "No disponible: $modeloCorto"
                     }
 
                 UnifiedFloatingComposer(

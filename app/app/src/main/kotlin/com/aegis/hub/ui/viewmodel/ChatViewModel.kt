@@ -29,6 +29,8 @@ import com.aegis.hub.data.modeloPorDefecto
 import com.aegis.hub.data.SendMessageRequest
 import com.aegis.hub.data.SessionModelRef
 import com.aegis.hub.data.CreateOpenCodeSessionRequest
+import com.aegis.hub.data.EventStream
+import com.aegis.hub.data.OpenCodeStreamItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -290,12 +292,17 @@ class ChatViewModel : ViewModel() {
     private fun restoreModelFor(sessionId: String, provider: String) {
         viewModelScope.launch {
             val ctx = runCatching { AppContext.require() }.getOrNull()
+            // MEDIDO 2026-10-03: hay prefs con `proveedor/id` de una version vieja. Se migran
+            // al abrir, una vez e idempotente; si ya corrio no toca nada.
+            runCatching { ctx?.let { ModelPreferences.migrarPrefijos(it) } }
 
             if (sessionId.isNotBlank()) {
                 runCatching {
                     val r = api.getSessionModel(sessionId)
-                    val fromServer = r.data?.id
-                    if (r.ok && !fromServer.isNullOrBlank()) {
+                    // El servidor tambien puede traer el id con prefijo: se corta aqui para
+                    // que la comparacion con la lista (ids cortos) no falle nunca por eso.
+                    val fromServer = ModelPreferences.normalizar(r.data?.id)
+                    if (r.ok && fromServer.isNotBlank()) {
                         if (_selectedModel.value != fromServer) _selectedModel.value = fromServer
                         runCatching { ModelPreferences.setModel(ctx!!, sessionId, fromServer) }
                         return@runCatching
@@ -323,20 +330,24 @@ class ChatViewModel : ViewModel() {
     }
 
     fun selectModel(modelId: String?) {
-        _selectedModel.value = modelId
-        if (modelId.isNullOrBlank()) return
+        // Nunca se guarda ni se envia con prefijo: la lista trae ids cortos y el servidor
+        // distingue por pareja id mas providerID, no por un id compuesto.
+        val limpio = ModelPreferences.normalizar(modelId)
+        _selectedModel.value = limpio.ifBlank { null }
+        if (limpio.isBlank()) return
         // Se persiste por sesión Y como "última elección" (que es lo que usarán los chats
         // nuevos). Es lo que evita que un chat nuevo vuelva al default.
-        runCatching { ModelPreferences.setModel(AppContext.require(), currentSessionForModel, modelId) }
+        runCatching { ModelPreferences.setModel(AppContext.require(), currentSessionForModel, limpio) }
         // MEDIDO 2026-10-03: esto solo escribia en prefs. El servidor seguia con el modelo
         // viejo y el CLI lo veia: la app y el CLI discrebaban. Ahora se empuja al servidor,
         // que es la unica verdad. Sin variant: al cambiar de modelo el variant viejo puede
         // no existir en el nuevo, asi que decide el servidor.
         val sid = currentSessionForModel
         if (sid.isBlank()) return
-        val prov = _models.value.firstOrNull { it.id == modelId }?.providerID
+        val prov = _models.value.firstOrNull { it.id == limpio }?.providerID
+            ?: modelId?.trim()?.takeIf { it.contains("/") }?.substringBeforeLast("/")?.trim()?.takeIf { it.isNotBlank() }
         viewModelScope.launch {
-            try { api.setSessionModel(sid, SessionModelRef(id = modelId, providerID = prov)) }
+            try { api.setSessionModel(sid, SessionModelRef(id = limpio, providerID = prov)) }
             catch (_: Exception) { }
         }
     }
@@ -1215,6 +1226,20 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 _streamingText.value = ""
                 _streamingTools.value = emptyList()
 
+                // Streaming token a token por `/api/event` del CLI (emite `session.text.delta`
+                // y `session.text.ended` ya filtrados por sesion). Vive solo lo que dura el envio
+                // y se cancela en el finally. Si el stream falla, el poll de arriba sigue trayendo
+                // el parcial cada 1,5 s: el streaming adelanta, no sustituye.
+                val streamJob = launch {
+                    try {
+                        EventStream.createEventStream(targetSessionId).collect { item ->
+                            if (item is OpenCodeStreamItem.TextUpdate) {
+                                _streamingText.value = item.textAccumulated
+                            }
+                        }
+                    } catch (_: Exception) { }
+                }
+
                 _sendingInFlight.value = true
                 try {
                     val responseMsg = api.sendMessage(
@@ -1245,6 +1270,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     _sendingInFlight.value = false
                     sseSuccess = false
                 } finally {
+                    streamJob.cancel()
                     _streamingText.value = null
                     _streamingTools.value = emptyList()
                 }

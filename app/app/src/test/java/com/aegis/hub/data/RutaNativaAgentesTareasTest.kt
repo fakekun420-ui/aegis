@@ -9,7 +9,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.lang.reflect.Proxy
 
 /**
  * Las nueve funciones de `RutaNativa` que leavesaban en el Hub: `getAgents`, `dispatchAgent`,
@@ -34,18 +33,12 @@ class RutaNativaAgentesTareasTest {
     private val gson = Gson()
 
     /**
-     * Un `ApiService` que EXPLOTA en cuanto se le llama. Su unico trabajo es comprobar que ninguna
-     * de las ocho funciones sin equivalente vuelve a mirar al Hub: si una lo hiciera, este test
-     * peta diciendo que metodo, en vez de dejar una pantalla vacia sin explicar por que.
+     * MEDIDO 2026-10-03: el parametro `hub` dejo de existir (el cliente del Hub se llevo a
+     * cuarentena sin ni una llamada viva). La no-delegacion ya no se comprueba con un proxy
+     * que explota: es estructural, no hay a donde delegar. Estas aserciones verifican la
+     * respuesta honesta de cada funcion sin equivalente.
      */
-    private val hubQueFalla: ApiService = Proxy.newProxyInstance(
-        ApiService::class.java.classLoader,
-        arrayOf(ApiService::class.java)
-    ) { _, metodo, _ ->
-        error("una de las ocho ha vuelto a preguntar al Hub: ${metodo.name}")
-    } as ApiService
-
-    private val ruta: RutaNativa = RutaNativa(hubQueFalla)
+    private val ruta: RutaNativa = RutaNativa()
 
     // ==================================================================
     // 1. Las ocho sin equivalente: ok=false, sin datos, sin llamar al Hub

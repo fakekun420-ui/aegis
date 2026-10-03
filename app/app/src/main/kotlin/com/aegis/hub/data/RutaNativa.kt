@@ -39,34 +39,23 @@ import retrofit2.Response
 object Conexion {
 
     /**
-     * false = Hub. true = OpenCode directo. **Ahora: `true`.**
+     * La ruta activa: OpenCode directo, sin intermediarios.
      *
-     * MEDIDO 2026-10-01, y el motivo de que este commit suba la bandera sin esperar a probarlo en
-     * un movil: **el Hub ya no existe.** Se elimino `keepalive.sh` por decision del usuario, y ese
-     * script era lo que mantenia el Hub en pie; medido, nada escucha en el puerto 8765 y no corre
-     * ningun `server.js`. Con la bandera en `false` la app apuntaria a un puerto muerto, o sea
-     * que "volver al Hub" ya no es una opcion real: no hay a donde volver.
-     *
-     * Por eso la red de seguridad que este diseno daba por perdida ya se ha perdido, y la
-     * verificacion que queda es la CI y despues el movil. Que sepas que el orden de
-     * construir -> comprobar -> eliminar se ha roto en la practica: la eliminacion se produjo
-     * antes, y esto es el arreglo hacia adelante, no la comprobacion de algo ya probado.
+     * MEDIDO 2026-10-01: el Hub ya no existe (se elimino `keepalive.sh` por decision del
+     * usuario y nada escucha en el puerto 8765). MEDIDO 2026-10-03: el cliente del Hub
+     * (`ApiClient`) ya no tenia ni una sola llamada viva y se llevo a cuarentena con su
+     * token (`TokenProvider`). No hay bandera que conmutar ni a donde volver.
      */
-    const val NATIVO_DIRECTO = true
-
-    /** La ruta activa. Con el flag en false, esto ES el cliente del Hub, sin intermediarios. */
-    val api: ApiService by lazy {
-        if (NATIVO_DIRECTO) RutaNativa(ApiClient.service) else ApiClient.service
-    }
+    val api: ApiService by lazy { RutaNativa() }
 }
 
 /**
- * Implementa [ApiService] contra OpenCode, delegando en el Hub lo que aun no tiene equivalente.
+ * Implementa [ApiService] contra OpenCode.
  *
  * No es una clase abstracta ni una interfaz: implementa las 57, porque `ApiService` es lo que
  * `ChatViewModel` ya tiene inyectado. Por eso el cambio en el ViewModel es de una linea.
  */
-class RutaNativa(private val hub: ApiService) : ApiService {
+class RutaNativa : ApiService {
 
     private val gson = Gson()
     private val oc: OpenCodeApi get() = OpenCodeApi.default
@@ -279,7 +268,7 @@ class RutaNativa(private val hub: ApiService) : ApiService {
      * Es `internal` para probarlo sin servidor.
      */
     internal fun resolveProviderFor(modelId: String?, hint: String?, catalogo: List<OpenCodeNativeModel>): String {
-        val id = modelId?.trim().orEmpty()
+        val id = normalizarIdModelo(modelId)
         if (id.isEmpty()) return "opencode"
         val candidatos = catalogo.filter { (it.id ?: it.modelID) == id }
         if (candidatos.isEmpty()) return hint?.trim()?.takeIf { it.isNotBlank() } ?: "opencode"
@@ -290,27 +279,87 @@ class RutaNativa(private val hub: ApiService) : ApiService {
             ?: candidatos.first().providerID
     }
 
+    /**
+     * El id tal y como lo entiende el CLI: sin prefijo de proveedor.
+     *
+     * MEDIDO 2026-10-03 en las prefs del movil: hay sesiones guardadas como
+     * `opencode/muse-spark-1.3-contributor-free`. Ese prefijo lo puso una version vieja al
+     * guardar, y con el la lista (que trae ids cortos) nunca coincide: el chip dice
+     * "No disponible" con la lista cargada. Se corta por la ultima barra, venga de donde venga.
+     * Es `internal` para probarlo sin servidor.
+     */
+    internal fun normalizarIdModelo(ref: String?): String =
+        ref?.trim()?.substringAfterLast("/")?.trim().orEmpty()
+
+    /**
+     * El proveedor que trae un id con prefijo (`opencode/x` -> `opencode`), o null si no hay.
+     * Es la pista que el propio valor da para no tener que adivinarlo en el catalogo.
+     */
+    internal fun proveedorDeRef(ref: String?): String? {
+        val limpio = ref?.trim().orEmpty()
+        if (!limpio.contains("/")) return null
+        return limpio.substringBeforeLast("/").trim().takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * El variant con el que fijar un modelo: `max` si el catalogo lo ofrece, null si no.
+     *
+     * Decision del usuario 2026-10-03 ("5. max"). MEDIDO en el catalogo vivo: tanto
+     * `space-bunny-free` como `muse-spark-1.3-contributor-free` ofrecen `max` entre sus
+     * variants. Si un modelo no lo ofrece, se manda sin variant y decide el servidor en
+     * vez de mandar un variant que no existe.
+     */
+    internal fun resolveVariantFor(modelId: String?, catalogo: List<OpenCodeNativeModel>): String? {
+        val id = normalizarIdModelo(modelId)
+        if (id.isEmpty()) return null
+        val entrada = catalogo.firstOrNull { (it.id ?: it.modelID) == id } ?: return null
+        val ids = entrada.variants.orEmpty().mapNotNull { it.id }
+        return if (ids.contains("max")) "max" else null
+    }
+
+    /**
+     * Fija el modelo de una sesion en el servidor (la unica via: POST /api/session/{id}/model
+     * ANTES del prompt, porque el prompt no acepta modelo). Resuelve proveedor (prefijo,
+     * pista, catalogo) y variant (`max` si lo hay). Devuelve si el servidor lo acepto.
+     */
+    private suspend fun fijarModelo(
+        sessionId: String,
+        modelId: String?,
+        providerHint: String?,
+        variantExplicit: String? = null
+    ): Boolean {
+        return try {
+            val id = normalizarIdModelo(modelId)
+            if (id.isEmpty()) return false
+            val catalogo = oc.listModels().data.orEmpty()
+            val prov = proveedorDeRef(modelId)
+                ?: resolveProviderFor(id, providerHint, catalogo)
+            val variante = variantExplicit?.trim()?.takeIf { it.isNotBlank() }
+                ?: resolveVariantFor(id, catalogo)
+            val resp = oc.setSessionModel(
+                sessionId,
+                SetSessionModelRequest(OpenCodeModelRef(id = id, providerID = prov, variant = variante))
+            )
+            if (!resp.isSuccessful) Log.w(TAG, "fijarModelo HTTP ${resp.code()} para $sessionId")
+            resp.isSuccessful
+        } catch (e: Exception) {
+            Log.w(TAG, "fijarModelo fallo para $sessionId: ${e.message}")
+            false
+        }
+    }
+
     // setSessionModel: empuja el modelo al servidor (POST /api/session/{id}/model del CLI).
     // MEDIDO 2026-10-03: la app nunca llamaba a esta ruta. `selectModel` solo escribia en
     // prefs y `sendMessage` mandaba el modelo en el cuerpo, que el CLI ignora: el prompt
     // no acepta modelo. Resultado: el modelo del CLI mandaba siempre y la app mostraba el
     // suyo. Ahora el modelo se fija ANTES del prompt, y el servidor es la unica verdad.
         override suspend fun setSessionModel(sessionId: String, body: SessionModelRef): Envelope<Boolean> {
-            return try {
-                val ref = body.id?.trim()?.takeIf { it.isNotBlank() }
-                    ?: return Envelope(ok = false, data = null)
-                val prov = body.providerID?.trim()?.takeIf { it.isNotBlank() }
-                    ?: resolveProviderFor(ref, null, oc.listModels().data.orEmpty())
-                val resp = oc.setSessionModel(sessionId, SetSessionModelRequest(OpenCodeModelRef(id = ref, providerID = prov, variant = body.variant)))
-                if (!resp.isSuccessful) {
-                    Log.w(TAG, "setSessionModel HTTP ${resp.code()} para $sessionId")
-                    return Envelope(ok = false, data = null)
-                }
-                envoltura(true)
-            } catch (e: Exception) {
-                Log.w(TAG, "setSessionModel fallo para $sessionId: ${e.message}")
-                Envelope(ok = false, data = null)
-            }
+            val ref = normalizarIdModelo(body.id)
+            if (ref.isEmpty()) return Envelope(ok = false, data = null)
+            val prov = body.providerID?.trim()?.takeIf { it.isNotBlank() }
+                ?: proveedorDeRef(body.id)
+            val ok = fijarModelo(sessionId, ref, prov, body.variant)
+            return if (ok) envoltura(true) else Envelope(ok = false, data = null)
         }
 
     // createSession: POST /api/session nativo (tambien envuelto en `data`).
@@ -809,19 +858,12 @@ class RutaNativa(private val hub: ApiService) : ApiService {
 
         // MEDIDO 2026-10-03: el prompt del CLI no acepta modelo (su schema solo trae text,
         // files, agents...). El modelo de `body` se ignoraba aqui en silencio: la app creia
-        // mandarlo y el CLI ni lo miraba. La unica via es `POST /api/session/{id}/model`
-        // ANTES del prompt. Si falla, el turno sigue con el modelo que tenga la sesion:
-        // fallar el envio entero por no poder fijar el modelo seria peor.
-        val modeloId = body.model?.trim()?.takeIf { it.isNotBlank() }
-        if (modeloId != null) {
-            try {
-                val catalogo = oc.listModels().data.orEmpty()
-                val prov = resolveProviderFor(modeloId, body.provider, catalogo)
-                val fijado = oc.setSessionModel(sessionId, SetSessionModelRequest(OpenCodeModelRef(id = modeloId, providerID = prov)))
-                if (!fijado.isSuccessful) Log.w(TAG, "sendMessage: fijar modelo HTTP ${fijado.code()} en $sessionId")
-            } catch (e: Exception) {
-                Log.w(TAG, "sendMessage: no se pudo fijar modelo $modeloId en $sessionId: ${e.message}")
-            }
+        // mandarlo y el CLI ni lo miraba. La unica via es fijarlo ANTES del prompt. Si falla,
+        // el turno sigue con el modelo que tenga la sesion: fallar el envio entero por no
+        // poder fijar el modelo seria peor.
+        val modeloId = normalizarIdModelo(body.model)
+        if (modeloId.isNotEmpty()) {
+            fijarModelo(sessionId, modeloId, proveedorDeRef(body.model) ?: body.provider)
         }
 
         oc.sendPrompt(

@@ -51,6 +51,37 @@ object ModelPreferences {
     /** Última elección global, para cuando no hay sesión todavía. */
     fun lastModel(ctx: Context): String? = prefs(ctx).getString(KEY_LAST_MODEL, null)
 
+    /**
+     * Corta el prefijo `proveedor/` de un id guardado (`opencode/x` -> `x`).
+     *
+     * MEDIDO 2026-10-03 en el movil: hay prefs guardadas CON prefijo por una version vieja,
+     * y con el la lista (ids cortos) nunca coincide. Se normaliza al leer y al migrar, nunca
+     * se escribe un id con prefijo.
+     */
+    fun normalizar(ref: String?): String =
+        ref?.trim()?.substringAfterLast("/")?.trim().orEmpty()
+
+    /**
+     * Migracion de una sola pasada: reescribe sin prefijo todo lo guardado con prefijo.
+     * Idempotente por construccion (sin prefijo no hay nada que cortar). Se llama al abrir
+     * un chat; si ya corrio, no toca nada.
+     */
+    fun migrarPrefijos(ctx: Context) {
+        val p = prefs(ctx)
+        val ed = p.edit()
+        var toco = false
+        for ((k, v) in p.all) {
+            if ((k == KEY_LAST_MODEL || k.startsWith(KEY_PREFIX_MODEL)) && v is String) {
+                val limpio = normalizar(v)
+                if (limpio.isNotEmpty() && limpio != v) {
+                    ed.putString(k, limpio)
+                    toco = true
+                }
+            }
+        }
+        if (toco) ed.apply()
+    }
+
     /** ¿Tiene ya registro esta sesión? Evita preguntar al servidor si no hace falta. */
     fun hasModelFor(ctx: Context, sessionId: String): Boolean =
         sessionId.isNotBlank() && prefs(ctx).contains(KEY_PREFIX_MODEL + sessionId)

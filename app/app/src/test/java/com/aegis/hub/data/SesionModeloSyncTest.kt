@@ -4,7 +4,6 @@ import com.google.gson.Gson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
-import java.lang.reflect.Proxy
 
 /**
  * MEDIDO 2026-10-03 contra el servidor vivo y el OpenAPI: `GET /api/session/{id}`,
@@ -19,14 +18,7 @@ class SesionModeloSyncTest {
 
     private val gson = Gson()
 
-    private val ruta: RutaNativa = RutaNativa(
-        Proxy.newProxyInstance(
-            ApiService::class.java.classLoader,
-            arrayOf(ApiService::class.java)
-        ) { _, metodo, _ ->
-            error("el test no debe preguntar al Hub: ${metodo.name}")
-        } as ApiService
-    )
+    private val ruta: RutaNativa = RutaNativa()
 
     @Test
     fun `la sesion individual se desenvuelve de data con su modelo completo`() {
@@ -72,5 +64,33 @@ class SesionModeloSyncTest {
         assertEquals("google", ruta.resolveProviderFor("desconocido", "google", emptyList()))
         assertEquals("opencode", ruta.resolveProviderFor("desconocido", null, emptyList()))
         assertEquals("opencode", ruta.resolveProviderFor(null, null, emptyList()))
+    }
+
+    @Test
+    fun `el id con prefijo se corta y el proveedor queda como pista`() {
+        // Forma real guardada en el movil por una version vieja.
+        assertEquals("muse-spark-1.3-contributor-free", ruta.normalizarIdModelo("opencode/muse-spark-1.3-contributor-free"))
+        assertEquals("opencode", ruta.proveedorDeRef("opencode/muse-spark-1.3-contributor-free"))
+        assertEquals("space-bunny-free", ruta.normalizarIdModelo("space-bunny-free"))
+        assertEquals(null, ruta.proveedorDeRef("space-bunny-free"))
+        assertEquals("", ruta.normalizarIdModelo(null))
+    }
+
+    @Test
+    fun `max se elige cuando el catalogo lo ofrece y si no es null`() {
+        val conMax = listOf(
+            OpenCodeNativeModel(
+                id = "muse-spark-1.3-contributor-free",
+                variants = listOf(OpenCodeModelVariant(id = "low"), OpenCodeModelVariant(id = "max"))
+            )
+        )
+        assertEquals("max", ruta.resolveVariantFor("muse-spark-1.3-contributor-free", conMax))
+        // Con prefijo tambien resuelve, porque normaliza antes de buscar.
+        assertEquals("max", ruta.resolveVariantFor("opencode/muse-spark-1.3-contributor-free", conMax))
+        val sinMax = listOf(
+            OpenCodeNativeModel(id = "otro", variants = listOf(OpenCodeModelVariant(id = "low")))
+        )
+        assertEquals(null, ruta.resolveVariantFor("otro", sinMax))
+        assertEquals(null, ruta.resolveVariantFor("ausente", conMax))
     }
 }

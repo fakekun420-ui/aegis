@@ -3,7 +3,6 @@ package com.aegis.hub.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.*
-import okhttp3.MediaType.Companion.toMediaType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -106,35 +105,13 @@ class ProjectDetailViewModel : ViewModel() {
                 // directorio del proyecto. Es la unica informacion que sirve para agrupar.
                 val provider = _project.value?.provider ?: "opencode"
                 val title = "companion:${_project.value?.name ?: projectId}:${System.currentTimeMillis() % 100000}"
-                val titulo = title.replace("\\", "\\\\").replace("\"", "\\\"")
-                val dirPath = java.io.File("/sdcard/projects/${_project.value?.name ?: projectId}")
-                    .absolutePath.replace("\\", "\\\\").replace("\"", "\\\"")
-                val bodyJson = "{\"title\":\"$titulo\",\"location\":{\"directory\":\"$dirPath\"}}"
-                val req = okhttp3.Request.Builder()
-                    .url("http://127.0.0.1:49374/api/session")
-                    .header("Authorization", com.aegis.hub.data.Credentials.default.getBasicAuthHeaderBlocking())
-                    .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
-                    .build()
-                val resp = ApiClient.rawOkHttp.newCall(req).execute()
-                val body = resp.body?.string() ?: return@launch
-                val sid = try {
-                    val j = com.google.gson.JsonParser.parseString(body).asJsonObject
-                    when {
-                        j.has("id") -> j.get("id").asString
-                        j.has("ID") -> j.get("ID").asString
-                        j.has("sessionId") -> j.get("sessionId").asString
-                        j.has("data") -> {
-                            val d = j.getAsJsonObject("data")
-                            when {
-                                d.has("id") -> d.get("id").asString
-                                d.has("ID") -> d.get("ID").asString
-                                d.has("sessionId") -> d.get("sessionId").asString
-                                else -> null
-                            }
-                        }
-                        else -> null
-                    }
-                } catch (_: Exception) { null } ?: return@launch
+                // MEDIDO 2026-10-03: esto era un POST crudo con parseo manual del `data`. Ahora va
+                // por la costura, que es el mismo OpenCode directo sin el parseo a mano.
+                val dirPath = java.io.File("/sdcard/projects/${_project.value?.name ?: projectId}").absolutePath
+                val creado = api.createSession(
+                    CreateOpenCodeSessionRequest(title = title, location = OpenCodeLocation(directory = dirPath))
+                )
+                val sid = creado.data?.resolvedId?.takeIf { it.isNotBlank() } ?: return@launch
 
                 // Link to project (if not automatically linked)
                 try {
