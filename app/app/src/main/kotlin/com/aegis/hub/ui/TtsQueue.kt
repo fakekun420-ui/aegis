@@ -63,20 +63,24 @@ class TtsQueue(private val onSpeakingChanged: (Boolean) -> Unit) {
         val frases = texto.split(REGLA).filter { it.isNotBlank() }
         if (frases.isEmpty()) return 0
         val base = System.nanoTime()
-        var hablados = 0
-        frases.forEachIndexed { i, frase ->
-            try {
-                // QUEUE_ADD y NUNCA QUEUE_FLUSH: flush cancela lo que este sonando.
-                t.speak(frase, TextToSpeech.QUEUE_ADD, null, "aegis-$base-$i")
-                hablados++
-            } catch (_: Exception) { /* el motor no lo ha sostenido: la frase se pierde, no el proceso */ }
-        }
-        if (hablados == 0) return 0
+        val lote = frases.mapIndexed { i, frase -> frase to "aegis-$base-$i" }
         // El motor no puede terminar antes de esto: los callbacks llegan por binder y se
         // publican al hilo principal, que ahora mismo somos nosotros.
-        enVuelo.addAndGet(hablados)
+        enVuelo.addAndGet(lote.size)
         onSpeakingChanged(true)
-        return hablados
+        // MEDIDO 2026-10-03 (ANR en MainActivity): `speak()` bloquea al hilo que lo llama
+        // contra el lock del servicio TTS, igual que `stop()`. Encolarlo aqui (hilo
+        // principal, al llegar cada mensaje) cuelga la UI si el motor esta atascado. Va al
+        // fondo en orden; si una frase falla se descuenta para no dejar la cuenta colgada.
+        FONDO.execute {
+            for ((frase, id) in lote) {
+                try {
+                    // QUEUE_ADD y NUNCA QUEUE_FLUSH: flush cancela lo que este sonando.
+                    t.speak(frase, TextToSpeech.QUEUE_ADD, null, id)
+                } catch (_: Exception) { termina() }
+            }
+        }
+        return lote.size
     }
 
     /**
@@ -92,9 +96,19 @@ class TtsQueue(private val onSpeakingChanged: (Boolean) -> Unit) {
      * Idempotente: llamarlo sin nada sonando no hace nada ni falla.
      */
     fun stop() {
-        try { motor?.stop() } catch (_: Exception) {}
+        val t = motor
         enVuelo.set(0)
         main.post { onSpeakingChanged(false) }
+        if (t == null) return
+        // MEDIDO 2026-10-03 (ANR en MainActivity, traza /data/anr): `TextToSpeech.stop()`
+        // bloquea al hilo que lo llama contra el lock del servicio TTS. Llamado desde el
+        // onDispose de ChatScreen eso era el hilo principal parado mas de 5 s. En un hilo
+        // propio no puede colgar la UI aunque el motor este atascado; la cuenta y el aviso
+        // ya quedaron resueltos arriba sin esperar al motor.
+        Thread({ try { t.stop() } catch (_: Exception) {} }, "tts-stop").apply {
+            isDaemon = true
+            start()
+        }
     }
 
     private fun termina() {
@@ -105,5 +119,14 @@ class TtsQueue(private val onSpeakingChanged: (Boolean) -> Unit) {
     private companion object {
         /** Punto de corte de frase: lo mismo que usaba el codigo anterior, aqui una sola vez. */
         val REGLA = Regex("(?<=[.!?¿¡\\n])\\s+")
+        /**
+         * Un solo hilo de fondo para `speak()`: conserva el orden de las frases y saca del
+         * hilo principal el bloqueo IPC del motor. Vive lo que la app (daemon): sin ciclo de
+         * vida que gestionar y sin fugas por instancia de pantalla.
+         */
+        val FONDO: java.util.concurrent.ExecutorService =
+            java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+                Thread(r, "tts-fondo").apply { isDaemon = true }
+            }
     }
 }
