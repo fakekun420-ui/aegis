@@ -494,8 +494,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // El usuario acaba de volver de Ajustes → "Acceso a todos los archivos". Si ya
-        // está concedido, TokenProvider dejó de necesitar root en la siguiente lectura
-        // del token (60 s de caché como mucho). Avisamos solo en la transición.
+        // está concedido, Credentials relee service.json sin root en la siguiente lectura
+        // (60 s de caché como mucho). Avisamos solo en la transición.
         if (hasAllFilesAccess() && !allFilesWarned) {
             allFilesWarned = true
             toast("Acceso al almacenamiento concedido: ya no hace falta root")
@@ -535,9 +535,8 @@ class MainActivity : ComponentActivity() {
      * concreta de nuestra app con ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, y no
      * un intent genérico, que dejaría al usuario perdido en un listado.
      *
-     * Si el usuario lo deniega, la app NO se rompe: TokenProvider cae a su respaldo con
-     * root (ver data/TokenProvider.kt → fetchToken). Solo se pierde la comodidad de no
-     * pedir root.
+     * Si el usuario lo deniega, la app NO se rompe: las lecturas de ficheros caen a su
+     * respaldo con root (RootShell). Solo se pierde la comodidad de no pedir root.
      */
     private fun ensureAllFilesAccess() {
         if (hasAllFilesAccess()) return
