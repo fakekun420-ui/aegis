@@ -796,13 +796,93 @@ class RutaNativa(private val hub: ApiService) : ApiService {
 
         override suspend fun updateSkillConfig(skillId: String, config: Map<String, Any>): Response<BaseResponse> = hub.updateSkillConfig(skillId, config)
 
-        override suspend fun getWorkspaceProjects(): Response<ProjectsResponse> = hub.getWorkspaceProjects()
+    // ==========================================================================================
+    // WORKSPACE
+    //
+    // MEDIDO 2026-10-03: la pantalla se describe a si misma (WorkspaceScreen.kt:30) como
+    // "explorador fisico de directorios en /sdcard/projects/". O sea que la fuente real es el
+    // disco y se puede hacer nativo sin inventar nada.
+    //
+    // Y un hallazgo que explica un GRUPO entero: `WorkspaceViewModel`, `WorkflowViewModel` y
+    // `SkillManagerViewModel` usan `ApiClient.service` DIRECTO, no `Conexion.api` (3 usos cada uno).
+    // Se saltan la costura y hablan con el cliente del Hub aunque la costura este en modo nativo.
+    // Por eso esas tres pantallas no funcionan con independencia de lo que se implemente aqui.
+    // ==========================================================================================
 
-        override suspend fun initProject(projectId: String): Response<BaseResponse> = hub.initProject(projectId)
+    private const val RAIZ_PROYECTOS = "/sdcard/projects"
+
+    override suspend fun getWorkspaceProjects(): Response<ProjectsResponse> {
+        val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+        // `-d` para quedarse solo con directorios: la pantalla lista carpetas, y un fichero suelto
+        // en la raiz no es un proyecto.
+        val r = shell("ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null", 8000)
+        if (r.code != 0 && r.stdout.isBlank()) {
+            Log.w(TAG, "getWorkspaceProjects: no se pudo listar $RAIZ_PROYECTOS (exit ${r.code})")
+            return Response.success(ProjectsResponse(ok = false, data = emptyList()))
+        }
+        val items = r.stdout.split("\n")
+            .map { it.trim().trimEnd('/') }
+            .filter { it.isNotEmpty() }
+            .map { ruta ->
+                val nombre = ruta.substringAfterLast('/')
+                ProjectItem(
+                    id = nombre,
+                    name = nombre,
+                    path = ruta,
+                    // MEDIDO: esta columna viene de un concepto que ya no existe. El Hub se retiro
+                    // el 2026-10-01. Decir `true` porque hay una carpeta seria mentir, y poner un
+                    // sustituto obligaria al usuario a aprender algo que no significa nada. Se deja
+                    // en false y queda dicho aqui.
+                    hasHub = false,
+                    lastCommit = null
+                )
+            }
+        Log.i(TAG, "getWorkspaceProjects: ${items.size} carpetas bajo $RAIZ_PROYECTOS")
+        return Response.success(ProjectsResponse(ok = true, data = items))
+    }
+
+    /**
+     * MEDIDO: no hay equivalente nativo, y no lo hay por una razon concreta — este endpoint era
+     * del Hub, que inicializaba su propio workspace. OpenCode no tiene el concepto.
+     *
+     * Se responde `ok=false` CON MOTIVO en vez de dejar que la peticion se vaya a un puerto muerto.
+     * La diferencia es visible: un boton que dice "esto ya no existe en la app" es informacion; uno
+     * que no hace nada es una pista falsa, y el usuario deducira que la app esta rota.
+     */
+    override suspend fun initProject(projectId: String): Response<BaseResponse> =
+        Response.success(
+            BaseResponse(
+                ok = false,
+                // MEDIDO: `error` es `ErrorBody?`, no un texto. Escribirlo como String no
+                // compila, y el control positivo de simbolos lo ve antes que la CI.
+                error = ErrorBody(
+                    code = "hub-retirado",
+                    message = "Inicializar el workspace era del Hub, que se retiro. OpenCode no" +
+                        " tiene ese concepto: el proyecto ya esta en el registro de la app."
+                )
+            )
+        )
+
+    /** MEDIDO: sin equivalente nativo, por la misma razon que [initProject]. */
+    override suspend fun indexProject(projectId: String): Response<TaskResponse> =
+        Response.success(
+            TaskResponse(
+                ok = false,
+                // MEDIDO: `TaskResponse` es `(ok, data: TaskData?)`, y `TaskData` es
+                // `(taskId, message)`. No hay campo `error` ni `taskId` sueltos: lo he mirado.
+                data = TaskData(
+                    taskId = null,
+                    message = "Indexar el workspace era del Hub. OpenCode indexa sus propias" +
+                        " sesiones; el grafo de un proyecto se construye desde el propio proyecto."
+                )
+            )
+        )
+
+
 
         override suspend fun getProjectState(projectId: String): Response<ProjectStateResponse> = hub.getProjectState(projectId)
 
-        override suspend fun indexProject(projectId: String): Response<TaskResponse> = hub.indexProject(projectId)
+
 
         override suspend fun getAgents(): Response<AgentsResponse> = hub.getAgents()
 
