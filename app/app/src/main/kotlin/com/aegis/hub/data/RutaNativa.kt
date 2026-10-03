@@ -809,8 +809,6 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     // Por eso esas tres pantallas no funcionan con independencia de lo que se implemente aqui.
     // ==========================================================================================
 
-    private const val RAIZ_PROYECTOS = "/sdcard/projects"
-
     override suspend fun getWorkspaceProjects(): Response<ProjectsResponse> {
         val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
         // `-d` para quedarse solo con directorios: la pantalla lista carpetas, y un fichero suelto
@@ -1050,5 +1048,11 @@ class RutaNativa(private val hub: ApiService) : ApiService {
          * porque esta escrito al lado, en vez de repetirse en cada llamada.
          */
         const val RUTA_CHROOT_ROOT = "/data/local/ubuntu/root"
+
+        /** MEDIDO 2026-10-03: la raiz de proyectos que lista el explorador de workspace.
+         *  Va en el companion y no en el cuerpo porque Kotlin solo admite `const val` en el
+         *  nivel superior, en objetos con nombre y en companions. Es el mismo error que el del
+         *  TAG de este fichero, y el segundo: por eso esta escrito. */
+        const val RAIZ_PROYECTOS = "/sdcard/projects"
     }
 }
