@@ -1,0 +1,8 @@
+# Exclusiones SAST del proyecto Aegis.
+#
+# tools/chk_forma.py: checker LOCAL que compara los DTO contra el CLI vivo en
+# 127.0.0.1:49374. La regla dynamic-urllib-use lo marca porque la URL se arma en un
+# bucle sobre 4 endpoints fijos. No es trafico remoto ni llega al APK (tools/ no se
+# empaqueta): corre solo en pre-commit como aviso y en local. Por eso se excluye por
+# ruta en vez de con un `nosemgrep` dentro del codigo.
+tools/chk_forma.py
