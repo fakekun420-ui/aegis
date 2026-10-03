@@ -834,9 +834,70 @@ class RutaNativa(private val hub: ApiService) : ApiService {
 
         override suspend fun runAuthGuide(): Response<AuthGuideResponse> = hub.runAuthGuide()
 
-        override suspend fun replyForm(sessionId: String, formId: String, body: FormReplyBody): Envelope<Map<String, Any>> = hub.replyForm(sessionId, formId, body)
+    // ==========================================================================================
+    // FORMULARIOS Y PERMISOS
+    //
+    // MEDIDO 2026-10-03: estas dos delegaban en el Hub con un endpoint equivalente YA DECLARADO
+    // en `OpenCodeApi` desde el principio. El nativo estaba escrito y desconectado, que es la
+    // QUINTA vez hoy que algo ya existia: un import de otro paquete, una constante que no existe,
+    // dos sobrecargas duplicadas, `updateSkill` sin implementar, y esto.
+    //
+    // MEDIDO contra el OpenAPI (113 rutas):
+    //   POST /api/session/{id}/form/{formID}/reply          body {answer},      required answer
+    //   POST /api/session/{id}/permission/{id}/reply        body {decision, message}, required decision
+    //
+    // Lo que cambia al cablear, y por que:
+    //  - La app manda `answer: Map<String,String>` y el nativo `Map<String,Any?>`. Se convierte en
+    //    vez de castear: `Form.Answer` admite mas que texto, y taparlo aqui seria cerrarle la
+    //    puerta al cliente.
+    //  - El nativo devuelve `Response<Unit>` y la app `Envelope`. Se comprueba `isSuccessful` y no
+    //    se asume excepcion, igual que en `deleteSession`: un 404 significa que la peticion ya no
+    //    esta, que para el usuario es respuesta y no fallo.
+    // ==========================================================================================
 
-        override suspend fun replyPermission(sessionId: String, requestId: String, body: PermissionReplyBody): Envelope<Map<String, Any>> = hub.replyPermission(sessionId, requestId, body)
+    override suspend fun replyForm(
+        sessionId: String,
+        formId: String,
+        body: FormReplyBody
+    ): Envelope<Map<String, Any>> {
+        val r = oc.replyForm(
+            sessionId,
+            formId,
+            OpenCodeFormReplyRequest(answer = body.answer.mapValues { it.value })
+        )
+        return if (r.isSuccessful) {
+            envoltura(mapOf("formId" to formId, "enviado" to true))
+        } else {
+            envolturaFallo("El formulario $formId no se pudo contestar (${r.code()})")
+        }
+    }
+
+    override suspend fun replyPermission(
+        sessionId: String,
+        requestId: String,
+        body: PermissionReplyBody
+    ): Envelope<Map<String, Any>> {
+        // MEDIDO: `decision` solo admite "once" | "always" | "reject". Se valida aqui y no en el
+        // nativo para que el error llegue al usuario como texto y no como un 400 sin explicar.
+        val validas = setOf("once", "always", "reject")
+        if (body.decision !in validas) {
+            return envolturaFallo(
+                "decision '${body.decision}' no vale. MEDIDO: solo ${validas.joinToString(", ")}."
+            )
+        }
+        val r = oc.replyPermission(
+            sessionId,
+            requestId,
+            OpenCodePermissionReplyRequest(decision = body.decision, message = body.message)
+        )
+        return if (r.isSuccessful) {
+            envoltura(mapOf("requestId" to requestId, "decision" to body.decision))
+        } else {
+            envolturaFallo("El permiso $requestId no se pudo contestar (${r.code()})")
+        }
+    }
+
+
 
     // GET /api/session/active da solo `type` por sesion. La semantica de `turnOver` y
     // `lastSeen` la define el Paquete D, no esta capa.
