@@ -371,7 +371,11 @@ data class ModelOption(
     // modelo, no solo si el id acaba en "-free". MEDIDO 2026-09-29: 39 de 472 modelos
     // lo traen a true. Sin este campo la app no puede distinguir un free de uno de
     // pago, y por eso el default acababa hardcodeado a un id que no existe.
-    val free: Boolean = false
+    val free: Boolean = false,
+    // MEDIDO 2026-10-03: sin esto la app solo maneja el id y no puede fijar el modelo en
+    // el servidor, que distingue por pareja id mas providerID. Con default null para no
+    // romper los tests que construyen ModelOption a mano.
+    val providerID: String? = null
 )
 
 /**

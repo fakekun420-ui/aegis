@@ -13,7 +13,6 @@ import com.aegis.hub.data.FormOption
 import com.aegis.hub.data.FormField
 import com.aegis.hub.ui.TurnNotifier
 import androidx.lifecycle.viewModelScope
-import com.aegis.hub.data.ApiClient
 import com.aegis.hub.data.Conexion
 import com.aegis.hub.data.AttachedFile
 import com.aegis.hub.data.LiveToolExecution
@@ -28,6 +27,8 @@ import com.aegis.hub.data.OpencodeAgent
 import com.aegis.hub.data.seleccionables
 import com.aegis.hub.data.modeloPorDefecto
 import com.aegis.hub.data.SendMessageRequest
+import com.aegis.hub.data.SessionModelRef
+import com.aegis.hub.data.CreateOpenCodeSessionRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -36,7 +37,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
 import com.aegis.hub.data.TurnState
 
 /**
@@ -328,6 +328,17 @@ class ChatViewModel : ViewModel() {
         // Se persiste por sesión Y como "última elección" (que es lo que usarán los chats
         // nuevos). Es lo que evita que un chat nuevo vuelva al default.
         runCatching { ModelPreferences.setModel(AppContext.require(), currentSessionForModel, modelId) }
+        // MEDIDO 2026-10-03: esto solo escribia en prefs. El servidor seguia con el modelo
+        // viejo y el CLI lo veia: la app y el CLI discrebaban. Ahora se empuja al servidor,
+        // que es la unica verdad. Sin variant: al cambiar de modelo el variant viejo puede
+        // no existir en el nuevo, asi que decide el servidor.
+        val sid = currentSessionForModel
+        if (sid.isBlank()) return
+        val prov = _models.value.firstOrNull { it.id == modelId }?.providerID
+        viewModelScope.launch {
+            try { api.setSessionModel(sid, SessionModelRef(id = modelId, providerID = prov)) }
+            catch (_: Exception) { }
+        }
     }
 
     fun selectProvider(provider: String) {
@@ -1176,13 +1187,11 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 }
             }
 
-            // 5. Send message with SSE real-time token streaming
+            // 5. Envio del mensaje por la via nativa (la costura fija el modelo y el poll trae
+            // la respuesta). Sin fallback a un id: si no hay modelo elegido se envia null y
+            // decide OpenCode; mandar un id caducado es peor que no mandar nada.
             try {
                 val currentAgentMode = _agentMode.value
-                // Sin fallback a un id. Si no hay modelo elegido se envia null y
-                // decide OpenCode; mandar un id caducado es peor que no mandar nada,
-                // porque ademas el Hub lo conservaba para la sesion (lo advertia con
-                // "modelo no encontrado en el indice v2") y persistia el error.
                 val currentModel = _selectedModel.value
                 val sendReq = SendMessageRequest(
                     parts = reqParts,
@@ -1191,241 +1200,53 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     agent = currentAgentMode,
                     mode = currentAgentMode
                 )
-                val bodyJson = com.google.gson.Gson().toJson(sendReq)
 
+                // MEDIDO 2026-10-03: esto era un POST SSE al Hub en :8765, que ya no escucha.
+                // El Hub adaptaba el stream del CLI a eventos accepted/chunk/tool_start/done; sin
+                // el, el POST siempre fallaba y ademas pintaba un error del Hub aunque el mensaje
+                // pudiera entregarse por la via nativa. Ahora el envio va directo por la costura
+                // (`api.sendMessage`: fija el modelo en el servidor y hace el prompt al CLI), y la
+                // respuesta llega por el poll de arriba mas el sync de abajo, que ya refrescan el
+                // texto parcial del asistente cada 1,5 s. El streaming token a token por
+                // `/api/event` queda pendiente (hay `EventStream.kt` para ello); el poll es la via
+                // honesta que funciona hoy, no la rapida que no existe.
                 var sseSuccess = false
-                // FASE A-5: true cuando el POST del streaming ya obtuvo respuesta HTTP del
-                // servidor. En ese caso la vía clásica de respaldo NO debe reenviar el
-                // mensaje final (antes: una excepción en L402 reenviaba en L410 = doble envío).
                 var sseRequestAccepted = false
-                // El Hub puede mandar `accepted` y luego, si el POST falló, `error`.
-                var ackReceived = false
-                var sseResp: okhttp3.Response? = null
                 _streamingText.value = ""
                 _streamingTools.value = emptyList()
 
                 _sendingInFlight.value = true
                 try {
-                    val streamReq = okhttp3.Request.Builder()
-                        .url("http://127.0.0.1:8765/api/opencode/sessions/$targetSessionId/message?stream=true")
-                        .header("Accept", "text/event-stream")
-                        .header("X-Provider", provider)
-                        // Solo si hay modelo. `header()` exige String no nulo, y ahora
-                        // `currentModel` es nullable a proposito (ya no hay un id de
-                        // reserva caducado): sin modelo, la cabecera no se pone y decide
-                        // el Hub con el primer free de la lista.
-                        .apply { if (currentModel != null) header("X-Model", currentModel) }
-                        .header("X-Agent", currentAgentMode)
-                        .header("X-Mode", currentAgentMode)
-                        .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
-                        .build()
-
-                    sseResp = withContext(Dispatchers.IO) { ApiClient.rawOkHttp.newCall(streamReq).execute() }
-                    val resp = sseResp
-                    sseRequestAccepted = resp?.isSuccessful == true
-
-                    // ---- CONFIRMACION DE RECEPCION ----
-                    // El POST ha vuelto: el servidor tiene el mensaje. A partir de aqui
-                    // "Enviando..." desaparece y empieza "Generando respuesta...". Antes
-                    // el mensaje seguia en PENDING hasta que terminaba TODO el stream, que
-                    // puede tardar minutos, y no habia forma de saber si lo habia
-                    // recibido o no.
-                    _sendingInFlight.value = false
-                    if (sseRequestAccepted) {
-                        _messages.value = _messages.value.map {
-                            if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
-                        }
-                    } else {
-                        // El servidor RECHAZO el mensaje. Se pinta el motivo real (cuota
-                        // agotada, quota, error de proveedor...) en vez de un generico.
-                        // Se lee `body` y no `errorBody`: en este OkHttp (4.12) el
-                        // identificador no resuelve como propiedad ni como metodo, y en la
-                        // rama de rechazo el stream no se va a leer, asi que consumir el
-                        // cuerpo aqui no molesta. El codigo HTTP se añade al motivo para
-                        // poder distinguir 429 (cuota) de 400/500.
-                        val codigo = resp?.code
-                        val crudo = try { resp?.body?.string() } catch (_: Exception) { null }
-                        val motivo = parseDeliveryError(crudo) + " (HTTP ${codigo ?: "?"})"
-                        _error.value = motivo
-                        _messages.value = _messages.value.map {
-                            if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
-                        }
-                    }
-                    if (resp != null && resp.isSuccessful && resp.body != null) {
-                        val reader = resp.body!!.charStream().buffered()
-                        // MEDIDO 2026-10-01: antes habia aqui un `StringBuilder` que ACUMULABA
-                        // los trozos. El evento `chunk` lleva el texto ACUMULADO —el Hub lo
-                        // emite entero en cada poll en que crece (providers.js, `emitir`)—, asi
-                        // que acumular lo duplicaria de arriba abajo en cuanto el streaming
-                        // dejase de ser un unico bloque al final. Se REEMPLAZA.
-                        // Y el acumulador desaparece entero: MEDIDO, `sb` no se usaba en ningun
-                        // otro sitio del fichero.
-                        var line: String? = null
-                        while (withContext(Dispatchers.IO) { reader.readLine() }.also { line = it } != null) {
-                            val cur = line ?: break
-                            if (cur.startsWith("data: ")) {
-                                val dataStr = cur.removePrefix("data: ").trim()
-                                try {
-                                    val jsonObj = com.google.gson.JsonParser.parseString(dataStr).asJsonObject
-                                    val type = if (jsonObj.has("type")) jsonObj.get("type").asString else ""
-                                    when (type) {
-                                        // El Hub lo emite justo después del flushHeaders: el
-                                        // prompt está dentro. Antes el ack dependía de que
-                                        // la respuesta HTTP volviera, y con el bug de cork
-                                        // del Hub eso no ocurría hasta el FINAL del turno, así
-                                        // que "Enviando…" duraba minutos. Ahora el relevo
-                                        // entre fases lo marca un evento explícito.
-                                        "accepted" -> {
-                                            if (!ackReceived) {
-                                                ackReceived = true
-                                                _sendingInFlight.value = false
-                                                _messages.value = _messages.value.map {
-                                                    if (it.info?.id == tempMsgId) {
-                                                        it.withStatus(MessageDeliveryStatus.SENT)
-                                                    } else it
-                                                }
-                                            }
-                                        }
-                                        "chunk" -> {
-                                            if (jsonObj.has("text")) {
-                                                val chunk = jsonObj.get("text").asString
-                                                // Reemplaza, no acumula: el Hub manda el
-                                                // acumulado (providers.js, `emitir`).
-                                                _streamingText.value = chunk
-                                            }
-                                        }
-                                        "tool_start" -> {
-                                            val rawTool = if (jsonObj.has("tool")) jsonObj.get("tool").asString else "bash"
-                                            val tool = if (rawTool == "run_command") "bash" else rawTool
-                                            val callId = if (jsonObj.has("callID")) jsonObj.get("callID").asString else "tool_${System.currentTimeMillis()}"
-                                            val inputObj = if (jsonObj.has("input") && jsonObj.get("input").isJsonObject) jsonObj.getAsJsonObject("input") else null
-                                            val cmd = inputObj?.let {
-                                                (if (it.has("CommandLine")) it.get("CommandLine").asString else null)
-                                                    ?: (if (it.has("command")) it.get("command").asString else null)
-                                                    ?: (if (it.has("cmd")) it.get("cmd").asString else null)
-                                                    ?: (if (it.has("path")) it.get("path").asString else null)
-                                                    ?: (if (it.has("AbsolutePath")) it.get("AbsolutePath").asString else null)
-                                                    ?: (if (it.has("TargetFile")) it.get("TargetFile").asString else null)
-                                                    ?: (if (it.has("query")) it.get("query").asString else null)
-                                                    ?: (if (it.has("Url")) it.get("Url").asString else null)
-                                            } ?: ""
-                                            val cleanCmd = cmd.trim().removeSurrounding("\"")
-                                            val newExec = LiveToolExecution(
-                                                id = callId,
-                                                tool = tool,
-                                                command = cleanCmd,
-                                                status = "running"
-                                            )
-                                            _streamingTools.value = _streamingTools.value.filterNot { it.id == callId } + newExec
-                                        }
-                                        "tool_done" -> {
-                                            val rawTool = if (jsonObj.has("tool")) jsonObj.get("tool").asString else "bash"
-                                            val tool = if (rawTool == "run_command") "bash" else rawTool
-                                            val callId = if (jsonObj.has("callID")) jsonObj.get("callID").asString else ""
-                                            val output = if (jsonObj.has("output")) jsonObj.get("output").asString else ""
-                                            val exitCode = if (jsonObj.has("exitCode")) jsonObj.get("exitCode").asInt else 0
-                                            val duration = if (jsonObj.has("duration")) jsonObj.get("duration").asDouble else null
-                                            val inputObj = if (jsonObj.has("input") && jsonObj.get("input").isJsonObject) jsonObj.getAsJsonObject("input") else null
-                                            val cmd = inputObj?.let {
-                                                (if (it.has("CommandLine")) it.get("CommandLine").asString else null)
-                                                    ?: (if (it.has("command")) it.get("command").asString else null)
-                                            } ?: ""
-                                            val cleanCmd = cmd.trim().removeSurrounding("\"")
-                                            _streamingTools.value = _streamingTools.value.map {
-                                                if (it.id == callId || (it.tool == tool && it.status == "running")) {
-                                                    it.copy(
-                                                        status = if (exitCode == 0) "completed" else "error",
-                                                        output = output,
-                                                        exitCode = exitCode,
-                                                        duration = duration,
-                                                        command = if (cleanCmd.isNotBlank()) cleanCmd else it.command
-                                                    )
-                                                } else it
-                                            }
-                                        }
-                                        // El Hub emite `error` (server.js, rama de error
-                                        // del stream). Antes no había rama para ella: caía en
-                                        // el catch silencioso, el stream se cerraba, y como
-                                        // `sseRequestAccepted` ya valía true el reenvío de
-                                        // seguridad NO se disparaba. Resultado: el turno se
-                                        // paraba sin mensaje de error para el usuario.
-                                        "error" -> {
-                                            // Por que no optString(): esto es un
-                                            // JsonObject, y la familia opt* de JsonObject
-                                            // (gson 2.10.1) exige SIEMPRE el segundo
-                                            // argumento de valor por defecto. La forma de
-                                            // un solo argumento que si existe es la de
-                                            // JsonElement, y no es este tipo. Se leen
-                                            // los dos campos con get(), que no ha
-                                            // cambiado en ninguna version, y se protege
-                                            // con ?. por si no vienen o no son primitivos.
-                                            val detalle = (jsonObj.get("error")
-                                                ?: jsonObj.get("message"))
-                                                ?.takeIf { it.isJsonPrimitive }
-                                                ?.asString.orEmpty()
-                                            _error.value = detalle.ifBlank { "El turno falló" }
-                                            _messages.value = _messages.value.map {
-                                                if (it.info?.id == tempMsgId) {
-                                                    it.withStatus(MessageDeliveryStatus.ERROR)
-                                                } else it
-                                            }
-                                            messageDelivered = true
-                                            pollingJob?.cancel()
-                                        }
-                                        "done" -> {
-                                            val msgObj = jsonObj.getAsJsonObject("message")
-                                            val finalMsg = com.google.gson.Gson().fromJson(msgObj, Message::class.java)
-                                            if (finalMsg != null && !finalMsg.isEmpty) {
-                                                messageDelivered = true
-                                                pollingJob?.cancel()
-                                                val updated = _messages.value.map {
-                                                    if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
-                                                }
-                                                val exists = updated.any { it.info?.id == finalMsg.info?.id }
-                                                _messages.value = if (exists) updated else updated + finalMsg
-                                                sseSuccess = true
-                                            }
-                                            break
-                                        }
-                                    }
-                                } catch (_: Exception) {}
-                            }
-                        }
-                    }
-                } catch (_: Exception) {
-                    sseSuccess = false
-                } finally {
-                    // FASE A-5: cerrar SIEMPRE la respuesta SSE. Sin esto, el ResponseBody
-                    // (y su socket/file descriptor de OkHttp) queda abierto y se fuga en
-                    // cada envío con streaming.
-                    try { sseResp?.close() } catch (_: Exception) {}
-                    _streamingText.value = null
-                    _streamingTools.value = emptyList()
-                }
-
-                // A-5: solo se reenvía por la vía clásica si el streaming NUNCA llegó a
-                // entregar la petición al servidor (2xx) y además no hay mensaje final.
-                // Si el POST del streaming ya fue aceptado, reenviar duplicaba el mensaje.
-                if (!sseSuccess && !messageDelivered && !sseRequestAccepted) {
                     val responseMsg = api.sendMessage(
                         sessionId = targetSessionId,
                         body = sendReq,
                         provider = provider
                     )
-
-                    // If responseMsg arrived directly with assistant parts
+                    _sendingInFlight.value = false
                     if (!responseMsg.isEmpty) {
                         messageDelivered = true
                         pollingJob?.cancel()
-
-                        // Mark user message as SENT and append response
                         val updated = _messages.value.map {
                             if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
                         }
                         val exists = updated.any { it.info?.id == responseMsg.info?.id }
                         _messages.value = if (exists) updated else updated + responseMsg
                         _loading.value = false
+                    } else {
+                        // La via nativa devuelve Message vacio a proposito: la respuesta va por
+                        // el poll. Se marca el envio como aceptado para no reenviarlo.
+                        _messages.value = _messages.value.map {
+                            if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.SENT) else it
+                        }
                     }
+                    sseRequestAccepted = true
+                    sseSuccess = true
+                } catch (_: Exception) {
+                    _sendingInFlight.value = false
+                    sseSuccess = false
+                } finally {
+                    _streamingText.value = null
+                    _streamingTools.value = emptyList()
                 }
 
                 // Follow-up sync to get canonical messages from DB
@@ -1494,31 +1315,13 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
     suspend fun createVoiceSession(provider: String = "opencode"): String? = createNewSession(provider)
 
     private suspend fun createNewSession(provider: String = "opencode"): String? = withContext(Dispatchers.IO) {
+        // MEDIDO 2026-10-03: esto era un POST crudo al Hub en :8765, que ya no escucha, asi que
+        // crear un chat desde cero fallaba siempre en silencio (null). Ahora va por la costura,
+        // que es OpenCode directo. El parametro provider se conserva por firma pero ya no decide:
+        // OpenCode no tiene proveedores de sesion, solo modelos por sesion.
         try {
-            val title = "Nuevo chat"
-            // Sin "model": lo pone el Hub con el primer free de la lista de OpenCode.
-            val bodyJson = "{\"title\":\"${title.replace("\"", "\\\"")}\",\"provider\":\"$provider\"}"
-            val req = okhttp3.Request.Builder()
-                .url("http://127.0.0.1:8765/opencode/session")
-                .header("X-Provider", provider)
-                .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
-                .build()
-            val resp = ApiClient.rawOkHttp.newCall(req).execute()
-            val body = resp.body?.string() ?: return@withContext null
-            val j = com.google.gson.JsonParser.parseString(body).asJsonObject
-            when {
-                j.has("id") -> j.get("id").asString
-                j.has("ID") -> j.get("ID").asString
-                j.has("data") -> {
-                    val d = j.getAsJsonObject("data")
-                    when {
-                        d.has("id") -> d.get("id").asString
-                        d.has("ID") -> d.get("ID").asString
-                        else -> null
-                    }
-                }
-                else -> null
-            }
+            val resp = api.createSession(CreateOpenCodeSessionRequest(title = "Nuevo chat"))
+            resp.data?.resolvedId?.takeIf { it.isNotBlank() }
         } catch (_: Exception) { null }
     }
 }

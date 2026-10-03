@@ -247,23 +247,94 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     // getSessionAgent: GET /api/session/{id} trae agent
     // MEDIDO: el mismo `GET /api/session/{id}` trae `agent`. Con la sesion ausente se devuelve
     // ok=true con dato nulo, que es lo que la app ya sabe leer (`.data?.agent`).
-        override suspend fun getSessionAgent(sessionId: String): Envelope<SessionAgentRef?> = envoltura(oc.getSession(sessionId).agent?.let { SessionAgentRef(it) })
+    // MEDIDO 2026-10-03: el endpoint envuelve en `data` (ver `OpenCodeSessionResponse`); sin
+    // desenvolver, esto siempre devolvia null y la app creia que no habia agente.
+        override suspend fun getSessionAgent(sessionId: String): Envelope<SessionAgentRef?> = envoltura(oc.getSession(sessionId).data?.agent?.let { SessionAgentRef(it) })
 
     // getPendingForms: mismos tipos; con sessionId nulo se delega
     // MEDIDO: OpenCode devuelve YA los tipos de la app (PendingForm), sin traduccion.
-    // Con sessionId nulo no hay ruta nativa: el Hub lo resuelvia globalmente. Se delega.
-        override suspend fun getPendingForms(sessionId: String?): Envelope<List<PendingForm>> = if (sessionId == null) hub.getPendingForms(null)
+    // MEDIDO 2026-10-03: con sessionId nulo se delegaba al Hub, que ya no escucha. Sin sesion
+    // no hay formularios que pedir: lista vacia honesta en vez de una excepcion de red.
+        override suspend fun getPendingForms(sessionId: String?): Envelope<List<PendingForm>> = if (sessionId == null) envoltura(emptyList())
            else envoltura(oc.getSessionForms(sessionId).data)
 
     // getPendingPermissions: mismos tipos; con sessionId nulo se delega
     // Igual que los formularios: mismos tipos, misma historia.
-        override suspend fun getPendingPermissions(sessionId: String?): Envelope<List<PendingPermission>> = if (sessionId == null) hub.getPendingPermissions(null)
+        override suspend fun getPendingPermissions(sessionId: String?): Envelope<List<PendingPermission>> = if (sessionId == null) envoltura(emptyList())
            else envoltura(oc.getSessionPermissions(sessionId).data)
 
     // getSessionModel: GET /api/session/{id} trae model con los tres campos
     // MEDIDO: `GET /api/session/{id}` trae `model` con id, providerID y variant poblados. Es
     // el dato que el ponytail daba por inexistente, y de ahi que existiera ModelPreferences.
-        override suspend fun getSessionModel(sessionId: String): Envelope<SessionModelRef?> = envoltura(oc.getSession(sessionId).model?.let { SessionModelRef(it.id, it.providerID, it.variant) })
+    // MEDIDO 2026-10-03: el endpoint envuelve en `data` (ver `OpenCodeSessionResponse`); sin
+    // desenvolver, esto siempre devolvia null y la app jamas veia el modelo del CLI.
+        override suspend fun getSessionModel(sessionId: String): Envelope<SessionModelRef?> = envoltura(oc.getSession(sessionId).data?.model?.let { SessionModelRef(it.id, it.providerID, it.variant) })
+
+    /**
+     * Resuelve el providerID de un id de modelo contra el catalogo vivo.
+     *
+     * MEDIDO 2026-10-03: `POST /api/session/{id}/model` exige la pareja id mas providerID, y
+     * la app solo guardaba el id. Si el id existe en varios proveedores, manda la pista
+     * (el provider del chat); si no, prefiere `opencode`; si ni eso, el primero.
+     * Es `internal` para probarlo sin servidor.
+     */
+    internal fun resolveProviderFor(modelId: String?, hint: String?, catalogo: List<OpenCodeNativeModel>): String {
+        val id = modelId?.trim().orEmpty()
+        if (id.isEmpty()) return "opencode"
+        val candidatos = catalogo.filter { (it.id ?: it.modelID) == id }
+        if (candidatos.isEmpty()) return hint?.trim()?.takeIf { it.isNotBlank() } ?: "opencode"
+        val pista = hint?.trim()?.takeIf { it.isNotBlank() }
+        val porPista = pista?.let { h -> candidatos.firstOrNull { it.providerID == h } }
+        if (porPista != null) return porPista.providerID
+        return candidatos.firstOrNull { it.providerID == "opencode" }?.providerID
+            ?: candidatos.first().providerID
+    }
+
+    // setSessionModel: empuja el modelo al servidor (POST /api/session/{id}/model del CLI).
+    // MEDIDO 2026-10-03: la app nunca llamaba a esta ruta. `selectModel` solo escribia en
+    // prefs y `sendMessage` mandaba el modelo en el cuerpo, que el CLI ignora: el prompt
+    // no acepta modelo. Resultado: el modelo del CLI mandaba siempre y la app mostraba el
+    // suyo. Ahora el modelo se fija ANTES del prompt, y el servidor es la unica verdad.
+        override suspend fun setSessionModel(sessionId: String, body: SessionModelRef): Envelope<Boolean> {
+            return try {
+                val ref = body.id?.trim()?.takeIf { it.isNotBlank() }
+                    ?: return Envelope(ok = false, data = null)
+                val prov = body.providerID?.trim()?.takeIf { it.isNotBlank() }
+                    ?: resolveProviderFor(ref, null, oc.listModels().data.orEmpty())
+                val resp = oc.setSessionModel(sessionId, SetSessionModelRequest(OpenCodeModelRef(id = ref, providerID = prov, variant = body.variant)))
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "setSessionModel HTTP ${resp.code()} para $sessionId")
+                    return Envelope(ok = false, data = null)
+                }
+                envoltura(true)
+            } catch (e: Exception) {
+                Log.w(TAG, "setSessionModel fallo para $sessionId: ${e.message}")
+                Envelope(ok = false, data = null)
+            }
+        }
+
+    // createSession: POST /api/session nativo (tambien envuelto en `data`).
+    // MEDIDO 2026-10-03: los ViewModels la creaban con POST crudo al Hub en :8765.
+        override suspend fun createSession(body: CreateOpenCodeSessionRequest): Envelope<OpencodeSession> {
+            return try {
+                val creado = oc.createSession(body).data
+                    ?: return Envelope(ok = false, data = null)
+                envoltura(
+                    OpencodeSession(
+                        id = creado.id,
+                        title = creado.title,
+                        model = creado.model,
+                        createdAt = creado.time?.created?.let { java.time.Instant.ofEpochMilli(it).toString() },
+                        updatedAt = creado.time?.updated?.let { java.time.Instant.ofEpochMilli(it).toString() },
+                        pinned = false,
+                        provider = creado.model?.providerID
+                    )
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "createSession fallo: ${e.message}")
+                Envelope(ok = false, data = null)
+            }
+        }
 
     // =====================================================================
     // DELEGADAS EN EL HUB — a proposito, no por olvido
@@ -736,6 +807,23 @@ class RutaNativa(private val hub: ApiService) : ApiService {
 
         val agentes = body.agent?.takeIf { it.isNotBlank() }?.let { listOf(OpenCodePromptAgentRef(name = it)) }
 
+        // MEDIDO 2026-10-03: el prompt del CLI no acepta modelo (su schema solo trae text,
+        // files, agents...). El modelo de `body` se ignoraba aqui en silencio: la app creia
+        // mandarlo y el CLI ni lo miraba. La unica via es `POST /api/session/{id}/model`
+        // ANTES del prompt. Si falla, el turno sigue con el modelo que tenga la sesion:
+        // fallar el envio entero por no poder fijar el modelo seria peor.
+        val modeloId = body.model?.trim()?.takeIf { it.isNotBlank() }
+        if (modeloId != null) {
+            try {
+                val catalogo = oc.listModels().data.orEmpty()
+                val prov = resolveProviderFor(modeloId, body.provider, catalogo)
+                val fijado = oc.setSessionModel(sessionId, SetSessionModelRequest(OpenCodeModelRef(id = modeloId, providerID = prov)))
+                if (!fijado.isSuccessful) Log.w(TAG, "sendMessage: fijar modelo HTTP ${fijado.code()} en $sessionId")
+            } catch (e: Exception) {
+                Log.w(TAG, "sendMessage: no se pudo fijar modelo $modeloId en $sessionId: ${e.message}")
+            }
+        }
+
         oc.sendPrompt(
             sessionId,
             OpenCodePromptRequest(
@@ -1084,7 +1172,10 @@ class RutaNativa(private val hub: ApiService) : ApiService {
                     append(m.family ?: "AI")
                     if (esFree(m)) append(" · gratis")
                 },
-                free = esFree(m)
+                free = esFree(m),
+                // MEDIDO 2026-10-03: sin el proveedor la app no puede fijar el modelo en el
+                // servidor, que distingue por pareja id mas providerID. Antes se tiraba.
+                providerID = m.providerID
             )
         }
         return envoltura(lista)
@@ -1250,10 +1341,12 @@ class RutaNativa(private val hub: ApiService) : ApiService {
     // "explorador fisico de directorios en /sdcard/projects/". O sea que la fuente real es el
     // disco y se puede hacer nativo sin inventar nada.
     //
-    // Y un hallazgo que explica un GRUPO entero: `WorkspaceViewModel`, `WorkflowViewModel` y
-    // `SkillManagerViewModel` usan `ApiClient.service` DIRECTO, no `Conexion.api` (3 usos cada uno).
-    // Se saltan la costura y hablan con el cliente del Hub aunque la costura este en modo nativo.
-    // Por eso esas tres pantallas no funcionan con independencia de lo que se implemente aqui.
+    // Y un hallazgo que explica un GRUPO entero y ya esta cerrado (2026-10-03):
+    // `WorkspaceViewModel`, `WorkflowViewModel`, `SkillManagerViewModel` y `ControlCenterViewModel`
+    // usaban `ApiClient.service` DIRECTO, no `Conexion.api` (10 usos en total). Se saltaban la
+    // costura y hablaban con el cliente del Hub aunque la costura estuviera en modo nativo. Por
+    // eso esas pantallas no funcionaban con independencia de lo que se implementara aqui. Ahora
+    // van por `Conexion.api`, que es esta misma clase en modo nativo.
     // ==========================================================================================
 
     override suspend fun getWorkspaceProjects(): Response<ProjectsResponse> {

@@ -3,7 +3,6 @@ package com.aegis.hub.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.*
-import okhttp3.MediaType.Companion.toMediaType
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -500,7 +499,7 @@ fun moveSession(sessionId: String, projectId: String) {
                 null
             }
 
-            val sid = createdSession?.id ?: createSessionViaHub(title, effectiveProjectId, providerOverride ?: proj?.provider ?: "opencode")
+            val sid = createdSession?.data?.id ?: createSessionViaHub(title, effectiveProjectId, providerOverride ?: proj?.provider ?: "opencode")
 
             if (sid != null) {
                 if (effectiveProjectId != null) {
@@ -519,38 +518,12 @@ fun moveSession(sessionId: String, projectId: String) {
     }
 
     private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        // MEDIDO 2026-10-03: esto era un POST crudo al Hub en :8765, que ya no escucha. Ahora va
+        // por la costura (`api.createSession`), que es OpenCode directo. Se conserva el nombre
+        // por firma: hay llamadas y no aporta nada renombrarlo.
         try {
-            // MEDIDO 2026-10-01: aqui habia `f'"{projectId}"'` — una F y una COMILLA SIMPLE de
-            // Python metidas en Kotlin. Y la linea siguiente decia
-            //   "{""title"":"" + title.replace(""""", "\"") + ..."
-            // donde el `\"` de Kotlin se habia convertido en `""` y las comillas del JSON se
-            // habian comido las suyas. El parser se desincroniza en esa linea y TODO lo de
-            // abajo es eco: 'if must have both branches', 'Unresolved reference catch', 'e'...
-            //
-            // Son 12 errores de CI y uno solo de causa, y otra vez en una sola linea. Por eso
-            // el arreglo NO es tocar lo que falla linea a linea: es reescribir la linea entera
-            // con el JSON construido de forma que no dependa de escapar nada.
-            val pIdStr = projectId?.takeIf { it.isNotBlank() }?.let { "\"$it\"" } ?: "null"
-            val titulo = title.replace("\\", "\\\\").replace("\"", "\\\"")
-            val bodyJson = "{\"title\":\"$titulo\",\"projectId\":$pIdStr,\"provider\":\"$provider\"}"
-            val req = okhttp3.Request.Builder()
-                .url("http://127.0.0.1:8765/opencode/session")
-                .header("X-Provider", provider)
-                .apply { if (!projectId.isNullOrBlank()) header("X-Project-Id", projectId) }
-                .post(okhttp3.RequestBody.create("application/json".toMediaType(), bodyJson))
-                .build()
-            val resp = ApiClient.rawOkHttp.newCall(req).execute()
-            val body = resp.body?.string() ?: return@withContext null
-            val json = com.google.gson.JsonParser.parseString(body).asJsonObject
-            when {
-                json.has("id") -> json.get("id").asString
-                json.has("ID") -> json.get("ID").asString
-                json.has("data") -> {
-                    val d = json.getAsJsonObject("data")
-                    when { d.has("id") -> d.get("id").asString; d.has("ID") -> d.get("ID").asString; else -> null }
-                }
-                else -> null
-            }
+            val resp = api.createSession(CreateOpenCodeSessionRequest(title = title))
+            resp.data?.resolvedId?.takeIf { it.isNotBlank() }
         } catch (e: Exception) {
             _error.value = "No se pudo crear la sesion: " + (e.message ?: e::class.simpleName)
             null

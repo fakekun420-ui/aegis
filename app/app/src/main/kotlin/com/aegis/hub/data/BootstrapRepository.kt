@@ -25,14 +25,16 @@ interface BootstrapRepository {
 }
 
 /**
- * Implementación REAL (F1/F3): delega una a una en [ApiClient.service].
- * El acceso es un getter perezoso → la object ApiClient (y RootShell/Log de
- * Android) sólo se carga en el primer uso REAL, nunca al construir el
- * ViewModel en un test JVM.
+ * Implementación REAL: delega una a una en [Conexion.api].
+ *
+ * MEDIDO 2026-10-03: esto era [ApiClient.service], el Retrofit del Hub en :8765, que ya no
+ * escucha. Con el Hub muerto, el bootstrap desde la app fallaba siempre. [Conexion.api] es la
+ * misma interfaz `ApiService` servida por `RutaNativa` (OpenCode directo), asi que el cambio
+ * es de una linea y los tests con fakes no se tocan.
  */
 object RetrofitBootstrapRepository : BootstrapRepository {
 
-    private val service: ApiService get() = ApiClient.service
+    private val service: ApiService get() = Conexion.api
 
     override suspend fun getBootstrapState(): Response<BootstrapResponse> =
         service.getBootstrapState()

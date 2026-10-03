@@ -53,13 +53,13 @@ interface OpenCodeApi {
     @GET("api/session/{id}")
     suspend fun getSession(
         @Path("id") id: String
-    ): OpenCodeSession
+    ): OpenCodeSessionResponse
 
 
     @POST("api/session")
     suspend fun createSession(
         @Body body: CreateOpenCodeSessionRequest
-    ): OpenCodeSession
+    ): OpenCodeSessionResponse
 
     @PATCH("api/session/{id}")
     suspend fun updateSession(
@@ -113,7 +113,7 @@ interface OpenCodeApi {
     suspend fun getMessage(
         @Path("id") sessionId: String,
         @Path("messageID") messageID: String
-    ): OpenCodeMessage
+    ): OpenCodeMessageResponse
 
     // ==========================================
     // Prompt y Control de Turno

@@ -2,7 +2,7 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.aegis.hub.data.ApiClient
+import com.aegis.hub.data.Conexion
 import com.aegis.hub.data.RunWorkflowRequest
 import com.aegis.hub.data.WorkflowItem
 import com.aegis.hub.data.WorkflowStatus
@@ -25,7 +25,7 @@ class WorkflowViewModel : ViewModel() {
     fun loadWorkflows(projectId: String) {
         viewModelScope.launch {
             try {
-                val res = ApiClient.service.getWorkflows(projectId)
+                val res = Conexion.api.getWorkflows(projectId)
                 if (res.isSuccessful) {
                     _workflows.value = res.body()?.data ?: emptyList()
                 }
@@ -39,7 +39,7 @@ class WorkflowViewModel : ViewModel() {
             try {
                 _isRunning.value = true
                 val req = RunWorkflowRequest(workflowId)
-                ApiClient.service.runWorkflow(projectId, req)
+                Conexion.api.runWorkflow(projectId, req)
                 pollStatus(projectId)
             } catch (e: Exception) {
                 _isRunning.value = false
@@ -51,7 +51,7 @@ class WorkflowViewModel : ViewModel() {
         viewModelScope.launch {
             while (_isRunning.value) {
                 try {
-                    val res = ApiClient.service.getWorkflowStatus(projectId)
+                    val res = Conexion.api.getWorkflowStatus(projectId)
                     if (res.isSuccessful) {
                         val st = res.body()?.data
                         _status.value = st

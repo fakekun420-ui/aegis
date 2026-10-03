@@ -2,7 +2,7 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.aegis.hub.data.ApiClient
+import com.aegis.hub.data.Conexion
 import com.aegis.hub.data.HealthData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +24,7 @@ class ControlCenterViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val response = ApiClient.service.getSystemHealth()
+                val response = Conexion.api.getSystemHealth()
                 if (response.isSuccessful) {
                     _health.value = response.body()?.data
                 } else {

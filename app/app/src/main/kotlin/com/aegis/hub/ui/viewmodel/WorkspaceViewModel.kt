@@ -2,7 +2,7 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.aegis.hub.data.ApiClient
+import com.aegis.hub.data.Conexion
 import com.aegis.hub.data.ProjectItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +19,7 @@ class WorkspaceViewModel : ViewModel() {
     fun loadProjects() {
         viewModelScope.launch {
             try {
-                val res = ApiClient.service.getWorkspaceProjects()
+                val res = Conexion.api.getWorkspaceProjects()
                 if (res.isSuccessful) {
                     _projects.value = res.body()?.data ?: emptyList()
                 }
@@ -31,7 +31,7 @@ class WorkspaceViewModel : ViewModel() {
     fun initProject(projectId: String) {
         viewModelScope.launch {
             try {
-                ApiClient.service.initProject(projectId)
+                Conexion.api.initProject(projectId)
                 loadProjects()
             } catch (e: Exception) {
             }
@@ -41,7 +41,7 @@ class WorkspaceViewModel : ViewModel() {
     fun indexProject(projectId: String) {
         viewModelScope.launch {
             try {
-                ApiClient.service.indexProject(projectId)
+                Conexion.api.indexProject(projectId)
                 loadProjects()
             } catch (e: Exception) {
             }

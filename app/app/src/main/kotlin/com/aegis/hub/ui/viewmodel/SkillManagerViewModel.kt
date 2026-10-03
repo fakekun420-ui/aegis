@@ -2,7 +2,7 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.aegis.hub.data.ApiClient
+import com.aegis.hub.data.Conexion
 import com.aegis.hub.data.InstallSkillRequest
 import com.aegis.hub.data.SkillsData
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +23,7 @@ class SkillManagerViewModel : ViewModel() {
     fun loadSkills() {
         viewModelScope.launch {
             try {
-                val response = ApiClient.service.getSystemSkills()
+                val response = Conexion.api.getSystemSkills()
                 if (response.isSuccessful) {
                     _skills.value = response.body()?.data
                 }
@@ -39,7 +39,7 @@ class SkillManagerViewModel : ViewModel() {
             _installLog.value = listOf("Starting installation of $skillId...")
             try {
                 val req = InstallSkillRequest(skillId)
-                val response = ApiClient.service.installSkill(req)
+                val response = Conexion.api.installSkill(req)
                 if (response.isSuccessful) {
                     _installLog.value = _installLog.value + "Installation complete."
                 } else {
@@ -59,7 +59,7 @@ class SkillManagerViewModel : ViewModel() {
     fun uninstallSkill(skillId: String) {
         viewModelScope.launch {
             try {
-                ApiClient.service.uninstallSkill(skillId)
+                Conexion.api.uninstallSkill(skillId)
                 loadSkills()
             } catch (e: Exception) {
             }

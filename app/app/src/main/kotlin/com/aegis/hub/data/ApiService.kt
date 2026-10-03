@@ -234,6 +234,19 @@ interface ApiService {
     // CLI. Devuelve {id, providerID, variant} o null si no hay modelo fijado.
     @GET("api/sessions/{id}/model")
     suspend fun getSessionModel(@Path("id") sessionId: String): Envelope<SessionModelRef?>
+
+    // Fija el modelo de una sesion en el servidor (POST /api/session/{id}/model del CLI).
+    // MEDIDO 2026-10-03: no existia en la interfaz. La app guardaba el modelo solo en
+    // prefs y nunca lo empujaba, asi que el CLI y la app discrebaban. Ruta nativa en
+    // `RutaNativa.setSessionModel`; `sendMessage` la llama antes del prompt.
+    @POST("api/sessions/{id}/model")
+    suspend fun setSessionModel(@Path("id") sessionId: String, @Body body: SessionModelRef): Envelope<Boolean>
+
+    // Crea una sesion en el servidor. Ruta nativa en `RutaNativa.createSession`.
+    // MEDIDO 2026-10-03: los dos ViewModels la creaban con POST crudo al Hub en :8765,
+    // que ya no escucha. Ahora van por aqui, que es OpenCode directo.
+    @POST("api/opencode/session")
+    suspend fun createSession(@Body body: CreateOpenCodeSessionRequest): Envelope<OpencodeSession>
 }
 
 /** Referencia de modelo que devuelve el Hub para una sesión. */

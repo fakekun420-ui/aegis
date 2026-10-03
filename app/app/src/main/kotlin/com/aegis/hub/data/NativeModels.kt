@@ -96,6 +96,16 @@ data class OpenCodeSessionListResponse(
     @SerializedName("cursor") val cursor: OpenCodeCursor? = null
 )
 
+/**
+ * MEDIDO 2026-10-03 contra el OpenAPI y contra el servidor vivo: `GET /api/session/{id}` y
+ * `POST /api/session` responden con la sesion ENVUELTA en `data`. Declarar el retorno sin
+ * envoltura hacia que Gson devolviera una sesion con todo a null: `getSessionModel` siempre
+ * null y la app creia que el servidor no tenia modelo. Esa era la desincronia con el CLI.
+ */
+data class OpenCodeSessionResponse(
+    @SerializedName("data") val data: OpenCodeSession? = null
+)
+
 data class OpenCodeCursor(
     @SerializedName("next") val next: String? = null,
     @SerializedName("prev") val prev: String? = null
@@ -185,6 +195,14 @@ data class OpenCodeMessage(
 data class OpenCodeMessageListResponse(
     @SerializedName("data") val data: List<OpenCodeMessage>? = null,
     @SerializedName("cursor") val cursor: OpenCodeCursor? = null
+)
+
+/**
+ * MEDIDO 2026-10-03 en el OpenAPI: `GET /api/session/{id}/message/{messageID}` responde con
+ * el mensaje ENVUELTO en `data`, igual que la sesion individual. Misma causa, mismo arreglo.
+ */
+data class OpenCodeMessageResponse(
+    @SerializedName("data") val data: OpenCodeMessage? = null
 )
 
 /**
