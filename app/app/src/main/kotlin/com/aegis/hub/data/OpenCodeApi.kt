@@ -77,7 +77,7 @@ interface OpenCodeApi {
     // ==========================================
 
     @GET("api/session/active")
-    suspend fun getActiveSessions(): Map<String, ActiveSessionStatus>
+    suspend fun getActiveSessions(): OpenCodeActiveSessionsResponse
 
     // ==========================================
     // Mensajes

@@ -118,6 +118,16 @@ data class ActiveSessionStatus(
     @SerializedName("type") val type: String? = null // e.g. "running", "idle"
 )
 
+/**
+ * MEDIDO 2026-10-03: `GET /api/session/active` responde `{"data":{"<id>":{"type":"running"}}}`,
+ * ENVUELTO en `data`. Declarar el endpoint como `Map<String, ActiveSessionStatus>` hacia que Gson
+ * devolviera un mapa con una sola clave, "data", y los ids de sesion se perdian al deserializar.
+ * (Reportado por el agente C con 5 sesiones reales que lo falsifican; verificado en el OpenAPI.)
+ */
+data class OpenCodeActiveSessionsResponse(
+    @SerializedName("data") val data: Map<String, ActiveSessionStatus>? = null
+)
+
 // ==========================================
 // 4. Mensajes y Partes Nativas
 // ==========================================

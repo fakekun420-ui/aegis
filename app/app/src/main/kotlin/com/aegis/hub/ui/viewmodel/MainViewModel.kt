@@ -138,7 +138,7 @@ class MainViewModel : ViewModel() {
             while (isActive) {
                 var ok = false
                 try {
-                    val activeMap = openCodeApi.getActiveSessions()
+                    val activeMap = openCodeApi.getActiveSessions().data.orEmpty()
                     applyActiveSessions(activeMap)
                     ok = true
                     ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
@@ -195,7 +195,7 @@ class MainViewModel : ViewModel() {
     fun refreshInflightNow() {
         viewModelScope.launch {
             try {
-                val activeMap = openCodeApi.getActiveSessions()
+                val activeMap = openCodeApi.getActiveSessions().data.orEmpty()
                 applyActiveSessions(activeMap)
                 ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
                 _inflightFiable.value = calcularEsFiable()

@@ -154,7 +154,7 @@ class SetupNativeTest {
             override suspend fun createSession(body: CreateOpenCodeSessionRequest): OpenCodeSession = throw UnsupportedOperationException()
             override suspend fun updateSession(id: String, body: UpdateOpenCodeSessionRequest): retrofit2.Response<Unit> = throw UnsupportedOperationException()
             override suspend fun deleteSession(id: String): retrofit2.Response<Unit> = throw UnsupportedOperationException()
-            override suspend fun getActiveSessions(): Map<String, ActiveSessionStatus> = throw UnsupportedOperationException()
+            override suspend fun getActiveSessions(): OpenCodeActiveSessionsResponse = throw UnsupportedOperationException()
             override suspend fun getMessages(sessionId: String, limit: Int?, order: String?, cursor: String?): OpenCodeMessageListResponse = throw UnsupportedOperationException()
             override suspend fun getMessage(sessionId: String, messageID: String): OpenCodeMessage = throw UnsupportedOperationException()
             override suspend fun sendPrompt(sessionId: String, body: OpenCodePromptRequest): OpenCodePromptAck = throw UnsupportedOperationException()

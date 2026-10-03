@@ -1697,7 +1697,7 @@ class RutaNativa(private val hub: ApiService) : ApiService {
      * exacto tiene que cruzarlo con los eventos del SSE.
      */
     override suspend fun getInflight(): Envelope<List<InflightSession>> {
-        val activos = oc.getActiveSessions()
+        val activos = oc.getActiveSessions().data.orEmpty()
         val lista = activos.map { (sid, estado) ->
             InflightSession(
                 id = sid,
