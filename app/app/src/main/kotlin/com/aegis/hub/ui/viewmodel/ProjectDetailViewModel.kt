@@ -105,18 +105,37 @@ class ProjectDetailViewModel : ViewModel() {
                 // directorio del proyecto. Es la unica informacion que sirve para agrupar.
                 val provider = _project.value?.provider ?: "opencode"
                 val title = "companion:${_project.value?.name ?: projectId}:${System.currentTimeMillis() % 100000}"
-                // MEDIDO 2026-10-03: esto era un POST crudo con parseo manual del `data`. Ahora va
-                // por la costura, que es el mismo OpenCode directo sin el parseo a mano.
-                val dirPath = java.io.File("/sdcard/projects/${_project.value?.name ?: projectId}").absolutePath
+                // MEDIDO 2026-10-06 (sesion en blanco): esto armaba la carpeta desde el NOMBRE
+                // (`/sdcard/projects/<nombre>`), pero un proyecto vinculado trae su propia
+                // carpeta (`folder`), que no tiene por que coincidir con el nombre. Con la
+                // carpeta equivocada la sesion nacia en otro directorio y el vinculo por
+                // carpeta fallaba. La real primero, la derivada solo como ultimo recurso.
+                val dirPath = _project.value?.folder?.takeIf { it.isNotBlank() }
+                    ?: _project.value?.resolvedFolder
+                    ?: java.io.File("/sdcard/projects/${_project.value?.name ?: projectId}").absolutePath
                 val creado = api.createSession(
                     CreateOpenCodeSessionRequest(title = title, location = OpenCodeLocation(directory = dirPath))
                 )
-                val sid = creado.data?.resolvedId?.takeIf { it.isNotBlank() } ?: return@launch
+                // MEDIDO 2026-10-06: esto hacia `?: return@launch` en silencio. Crear fallaba
+                // (o devolvia sin id) y la UI no navegaba ni avisaba: el usuario pulsaba "+"
+                // y no pasaba nada visible. Un fallo mudo en el boton principal de la pantalla.
+                val sid = creado.data?.resolvedId?.takeIf { it.isNotBlank() }
+                if (sid == null) {
+                    _error.value = "No se pudo crear la sesión en OpenCode"
+                    return@launch
+                }
 
                 // Link to project (if not automatically linked)
+                // MEDIDO 2026-10-06: esto iba en `try/catch` mudo. Si el vinculo fallaba, el
+                // chat se abria fuera de todo proyecto sin decirlo ("no se vincula").
                 try {
-                    api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider))
-                } catch (_: Exception) {}
+                    val vinculo = api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider))
+                    if (vinculo.ok != true) {
+                        _error.value = "Sesión creada pero no vinculada al proyecto"
+                    }
+                } catch (e: Exception) {
+                    _error.value = "Sesión creada pero no vinculada: ${e.message ?: "error de red"}"
+                }
 
                 // Optimistically add to local sessions list
                 val newRef = SessionRef(sessionId = sid, title = title, createdAt = java.time.Instant.now().toString(), provider = provider)
@@ -127,7 +146,9 @@ class ProjectDetailViewModel : ViewModel() {
                     onCreated(sid)
                 }
 
-                // Send first message asynchronously if present without blocking navigation
+                // Send first message asynchronously if present without blocking navigation.
+                // MEDIDO 2026-10-06: el fallo aqui tambien era mudo y dejaba el chat recien
+                // abierto en blanco para siempre. Si el primer mensaje no entra, se dice.
                 if (text.isNotBlank()) {
                     try {
                         api.sendMessage(
@@ -137,7 +158,7 @@ class ProjectDetailViewModel : ViewModel() {
                             projectId = projectId
                         )
                     } catch (msgErr: Exception) {
-                        // ignore or log
+                        _error.value = "Sesión creada pero el primer mensaje no se envió: ${msgErr.message ?: "error de red"}"
                     }
                 }
                 load(projectId)
