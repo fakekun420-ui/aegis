@@ -6,6 +6,8 @@ import android.util.Log
 // que lo pillo la primera, asi que el control positivo existe y funciona.
 import com.aegis.hub.RootShell
 import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import retrofit2.Response
 
 /**
@@ -62,6 +64,14 @@ class RutaNativa(
      * propiedad con el mismo valor por defecto: produccion igual, tests con fake posible.
      */
     private val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+    /**
+     * MEDIDO 2026-10-06 (ANR con traza): `shell()` bifurca un proceso `su` y lo espera.
+     * Invocado en el hilo principal (viewModelScope), un `su` lento (>5 s) cuelga la UI.
+     * Este es el UNICO punto de llamada: todo `su` sale a IO, la inyeccion para tests
+     * se conserva tal cual en `shell`.
+     */
+    private suspend fun sh(cmd: String, timeoutMs: Long): RootShell.Result =
+        withContext(Dispatchers.IO) { shell(cmd, timeoutMs) }
 ) : ApiService {
 
     private val gson = Gson()
@@ -652,7 +662,7 @@ class RutaNativa(
      */
     override suspend fun getSkills(projectId: String?): Envelope<SkillListResponse> {
         val base = rutaDeSkills()
-        val listado = shell("ls -1 '$base' 2>/dev/null", 5000)
+        val listado = sh("ls -1 '$base' 2>/dev/null", 5000)
         if (listado.code != 0) {
             return envolturaFallo("No se pudo leer $base (exit ${listado.code})")
         }
@@ -662,7 +672,7 @@ class RutaNativa(
         val skills = mutableListOf<Skill>()
         var leidos = 0
         for (nombre in nombres) {
-            val md = shell("head -c 200000 '$base/$nombre/SKILL.md' 2>/dev/null", 5000)
+            val md = sh("head -c 200000 '$base/$nombre/SKILL.md' 2>/dev/null", 5000)
             if (md.code != 0 || md.stdout.isBlank()) continue
             // `head -c` evita el fallo de `cat` cuando el fichero es grande: un skill de 40 KB
             // entra, pero uno de varios MB no cabe en el buffer del shell.
@@ -712,12 +722,12 @@ class RutaNativa(
         }
         val base = rutaDeSkills()
         val origen = "$base/$name"
-        val comprobacion = shell("test -d '$origen' && echo SI", 3000)
+        val comprobacion = sh("test -d '$origen' && echo SI", 3000)
         if (comprobacion.stdout.trim() != "SI") {
             return envolturaFallo("No existe el skill '$name'")
         }
         val destino = "$base/.papelera/$name-$(System.currentTimeMillis())"
-        val r = shell("mkdir -p '$base/.papelera' && mv '$origen' '$destino'", 8000)
+        val r = sh("mkdir -p '$base/.papelera' && mv '$origen' '$destino'", 8000)
         if (r.code != 0) {
             return envolturaFallo("No se pudo apartar '$name': ${r.stderr.take(140)}")
         }
@@ -738,13 +748,13 @@ class RutaNativa(
         }
         val base = rutaDeSkills()
         val dir = "$base/$name"
-        val check = shell("test -d '$dir' && echo SI", 3000)
+        val check = sh("test -d '$dir' && echo SI", 3000)
         if (check.stdout.trim() == "SI") {
             return envolturaFallo("El skill '$name' ya existe")
         }
         val encoded = android.util.Base64.encodeToString(content.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
         val cmd = "mkdir -p '$dir' && echo '$encoded' | base64 -d > '$dir/SKILL.md'"
-        val r = shell(cmd, 5000)
+        val r = sh(cmd, 5000)
         if (r.code != 0) {
             return envolturaFallo("Error creando skill '$name': ${r.stderr.take(140)}")
         }
@@ -774,17 +784,17 @@ class RutaNativa(
         val base = rutaDeSkills()
         val dir = "$base/$skillName"
         val file = "$dir/SKILL.md"
-        val check = shell("test -f '$file' && echo SI", 3000)
+        val check = sh("test -f '$file' && echo SI", 3000)
         if (check.stdout.trim() != "SI") {
             return envolturaFallo("No existe el skill '$skillName'")
         }
         val content = body["content"] ?: run {
-            val cur = shell("head -c 200000 '$file' 2>/dev/null", 5000)
+            val cur = sh("head -c 200000 '$file' 2>/dev/null", 5000)
             cur.stdout
         }
         val encoded = android.util.Base64.encodeToString(content.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
         val cmd = "echo '$encoded' | base64 -d > '$file'"
-        val r = shell(cmd, 5000)
+        val r = sh(cmd, 5000)
         if (r.code != 0) {
             return envolturaFallo("Error actualizando skill '$skillName': ${r.stderr.take(140)}")
         }
@@ -916,10 +926,10 @@ class RutaNativa(
 
     override suspend fun getSystemHealth(): Response<HealthResponse> {
         return try {
-            val upRes = shell("cat /proc/uptime 2>/dev/null", 2000)
+            val upRes = sh("cat /proc/uptime 2>/dev/null", 2000)
             val uptimeSec = upRes.stdout.trim().split("\\s+".toRegex()).firstOrNull()?.toDoubleOrNull()?.toLong() ?: 0L
 
-            val memRes = shell("cat /proc/meminfo 2>/dev/null", 2000)
+            val memRes = sh("cat /proc/meminfo 2>/dev/null", 2000)
             val lines = memRes.stdout.lines()
             var totalKb = 0L
             var freeKb = 0L
@@ -939,11 +949,11 @@ class RutaNativa(
                 heapTotal = "${totalKb / 1024}MB"
             )
 
-            val pRes = shell("ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null | wc -l", 3000)
+            val pRes = sh("ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null | wc -l", 3000)
             val projectCount = pRes.stdout.trim().toIntOrNull() ?: 0
 
             val baseSkills = rutaDeSkills()
-            val skRes = shell("ls -1d '$baseSkills'/*/ 2>/dev/null", 3000)
+            val skRes = sh("ls -1d '$baseSkills'/*/ 2>/dev/null", 3000)
             val skillNames = skRes.stdout.lines()
                 .map { it.trim().trimEnd('/') }
                 .filter { it.isNotEmpty() }
@@ -973,7 +983,7 @@ class RutaNativa(
     override suspend fun getSystemLogs(limit: Int): Response<LogsResponse> {
         return try {
             val n = if (limit in 1..500) limit else 100
-            val res = shell("logcat -d -t $n 2>/dev/null", 4000)
+            val res = sh("logcat -d -t $n 2>/dev/null", 4000)
             if (res.code == 0 && res.stdout.isNotBlank()) {
                 val logLines = res.stdout.lines().filter { it.isNotBlank() }
                 Response.success(LogsResponse(ok = true, data = logLines))
@@ -988,7 +998,7 @@ class RutaNativa(
 
     override suspend fun getSystemMemory(): Response<MemoryResponse> {
         return try {
-            val memRes = shell("cat /proc/meminfo 2>/dev/null", 2000)
+            val memRes = sh("cat /proc/meminfo 2>/dev/null", 2000)
             val lines = memRes.stdout.lines()
             var totalKb = 0L
             var freeKb = 0L
@@ -1252,7 +1262,7 @@ class RutaNativa(
 
     override suspend fun getSystemSkills(): Response<SkillsResponse> {
         val base = rutaDeSkills()
-        val listado = shell("ls -1 '$base' 2>/dev/null", 5000)
+        val listado = sh("ls -1 '$base' 2>/dev/null", 5000)
         val carpetas = if (listado.code == 0) {
             listado.stdout.split("\n")
                 .map { it.trim() }
@@ -1264,7 +1274,7 @@ class RutaNativa(
         val installedSet = mutableSetOf<String>()
         val installedList = mutableListOf<SkillItem>()
         for (id in carpetas) {
-            val mdCheck = shell("test -f '$base/$id/SKILL.md' && echo SI", 3000)
+            val mdCheck = sh("test -f '$base/$id/SKILL.md' && echo SI", 3000)
             if (mdCheck.stdout.trim() == "SI") {
                 installedSet.add(id)
                 installedList.add(
@@ -1354,7 +1364,7 @@ class RutaNativa(
             )
         }
         val base = rutaDeSkills()
-        val r = shell("cat '$base/$id.json' 2>/dev/null", 3000)
+        val r = sh("cat '$base/$id.json' 2>/dev/null", 3000)
         return if (r.code == 0 && r.stdout.isNotBlank()) {
             try {
                 val mapType = object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type
@@ -1385,7 +1395,7 @@ class RutaNativa(
         val jsonStr = com.google.gson.Gson().toJson(config)
         val encoded = android.util.Base64.encodeToString(jsonStr.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
         val cmd = "mkdir -p '$base' && echo '$encoded' | base64 -d > '$base/$id.json'"
-        val r = shell(cmd, 5000)
+        val r = sh(cmd, 5000)
         return if (r.code == 0) {
             Response.success(BaseResponse(ok = true, error = null))
         } else {
@@ -1416,7 +1426,7 @@ class RutaNativa(
     override suspend fun getWorkspaceProjects(): Response<ProjectsResponse> {
         // `-d` para quedarse solo con directorios: la pantalla lista carpetas, y un fichero suelto
         // en la raiz no es un proyecto.
-        val r = shell("ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null", 8000)
+        val r = sh("ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null", 8000)
         if (r.code != 0 && r.stdout.isBlank()) {
             Log.w(TAG, "getWorkspaceProjects: no se pudo listar $RAIZ_PROYECTOS (exit ${r.code})")
             return Response.success(ProjectsResponse(ok = false, data = emptyList()))
