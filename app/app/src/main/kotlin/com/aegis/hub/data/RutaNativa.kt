@@ -64,6 +64,7 @@ class RutaNativa(
      * propiedad con el mismo valor por defecto: produccion igual, tests con fake posible.
      */
     private val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+) : ApiService {
     /**
      * MEDIDO 2026-10-06 (ANR con traza): `shell()` bifurca un proceso `su` y lo espera.
      * Invocado en el hilo principal (viewModelScope), un `su` lento (>5 s) cuelga la UI.
@@ -72,7 +73,7 @@ class RutaNativa(
      */
     private suspend fun sh(cmd: String, timeoutMs: Long): RootShell.Result =
         withContext(Dispatchers.IO) { shell(cmd, timeoutMs) }
-) : ApiService {
+
 
     private val gson = Gson()
     private val oc: OpenCodeApi get() = OpenCodeApi.default
