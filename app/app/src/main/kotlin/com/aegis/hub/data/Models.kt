@@ -237,6 +237,24 @@ data class MessagePart(
     val binaryChars: Int? = null
 )
 
+/**
+ * MEDIDO 2026-10-06 (ANR con traza): estos 12 patrones se compilaban en CADA llamada
+ * a `strippedText()` —200 mensajes x 12 compilaciones ICU cada 2 s de poll, en el hilo
+ * principal— y el main no atendia input (>5 s = ANR). Compilados UNA vez aqui.
+ */
+private val RX_USER_REQUEST = Regex("<USER_REQUEST>([\\s\\S]*?)(?:</USER_REQUEST>|$)", RegexOption.IGNORE_CASE)
+private val RX_PLAN_BUILD = Regex("^\\s*//?/?(?:PLAN|plan|BUILD|build)\\s*", RegexOption.IGNORE_CASE)
+private val RX_SYSTEM_INSTRUCTION = Regex("<SYSTEM_INSTRUCTION>[\\s\\S]*?(?:</SYSTEM_INSTRUCTION>|$)", RegexOption.IGNORE_CASE)
+private val RX_SYSTEM_CONTEXT = Regex("<SYSTEM_CONTEXT>[\\s\\S]*?(?:</SYSTEM_CONTEXT>|$)", RegexOption.IGNORE_CASE)
+private val RX_SYSTEM_CONTEXT_MD = Regex("\\[SYSTEM CONTEXT[\\s\\S]*?\\][\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE)
+private val RX_PONYTAIL = Regex("# PONY-TAIL[\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE)
+private val RX_ENTORNO = Regex("## 1\\. Entorno[\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE)
+private val RX_MEMORY_CONTEXT = Regex("<memory_context[\\s\\S]*?</memory_context>", RegexOption.IGNORE_CASE)
+private val RX_PROJECT_KNOWLEDGE = Regex("<project_knowledge[\\s\\S]*?</project_knowledge>", RegexOption.IGNORE_CASE)
+private val RX_ADDITIONAL_METADATA = Regex("<ADDITIONAL_METADATA>[\\s\\S]*?</ADDITIONAL_METADATA>", RegexOption.IGNORE_CASE)
+private val RX_USER_SETTINGS = Regex("<USER_SETTINGS_CHANGE>[\\s\\S]*?</USER_SETTINGS_CHANGE>", RegexOption.IGNORE_CASE)
+
+
 data class Message(
     val info: MessageInfo? = null,
     val parts: List<MessagePart>? = null
@@ -252,20 +270,20 @@ data class Message(
     }
     fun strippedText(): String {
         var t = text
-        val reqMatch = Regex("<USER_REQUEST>([\\s\\S]*?)(?:</USER_REQUEST>|$)", RegexOption.IGNORE_CASE).find(t)
+        val reqMatch = RX_USER_REQUEST.find(t)
         if (reqMatch != null && reqMatch.groupValues[1].isNotBlank()) {
             t = reqMatch.groupValues[1].trim()
         }
-        t = Regex("^\\s*//?/?(?:PLAN|plan|BUILD|build)\\s*", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("<SYSTEM_INSTRUCTION>[\\s\\S]*?(?:</SYSTEM_INSTRUCTION>|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("<SYSTEM_CONTEXT>[\\s\\S]*?(?:</SYSTEM_CONTEXT>|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("\\[SYSTEM CONTEXT[\\s\\S]*?\\][\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("# PONY-TAIL[\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("## 1\\. Entorno[\\s\\S]*?(?:---\\n\\n|$)", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("<memory_context[\\s\\S]*?</memory_context>", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("<project_knowledge[\\s\\S]*?</project_knowledge>", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("<ADDITIONAL_METADATA>[\\s\\S]*?</ADDITIONAL_METADATA>", RegexOption.IGNORE_CASE).replace(t, "").trim()
-        t = Regex("<USER_SETTINGS_CHANGE>[\\s\\S]*?</USER_SETTINGS_CHANGE>", RegexOption.IGNORE_CASE).replace(t, "").trim()
+        t = RX_PLAN_BUILD.replace(t, "").trim()
+        t = RX_SYSTEM_INSTRUCTION.replace(t, "").trim()
+        t = RX_SYSTEM_CONTEXT.replace(t, "").trim()
+        t = RX_SYSTEM_CONTEXT_MD.replace(t, "").trim()
+        t = RX_PONYTAIL.replace(t, "").trim()
+        t = RX_ENTORNO.replace(t, "").trim()
+        t = RX_MEMORY_CONTEXT.replace(t, "").trim()
+        t = RX_PROJECT_KNOWLEDGE.replace(t, "").trim()
+        t = RX_ADDITIONAL_METADATA.replace(t, "").trim()
+        t = RX_USER_SETTINGS.replace(t, "").trim()
         return t.trim()
     }
     val isEmpty: Boolean get() = text.isBlank() && strippedText().isBlank() && fileParts().isEmpty() && imageParts().isEmpty() && toolParts().isEmpty()
