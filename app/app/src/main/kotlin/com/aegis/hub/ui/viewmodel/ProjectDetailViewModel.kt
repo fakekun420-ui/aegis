@@ -153,9 +153,7 @@ class ProjectDetailViewModel : ViewModel() {
                     try {
                         api.sendMessage(
                             sessionId = sid,
-                            body = SendMessageRequest(parts = listOf(mapOf("type" to "text", "text" to text))),
-                            provider = provider,
-                            projectId = projectId
+                            body = SendMessageRequest(parts = listOf(mapOf("type" to "text", "text" to text)))
                         )
                     } catch (msgErr: Exception) {
                         _error.value = "Sesión creada pero el primer mensaje no se envió: ${msgErr.message ?: "error de red"}"

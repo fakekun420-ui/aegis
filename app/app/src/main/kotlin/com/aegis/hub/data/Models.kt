@@ -301,7 +301,6 @@ data class Message(
 data class SendMessageRequest(
     val parts: List<Map<String, String>>,
     val model: String? = null,
-    val provider: String? = null,
     val agent: String? = null,
     val mode: String? = null
 )

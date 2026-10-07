@@ -825,9 +825,7 @@ class RutaNativa(
     // vacio es lo unico honesto: "aceptado, la respuesta va por otro lado".
     override suspend fun sendMessage(
         sessionId: String,
-        body: SendMessageRequest,
-        provider: String?,
-        projectId: String?
+        body: SendMessageRequest
     ): Message {
         // MEDIDO: la app manda `parts` como mapa libre, con type "text" y type "file". OpenCode
         // quiere un `text` plano y `files` con URI OBLIGATORIA. Se traduce aqui.
@@ -871,7 +869,9 @@ class RutaNativa(
         // poder fijar el modelo seria peor.
         val modeloId = normalizarIdModelo(body.model)
         if (modeloId.isNotEmpty()) {
-            fijarModelo(sessionId, modeloId, proveedorDeRef(body.model) ?: body.provider)
+            // F1: sin pista de proveedor del cuerpo (era siempre "opencode"); el prefijo
+            // del id o el catalogo deciden en fijarModelo.
+            fijarModelo(sessionId, modeloId, proveedorDeRef(body.model))
         }
 
         oc.sendPrompt(

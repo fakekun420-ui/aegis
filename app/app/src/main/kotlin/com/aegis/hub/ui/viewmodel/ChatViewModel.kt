@@ -1219,7 +1219,6 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 val sendReq = SendMessageRequest(
                     parts = reqParts,
                     model = currentModel,
-                    provider = provider,
                     agent = currentAgentMode,
                     mode = currentAgentMode
                 )
@@ -1256,8 +1255,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 try {
                     val responseMsg = api.sendMessage(
                         sessionId = targetSessionId,
-                        body = sendReq,
-                        provider = provider
+                        body = sendReq
                     )
                     _sendingInFlight.value = false
                     if (!responseMsg.isEmpty) {

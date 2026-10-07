@@ -68,12 +68,12 @@ interface ApiService {
     ): Envelope<PartFull>
 
     // Send message via hub proxy POST /opencode/session/:id/message (handles injection)
+    // F1: sin cabeceras X-Provider/X-Project-Id (RutaNativa nunca las leia; el modelo
+    // viaja en el cuerpo y el proyecto vive en ProjectsStore).
     @POST("opencode/session/{id}/message")
     suspend fun sendMessage(
         @Path("id") sessionId: String,
-        @Body body: SendMessageRequest,
-        @Header("X-Provider") provider: String? = null,
-        @Header("X-Project-Id") projectId: String? = null
+        @Body body: SendMessageRequest
     ): Message
 
     @GET("api/opencode/models")
