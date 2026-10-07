@@ -126,7 +126,6 @@ class FakeOpenCode {
         return MockResponse().setResponseCode(200)
             .setHeader("Content-Type", "text/event-stream")
             .setBody(cuerpo)
-            .throttleBody(1024, 50, java.util.concurrent.TimeUnit.MILLISECONDS)
     }
 
     fun api(): OpenCodeApi = OpenCodeApi.create(baseUrl = servidor.url("/").toString())
