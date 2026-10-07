@@ -68,16 +68,20 @@ class RutaNativa(
      * inyectable, y por eso el codigo que habla con el shell no tenia ni un test. Una sola
      * propiedad con el mismo valor por defecto: produccion igual, tests con fake posible.
      */
-    private val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+    private val shell: (String, Long) -> RootShell.Result = SHELL_REAL
 ) : ApiService {
     /**
      * MEDIDO 2026-10-06 (ANR con traza): `shell()` bifurca un proceso `su` y lo espera.
      * Invocado en el hilo principal (viewModelScope), un `su` lento (>5 s) cuelga la UI.
      * Este es el UNICO punto de llamada: todo `su` sale a IO, la inyeccion para tests
      * se conserva tal cual en `shell`.
+     *
+     * F7: con el shell real se pasa por [Raiz] (mismo IO + semaforo de 2 para no
+     * lanzar 10 `su` a la vez); con el fake de tests se llama directo.
      */
     private suspend fun sh(cmd: String, timeoutMs: Long): RootShell.Result =
-        withContext(Dispatchers.IO) { shell(cmd, timeoutMs) }
+        if (shell === SHELL_REAL) Raiz.ejecutar(cmd, timeoutMs)
+        else withContext(Dispatchers.IO) { shell(cmd, timeoutMs) }
 
 
     private val gson = Gson()
@@ -1467,5 +1471,8 @@ class RutaNativa(
          *  nivel superior, en objetos con nombre y en companions. Es el mismo error que el del
          *  TAG de este fichero, y el segundo: por eso esta escrito. */
         const val RAIZ_PROYECTOS = "/sdcard/projects"
+
+        /** Shell real (con `su`); los tests inyectan su fake en el constructor. */
+        val SHELL_REAL: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
     }
 }
