@@ -30,6 +30,10 @@ class FlujoEventosDirectoTest {
 
     @Test
     fun `el stream entrega lineas y conecta`() = runBlocking {
+        // Paso -1 (control): la ruta unaria sobre el mismo servidor/cliente va.
+        val eco = fake.api().getMessages("ses_test", 10, null, null)
+        println("DIAG unaria ok=${eco.data?.size} peticiones=${fake.peticiones.size}")
+
         // Paso 0 (bypass): el GET crudo trae bytes sin bucle de por medio.
         // Con timeout propio: si el streaming HTTP se cuelga, esto lo dice en 5 s
         // en vez de colgar el worker hasta el readTimeout (660 s).
