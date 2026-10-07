@@ -7,6 +7,7 @@ import android.util.Log
 import com.aegis.hub.RootShell
 import com.aegis.hub.data.repo.NuevaSesion
 import com.aegis.hub.data.repo.Resultado
+import com.aegis.hub.data.repo.CatalogoRepo
 import com.aegis.hub.data.repo.SesionConfigRepo
 import com.aegis.hub.data.repo.SesionesRepo
 import com.google.gson.Gson
