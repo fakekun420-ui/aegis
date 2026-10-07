@@ -294,7 +294,7 @@ fun List<Agente>.seleccionables(): List<Agente> =
     filter { it.mode == "primary" && !it.hidden }
         .sortedBy { it.name.lowercase() }
 
-data class ModelOption(
+data class ModeloElegible(
     val id: String,
     val name: String,
     val description: String? = null,
@@ -305,7 +305,7 @@ data class ModelOption(
     val free: Boolean = false,
     // MEDIDO 2026-10-03: sin esto la app solo maneja el id y no puede fijar el modelo en
     // el servidor, que distingue por pareja id mas providerID. Con default null para no
-    // romper los tests que construyen ModelOption a mano.
+    // romper los tests que construyen ModeloElegible a mano.
     val providerID: String? = null
 )
 
@@ -326,7 +326,7 @@ data class ModelOption(
  * Si la lista no trae ninguno free, se devuelve null y deja que OpenCode elija: es preferible
  * a inventar un id.
  */
-val List<ModelOption>.modeloPorDefecto: String?
+val List<ModeloElegible>.modeloPorDefecto: String?
     get() = firstOrNull { it.id == ID_MODELO_POR_DEFECTO && it.free }?.id
         ?: firstOrNull { it.free }?.id
 
@@ -343,7 +343,7 @@ val List<ModelOption>.modeloPorDefecto: String?
 internal fun modeloPorDefectoPara(
     agente: String?,
     agentes: List<Agente>,
-    modelos: List<ModelOption>
+    modelos: List<ModeloElegible>
 ): String? {
     val nombre = agente?.trim()?.takeIf { it.isNotBlank() }
     val delAgente = nombre?.let { n -> agentes.firstOrNull { it.name == n }?.model?.trim() }

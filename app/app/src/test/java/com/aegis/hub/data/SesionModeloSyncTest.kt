@@ -117,8 +117,8 @@ class SesionModeloSyncTest {
             Agente(name = "Build", model = null)
         )
         val modelos = listOf(
-            ModelOption(id = "space-bunny-free", name = "Space Bunny", free = true),
-            ModelOption(id = "muse-spark-1.3-contributor-free", name = "Muse Spark", free = true)
+            ModeloElegible(id = "space-bunny-free", name = "Space Bunny", free = true),
+            ModeloElegible(id = "muse-spark-1.3-contributor-free", name = "Muse Spark", free = true)
         )
         assertEquals(
             "muse-spark-1.3-contributor-free",

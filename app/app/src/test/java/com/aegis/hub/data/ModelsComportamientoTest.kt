@@ -199,9 +199,9 @@ class ModelsComportamientoTest {
     @Test
     fun `modeloPorDefecto de una sesion nueva es Space Bunny Free`() {
         val lista = listOf(
-            ModelOption(id = "pago-1", name = "De pago", free = false),
-            ModelOption(id = "longcat-2.5-preview-free", name = "Longcat", free = true),
-            ModelOption(id = ID_MODELO_POR_DEFECTO, name = "Space Bunny Free", free = true)
+            ModeloElegible(id = "pago-1", name = "De pago", free = false),
+            ModeloElegible(id = "longcat-2.5-preview-free", name = "Longcat", free = true),
+            ModeloElegible(id = ID_MODELO_POR_DEFECTO, name = "Space Bunny Free", free = true)
         )
         assertEquals(ID_MODELO_POR_DEFECTO, lista.modeloPorDefecto)
     }
@@ -217,9 +217,9 @@ class ModelsComportamientoTest {
     @Test
     fun `si Space Bunny Free no esta, cae al primero free y no al primero de la lista`() {
         val lista = listOf(
-            ModelOption(id = "pago-1", name = "De pago", free = false),
-            ModelOption(id = "longcat-2.5-preview-free", name = "Longcat", free = true),
-            ModelOption(id = "otro-free", name = "Otro", free = true)
+            ModeloElegible(id = "pago-1", name = "De pago", free = false),
+            ModeloElegible(id = "longcat-2.5-preview-free", name = "Longcat", free = true),
+            ModeloElegible(id = "otro-free", name = "Otro", free = true)
         )
         assertEquals("longcat-2.5-preview-free", lista.modeloPorDefecto)
     }
@@ -232,8 +232,8 @@ class ModelsComportamientoTest {
     @Test
     fun `un Space Bunny Free de pago no es el default`() {
         val lista = listOf(
-            ModelOption(id = ID_MODELO_POR_DEFECTO, name = "Space Bunny", free = false),
-            ModelOption(id = "longcat-2.5-preview-free", name = "Longcat", free = true)
+            ModeloElegible(id = ID_MODELO_POR_DEFECTO, name = "Space Bunny", free = false),
+            ModeloElegible(id = "longcat-2.5-preview-free", name = "Longcat", free = true)
         )
         assertEquals("longcat-2.5-preview-free", lista.modeloPorDefecto)
     }
@@ -245,19 +245,19 @@ class ModelsComportamientoTest {
     @Test
     fun `modeloPorDefecto devuelve null si no hay ningun modelo free`() {
         val soloPago = listOf(
-            ModelOption(id = "pago-1", name = "Uno", free = false),
-            ModelOption(id = "pago-2", name = "Dos", free = false)
+            ModeloElegible(id = "pago-1", name = "Uno", free = false),
+            ModeloElegible(id = "pago-2", name = "Dos", free = false)
         )
         assertNull(soloPago.modeloPorDefecto)
-        assertNull(emptyList<ModelOption>().modeloPorDefecto)
+        assertNull(emptyList<ModeloElegible>().modeloPorDefecto)
     }
 
     /** `free` por default es `false`: un modelo sin el campo NO se toma como default. */
     @Test
     fun `modeloPorDefecto no toma un modelo al que no se le dijo que es free`() {
         val sinMarcar = listOf(
-            ModelOption(id = "parece-free-por-el-nombre", name = "X"),
-            ModelOption(id = "marcado", name = "Y", free = true)
+            ModeloElegible(id = "parece-free-por-el-nombre", name = "X"),
+            ModeloElegible(id = "marcado", name = "Y", free = true)
         )
         assertEquals("marcado", sinMarcar.modeloPorDefecto)
     }
@@ -266,8 +266,8 @@ class ModelsComportamientoTest {
     @Test
     fun `modeloPorDefecto se queda con el primero que encuentra libre`() {
         val lista = listOf(
-            ModelOption(id = "libre-1", name = "A", free = true),
-            ModelOption(id = "libre-2", name = "B", free = true)
+            ModeloElegible(id = "libre-1", name = "A", free = true),
+            ModeloElegible(id = "libre-2", name = "B", free = true)
         )
         assertEquals("libre-1", lista.modeloPorDefecto)
     }

@@ -30,7 +30,7 @@ import com.aegis.hub.data.MessageDeliveryStatus
 import com.aegis.hub.data.MessageInfo
 import com.aegis.hub.data.MessagePart
 import android.util.Log
-import com.aegis.hub.data.ModelOption
+import com.aegis.hub.data.ModeloElegible
 import com.aegis.hub.data.Agente
 import com.aegis.hub.data.seleccionables
 import com.aegis.hub.data.modeloPorDefecto
@@ -108,8 +108,8 @@ class ChatViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
-    private val _models = MutableStateFlow<List<ModelOption>>(emptyList())
-    val models: StateFlow<List<ModelOption>> = _models
+    private val _models = MutableStateFlow<List<ModeloElegible>>(emptyList())
+    val models: StateFlow<List<ModeloElegible>> = _models
 
     private val _modelsLoading = MutableStateFlow(false)
     val modelsLoading: StateFlow<Boolean> = _modelsLoading

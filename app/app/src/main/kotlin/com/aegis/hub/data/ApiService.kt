@@ -77,7 +77,7 @@ interface ApiService {
     ): Message
 
     @GET("api/opencode/models")
-    suspend fun getModels(@Query("provider") provider: String? = null): Envelope<List<ModelOption>>
+    suspend fun getModels(@Query("provider") provider: String? = null): Envelope<List<ModeloElegible>>
 
     // F4: invalida el catalogo con cache (no es una ruta de red; es local).
     suspend fun refrescarCatalogo(): Envelope<Boolean>

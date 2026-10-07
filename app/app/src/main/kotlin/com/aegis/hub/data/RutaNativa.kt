@@ -1033,7 +1033,7 @@ class RutaNativa(
         return envoltura(true)
     }
 
-    override suspend fun getModels(provider: String?): Envelope<List<ModelOption>> {
+    override suspend fun getModels(provider: String?): Envelope<List<ModeloElegible>> {
         // F4: catalogo con cache (antes: GET /api/model entero en cada llamada).
         val todos = catalogo.modelosNativos()
             .filter { it.enabled }
@@ -1062,7 +1062,7 @@ class RutaNativa(
             "openrouter" to "OpenRouter"
         )
         val lista = todos.map { m ->
-            ModelOption(
+            ModeloElegible(
                 id = m.id ?: m.modelID.orEmpty(),
                 name = m.name ?: m.modelID ?: m.id,
                 description = buildString {
