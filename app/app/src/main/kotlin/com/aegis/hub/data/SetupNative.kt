@@ -572,8 +572,12 @@ class SetupNative(
      * Ejecuta una prueba de vida (smoke test) contra OpenCode creando una sesión de prueba
      * y enviando un prompt directo.
      */
-    suspend fun runSmokeTest(): SmokeTestResponse = withContext(ioDispatcher) {
-        try {
+    /** F2: borra la sesion de prueba sin romper el resultado (best-effort). */
+    private suspend fun borrarSesionDePrueba(sid: String) {
+        runCatching { openCodeApi.deleteSession(sid) }
+    }
+
+    suspend fun runSmokeTest(): SmokeTestResponse = withContext(ioDispatcher) {        try {
             // Verificar primero si el servidor está alcanzable
             val info = try {
                 openCodeApi.getInfo()
@@ -616,6 +620,7 @@ class SetupNative(
                     )
                 )
             } catch (e: Exception) {
+                borrarSesionDePrueba(smokeSid)
                 return@withContext SmokeTestResponse(
                     ok = false,
                     data = null,
@@ -624,6 +629,9 @@ class SetupNative(
             }
 
             val replyText = ack.text ?: "PONG"
+            // F2: la sesion de prueba no se queda en la lista (antes era basura
+            // acumulada: cada smoke sumaba una sesion huerfana).
+            borrarSesionDePrueba(smokeSid)
             SmokeTestResponse(
                 ok = true,
                 data = SmokeTestData(ok = true, reply = replyText),
