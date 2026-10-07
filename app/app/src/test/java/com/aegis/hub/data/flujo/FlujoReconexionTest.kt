@@ -25,7 +25,7 @@ class FlujoReconexionTest {
 
     @Before
     fun arrancar() {
-        fake = FakeOpenCode().apply { primerEventoCorta = true }
+        fake = FakeOpenCode()
     }
 
     @After
@@ -34,7 +34,35 @@ class FlujoReconexionTest {
     }
 
     @Test
+    fun `stream bueno mueve el turno hasta el fin sin duplicar`() = runBlocking {
+        val oc = fake.api()
+        val api = RutaNativa(oc = oc)
+        val eventos = EventosServidor(this, abrir = { oc.openEventStream() })
+        val sync = ChatSync(
+            CoroutineScope(UnconfinedTestDispatcher()),
+            eventos,
+            leerCola = { sid -> api.getMessagesTail(sid, 200).data.orEmpty() }
+        )
+        eventos.iniciar()
+        sync.abrir("ses_test")
+
+        val terminado = esperarHasta(10_000L) {
+            sync.turno.value is EstadoTurno.Terminado
+        }
+        eventos.detener()
+        sync.cerrar()
+
+        assertTrue(
+            "el turno termino con el stream bueno (turno=${sync.turno.value} estado=${sync.estado.value})",
+            terminado
+        )
+        val ids = sync.mensajes.value.mapNotNull { it.info?.id }
+        assertEquals("sin duplicados", ids.size, ids.toSet().size)
+    }
+
+    @Test
     fun `cae y vuelve sin duplicar`() = runBlocking {
+        fake.primerEventoCorta = true
         val oc = fake.api()
         val api = RutaNativa(oc = oc)
         val eventos = EventosServidor(this, abrir = { oc.openEventStream() })
