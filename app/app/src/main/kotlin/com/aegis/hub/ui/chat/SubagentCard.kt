@@ -213,7 +213,7 @@ fun SubagentCard(
                         )
                     }
                     val meta = buildString {
-                        if (state.isTruncated) append("recortado por el Hub")
+                        if (state.isTruncated) append("recortado por OpenCode")
                         state.subagentSessionId?.let { append(" ${it.takeLast(6)}") }
                     }
                     if (meta.isNotBlank()) {

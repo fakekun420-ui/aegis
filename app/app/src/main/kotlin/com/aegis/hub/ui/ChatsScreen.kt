@@ -237,7 +237,7 @@ fun ChatsScreen(
                                                             .semantics {
                                                                 contentDescription =
                                                                     if (inflightFiable) "Sesión trabajando"
-                                                                    else "Sesión marcada como trabajando, pero el dato es antiguo: el Hub no responde"
+                                                                    else "Sesión marcada como trabajando, pero el dato es antiguo: OpenCode no responde"
                                                             },
                                                         strokeWidth = 1.6.dp,
                                                         color = if (inflightFiable)

@@ -88,7 +88,7 @@ fun MainNavScreen(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )
                 NavigationDrawerItem(
-                    label = { Text("Workspace (Hub)", fontWeight = FontWeight.Medium) },
+                    label = { Text("Workspace", fontWeight = FontWeight.Medium) },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }

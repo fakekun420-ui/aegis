@@ -59,7 +59,7 @@ class SetupNativeViewModel(
         BootstrapUiState(
             state = setupNative.getSnapshot(),
             loading = false,
-            hubReachable = true
+            servidorAlcanzable = true
         )
     )
     val ui: StateFlow<BootstrapUiState> = _ui.asStateFlow()
@@ -79,7 +79,7 @@ class SetupNativeViewModel(
             setupNative.stateFlow.collect { st ->
                 _ui.value = _ui.value.copy(
                     state = st,
-                    hubReachable = true
+                    servidorAlcanzable = true
                 )
                 if (st.phaseOrIdle == BootstrapPhase.running) {
                     startPolling()
@@ -102,7 +102,7 @@ class SetupNativeViewModel(
         _ui.value = _ui.value.copy(
             state = st,
             loading = false,
-            hubReachable = true
+            servidorAlcanzable = true
         )
         if (st.phaseOrIdle == BootstrapPhase.running) {
             startPolling()

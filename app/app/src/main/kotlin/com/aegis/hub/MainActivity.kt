@@ -101,13 +101,6 @@ class MainActivity : ComponentActivity() {
         // vez (el companion object lo cachea). Sin esto, `isAppVisible` se queda en 0 para
         // siempre y el aviso de fin de turno no sale nunca: el fallo seria silencioso.
         registerVisibleTracker()
-        // MEDIDO 2026-09-30: sin esto el watchdog solo existia si el usuario pulsaba el
-        // boton de la pantalla de arranque (el unico llamador de startRootSystemAndPoll).
-        // Con el Hub arriba —el caso normal— ese boton ni siquiera aparece, asi que el Hub
-        // se quedaba sin vigilante sin que nada lo indicara. Se asegura en cada arranque;
-        // keepalive.sh se protege solo con su lock, asi que repetir el lanzamiento no
-        // duplica nada (medido: con el lock apuntando a un pid MUERTO, el guard deja pasar).
-        anotarArranqueSinHub()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
@@ -120,9 +113,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             com.aegis.hub.ui.theme.OpenCodeCompanionTheme {
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    // F1: sólo se monta cuando checkHubOnStart ha decidido la ruta inicial
+                    // F1: sólo se monta cuando comprobarServidorAlArrancar ha decidido la ruta inicial
                     // (SETUP si el bootstrap no terminó; DRAFT_CHAT = comportamiento actual).
-                    // F2 (ambigüedad #7): key(start) → si "Iniciar Sistema" levanta el hub con
+                    // F2 (ambigüedad #7): key(start) → si "Iniciar Sistema" levanta el servidor con
                     // bootstrap pendiente, initialRoute pasa DRAFT_CHAT→SETUP y el NavHost se
                     // recrea arrancando en el wizard (mismo efecto que un navigate de arranque).
                     initialRoute?.let { start ->
@@ -140,7 +133,7 @@ class MainActivity : ComponentActivity() {
         }
 
         ensurePermissions()
-        checkHubOnStart()
+        comprobarServidorAlArrancar()
     }
 
     private var lastBootError: String? by mutableStateOf<String?>(null)
@@ -251,72 +244,11 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) { false }
     }
 
-    /**
-     * MEDIDO 2026-10-02: **esto ya no lanza nada.** Antes si lo hacia, y el KDoc que tenia
-     * describia lo que hacia: arrancar `keepalive.sh` en el chroot, con su lock y su `kill -0`
-     * para no duplicar el daemon. Ese script se elimino con el Hub, asi que el comentario
-     * mentia y por eso se reescribe: un comentario que describe un mecanismo retirado es peor
-     * que no tener comentario.
-     *
-     * Se conserva la firma y el nombre porque su unico consumidor es [startRootSystemAndPoll],
-     * y dejar el metodo con un cuerpo que explica la decision es mas util que un borrado que
-     * obliga a buscar por que desaparecio. Devuelve siempre 99, que ya era el codigo de
-     * "no hay node disponible".
-     */
-    private suspend fun pasoHubRetirado(): Int {
-        // MEDIDO 2026-10-02: este metodo lanzaba `keepalive.sh`, que ya no existe (movido a
-        // `_tmp/keepalive-retirado-2026-10-01/`), y dependia de `find-ubuntu.sh` para localizar el
-        // mount namespace del chroot. Se queda la FIRMA y se documenta por que no hace nada, en
-        // vez de borrarla: su unico consumidor es [startRootSystemAndPoll], y dejar el nombre
-        // con un cuerpo que explica la decision es mas util que un borrado que obliga a buscar
-        // por que desaparecio.
-        android.util.Log.i(
-            TAG,
-            "pasoHubRetirado: nada que lanzar. El Hub y su watchdog se eliminaron (2026-10-01)."
-        )
-        return 99
-    }
-
-    /**
-     * MEDIDO 2026-09-30, y este es el arreglo de un fallo real: el watchdog NO se lanzaba
-     * salvo que el usuario pulsara el boton de la pantalla de arranque.
-     *
-     * El unico llamador de [startRootSystemAndPoll] estaba dentro de
-     * `if (!systemReady) { NativeOfflineOverlay(onStartSystem = ...) }`. Con el Hub ARRIBA —
-     * el caso normal, y el unico en el que importa— el overlay no aparece y el watchdog no
-     * se lanza nunca. El resultado medido: el Hub se queda sin quien lo vigile justo cuando
-     * todo va bien, que es cuando nadie se entera.
-     *
-     * Se lanza en cada arranque, y no solo si el Hub esta caido, porque la ventana del
-     * fallo era precisamente esa: Hub arriba + watchdog ausente.
-     */
-    private fun anotarArranqueSinHub() {
-        // MEDIDO 2026-10-01, y esto estaba ROTO, no solo obsoleto: `anotarArranqueSinHub()` llamaba a
-        // `pasoHubRetirado()`, que ejecuta
-        //     /sdcard/projects/Aegis/backend/keepalive.sh
-        // y ese fichero **ya no esta**: se movio a `_tmp/keepalive-retirado-2026-10-01/` por
-        // decision del usuario. O sea que la app lanzaba un `su -c` en cada arranque contra un
-        // script inexistente. Un fallo que no se ve: el script devuelve error, el codigo se
-        // registra en el log y el `toast` ni se nota.
-        //
-        // Que se hace en su lugar: NADA. El Hub se elimino entero y con el su watchdog que lo
-        // mantenia en pie. No hay a quien vigilar porque no hay Hub, y `opencode serve` es un
-        // servicio registrado que se levanta solo.
-        //
-        // Ojo al reverso: esto significa que **tras un reinicio del movil no hay nada que
-        // arranque OpenCode**. No es un descuido, es lo que significa quedarse sin Hub, y esta
-        // nota es lo que lo deja escrito para dentro de seis meses.
-        android.util.Log.i(TAG, "sin watchdog: el Hub se elimino (decision 2026-10-01)")
-    }
 
     private fun startRootSystemAndPoll() {
         if (isStartingSystem) return
         isStartingSystem = true
         lifecycleScope.launch(Dispatchers.IO) {
-            // MEDIDO 2026-10-02: `pasoHubRetirado()` ya no lanza nada (el Hub y su watchdog se
-            // eliminaron), asi que su codigo de salida no significa nada.
-            pasoHubRetirado()
-
             // MEDIDO 2026-10-02: esto antes NO levantaba nada. Preguntaba a OpenCode 90 veces y
             // se rindia, con el boton etiquetado "Reintentar" que no reintentaba: solo esperaba.
             // Con el Hub fuera, `opencode serve` hay que lanzarlo desde aqui, y se puede:
@@ -362,9 +294,8 @@ class MainActivity : ComponentActivity() {
                     toast("OpenCode responde")
                 } else {
                     // MEDIDO 2026-10-02: estos tres mensajes describian el Hub y su watchdog
-                    // (namespace de node, exit de keepalive, "hub sin 200"). Los dos primeros ya
-                    // no significan nada —el watchdog se elimino y pasoHubRetirado() siempre
-                    // devuelve 99—, asi que se sustituyen por la unica causa real que queda.
+                    // (namespace de node, exit de keepalive, "hub sin 200"), ya eliminados,
+                    // asi que se sustituyen por la unica causa real que queda.
                     val reason = "OpenCode no responde en 127.0.0.1:49374 tras 3 minutos. Arranca 'opencode serve --service' (Termux) o reinicia el servicio registrado."
                     lastBootError = reason
                     android.util.Log.e(TAG, "timeout 3min sin respuesta: $reason")
@@ -374,7 +305,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkHubOnStart() {
+    private fun comprobarServidorAlArrancar() {
         lifecycleScope.launch {
             val result = withTimeoutOrNull(3000L) { checkSystemReady() }
             val (ready, info) = result ?: Pair(false, "timeout:3s")
@@ -385,7 +316,7 @@ class MainActivity : ComponentActivity() {
                 val pending = withTimeoutOrNull(2500L) { isBootstrapPending() } ?: false
                 initialRoute = if (pending) NavRoutes.SETUP else NavRoutes.DRAFT_CHAT
                 systemReady = true
-                android.util.Log.i(TAG, "checkHubOnStart ready=true ($info) — Compose ready setupPending=$pending")
+                android.util.Log.i(TAG, "comprobarServidorAlArrancar ready=true ($info) — Compose ready setupPending=$pending")
             } else {
                 // MEDIDO 2026-10-02: aquí solo se COMPROBABA. El lanzador existía, pero su único
                 // llamador era el botón "Reintentar" del overlay, así que al abrir la app tras un
@@ -399,8 +330,8 @@ class MainActivity : ComponentActivity() {
                 // tiempo es a OpenCode para abrir su base de datos de 2 GB.
                 initialRoute = NavRoutes.DRAFT_CHAT
                 systemReady = false
-                if (result == null) android.util.Log.w(TAG, "checkHubOnStart timed out after 3s")
-                android.util.Log.i(TAG, "checkHubOnStart ready=false ($info) — se intenta arrancar")
+                if (result == null) android.util.Log.w(TAG, "comprobarServidorAlArrancar timed out after 3s")
+                android.util.Log.i(TAG, "comprobarServidorAlArrancar ready=false ($info) — se intenta arrancar")
                 startRootSystemAndPoll()
             }
         }

@@ -80,7 +80,7 @@ fun ChatScreen(
     val loading by vm.loading.collectAsState()
     val sendingInFlight by vm.sendingInFlight.collectAsState()
     val error by vm.error.collectAsState()
-    val hubReachable by vm.hubReachable.collectAsState()
+    val servidorAlcanzable by vm.servidorAlcanzable.collectAsState()
     val models by vm.models.collectAsState()
     val selectedModel by vm.selectedModel.collectAsState()
     val pendingForms by vm.pendingForms.collectAsState()
@@ -448,7 +448,7 @@ fun ChatScreen(
                 // cuanto un ciclo vuelve a salir bien (noteRefreshResult). Sin esto, un
                 // 429/502 durante el refresco dejaba la pantalla con el estado viejo y
                 // sin decir nada: "Trabajando en ello" para un turno ya acabado.
-                if (!hubReachable) {
+                if (!servidorAlcanzable) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(8.dp),
@@ -468,7 +468,7 @@ fun ChatScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "Sin conexión con el Hub: esto puede no reflejar el estado real.",
+                                text = "Sin conexión con OpenCode: lo que ves puede no ser el estado real.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.weight(1f)

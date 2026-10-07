@@ -52,7 +52,7 @@ data class ProjectItem(
     val id: String,
     val name: String,
     val path: String?,
-    val hasHub: Boolean,
+    val tieneWorkspace: Boolean,
     val lastCommit: String?
 )
 

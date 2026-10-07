@@ -115,7 +115,7 @@ class SetupNativeViewModelTest {
     }
 
     @Test
-    fun `estado inicial refleja el snapshot persistido y hubReachable es true`() = runTest {
+    fun `estado inicial refleja el snapshot persistido y servidorAlcanzable es true`() = runTest {
         val stateFile = File(tempFolder.root, "state.json")
         val bsNative = BootstrapNative(stateFile = stateFile)
         // MEDIDO 2026-10-02: se le pasa el dispatcher del test. `SetupNative` hace
@@ -131,7 +131,7 @@ class SetupNativeViewModelTest {
         vmsAbiertos.add(vm)
         val ui = vm.ui.value
 
-        assertTrue(ui.hubReachable)
+        assertTrue(ui.servidorAlcanzable)
         assertNotNull(ui.state)
         assertEquals(BootstrapPhase.idle, ui.state?.phaseOrIdle)
         assertEquals(5, ui.state?.stepList?.size)

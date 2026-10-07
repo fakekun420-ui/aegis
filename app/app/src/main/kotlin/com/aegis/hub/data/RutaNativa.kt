@@ -1316,7 +1316,7 @@ class RutaNativa(
                     // el 2026-10-01. Decir `true` porque hay una carpeta seria mentir, y poner un
                     // sustituto obligaria al usuario a aprender algo que no significa nada. Se deja
                     // en false y queda dicho aqui.
-                    hasHub = false,
+                    tieneWorkspace = false,
                     lastCommit = null
                 )
             }

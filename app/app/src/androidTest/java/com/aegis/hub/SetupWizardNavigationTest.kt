@@ -270,14 +270,14 @@ class SetupWizardNavigationTest {
         composeRule.onNodeWithTag(SetupTestTags.SMOKE_TEST).assertDoesNotExist()
     }
 
-    // ---- 5) Hub inaccesible: bloqueo de espera en español ----
+    // ---- 5) Servidor inaccesible: bloqueo de espera en español ----
     @Test
-    fun hubInaccesibleMuestraBloqueoDeEspera() {
+    fun servidorInaccesibleMuestraBloqueoDeEspera() {
         setScreen(FakeRepo { throw IOException("connection refused") })
 
-        // Texto exacto del bloqueo F3 (state null + hubReachable=false)
-        waitText("Esperando el hub (127.0.0.1:8765)…")
-        composeRule.onNodeWithText("Esperando el hub (127.0.0.1:8765)…").assertExists()
+        // Texto exacto del bloqueo F3 (state null + servidorAlcanzable=false)
+        waitText("Esperando OpenCode (127.0.0.1:49374)…")
+        composeRule.onNodeWithText("Esperando OpenCode (127.0.0.1:49374)…").assertExists()
         // Sin lista de pasos ni tarjeta tras el fallo de red
         composeRule.onNodeWithText("Verificación final", substring = true).assertDoesNotExist()
     }
