@@ -36,3 +36,20 @@ Notas medidas:
 - `GET session/{id}` inexistente = 404 + `{"_tag","message"}`; `POST message` a
   inexistente = 404 vacío; sin credenciales = 401 + `{"_tag","message"}` (ver
   `data/ErroresRed.kt` y `test/resources/errores/`).
+
+## Eventos SSE reales (`GET /api/event`)
+
+Captura 2026-10-07 en turno vivo (8 min, 23 tipos; ver
+`app/src/test/resources/eventos/` con fixtures redactados):
+
+- Texto: `session.text.started`, `session.text.delta` (`data.delta`), `session.text.ended`
+  (`data.text` consolidado). El `ended` cierra el SEGMENTO, no el turno.
+- Razonamiento: `session.reasoning.started`, `session.reasoning.delta`, `session.reasoning.ended`.
+- Pasos y herramientas: `session.step.started`, `session.step.streamed`,
+  `session.step.ended`, `session.tool.called`, `session.tool.input.started`,
+  `session.tool.input.ended`, `session.tool.progress`, `session.tool.success`.
+- Shell: `shell.created`, `shell.exited`, `shell.deleted`.
+- Misceláneo: `session.usage.updated`, `server.connected`, `provider.updated`,
+  `model.updated`, `project.updated`, `skill.updated`, `: heartbeat`.
+- Turno (ADR-003, **no observados en la ventana**: validar en V-06):
+  `session.execution.started`, `session.execution.succeeded`, `session.inbox.delivered`.
