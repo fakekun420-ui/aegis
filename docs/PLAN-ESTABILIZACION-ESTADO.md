@@ -16,7 +16,7 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
 | F4 Menos peticiones | 🟢 CI verde en rama; pendiente móvil + merge | `estabilizar/F4-peticiones` (3 commits: T-F4.1 catálogo, fixup oc, import) | ✅ run `37575719710` (5 success + instrumented skipped; antes 1 rojo por import, fixed) | pendiente E3 vs PERF-BASELINE | Catálogo TTL 5 min; abrir = leer+cola+historial; poll por tail | — |
 | F5 Un canal sync | ⬜ no empezada | — | — | V-06, V-08 | Flag `SYNC_POR_EVENTOS=false` hasta 3 días en verde | — |
 | F6 Arranque único | ⬜ no empezada | — | — | V-09 | — | — |
-| F7 su/hilos/regex | ⬜ no empezada | — | — | E8, E1 | — | — |
+| F7 su/hilos/regex | 🟢 CI verde en rama; pendiente móvil + merge | `estabilizar/F7-suhilos` (7 commits: Raiz, skills×2, TTL, regex, guardia, fix) | ✅ run `37581380511` (5 success + instrumented skipped; 2 rojos intermedios por imports/nulabilidad, fixed) | pendiente E8 (1 su en Skills) + E1 (1 h sin avisos StrictMode) | Lotes 1-su, TTL, regex a consts, guard en CI | — |
 | F8 Modelos datos | ⬜ no empezada | — | — | V-01…V-07 | — | Pantallas Workspace/Workflow/ControlCenter/SkillManager: se mantienen (por defecto) |
 | F9 Partir dioses | ⬜ no empezada | — | — | V-01…V-09 | Entrada: F1–F7 estables 3 días | — |
 | F10 Tests/CI/docs | ⬜ no empezada | — | — | §6 del plan | — | — |
