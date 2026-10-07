@@ -74,6 +74,16 @@ android {
     // `Unresolved reference: testOptions`, que es como se ve un bloque en el sitio equivocado.
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // F10: trazas completas en CI (sin esto el log solo muestra la primera
+        // linea y los mensajes de los asserts se pierden).
+        unitTests.all {
+            testLogging {
+                events("failed")
+                exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                showStackTraces = true
+                showCauses = true
+            }
+        }
     }
 }
 dependencies {
