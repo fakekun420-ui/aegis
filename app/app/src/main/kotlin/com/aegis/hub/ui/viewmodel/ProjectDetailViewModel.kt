@@ -6,7 +6,7 @@ import com.aegis.hub.data.*
 import com.aegis.hub.data.repo.NuevaSesion
 import com.aegis.hub.data.repo.Resultado
 import com.aegis.hub.data.repo.SesionesRepo
-import com.aegis.hub.data.carpetaDeProyecto
+import com.aegis.hub.data.repo.carpetaDeProyecto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
