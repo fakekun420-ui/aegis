@@ -25,12 +25,12 @@ class FakeOpenCode {
     data class Peticion(val metodo: String, val ruta: String)
 
     val peticiones = ConcurrentLinkedQueue<Peticion>()
-    var crearSesiones = 0
-    var modelosFijados = mutableListOf<String>()
-    var agentesFijados = mutableListOf<String>()
-    var cuerposCreacion = mutableListOf<String>()
-    var eventosPeticiones = 0
-    var primerEventoCorta = false
+    var crearSesiones = java.util.concurrent.atomic.AtomicInteger(0)
+    var modelosFijados = java.util.Collections.synchronizedList(mutableListOf<String>())
+    var agentesFijados = java.util.Collections.synchronizedList(mutableListOf<String>())
+    var cuerposCreacion = java.util.Collections.synchronizedList(mutableListOf<String>())
+    @Volatile var eventosPeticiones = 0
+    @Volatile var primerEventoCorta = false
 
     val servidor = MockWebServer()
 
@@ -64,10 +64,10 @@ class FakeOpenCode {
                 }
                 return when {
                     ruta == "/api/session" && request.method == "POST" -> {
-                        crearSesiones++
+                        val n = crearSesiones.incrementAndGet()
                         cuerposCreacion.add(request.body.readUtf8())
                         MockResponse().setResponseCode(200)
-                            .setBody(envuelto("""{"id":"ses_nueva_$crearSesiones","title":"T"}"""))
+                            .setBody(envuelto("""{"id":"ses_nueva_$n","title":"T"}"""))
                     }
                     ruta.startsWith("/api/session/") && ruta.endsWith("/model") -> {
                         modelosFijados.add(request.body.readUtf8())

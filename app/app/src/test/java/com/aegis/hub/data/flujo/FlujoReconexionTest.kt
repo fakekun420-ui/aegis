@@ -50,8 +50,14 @@ class FlujoReconexionTest {
         val conectado = esperarHasta(10_000L) {
             eventos.conexion.value is EventosServidor.Conexion.Conectado
         }
-        assertTrue("la conexion SSE se establecio tras el corte", conectado)
-        assertTrue("se reconecto al menos una vez", fake.eventosPeticiones >= 2)
+        assertTrue(
+            "etapa1: conexion=${eventos.conexion.value} peticiones=${fake.eventosPeticiones}",
+            conectado
+        )
+        assertTrue(
+            "se reconecto al menos una vez (peticiones=${fake.eventosPeticiones})",
+            fake.eventosPeticiones >= 2
+        )
 
         // Etapa 2: los eventos del stream bueno mueven el turno hasta el fin.
         val terminado = esperarHasta(10_000L) {
@@ -61,7 +67,10 @@ class FlujoReconexionTest {
         eventos.detener()
         sync.cerrar()
 
-        assertTrue("el turno termino tras reconectar", terminado)
+        assertTrue(
+            "el turno termino tras reconectar (turno=${sync.turno.value} estado=${sync.estado.value} texto=${sync.textoEnVivo.value})",
+            terminado
+        )
         val ids = sync.mensajes.value.mapNotNull { it.info?.id }
         assertEquals("sin duplicados", ids.size, ids.toSet().size)
     }
