@@ -43,10 +43,19 @@ class EstadoTurnoTest {
     }
 
     @Test
-    fun `herramientas reproducidas mantienen ocupado`() {
-        val seq = secuencia("turno-tools.ndjson")
-        assertTrue(seq.isNotEmpty())
-        assertTrue(seq.all { it is EstadoTurno.Ocupado })
+    fun `herramientas reproducidas ocupan al empezar y nunca terminan solas`() {
+        var turno: EstadoTurno = EstadoTurno.Ocioso
+        var huboOcupado = false
+        var huboTerminado = false
+        for ((tipo, seq) in tipos("turno-tools.ndjson")) {
+            turno = avanzarTurno(turno, tipo, seq)
+            if (turno is EstadoTurno.Ocupado) huboOcupado = true
+            if (turno is EstadoTurno.Terminado) huboTerminado = true
+        }
+        // Los inicios (step/tool) ocupan; los fines (success/ended) no terminan:
+        // el fin de un paso no es fin de turno (H-10).
+        assertTrue(huboOcupado)
+        assertTrue(!huboTerminado)
     }
 
     @Test
