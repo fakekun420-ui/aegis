@@ -99,12 +99,6 @@ interface ApiService {
     @GET("api/system/health")
     suspend fun getSystemHealth(): Response<HealthResponse>
 
-    @GET("api/system/logs")
-    suspend fun getSystemLogs(@Query("limit") limit: Int = 100): Response<LogsResponse>
-
-    @GET("api/system/memory")
-    suspend fun getSystemMemory(): Response<MemoryResponse>
-
     // Skills
     @GET("api/skills")
     suspend fun getSystemSkills(): Response<SkillsResponse>

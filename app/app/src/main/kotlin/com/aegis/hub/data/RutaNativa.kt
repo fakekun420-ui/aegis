@@ -981,49 +981,8 @@ class RutaNativa(
         }
     }
 
-    override suspend fun getSystemLogs(limit: Int): Response<LogsResponse> {
-        return try {
-            val n = if (limit in 1..500) limit else 100
-            val res = sh("logcat -d -t $n 2>/dev/null", 4000)
-            if (res.code == 0 && res.stdout.isNotBlank()) {
-                val logLines = res.stdout.lines().filter { it.isNotBlank() }
-                Response.success(LogsResponse(ok = true, data = logLines))
-            } else {
-                Response.success(LogsResponse(ok = false, data = emptyList()))
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "getSystemLogs fallo: ${e.message}")
-            Response.success(LogsResponse(ok = false, data = emptyList()))
-        }
-    }
-
-    override suspend fun getSystemMemory(): Response<MemoryResponse> {
-        return try {
-            val memRes = sh("cat /proc/meminfo 2>/dev/null", 2000)
-            val lines = memRes.stdout.lines()
-            var totalKb = 0L
-            var freeKb = 0L
-            var availableKb = 0L
-            for (line in lines) {
-                if (line.startsWith("MemTotal:")) {
-                    totalKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                } else if (line.startsWith("MemAvailable:")) {
-                    availableKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                } else if (line.startsWith("MemFree:")) {
-                    freeKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                }
-            }
-            val usedKb = if (availableKb > 0) (totalKb - availableKb) else (totalKb - freeKb)
-            val memData = MemoryData(
-                heapUsed = "${usedKb / 1024}MB",
-                heapTotal = "${totalKb / 1024}MB"
-            )
-            Response.success(MemoryResponse(ok = true, data = memData))
-        } catch (e: Exception) {
-            Log.w(TAG, "getSystemMemory fallo: ${e.message}")
-            Response.success(MemoryResponse(ok = false, data = null))
-        }
-    }
+    // F1: getSystemLogs/getSystemMemory eliminados (0 usos; el estado del sistema
+    // vive en getSystemHealth, que ya lee /proc/meminfo por su cuenta).
 
     override suspend fun getBootstrapState(): Response<BootstrapResponse> {
         return try {

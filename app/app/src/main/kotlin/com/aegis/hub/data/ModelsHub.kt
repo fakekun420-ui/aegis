@@ -66,7 +66,5 @@ data class RunWorkflowRequest(val workflowId: String)
 data class WorkflowStatusResponse(val ok: Boolean, val data: WorkflowStatus?)
 data class WorkflowStatus(val id: String, val status: String, val currentStep: String?, val progress: Int)
 
-data class LogsResponse(val ok: Boolean, val data: List<String>?)
-data class MemoryResponse(val ok: Boolean, val data: MemoryData?)
 data class SkillConfigResponse(val ok: Boolean, val data: Map<String, Any>?)
 
