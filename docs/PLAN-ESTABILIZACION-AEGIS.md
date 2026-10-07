@@ -380,8 +380,10 @@ Textos de usuario: "Sin conexión con el Hub: esto puede no reflejar el estado r
 actualizan en el mismo commit.
 
 **T-F1.4 — `parseDeliveryError` real.** Primero captura 3 cuerpos de error **reales** de OpenCode
-(modelo inexistente, sesión inexistente, servidor sin credenciales: `curl -i -u opencode:PASS …`)
-y guárdalos en `app/app/src/test/resources/errores/*.json`. Reescribe `parseDeliveryError`
+(modelo inexistente, sesión inexistente, servidor sin credenciales) con `curl -i` contra
+`:49374` usando la misma cabecera Basic que construye `Credentials` (la contraseña sale de
+`service.json`, nunca va escrita en el doc) y guárdalos en
+`app/app/src/test/resources/errores/*.json`. Reescribe `parseDeliveryError`
 (sácalo de `ChatViewModel` a `data/ErroresRed.kt`) para entender esas formas **y** el sobre viejo
 como respaldo. Tests con los 3 fixtures + vacío + HTML + no-JSON.
 
