@@ -2,6 +2,23 @@
 
 Todo notable de Aegis se documenta aquí. Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [No publicado] — F0 base y medición (plan de estabilización)
+
+Solo instrumentación debug; cero cambio de comportamiento en release.
+
+### Añadido
+- **Contador de peticiones `AegisTrace`** (`data/TraceoPeticiones.kt`): interceptor
+  OkHttp solo en debug que cuenta por `método + ruta normalizada` (`ses_/msg_/prt_`
+  → `:id`) e informa cada 60 s en logcat. Es el "antes" medible de E3/E4.
+- **StrictMode `penaltyLog` en debug** (`MainActivity.onCreate`) +
+  `IllegalStateException` si `RootShell.exec` corre en el hilo principal (debug).
+- **Tablero del plan** (`docs/PLAN-ESTABILIZACION-ESTADO.md`) y plantilla de cifras
+  (`docs/PERF-BASELINE.md`, pendiente de medir en el móvil).
+
+### Cambiado
+- `versionName` `1.1.1` → `1.1.2` (llevaba desalineado desde 2026-09-26; decisión
+  T-F0.6 del plan) y `buildFeatures.buildConfig = true` explícito.
+
 ## [1.1.2] - 2026-09-26
 
 Estado del "final del final", las fases de envio, la navegacion del historial, el
