@@ -2,6 +2,7 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.aegis.hub.data.FormReplyBody
+import com.aegis.hub.data.ErroresRed
 import com.aegis.hub.data.AppContext
 import com.aegis.hub.data.InflightSession
 import com.aegis.hub.data.ModelPreferences
@@ -110,13 +111,13 @@ class ChatViewModel : ViewModel() {
     // estado viejo y un 429/502 no dejaba ni una pista, de modo que "Trabajando en
     // ello" podia quedarse pegado para un turno que ya habia acabado. Con el
     // contador, la app puede distinguir "un fallo" de "el Hub no esta" y decirlo.
-    private val _hubReachable = MutableStateFlow(true)
-    val hubReachable: StateFlow<Boolean> = _hubReachable
+    private val _servidorAlcanzable = MutableStateFlow(true)
+    val servidorAlcanzable: StateFlow<Boolean> = _servidorAlcanzable
     private var refreshFailStreak = 0
 
     /**
      * Un ciclo del refresco salio bien -> el Hub responde.
-     * Uno fallo -> se cuenta; a partir de [HUB_FAIL_STREAK_FOR_DEGRADED] se dice.
+     * Uno fallo -> se cuenta; a partir de [SERVIDOR_FAIL_STREAK_FOR_DEGRADED] se dice.
      *
      * El umbral son 3 ciclos (6 s) y no 1 a proposito: el criterio del codigo es que
      * un fallo puntual se ignora, y eso se respeta. Lo que se cambia no es tragarse
@@ -126,12 +127,12 @@ class ChatViewModel : ViewModel() {
         if (ok) {
             if (refreshFailStreak != 0) {
                 refreshFailStreak = 0
-                _hubReachable.value = true
+                _servidorAlcanzable.value = true
             }
             return
         }
         refreshFailStreak++
-        if (refreshFailStreak >= HUB_FAIL_STREAK_FOR_DEGRADED) _hubReachable.value = false
+        if (refreshFailStreak >= SERVIDOR_FAIL_STREAK_FOR_DEGRADED) _servidorAlcanzable.value = false
     }
 
     private val _streamingText = MutableStateFlow<String?>(null)
@@ -385,12 +386,12 @@ class ChatViewModel : ViewModel() {
         }
         viewModelScope.launch {
             val ctx = runCatching { AppContext.require() }.getOrNull()
-            val delHub = runCatching { api.getSessionAgent(sessionId).data?.agent }
+            val delServidor = runCatching { api.getSessionAgent(sessionId).data?.agent }
                 .onFailure { Log.w("AegisChat", "No se pudo leer el agente de $sessionId: ${it.message}") }
                 .getOrNull()
             val guardado = runCatching { ctx?.let { AgentPreferences.agentFor(it, sessionId) } }.getOrNull()
             val elegido = when {
-                !delHub.isNullOrBlank() -> delHub
+                !delServidor.isNullOrBlank() -> delServidor
                 !guardado.isNullOrBlank() -> guardado
                 else -> AGENTE_POR_DEFECTO
             }
@@ -402,8 +403,8 @@ class ChatViewModel : ViewModel() {
                 return@launch
             }
             if (_agentMode.value != elegido) _agentMode.value = elegido
-            if (!delHub.isNullOrBlank() && ctx != null) {
-                runCatching { AgentPreferences.setAgent(ctx, sessionId, delHub) }
+            if (!delServidor.isNullOrBlank() && ctx != null) {
+                runCatching { AgentPreferences.setAgent(ctx, sessionId, delServidor) }
             }
         }
     }
@@ -521,7 +522,7 @@ class ChatViewModel : ViewModel() {
     // Ciclos de refresco seguidos fallidos antes de decir que el Hub no esta.
     // El refresco va cada 2 s, asi que 3 son ~6 s: suficiente para no Destapar un
     // fallo puntual, suficiente para no dejar la pantalla mintiendo un minuto.
-    private val HUB_FAIL_STREAK_FOR_DEGRADED = 3
+    private val SERVIDOR_FAIL_STREAK_FOR_DEGRADED = 3
 
     private fun mergeTail(actual: List<Message>, cola: List<Message>): List<Message> {
         if (cola.isEmpty()) return actual
@@ -570,7 +571,7 @@ class ChatViewModel : ViewModel() {
                 // para esto costaria peticiones en el turno que mas las necesita. El
                 // efecto honesto es una ventana: con texto en vivo, el refresco hace
                 // como mucho 6 ciclos de espera (~12 s) y despues uno completo, asi
-                // que hubReachable puede tardar hasta ~14 s en corregirse. No queda
+                // que servidorAlcanzable puede tardar hasta ~14 s en corregirse. No queda
                 // pegado: en cuanto hay un ciclo completo, si responde, se resetea.
                 if (pollingJob?.isActive == true) continue
                 // El stream manda mientras hay texto en vivo, pero con un tope: si el
@@ -1264,7 +1265,16 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     _messages.value = _messages.value.map {
                         if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
                     }
-                    _error.value = "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
+                    // F1: si el fallo es HTTP, el motivo sale del cuerpo real (ver
+                    // ErroresRed y los fixtures de `test/resources/errores/`); si no,
+                    // el mensaje de la excepcion como antes.
+                    val http = e as? retrofit2.HttpException
+                    _error.value = if (http != null) {
+                        val cuerpo = runCatching { http.response()?.errorBody()?.string() }.getOrNull()
+                        ErroresRed.parsear(cuerpo, http.code())
+                    } else {
+                        "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
+                    }
                     _messages.value = _messages.value.map {
                         if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
                     }
@@ -1292,30 +1302,3 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         } catch (_: Exception) { null }
     }
 }
-
-    /**
-     * Saca el motivo real de un cuerpo de error del Hub.
-     *
-     * El Hub responde `{ok:false, error:{code, message}}` y providers.js YA mete ahi
-     * el motivo accionable ("Antigravity no tiene cuota disponible (cuota agotada)",
-     * o el final de stderr de agy). Antes la app se tragaba el cuerpo y pintaba un
-     * error generico, losing justo la informacion que dice si fue cuota, 429 o token.
-     */
-    private fun parseDeliveryError(crudo: String?): String {
-        if (crudo.isNullOrBlank()) return "El servidor no acepto el mensaje"
-        val txt = crudo.trim()
-        return try {
-            val env = org.json.JSONObject(txt)
-            val err = env.optJSONObject("error")
-            val msg = err?.optString("message")?.takeIf { it.isNotBlank() }
-                ?: env.optString("message").takeIf { it.isNotBlank() }
-            val code = err?.optString("code")?.takeIf { it.isNotBlank() }
-            when {
-                msg != null && code != null -> "$code: $msg"
-                msg != null -> msg
-                else -> txt.take(300)
-            }
-        } catch (_: Exception) {
-            txt.take(300)
-        }
-    }
