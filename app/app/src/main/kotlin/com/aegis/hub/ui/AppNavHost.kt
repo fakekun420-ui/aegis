@@ -163,7 +163,7 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                         // F1: motor unico; antes se leia el proveedor elegido en el
                         // compositor (siempre "opencode" desde que no hay selector).
                         val sid = vm.createSessionForProject(
-                            "", "Chat ${System.currentTimeMillis() % 10000}", "opencode"
+                            "", "Chat ${System.currentTimeMillis() % 10000}"
                         )
                         if (!sid.isNullOrBlank()) {
                             navController.navigate(NavRoutes.chat(sid))

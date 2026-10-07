@@ -481,13 +481,14 @@ fun moveSession(sessionId: String, projectId: String) {
         }
     }
 
-    suspend fun createSessionForProject(projectId: String, title: String, providerOverride: String? = null): String? {
+    suspend fun createSessionForProject(projectId: String, title: String): String? {
         return try {
             val proj = _projects.value.find { it.id == projectId }
             val effectiveProjectId = projectId.trim().ifBlank { null }
             val effectiveFolder = proj?.folder ?: proj?.resolvedFolder
             val location = if (!effectiveFolder.isNullOrBlank()) OpenCodeLocation(directory = effectiveFolder) else null
 
+            var falloCreacion: Exception? = null
             val createdSession = try {
                 // MEDIDO 2026-10-03: antes se llamaba a OpenCode directo y, si fallaba, a la
                 // via vieja del Hub. Las dos hacian lo mismo menos el agente y el modelo: la
@@ -499,11 +500,19 @@ fun moveSession(sessionId: String, projectId: String) {
                         location = location
                     )
                 )
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                falloCreacion = e
                 null
             }
 
-            val sid = createdSession?.data?.id ?: createSessionViaHub(title, effectiveProjectId, providerOverride ?: proj?.provider ?: "opencode")
+            // F1: un solo intento (antes createSessionViaHub reintentaba la MISMA llamada).
+            // Si el servidor no responde al primero, tampoco al segundo inmediato; F2 lo
+            // convierte en atomico con motivo. El motivo se publica, no se traga.
+            val sid = createdSession?.data?.id
+            if (sid == null) {
+                _error.value = "No se pudo crear la sesión" +
+                    (falloCreacion?.message?.let { ": $it" } ?: "")
+            }
 
             if (sid != null) {
                 if (effectiveProjectId != null) {
@@ -517,19 +526,6 @@ fun moveSession(sessionId: String, projectId: String) {
             sid
         } catch (e: Exception) {
             _error.value = e.message
-            null
-        }
-    }
-
-    private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        // MEDIDO 2026-10-03: esto era un POST crudo al Hub en :8765, que ya no escucha. Ahora va
-        // por la costura (`api.createSession`), que es OpenCode directo. Se conserva el nombre
-        // por firma: hay llamadas y no aporta nada renombrarlo.
-        try {
-            val resp = api.createSession(CreateOpenCodeSessionRequest(title = title))
-            resp.data?.resolvedId?.takeIf { it.isNotBlank() }
-        } catch (e: Exception) {
-            _error.value = "No se pudo crear la sesion: " + (e.message ?: e::class.simpleName)
             null
         }
     }
