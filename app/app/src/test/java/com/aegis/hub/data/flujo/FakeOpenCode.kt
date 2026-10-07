@@ -11,10 +11,14 @@ import java.util.concurrent.ConcurrentLinkedQueue
 /**
  * Servidor falso de OpenCode (F10, T-F10.1).
  *
- * Sirve las rutas de [OpenCodeApi] con las FORMAS reales (envelopes `data`,
- * errores `_tag`/`message` de la captura 2026-10-07). Modos: [NORMAL], [LENTO],
- * [FALLO_500], [SIN_SESION] (404 con cuerpo real) y [SSE_TEXTO] (stream con un
- * segmento texto completo). Cada peticion queda registrada en [peticiones].
+ * Sirve las rutas UNARIAS de [OpenCodeApi] con las FORMAS reales (envelopes
+ * `data`, errores `_tag`/`message` de la captura 2026-10-07). Modos: [NORMAL],
+ * [LENTO], [FALLO_500] y [SIN_SESION] (404 con cuerpo real). Cada peticion
+ * queda registrada en [peticiones] (thread-safe).
+ *
+ * SIN `/api/event`: el streaming HTTP/SSE no entrega en CI y los tests SSE usan
+ * `ResponseBody` locales (ver `FlujoReconexionTest`); la interop HTTP/SSE va al
+ * movil (V-06/V-08).
  */
 class FakeOpenCode {
 
@@ -29,8 +33,6 @@ class FakeOpenCode {
     var modelosFijados = java.util.Collections.synchronizedList(mutableListOf<String>())
     var agentesFijados = java.util.Collections.synchronizedList(mutableListOf<String>())
     var cuerposCreacion = java.util.Collections.synchronizedList(mutableListOf<String>())
-    @Volatile var eventosPeticiones = 0
-    @Volatile var primerEventoCorta = false
 
     val servidor = MockWebServer()
 
@@ -95,37 +97,14 @@ class FakeOpenCode {
                         MockResponse().setResponseCode(200).setBody(modelos)
                     ruta.startsWith("/api/agent") ->
                         MockResponse().setResponseCode(200).setBody(agentes)
-                    ruta.startsWith("/api/event") -> {
-                        eventosPeticiones++
-                        if (primerEventoCorta && eventosPeticiones == 1) {
-                            // Corte limpio con error: el cliente reconecta igual
-                            // que ante un EOF (mismo backoff, mismo camino).
-                            MockResponse().setResponseCode(500).setBody("corte")
-                        } else {
-                            sse()
-                        }
-                    }
+                    // NOTA: /api/event NO se sirve aqui. El streaming HTTP/SSE no
+                    // entrega en CI (ver FlujoReconexionTest); los tests SSE usan
+                    // ResponseBody locales y las formas viven en resources/eventos/.
                     else -> MockResponse().setResponseCode(404).setBody("no hay ruta")
                 }
             }
         }
         servidor.start()
-    }
-
-    private fun sse(): MockResponse {
-        val cuerpo = """
-            data: {"id":"e1","type":"session.text.started","data":{"sessionID":"ses_test"}}
-
-            data: {"id":"e2","type":"session.text.delta","data":{"sessionID":"ses_test","delta":"Ho"}}
-
-            data: {"id":"e3","type":"session.text.ended","data":{"sessionID":"ses_test","text":"Hola"}}
-
-            data: {"id":"e4","type":"session.execution.succeeded","data":{"sessionID":"ses_test"},"durable":{"aggregateID":"ses_test","seq":7,"version":1}}
-
-        """.trimIndent()
-        return MockResponse().setResponseCode(200)
-            .setHeader("Content-Type", "text/event-stream")
-            .setBody(cuerpo)
     }
 
     fun api(): OpenCodeApi = OpenCodeApi.create(baseUrl = servidor.url("/").toString())
