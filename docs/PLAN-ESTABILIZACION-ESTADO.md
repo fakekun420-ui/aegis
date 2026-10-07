@@ -9,7 +9,7 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
 
 | Fase | Estado | Commit | CI | Checklist manual | Notas | Decisiones pendientes |
 |---|---|---|---|---|---|---|
-| F0 Base y medición | 🟡 fusionada a main, CI corriendo | `4d21768` (merge de `estabilizar/F0-base`, 4 commits) | pendiente (~9 min, ver Actions) | no aplica (F0 no cambia release) | Tests JVM: 220 anotaciones `@Test` en 28 ficheros (el plan esperaba 209; +11 por commits posteriores a la base — confirmar número exacto en CI). T-F0.5 (cifras en el móvil) pendiente de medición manual. AVISO: el merge arrastró el borrado ya staged de `.opencode/plugins/graphify-staleness.js` (preexistente, no es del plan §8 — decidir si se restaura) | T-F0.6: alinear a `1.1.2` (aplicado, valor por defecto del plan) |
+| F0 Base y medición | 🟢 CI verde; pendiente móvil | `4d21768` + `ea0181e` en `main` | ✅ 7 jobs (6 success + instrumented skipped, es manual) en runs `37555482229` y `37555520373` | pendiente: AegisTrace en logcat + cifras PERF-BASELINE (lo hace Leonardo) | T-F0.5 (cifras en el móvil) pendiente de medición manual. AVISO: el merge arrastró el borrado ya staged de `.opencode/plugins/graphify-staleness.js` (preexistente, no es del plan §8 — decidir si se restaura) | T-F0.6: alinear a `1.1.2` (aplicado) |
 | F1 Limpieza de legado | ⬜ no empezada | — | — | V-01, V-02, V-07 | — | Antigravity descartado (por defecto: sí) |
 | F2 Crear sesión | ⬜ no empezada | — | — | V-04, V-05 | — | — |
 | F3 Modelo/agente | ⬜ no empezada | — | — | V-03 | — | `OMITIR_FIJADO_REDUNDANTE = true` (por defecto: implementar) |
