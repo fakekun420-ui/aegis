@@ -1,6 +1,5 @@
 package com.aegis.hub.ui
 
-private val RX_NOMBRE_PROYECTO = Regex("[^a-z0-9_-]")
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,6 +43,8 @@ import com.aegis.hub.ui.theme.OpenCodeBadgeBg
 import com.aegis.hub.ui.theme.OpenCodeBadgeBorder
 import com.aegis.hub.ui.theme.OpenCodeBadgeFg
 import com.aegis.hub.util.relativeTime
+
+private val RX_NOMBRE_PROYECTO = Regex("[^a-z0-9_-]")
 
 @Composable
 fun ProviderBadge(provider: String, modifier: Modifier = Modifier) {

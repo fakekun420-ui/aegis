@@ -1,7 +1,5 @@
 package com.aegis.hub.ui.chat
 
-private val RX_SUBAGENT_APERTURA = Regex("^\\s*<subagent[^>]*>")
-private val RX_SUBAGENT_CIERRE = Regex("</subagent>\\s*$")
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -32,6 +30,9 @@ import androidx.compose.ui.unit.sp
 import com.aegis.hub.data.ToolState
 import com.aegis.hub.ui.MarkdownText
 import com.aegis.hub.ui.markdownBlockCount
+
+private val RX_SUBAGENT_APERTURA = Regex("^\\s*<subagent[^>]*>")
+private val RX_SUBAGENT_CIERRE = Regex("</subagent>\\s*$")
 
 /**
  * Tarjeta de una invocacion de subagente.
