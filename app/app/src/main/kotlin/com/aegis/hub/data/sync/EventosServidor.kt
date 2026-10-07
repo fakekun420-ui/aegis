@@ -5,8 +5,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.BufferOverflow
 import kotlinx.coroutines.isActive
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.ResponseBody
 import java.io.BufferedReader
@@ -84,10 +83,10 @@ class EventosServidor(
                 abrir().use { cuerpo ->
                     espera = ESPERA_INICIAL_MS
                     _conexion.value = Conexion.Conectado
-                    BufferedReader(InputStreamReader(cuerpo.byteStream(), Charsets.UTF_8))
-                        .forEachLine { linea ->
-                            if (linea.isNotBlank()) _lineas.emit(linea)
-                        }
+                    val lector = BufferedReader(InputStreamReader(cuerpo.byteStream(), Charsets.UTF_8))
+                    for (linea in lector.lineSequence()) {
+                        if (linea.isNotBlank()) _lineas.emit(linea)
+                    }
                     // Fin limpio del stream sin error: reconectar igual (el servidor
                     // lo corta; no es un estado estable).
                 }

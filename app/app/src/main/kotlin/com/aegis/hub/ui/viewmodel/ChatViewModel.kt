@@ -1208,13 +1208,6 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             val lastAssistantIdBefore =
                 _messages.value.lastOrNull { it.role == "assistant" && !it.isEmpty }?.info?.id
 
-            // F5: con el flag el envio va por el canal unico (sin pollingJob ni stream
-            // propio: el espejo ya los cubre). El camino viejo sigue intacto debajo.
-            if (SYNC_POR_EVENTOS) {
-                envioPorEventos(targetSessionId, sendReq, tempMsgId)
-                return@launch
-            }
-
             // 4. Start active background polling in parallel to catch assistant output or SSE stream completions
             pollingJob?.cancel()
             pollingJob = launch {
@@ -1265,6 +1258,15 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     agent = currentAgentMode,
                     mode = currentAgentMode
                 )
+
+                // F5: con el flag el envio va por el canal unico (sin pollingJob ni
+                // stream propio: el espejo ya los cubre). Se cancela el poll que se
+                // acaba de crear arriba. El camino viejo sigue intacto debajo.
+                if (SYNC_POR_EVENTOS) {
+                    pollingJob?.cancel()
+                    envioPorEventos(targetSessionId, sendReq, tempMsgId)
+                    return@launch
+                }
 
                 // MEDIDO 2026-10-03: esto era un POST SSE al Hub en :8765, que ya no escucha.
                 // El Hub adaptaba el stream del CLI a eventos accepted/chunk/tool_start/done; sin
