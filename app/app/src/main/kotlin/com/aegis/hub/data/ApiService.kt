@@ -131,21 +131,8 @@ interface ApiService {
     @POST("api/workspace/projects/{id}/init")
     suspend fun initProject(@Path("id") projectId: String): Response<BaseResponse>
 
-    @GET("api/workspace/projects/{id}/state")
-    suspend fun getProjectState(@Path("id") projectId: String): Response<ProjectStateResponse>
-
     @POST("api/workspace/projects/{id}/index")
     suspend fun indexProject(@Path("id") projectId: String): Response<TaskResponse>
-
-    // Agents
-    @GET("api/agents")
-    suspend fun getAgents(): Response<AgentsResponse>
-
-    @POST("api/agents/dispatch")
-    suspend fun dispatchAgent(@Body body: DispatchAgentRequest): Response<TaskResponse>
-
-    @GET("api/agents/status/{projectId}")
-    suspend fun getAgentStatus(@Path("projectId") projectId: String): Response<AgentStatusResponse>
 
     // Workflows
     @GET("api/workflows/{projectId}")
@@ -159,13 +146,6 @@ interface ApiService {
 
     @GET("api/workflows/{projectId}/status")
     suspend fun getWorkflowStatus(@Path("projectId") projectId: String): Response<WorkflowStatusResponse>
-
-    // Jobs
-    @GET("api/jobs")
-    suspend fun getJobs(): Response<JobsResponse>
-
-    @POST("api/jobs/{id}/run")
-    suspend fun runJob(@Path("id") jobId: String): Response<BaseResponse>
 
     // F1 — Bootstrap / asistente de configuración inicial (contrato /api/bootstrap/*)
     @GET("api/bootstrap/state")

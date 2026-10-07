@@ -57,21 +57,14 @@ data class ProjectItem(
 )
 
 data class ProjectsResponse(val ok: Boolean, val data: List<ProjectItem>?)
-data class ProjectStateResponse(val ok: Boolean, val data: Map<String, Any>?)
 
 data class AgentItem(val id: String, val name: String, val status: String)
-data class AgentsResponse(val ok: Boolean, val data: List<AgentItem>?)
-data class DispatchAgentRequest(val agentType: String, val projectId: String, val context: Map<String, String>)
-data class AgentStatusResponse(val ok: Boolean, val data: List<AgentItem>?)
 
 data class WorkflowItem(val id: String, val name: String, val steps: Int)
 data class WorkflowsResponse(val ok: Boolean, val data: List<WorkflowItem>?)
 data class RunWorkflowRequest(val workflowId: String)
 data class WorkflowStatusResponse(val ok: Boolean, val data: WorkflowStatus?)
 data class WorkflowStatus(val id: String, val status: String, val currentStep: String?, val progress: Int)
-
-data class JobItem(val id: String, val enabled: Boolean, val lastRun: String?, val interval: String)
-data class JobsResponse(val ok: Boolean, val data: List<JobItem>?)
 
 data class LogsResponse(val ok: Boolean, val data: List<String>?)
 data class MemoryResponse(val ok: Boolean, val data: MemoryData?)

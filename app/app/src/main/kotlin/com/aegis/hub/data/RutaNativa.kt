@@ -1496,10 +1496,8 @@ class RutaNativa(
     // MEDIDO 2026-10-03 contra el OpenAPI VIVO (`_tmp/openapi.json`, 113 rutas, 249.900 bytes) y
     // contra el Hub retirado. Las DOS mediciones cuentan, y en el mismo sentido:
     //
-    //  - `GET /api/agent` EXISTE. Es la unica de las nueve con equivalente real, y de ahi que
-    //    `getAgents` sea el unico `ok=true` de este bloque.
     //  - "workflow": CERO apariciones en las 249.900 bytes. Ni ruta, ni descripcion, ni schema.
-    //    "job": CERO tambien. "dispatch": una, y es la descripcion de
+    //  - "job": CERO tambien. "dispatch": una, y es la descripcion de
     //    `POST /api/rpc/{rpcID}/{method}` ("Dispatch a method to the currently registered RPC"),
     //    que no es despachar un agente de Aegis.
     //
@@ -1510,166 +1508,35 @@ class RutaNativa(
     // y ademas el fallback SPA les contestaba HTML con 200 (BUG-02). Delegar en el Hub no era
     // "funcionar todavia": era fallar de una forma que la app no distinguia de un dato vacio.
     //
-    // Por eso ocho de las nueve son `ok=false` CON MOTIVO y no una traduccion a medias: un
-    // endpoint del Hub que nunca existio no tiene equivalente que buscar, y fingir que lo tiene
-    // devuelve una pantalla vacia sin explicar por que.
+    // F1 (2026-10-07): los metodos de agentes/jobs/estado (`getAgents`, `dispatchAgent`,
+    // `getAgentStatus`, `getJobs`, `runJob`, `getProjectState`) se eliminaron con sus tests
+    // (grep: 0 usos fuera de su definicion). El catalogo de agentes vive en
+    // `getOpencodeAgents` (`GET /api/agent`, nativo). Aqui quedan solo las tres de workflows,
+    // que son `ok=false` CON MOTIVO y no una traduccion a medias: un endpoint del Hub que
+    // nunca existio no tiene equivalente que buscar, y fingir que lo tiene devuelve una
+    // pantalla vacia sin explicar por que.
 
     /**
-     * MEDIDO 2026-10-03: SEIS clases de `Models.kt` de esta costura no tienen donde poner un
-     * motivo, y cinco de las nueve funciones los usan para responder.
+     * MEDIDO 2026-10-03: DOS clases de `Models.kt` de esta costura no tienen donde poner un
+     * motivo, y las tres funciones de workflows las usan para responder.
      *
-     * `BaseResponse` trae `error: ErrorBody?` — por ahi va el motivo de [initProject] y de
-     * [runJob] — y `TaskResponse` lo lleva en `TaskData.message`, como [indexProject]. Pero
-     * `AgentsResponse`, `AgentStatusResponse`, `WorkflowsResponse`, `WorkflowStatusResponse`,
-     * `JobsResponse` y `ProjectStateResponse` son `(ok, data)` a secas: no hay campo `error`, y
-     * `ok=false` con `data=null` es EXACTAMENTE lo que dice `envoltura(null)`, o sea
+     * `BaseResponse` trae `error: ErrorBody?` — por ahi va el motivo de [initProject] — y
+     * `TaskResponse` lo lleva en `TaskData.message`, como [indexProject]. Pero
+     * `WorkflowsResponse` y `WorkflowStatusResponse` son `(ok, data)` a secas: no hay campo
+     * `error`, y `ok=false` con `data=null` es EXACTAMENTE lo que dice `envoltura(null)`, o sea
      * indistinguible de "no hay nada".
      *
      * Poner el motivo dentro de `data` seria una abuse: la pantalla lo pinta como si fuera
      * contenido, que es peor que un null honesto. Asi que va al log, que es lo unico que hay, y
-     * el hueco queda dicho aqui. Arreglarlo es anadir `error: ErrorBody?` a esas seis clases, y
-     * NO lo he hecho porque este encargo limita los cambios de producto a estas nueve funciones.
+     * el hueco queda dicho aqui. Arreglarlo es anadir `error: ErrorBody?` a esas dos clases, y
+     * NO lo he hecho porque este encargo limita los cambios de producto a estas funciones.
      */
     private fun <T> logMotivo(motivo: String, respuesta: Response<T>): Response<T> {
         Log.w(TAG, "RutaNativa: $motivo")
         return respuesta
     }
 
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo, y por la misma razon que [initProject] — con un
-     * matiz que cambia lo que se puede decir en vez de callarselo.
-     *
-     * La ruta era `GET api/workspace/projects/{id}/state` (`ApiService.kt:137`): el estado del
-     * WORKSPACE que montaba el Hub. OpenCode no tiene el concepto de workspace, y el dato que la
-     * app sabe de un proyecto —ruta, ultimo commit, si esta vinculado— ya lo tiene `getProjects`,
-     * que vive en la app y no en ningun servidor.
-     *
-     * `ProjectStateResponse.data` es `Map<String, Any>?` y en un mapa asi cabria cualquier cosa.
-     * No la lleno, y el motivo es concreto: las CLAVES las inventaria yo. Una pantalla que las
-     * leyera estaria leyendo un mapa que ninguna medicion sostiene.
-     *
-     * MEDIDO ademas: esta funcion no tiene NINGUN consumidor en la app (grep de las nueve: solo
-     * `getWorkflows`, `runWorkflow` y `getWorkflowStatus` tienen a alguien llamandolas). Nadie ve
-     * el cambio.
-     */
-    override suspend fun getProjectState(projectId: String): Response<ProjectStateResponse> =
-        logMotivo(
-            "getProjectState($projectId): era el estado del workspace del Hub, " +
-                "GET api/workspace/projects/{id}/state. OpenCode no tiene workspaces; " +
-                "el dato del proyecto esta en getProjects, que es de la app.",
-            Response.success(ProjectStateResponse(ok = false, data = null))
-        )
-
-    /**
-     * MEDIDO 2026-10-03: ESTA TIENE EQUIVALENTE REAL. `GET /api/agent` esta en el OpenAPI vivo y
-     * [OpenCodeApi.listAgents] la declaraba desde el principio (OpenCodeApi.kt:153), o sea que
-     * estaba escrito y desconectado. Es la primera de las nueve que deja de hablar con el Hub.
-     *
-     * MEDIDO contra el endpoint vivo, y son las dos cifras que mandan:
-     *  - el catalogo trae **40** agentes y el filtro `primary && !hidden` deja **3**
-     *    (`orchestrator`, `build`, `plan`). Es el MISMO filtro que ya aplica
-     *    [getOpencodeAgents], por el mismo motivo: el Hub respondia la lista ya filtrada, y
-     *    `GET /api/agent` devuelve el catalogo entero.
-     *  - `id` y `name` NO son lo mismo en 7 de los 40: `build` se llama `Build` y `plan` se llama
-     *    `Plan`. Por eso `AgentItem` lleva los dos campos en vez de uno.
-     *
-     * ## El `status` NO es una medicion, y es lo unico que queda por decidir
-     *
-     * `AgentItem.status` lo ideo el Hub para pintar un punto verde o rojo por agente. MEDIDO: el
-     * Hub NUNCA llego a responderlo — su router no se monto (BUG-03, citado arriba)—, asi que no
-     * hay contrato al que traducir. Y OpenCode no expone estado de ejecucion por agente: los
-     * campos que trae `GET /api/agent` son `id`, `name`, `model`, `request`, `description`,
-     * `mode`, `hidden` y `permissions`, y ninguno es estado.
-     *
-     * Se ha buscado una senal de verdad y NO la hay. Las dos candidatas fallan, y estan medidas:
-     *
-     *  - `GET /api/session/active` responde `{"data":{"<sessionID>":{"type":"running"}}}`, o sea
-     *    ENVUELTO en `data`, y [OpenCodeApi.getActiveSessions] declara `Map<String,
-     *    ActiveSessionStatus>` sin desenvolver. Con el Gson de `ApiClient` el mapa que sale tiene
-     *    una sola clave, "data", cuyo valor no trae los ids de sesion: la senal se pierde al
-     *    deserializar. MEDIDO, y es lo que le pasa hoy a `MainViewModel`, que consulta ese mapa.
-     *  - `time.idle` de `GET /api/session` (nulo = sin idle todavia) MIENTE en las dos
-     *    direcciones: de 50 sesiones, 6 tienen `idle` nulo y solo **3** estan en
-     *    `/api/session/active`; y la sesion `orchestrator` que ahora mismo esta despachando
-     *    subagentes tiene `idle` PUESTO. O sea que marcar con eso es marcar a gente que no esta
-     *    ocupada y no marcar a la que si.
-     *
-     * Un `status` pintado con esa senal seria una pantalla que miente en silencio, que es el
-     * fallo que este fichero lleva tres commits corrigiendo. Asi que se pone "idle" para todos,
-     * que quiere decir "en el catalogo y sin ejecucion que reportar", y se dice aqui que es una
-     * DEFINICION y no una lectura. Si algun dia se quiere el punto rojo de verdad, el arreglo es
-     * desenvolver la envoltura de `getActiveSessions` —una linea en `OpenCodeApi`— y no un filtro
-     * mas aqui.
-     */
-    override suspend fun getAgents(): Response<AgentsResponse> {
-        val lista = oc.listAgents().data.orEmpty()
-            .filter { it.mode == "primary" && !it.hidden }
-            .map { a ->
-                AgentItem(
-                    id = a.id.orEmpty(),
-                    name = a.name,
-                    status = "idle"
-                )
-            }
-        return Response.success(AgentsResponse(ok = true, data = lista))
-    }
-
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo, y hay un casi-equivalente que NO es lo mismo.
-     *
-     * Existe `POST /api/session/{sessionID}/agent`, y por el nombre parece este dispatch. MEDIDO
-     * en el spec: se llama `session.switchAgent` y su descripcion es "Switch the agent used by
-     * subsequent provider turns" — CAMBIA el agente de una sesion que ya existe. `dispatchAgent`
-     * no trae `sessionID`: trae `agentType`, `projectId` y `context`, o sea que ademas de elegir
-     * agente CREA la sesion y la manda. Y devuelve 204 sin cuerpo, mientras que `TaskResponse`
-     * necesita un `TaskData`.
-     *
-     * Hacerlo nativo exigia inventar el `sessionID` que la peticion no trae. Eso es una escritura
-     * en el aire con forma de exito.
-     */
-    override suspend fun dispatchAgent(body: DispatchAgentRequest): Response<TaskResponse> =
-        logMotivo(
-            "dispatchAgent(${body.agentType}): POST api/agents/dispatch era del Hub y su router " +
-                "nunca se monto. No hay equivalente nativo.",
-            Response.success(
-                TaskResponse(
-                    ok = false,
-                    // MEDIDO: `TaskResponse` es `(ok, data: TaskData?)` sin campo `error`, igual
-                    // que en [indexProject]. El motivo va en `TaskData.message`.
-                    data = TaskData(
-                        taskId = null,
-                        message = "Despachar un agente era del Hub (POST /api/agents/dispatch) y " +
-                            "sus routers nunca se montaron: AUDITORIA_BACKEND.md BUG-03. Lo mas " +
-                            "parecido en OpenCode es POST /api/session/{sessionID}/agent, que es " +
-                            "session.switchAgent: cambia el agente de una sesion que ya existe, " +
-                            "necesita un sessionID que esta peticion no trae y devuelve 204 sin " +
-                            "cuerpo. Para lanzar un agente de verdad hay que crear la sesion y " +
-                            "mandarle el prompt."
-                    )
-                )
-            )
-        )
-
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo. La ruta era `GET api/agents/status/{projectId}`.
-     *
-     * Se podria contestar con el mismo catalogo que [getAgents] —el tipo de salida ES el mismo,
-     * `List<AgentItem>`— y por eso es tentador. No lo hago, y la razon es la que mas veces se ha
-     * pagado en este fichero: **una funcion que recibe `projectId` y lo ignora no es una funcion,
-     * es una mentira con parametros.** Ensenaria agentes del catalogo global donde la pantalla
-     * pidio los de un proyecto, y no habria forma de que la UI notase la diferencia.
-     *
-     * Lo que OpenCode si tiene es estado por SESION, y de ahi que la idea de agente ocupado sea
-     * real aunque todavia no se pueda pintar. Por sesion, no por proyecto: ese es el dato que
-     * existe.
-     */
-    override suspend fun getAgentStatus(projectId: String): Response<AgentStatusResponse> =
-        logMotivo(
-            "getAgentStatus($projectId): el estado de agentes por proyecto era del Hub, " +
-                "GET api/agents/status/{projectId}. OpenCode tiene estado por sesion " +
-                "(GET /api/session/active), no por proyecto.",
-            Response.success(AgentStatusResponse(ok = false, data = null))
-        )
+    // --- Workflows (sin equivalente nativo; ok=false con motivo) ---
 
     /**
      * MEDIDO 2026-10-03: sin equivalente nativo, y esta vez la prueba es de las gordas.
@@ -1740,41 +1607,7 @@ class RutaNativa(
             Response.success(WorkflowStatusResponse(ok = false, data = null))
         )
 
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo. "job" aparece CERO veces en el OpenAPI.
-     *
-     * Los jobs del Hub eran `jobScheduler.js` y AUDITORIA_BACKEND.md OBS-02 lo dice medido:
-     * `start()` no se llamaba nunca, de modo que `/api/jobs` habria devuelto `[]` incluso con el
-     * router montado. O sea que la lista de tareas programadas no la perdio OpenCode: no existio
-     * casi nunca, y devuelve `ok=false` en vez de una lista vacia que pareceria "no hay jobs".
-     */
-    override suspend fun getJobs(): Response<JobsResponse> =
-        logMotivo(
-            "getJobs(): GET api/jobs era del Hub, y \"job\" no aparece ni una vez en el OpenAPI " +
-                "de OpenCode. Ademas el planificador del Hub (jobScheduler) no se chegou a arrancar.",
-            Response.success(JobsResponse(ok = false, data = null))
-        )
-
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo. La ruta era `POST /api/jobs/{id}/run`, del mismo
-     * planificador que nunca arranco (ver [getJobs]).
-     *
-     * Este si tiene donde llevar el motivo: `BaseResponse` trae `error: ErrorBody?`, igual que
-     * [initProject]. El codigo es `hub-retirado`, el mismo de [initProject], para que quien mire
-     * el error vea la misma causa en las nueve y no nueve causas parecidas.
-     */
-    override suspend fun runJob(jobId: String): Response<BaseResponse> =
-        Response.success(
-            BaseResponse(
-                ok = false,
-                error = ErrorBody(
-                    code = "hub-retirado",
-                    message = "Ejecutar una tarea programada ($jobId) era del Hub, de un " +
-                        "planificador que no se llego a arrancar. OpenCode no expone \"job\" en " +
-                        "ninguna de sus 113 rutas."
-                )
-            )
-        )
+    // --- Jobs: eliminados en F1 (el planificador del Hub nunca arranco; 0 usos) ---
 
 
 
@@ -1925,10 +1758,11 @@ class RutaNativa(
          * El agente con el que nace una sesion creada desde la app.
          *
          * MEDIDO 2026-10-03: es el mismo valor que `AGENTE_POR_DEFECTO` de ChatViewModel (ahi es
-         * `private`, no se puede importar). La app ya trabajaba con orchestrator en todas
-         * partes menos al crear: la sesion nacia con los defaults del servidor. Duplicar el
-         * literal aqui con el motivo escrito es mejor que dejar la creacion sin agente.
+         * `private`, no se puede importar). CAMBIADO 2026-10-07: era "orchestrator", que ya no
+         * existe (migración ECC F2 del 2026-10-06); ahora "build", igual que el `default_agent`
+         * del servidor. Duplicar el literal aqui con el motivo escrito es mejor que dejar la
+         * creacion sin agente.
          */
-        const val AGENTE_POR_DEFECTO = "orchestrator"
+        const val AGENTE_POR_DEFECTO = "build"
     }
 }
