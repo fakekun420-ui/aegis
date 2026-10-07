@@ -5,6 +5,9 @@ import android.util.Log
 // Es el segundo vez que lo doy por hecho; lo pillo el mismo comprobador de simbolos
 // que lo pillo la primera, asi que el control positivo existe y funciona.
 import com.aegis.hub.RootShell
+import com.aegis.hub.data.repo.NuevaSesion
+import com.aegis.hub.data.repo.Resultado
+import com.aegis.hub.data.repo.SesionesRepo
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -83,6 +86,9 @@ class RutaNativa(
      * Se usa en `getProjects`, `createProject`, `patchProject` y `deleteProject`.
      */
     private val store: ProjectsStore get() = ProjectsStore.default
+
+    /** F2: el unico camino de crear/renombrar/borrar/vincular; aqui solo fachadas. */
+    private val sesiones = SesionesRepo()
 
     private fun <T> envoltura(datos: T?): Envelope<T> =
         if (datos == null) Envelope(ok = false, data = null)
@@ -325,43 +331,24 @@ class RutaNativa(
         }
 
     // createSession: POST /api/session nativo (tambien envuelto en `data`).
-    // MEDIDO 2026-10-03: los ViewModels la creaban con POST crudo al Hub en :8765.
-    // MEDIDO 2026-10-03 (2): crear sin agente ni modelo dejaba la sesion con los defaults
-    // del servidor (Space Bunny) aunque la app trabajara con orchestrator y su modelo. Por
-    // eso aqui se fija el agente (el del cuerpo o el de por defecto) y despues su modelo:
-    // el prompt no acepta modelo y POST /api/session tampoco lo garantiza, asi que se fija
-    // despues de crear, igual que al enviar. Si fijar falla, la sesion creada igual vale:
-    // fallar la creacion entera por el modelo seria peor.
+    // F2: fachada delgada sobre SesionesRepo (el unico camino). Los avisos de exito
+    // parcial van al log: los llamadores con UI usan el repo directo.
         override suspend fun createSession(body: CreateOpenCodeSessionRequest): Envelope<OpencodeSession> {
-            return try {
-                val creado = oc.createSession(body).data
-                    ?: return Envelope(ok = false, data = null)
-                val sid = creado.id
-                val agente = body.agent?.trim()?.takeIf { it.isNotBlank() } ?: AGENTE_POR_DEFECTO
-                try {
-                    oc.setSessionAgent(sid, SetSessionAgentRequest(agente))
-                } catch (e: Exception) {
-                    Log.w(TAG, "createSession: no se pudo fijar agente $agente en $sid: ${e.message}")
-                }
-                val modelo = body.model
-                    ?: runCatching { ModelosUtil.modeloDelAgente(agente, oc.listAgents().data.orEmpty()) }.getOrNull()
-                if (modelo != null) {
-                    fijarModelo(sid, modelo.id, modelo.providerID, modelo.variant)
-                }
-                envoltura(
-                    OpencodeSession(
-                        id = creado.id,
-                        title = creado.title,
-                        model = creado.model,
-                        createdAt = creado.time?.created?.let { java.time.Instant.ofEpochMilli(it).toString() },
-                        updatedAt = creado.time?.updated?.let { java.time.Instant.ofEpochMilli(it).toString() },
-                        pinned = false,
-                        provider = creado.model?.providerID
+            return when (
+                val r = sesiones.crear(
+                    NuevaSesion(
+                        titulo = body.title?.takeIf { it.isNotBlank() } ?: "Nuevo chat",
+                        carpeta = body.location?.directory,
+                        agente = body.agent,
+                        modelo = body.model
                     )
                 )
-            } catch (e: Exception) {
-                Log.w(TAG, "createSession fallo: ${e.message}")
-                Envelope(ok = false, data = null)
+            ) {
+                is Resultado.Ok -> {
+                    r.avisos.forEach { Log.w(TAG, "createSession: $it") }
+                    envoltura(OpencodeSession(id = r.valor.id, title = r.valor.titulo))
+                }
+                is Resultado.Fallo -> envolturaFallo(r.motivo)
             }
         }
 
@@ -472,25 +459,23 @@ class RutaNativa(
      * lee el store: si solo se guardara en OpenCode, el renombrado no se veria hasta que la
      * pantalla volviera a pedir la lista completa, y el store no tendria de donde sacarlo.
      */
+    // F2: fachada sobre el repo (servidor primero, titulo local solo si confirma).
     override suspend fun renameSession(id: String, body: Map<String, String>): Envelope<Map<String, Any>> {
         val titulo = body["title"]?.takeIf { it.isNotBlank() }
             ?: return envolturaFallo("renameSession sin title")
-        val r = oc.updateSession(id, UpdateOpenCodeSessionRequest(title = titulo))
-        if (!r.isSuccessful) return envolturaFallo("PATCH session ${r.code()}")
-        store.setSessionTitle(id, titulo)
-        return envoltura(mapOf("id" to id, "title" to titulo))
+        return when (val r = sesiones.renombrar(id, titulo)) {
+            is Resultado.Ok -> envoltura(mapOf("id" to id, "title" to titulo))
+            is Resultado.Fallo -> envolturaFallo(r.motivo)
+        }
     }
 
-    /**
-     * MEDIDO: `DELETE /api/session/{sessionID}` existe (OpenAPI, ruta 1 de 113).
-     *
-     * Se consulta `isSuccessful` y no se asume excepcion: un 404 significa que la sesion ya no
-     * esta, que para el usuario es el resultado que queria, no un fallo.
-     */
+    // F2: fachada sobre el repo. Mismo contrato que antes (incluido 404 -> fallo);
+    // cambiarlo a ok es decision UX fuera de esta fase.
     override suspend fun deleteSession(id: String): Envelope<Map<String, Any>> {
-        val r = oc.deleteSession(id)
-        return if (r.isSuccessful) envoltura(mapOf("id" to id, "deleted" to true))
-        else envolturaFallo("DELETE session ${r.code()}")
+        return when (val r = sesiones.borrar(id)) {
+            is Resultado.Ok -> envoltura(mapOf("id" to id, "deleted" to true))
+            is Resultado.Fallo -> envolturaFallo(r.motivo)
+        }
     }
 
     override suspend fun pinSession(id: String): Envelope<PinResponse> {
@@ -505,19 +490,22 @@ class RutaNativa(
         return envoltura(PinResponse(id = id, pinned = false))
     }
 
+    // F2: fachada sobre el repo (una sola escritura).
     override suspend fun linkSession(projectId: String, body: LinkSessionRequest): Envelope<SessionRef> {
-        store.linkSessionToProject(body.sessionId, projectId)
-        body.title?.takeIf { it.isNotBlank() }?.let { store.setSessionTitle(body.sessionId, it) }
-        return envoltura(
-            SessionRef(
-                sessionId = body.sessionId,
-                title = body.title ?: store.getSessionTitle(body.sessionId),
-                pinned = store.isSessionPinned(body.sessionId),
-                provider = body.provider
+        return when (val r = sesiones.vincular(body.sessionId, projectId, body.title)) {
+            is Resultado.Ok -> envoltura(
+                SessionRef(
+                    sessionId = body.sessionId,
+                    title = body.title ?: store.getSessionTitle(body.sessionId),
+                    pinned = store.isSessionPinned(body.sessionId),
+                    provider = body.provider
+                )
             )
-        )
+            is Resultado.Fallo -> envolturaFallo(r.motivo)
+        }
     }
 
+    // F2: fachada sobre el repo.
     override suspend fun unlinkSession(projectId: String, sessionId: String): Envelope<Map<String, String>> {
         // MEDIDO 2026-10-02: `unlinkSessionFromProject` no existia en el store, y su ausencia la
         // anote como "desvincular sigue sin estar soportado" en un commit anterior. Era verdad
@@ -1557,16 +1545,5 @@ class RutaNativa(
          *  nivel superior, en objetos con nombre y en companions. Es el mismo error que el del
          *  TAG de este fichero, y el segundo: por eso esta escrito. */
         const val RAIZ_PROYECTOS = "/sdcard/projects"
-
-        /**
-         * El agente con el que nace una sesion creada desde la app.
-         *
-         * MEDIDO 2026-10-03: es el mismo valor que `AGENTE_POR_DEFECTO` de ChatViewModel (ahi es
-         * `private`, no se puede importar). CAMBIADO 2026-10-07: era "orchestrator", que ya no
-         * existe (migración ECC F2 del 2026-10-06); ahora "build", igual que el `default_agent`
-         * del servidor. Duplicar el literal aqui con el motivo escrito es mejor que dejar la
-         * creacion sin agente.
-         */
-        const val AGENTE_POR_DEFECTO = "build"
     }
 }
