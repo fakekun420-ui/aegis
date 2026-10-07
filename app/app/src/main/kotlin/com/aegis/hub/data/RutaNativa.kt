@@ -68,7 +68,14 @@ class RutaNativa(
      * inyectable, y por eso el codigo que habla con el shell no tenia ni un test. Una sola
      * propiedad con el mismo valor por defecto: produccion igual, tests con fake posible.
      */
-    private val shell: (String, Long) -> RootShell.Result = SHELL_REAL
+    private val shell: (String, Long) -> RootShell.Result = SHELL_REAL,
+    /**
+     * F10: `oc` y `store` inyectables (mismos defaults de siempre): los tests de flujo
+     * levantan la costura real contra un MockWebServer. Los repos derivan del mismo
+     * `oc` para no ir a red por otro lado.
+     */
+    private val oc: OpenCodeApi = OpenCodeApi.default,
+    private val store: ProjectsStore = ProjectsStore.default
 ) : ApiService {
     /**
      * MEDIDO 2026-10-06 (ANR con traza): `shell()` bifurca un proceso `su` y lo espera.
@@ -85,22 +92,22 @@ class RutaNativa(
 
 
     private val gson = Gson()
-    private val oc: OpenCodeApi get() = OpenCodeApi.default
 
     /**
      * MEDIDO 2026-10-02: el registro de proyectos, que antes era del Hub y ahora es de la app.
      * Se usa en `getProjects`, `createProject`, `patchProject` y `deleteProject`.
+     *
+     * F10: `store` es parametro (ver arriba); este comentario documentaba el getter.
      */
-    private val store: ProjectsStore get() = ProjectsStore.default
 
     /** F2: el unico camino de crear/renombrar/borrar/vincular; aqui solo fachadas. */
-    private val sesiones = SesionesRepo()
+    private val sesiones = SesionesRepo(oc)
 
     /** F3: modelo/agente con el servidor como verdad (con salto de redundante). */
-    private val config = SesionConfigRepo()
+    private val config = SesionConfigRepo(oc)
 
     /** F4: catalogos con cache corta (modelos + agentes). */
-    private val catalogo = CatalogoRepo()
+    private val catalogo = CatalogoRepo(oc)
 
     private fun <T> envoltura(datos: T?): Envelope<T> =
         if (datos == null) Envelope(ok = false, data = null)

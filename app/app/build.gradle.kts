@@ -109,6 +109,8 @@ dependencies {
     // los fakes construyen retrofit2.Response a mano y no hay red real.
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1") // misma versión que coroutines-android
+    // F10: servidor falso de OpenCode (misma versión que okhttp).
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     // Instrumentada (src/androidTest): ext junit + espresso + compose ui-test.
     // El BOM se REUTILIZA (el mismo de release, 2024.10.00): no se introduce una
     // segunda versión de compose-bom que pudiera desalinear ui-test y la app.
