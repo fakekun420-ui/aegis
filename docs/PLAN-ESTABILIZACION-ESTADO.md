@@ -17,7 +17,7 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
 | F5 Un canal sync | ⬜ no empezada | — | — | V-06, V-08 | Flag `SYNC_POR_EVENTOS=false` hasta 3 días en verde | — |
 | F6 Arranque único | ⬜ no empezada | — | — | V-09 | — | — |
 | F7 su/hilos/regex | 🟢 CI verde en rama; pendiente móvil + merge | `estabilizar/F7-suhilos` (7 commits: Raiz, skills×2, TTL, regex, guardia, fix) | ✅ run `37581380511` (5 success + instrumented skipped; 2 rojos intermedios por imports/nulabilidad, fixed) | pendiente E8 (1 su en Skills) + E1 (1 h sin avisos StrictMode) | Lotes 1-su, TTL, regex a consts, guard en CI | — |
-| F8 Modelos datos | ⬜ no empezada | — | — | V-01…V-07 | — | Pantallas Workspace/Workflow/ControlCenter/SkillManager: se mantienen (por defecto) |
+| F8 Modelos datos | 🟢 CI verde en rama; pendiente móvil + merge | `estabilizar/F8-modelos` (6 commits: split, 3 renombres, ModeloRef, ModelsHub) | ✅ run `37583145506` (5 success + instrumented skipped; split rehecho por declaraciones tras partir clases) | pendiente V-01…V-07 | Mismo comportamiento (verificado por tests sin tocar aserciones) | pantallas se mantienen (aplicado) |
 | F9 Partir dioses | ⬜ no empezada | — | — | V-01…V-09 | Entrada: F1–F7 estables 3 días | — |
 | F10 Tests/CI/docs | ⬜ no empezada | — | — | §6 del plan | — | — |
 
