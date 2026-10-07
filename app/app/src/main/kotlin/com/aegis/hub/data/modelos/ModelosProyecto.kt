@@ -76,7 +76,8 @@ data class Sesion(
     val name: String? = null,
     // F6: registro único — nombre REAL que le puso OpenCode (title = nombre puesto desde la app)
     val providerTitle: String? = null,
-    val model: Any? = null,
+    // F8: tipado (antes `Any?`; nadie lo leia como Any: solo se mapeaba y se pedia su providerID).
+    val model: ModeloRef? = null,
     val createdAt: String? = null,
     @SerializedName("created_at") val createdAtAlt: String? = null,
     val updatedAt: String? = null,
@@ -93,6 +94,13 @@ data class Sesion(
 data class PinResponse(
     val id: String,
     val pinned: Boolean = false
+)
+
+/** Referencia de modelo de una sesion (id + proveedor + variante opcional). */
+data class ModeloRef(
+    val id: String? = null,
+    val providerID: String? = null,
+    val variant: String? = null
 )
 
 // ---- Messages (GET /session/:id/message proxied via hub) ----

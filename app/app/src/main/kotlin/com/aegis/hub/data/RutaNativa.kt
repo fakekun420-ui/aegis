@@ -122,8 +122,8 @@ class RutaNativa(
         //
         // Este mapa NO usa la conversion con Gson que si usaba en los agentes: alli el campo
         // `model` es un objeto donde la app espera un `String`, y Gson fallaba al DESERIALIZAR.
-        // Aqui `Sesion.model` es `Any?` a proposito, asi que el objeto entra sin drama —
-        // y por eso este mapeo es explicito campo a campo y el de agentes no lo podia ser.
+        // Aqui el nativo ya trae el objeto y se mapea a `ModeloRef`, asi que el mapeo es
+        // explicito campo a campo.
         override suspend fun getOpencodeSessions(): Envelope<List<Sesion>> {
             // MEDIDO el 2026-10-02: `GET /api/session` devuelve las sesiones de
             // primer nivel Y las que crean los subagentes, mezcladas y sin
@@ -153,7 +153,8 @@ class RutaNativa(
                     // id, ID, title, name, providerTitle, model, createdAt... Escribi `agent`
                     // aqui de memoria y no compila. El agente de la sesion se lee por otra
                     // via, `GET /api/session/{id}`, en `getSessionAgent`.
-                    model = s.model,
+                    // F8: el modelo nativo se mapea a ModeloRef (ya no entra como Any).
+                    model = s.model?.let { ModeloRef(id = it.id, providerID = it.providerID, variant = it.variant) },
                     // MEDIDO: `projectID` tampoco esta en `Sesion` (la app). Es el
                     // segundo campo de esta función que escribi de memoria. El vinculo
                     // sesion-proyecto lo lleva `ProjectsStore`, no el modelo de la sesion.
