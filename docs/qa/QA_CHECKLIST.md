@@ -133,3 +133,36 @@ dispositivo en la tabla final.
 | 8 | [ ] | | | | |
 
 **Estado de la release:** `[ ]` QA de dispositivo pendiente · `[ ]` aprobado por segunda persona
+
+---
+
+# QA — Aceptación v1.2.0 (plan de estabilización §6)
+
+Con APK debug instalado por `pm` (desinstalar el debug anterior primero) y
+`adb logcat -s AegisTrace AegisChat OpenCodeLauncher`. Marcar solo lo ejecutado
+con evidencia. Cada fase del plan exige sus V antes de fusionar a `main`.
+
+- [ ] **V-01 Abrir chat existente** (con y sin historial largo): carga rápida, chip
+  de modelo y agente correctos, sin spinner eterno.
+- [ ] **V-02 Enviar mensaje**: fases Enviando → Generando, respuesta completa,
+  divisor "✓ respuesta final" solo al final del turno entero (no tras cada `bash`).
+- [ ] **V-03 Cambiar de chat 10 veces seguidas** (alternando dos chats con modelos
+  distintos): el chip nunca muestra el modelo/agente del otro. Cambiar modelo a
+  uno inexistente: el chip vuelve al anterior y aparece el motivo.
+- [ ] **V-04 Crear chat nuevo global** ("+" en Chats): aparece **una** sola sesión
+  nueva con agente y modelo; pulsar "+" dos veces seguidas no crea dos.
+- [ ] **V-05 Crear chat en proyecto vinculado a carpeta con nombre distinto**: la
+  sesión nace en esa carpeta, aparece en la lista del proyecto y no en "sin
+  proyecto"; si falla algo, hay mensaje con motivo (probar con servidor detenido).
+- [ ] **V-06 Turno largo** (varios `bash` + formulario/permiso): "trabajando…"
+  hasta el final real; formulario y permiso respondibles; notificación una vez.
+- [ ] **V-07 Proyectos**: lista, abrir, renombrar y borrar sesión,
+  vincular/desvincular; Skills, Workspace, Workflow, Control Center sin ANR.
+- [ ] **V-08 Servidor caído/levantado con el chat abierto:** banner de sin
+  conexión, y al volver el servidor el chat se recupera solo (sin reabrir).
+- [ ] **V-09 Arranque:** reinicio del teléfono → abrir app (1 proceso `serve`);
+  matar `serve` → abrir app (se relanza uno); abrir y cerrar la app 5 veces.
+- [ ] **V-10 TTS y segundo plano:** leer una respuesta en voz alta, salir y
+  volver; sin ANR.
+- [ ] **V-11 Memoria:** `dumpsys meminfo com.aegis.hub` tras 30 min: sin
+  crecimiento sostenido.

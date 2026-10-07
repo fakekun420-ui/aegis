@@ -9,19 +9,24 @@ UI (Compose)            solo pinta estado y emite intenciones
    │
 ViewModels              estado de pantalla (Chat, Main, ProjectDetail, …)
    │
-Costura (RutaNativa)    traduce app ↔ OpenCode; fachada que F2+ adelgaza a repos
+Repos (data/repo/)      Sesiones · SesionConfig · Catalogo (TTL) — un camino c/u
    │
-OpenCodeApi (Retrofit) · EventStream (SSE) · ProjectsStore · RootShell (su)
+Costura (RutaNativa)    fachada delgada; ChatSync tras SYNC_POR_EVENTOS (F5, off)
+   │
+OpenCodeApi (Retrofit) · EventosServidor (SSE) · ProjectsStore · Raiz (su x2)
    │
 opencode serve --service :49374 (único; ver docs/CONTRATO-OPENCODE.md)
 ```
 
 - **Servidor = única verdad** de modelo/agente/título/mensajes; `ProjectsStore`
   guarda el vínculo proyecto↔sesión (OpenCode no lo conoce); prefs solo caché.
+- **Éxito parcial = avisos, nunca fallo** (`Resultado.Ok` con lista; `Fallo` con motivo).
+- **Un canal de sincronización** (F5 tras flag); el fin de turno solo lo dice
+  `session.execution.succeeded`, nunca el fin de un segmento de texto.
+- **Lo caro se pide una vez**: catálogo TTL 5 min, `su` en lote con TTL, `Raiz`
+  con semáforo de 2 (ver `tools/check_hilo_principal.py` en CI).
 - **Arranque:** `OpenCodeLauncher.asegurarAbierto` + hook Magisk `service.d`
   (F6 lo deja en un solo lanzador).
-- **Sincronización del chat:** poll + SSE durante el envío (F5 lo deja en un canal).
-- **Skills/salud del sistema:** lectura por `su` en lote (F7: 1 exec).
 
 Diagrama objetivo y fases: [plan de estabilización](PLAN-ESTABILIZACION-AEGIS.md §3).
 Contrato vigente: [CONTRATO-OPENCODE.md](CONTRATO-OPENCODE.md).
