@@ -48,6 +48,10 @@ jobs:
               yaml.safe_load(open(f, encoding='utf-8'))
               print('OK', f)
           PY
+      # F7: guardia de hilo principal / su unico / fallos mudos (ver el KDoc del
+      # propio script para las reglas y la lista de excepciones).
+      - name: Guardia de hilo principal (Regex/su/catch)
+        run: python3 tools/check_hilo_principal.py
 
   # ---------------------------------------------------------------------------
   # 2) APK DEBUG

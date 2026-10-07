@@ -1033,7 +1033,11 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     updateTitleFromFirstMessage(nonEmpties)
                     _loading.value = false
                 }
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                    // La cola es optimizacion (rapida); si falla va el historial
+                    // completo debajo, que si avisa. Un aviso aqui duplicaria.
+                    android.util.Log.d("AegisChat", "cola rapida fallo, va historial: ${e.message}")
+                }
 
             try {
                 val resp = api.getMessages(sessionId)
@@ -1235,6 +1239,8 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                 _messages.value = nonEmpties
                             }
                         }
+                    // GUARD-SILENCIO-OK: poll de 1,5 s por diseno (reintenta solo;
+                    // el estado final lo marca el bloque sync de abajo con motivo).
                     } catch (_: Exception) { }
                 }
             }
@@ -1286,6 +1292,8 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                 _streamingText.value = item.textAccumulated
                             }
                         }
+                    // GUARD-SILENCIO-OK: stream best-effort (el poll trae lo mismo;
+                    // si el stream muere, el parcial sigue llegando por el poll).
                     } catch (_: Exception) { }
                 }
 
@@ -1364,7 +1372,12 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                 return@launch
                             }
                         }
-                    } catch (_: Exception) { }
+                    } catch (e: Exception) {
+                        // Ultimo intento antes del ERROR visible de abajo: se deja
+                        // rastro en log para distinguir "fallo el reintento" de
+                        // "ni se intento".
+                        android.util.Log.w("AegisChat", "reintento final fallo: ${e.message}")
+                    }
 
                     _messages.value = _messages.value.map {
                         if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it

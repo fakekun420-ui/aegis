@@ -78,12 +78,16 @@ class ProjectDetailViewModel : ViewModel() {
                     if (sResp.ok && sResp.data != null) {
                         _sessions.value = sResp.data.filter { it.sessionId !in _deletedSessionIds }
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    _error.value = "No se pudieron cargar las sesiones: ${e.message ?: "error de red"}"
+                }
                 // Skills
                 try {
                     val skResp = api.getSkills(projectId)
                     if (skResp.ok && skResp.data != null) _skills.value = skResp.data.skills
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    _error.value = "No se pudieron cargar los skills: ${e.message ?: "error de red"}"
+                }
                 // Linked projects full objects
                 val allProjects = projResp.data ?: emptyList()
                 val linkedIds = proj?.linkedProjects ?: emptyList()

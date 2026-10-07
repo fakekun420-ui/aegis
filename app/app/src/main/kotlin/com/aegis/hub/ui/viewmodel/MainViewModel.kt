@@ -382,7 +382,9 @@ fun moveSession(sessionId: String, projectId: String) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     api.pinSession(sessionId)
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                _error.value = "No se pudo fijar el pin: ${e.message ?: "error de red"}"
+            }
             refreshSessions()
         }
     }
@@ -398,7 +400,9 @@ fun moveSession(sessionId: String, projectId: String) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     api.unpinSession(sessionId)
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                _error.value = "No se pudo quitar el pin: ${e.message ?: "error de red"}"
+            }
             refreshSessions()
         }
     }
