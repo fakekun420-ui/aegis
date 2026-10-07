@@ -84,6 +84,7 @@ android {
 tasks.withType<Test> {
     testLogging {
         events("failed")
+        showStandardStreams = true
         exceptionFormat = TestExceptionFormat.FULL
         showStackTraces = true
         showCauses = true

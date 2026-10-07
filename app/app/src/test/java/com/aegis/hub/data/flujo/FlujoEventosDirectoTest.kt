@@ -42,6 +42,10 @@ class FlujoEventosDirectoTest {
         val eventos = EventosServidor(this, abrir = { oc.openEventStream() })
         eventos.iniciar()
 
+        repeat(8) { i ->
+            kotlinx.coroutines.delay(1_000)
+            println("DIAG t=${i + 1}s conexion=${eventos.conexion.value} peticiones=${fake.eventosPeticiones}")
+        }
         val recibidas = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
             eventos.lineas.take(4).toList()
         }.orEmpty()
