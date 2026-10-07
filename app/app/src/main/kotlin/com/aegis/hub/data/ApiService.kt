@@ -46,9 +46,6 @@ interface ApiService {
     @POST("api/skills")
     suspend fun createSkill(@Body body: SkillCreateRequest): Envelope<Skill>
 
-    @PATCH("api/skills/{scope}/{name}")
-    suspend fun updateSkill(@Path("scope") scope: String, @Path("name") name: String, @Body body: Map<String, String>): Envelope<Skill>
-
     @DELETE("api/skills/{scope}/{name}")
     suspend fun deleteSkill(@Path("scope") scope: String, @Path("name") name: String): Envelope<Map<String, String>>
 
@@ -108,15 +105,6 @@ interface ApiService {
 
     @DELETE("api/skills/{id}")
     suspend fun uninstallSkill(@Path("id") skillId: String): Response<BaseResponse>
-
-    @GET("api/skills/{id}/config")
-    suspend fun getSkillConfig(@Path("id") skillId: String): Response<SkillConfigResponse>
-
-    @PATCH("api/skills/{id}/config")
-    suspend fun updateSkillConfig(
-        @Path("id") skillId: String,
-        @Body config: Map<String, Any>
-    ): Response<BaseResponse>
 
     // Workspace / Projects
     @GET("api/workspace/projects")

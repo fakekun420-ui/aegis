@@ -769,45 +769,8 @@ class RutaNativa(
         )
     }
 
-    override suspend fun updateSkill(
-        scope: String,
-        name: String,
-        body: Map<String, String>
-    ): Envelope<Skill> {
-        val skillName = name.trim()
-        val realScope = scope.trim().ifEmpty { "global" }
-        if (skillName.isEmpty()) {
-            return envolturaFallo("updateSkill sin nombre")
-        }
-        if (skillName.contains("..") || skillName.contains("/")) {
-            return envolturaFallo("Nombre de skill invalido: $skillName")
-        }
-        val base = rutaDeSkills()
-        val dir = "$base/$skillName"
-        val file = "$dir/SKILL.md"
-        val check = sh("test -f '$file' && echo SI", 3000)
-        if (check.stdout.trim() != "SI") {
-            return envolturaFallo("No existe el skill '$skillName'")
-        }
-        val content = body["content"] ?: run {
-            val cur = sh("head -c 200000 '$file' 2>/dev/null", 5000)
-            cur.stdout
-        }
-        val encoded = android.util.Base64.encodeToString(content.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        val cmd = "echo '$encoded' | base64 -d > '$file'"
-        val r = sh(cmd, 5000)
-        if (r.code != 0) {
-            return envolturaFallo("Error actualizando skill '$skillName': ${r.stderr.take(140)}")
-        }
-        Log.i(TAG, "updateSkill: actualizado SKILL.md de '$skillName'")
-        return envoltura(
-            Skill(
-                scope = realScope,
-                name = skillName,
-                content = content
-            )
-        )
-    }
+    // F1: updateSkill eliminado (0 usos fuera de su definicion; crear/borrar
+    // cubren el ciclo de vida que la UI usa).
 
     // El recorte de payload binario (hasBinary/truncated) lo inventaba server.js al pasar por
     // el puente HTTP. En la conexion directa no hay puente: se lee el mensaje entero.
@@ -1316,57 +1279,8 @@ class RutaNativa(
         }
     }
 
-    override suspend fun getSkillConfig(skillId: String): Response<SkillConfigResponse> {
-        val id = skillId.trim()
-        if (id.isEmpty() || id.contains("..") || id.contains("/")) {
-            return Response.success(
-                SkillConfigResponse(ok = false, data = null)
-            )
-        }
-        val base = rutaDeSkills()
-        val r = sh("cat '$base/$id.json' 2>/dev/null", 3000)
-        return if (r.code == 0 && r.stdout.isNotBlank()) {
-            try {
-                val mapType = object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type
-                val map: Map<String, Any> = com.google.gson.Gson().fromJson(r.stdout, mapType)
-                Response.success(SkillConfigResponse(ok = true, data = map))
-            } catch (e: Exception) {
-                Response.success(SkillConfigResponse(ok = true, data = emptyMap()))
-            }
-        } else {
-            Response.success(SkillConfigResponse(ok = true, data = emptyMap()))
-        }
-    }
-
-    override suspend fun updateSkillConfig(
-        skillId: String,
-        config: Map<String, Any>
-    ): Response<BaseResponse> {
-        val id = skillId.trim()
-        if (id.isEmpty() || id.contains("..") || id.contains("/")) {
-            return Response.success(
-                BaseResponse(
-                    ok = false,
-                    error = ErrorBody(code = "SKILL_INVALID", message = "id de skill invalido: $id")
-                )
-            )
-        }
-        val base = rutaDeSkills()
-        val jsonStr = com.google.gson.Gson().toJson(config)
-        val encoded = android.util.Base64.encodeToString(jsonStr.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        val cmd = "mkdir -p '$base' && echo '$encoded' | base64 -d > '$base/$id.json'"
-        val r = sh(cmd, 5000)
-        return if (r.code == 0) {
-            Response.success(BaseResponse(ok = true, error = null))
-        } else {
-            Response.success(
-                BaseResponse(
-                    ok = false,
-                    error = ErrorBody(code = "CONFIG_WRITE_FAILED", message = "No se pudo guardar la configuracion de $id")
-                )
-            )
-        }
-    }
+    // F1: getSkillConfig/updateSkillConfig eliminados (0 usos; ningun JSON de
+    // config bajo rutaDeSkills tiene lector ni escritor).
 
     // ==========================================================================================
     // WORKSPACE

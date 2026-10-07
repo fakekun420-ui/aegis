@@ -111,16 +111,6 @@ class SkillsNativosTest {
     }
 
     @Test
-    fun `SkillConfigResponse maneja mapas de configuracion arbitrarios`() {
-        val json = """{"ok":true,"data":{"enabled":true,"apiKey":"secret123","timeout":30}}"""
-        val resp = gson.fromJson(json, SkillConfigResponse::class.java)
-        assertTrue(resp.ok)
-        assertNotNull(resp.data)
-        assertEquals(true, resp.data?.get("enabled"))
-        assertEquals("secret123", resp.data?.get("apiKey"))
-    }
-
-    @Test
     fun `BaseResponse maneja respuesta de exito y error con ErrorBody`() {
         val okJson = """{"ok":true}"""
         val okResp = gson.fromJson(okJson, BaseResponse::class.java)
