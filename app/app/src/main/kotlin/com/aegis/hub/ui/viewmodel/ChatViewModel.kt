@@ -26,6 +26,7 @@ import com.aegis.hub.data.ModelOption
 import com.aegis.hub.data.OpencodeAgent
 import com.aegis.hub.data.seleccionables
 import com.aegis.hub.data.modeloPorDefecto
+import com.aegis.hub.data.modeloPorDefectoPara
 import com.aegis.hub.data.SendMessageRequest
 import com.aegis.hub.data.SessionModelRef
 import com.aegis.hub.data.CreateOpenCodeSessionRequest
