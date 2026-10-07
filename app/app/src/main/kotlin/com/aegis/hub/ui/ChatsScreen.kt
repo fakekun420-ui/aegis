@@ -32,14 +32,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aegis.hub.data.OpencodeSession
+import com.aegis.hub.data.Sesion
 import com.aegis.hub.data.Project
 import com.aegis.hub.util.relativeTime
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatsScreen(
-    sessions: List<OpencodeSession>,
+    sessions: List<Sesion>,
     projects: List<Project>,
     // Sesiones con un turno en curso. Cada una lleva un circulo girando, para poder ver
     // de un vistazo cuales siguen trabajando SIN abrir cada chat.
@@ -70,10 +70,10 @@ fun ChatsScreen(
     onClearError: () -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
-    var menuTarget by remember { mutableStateOf<OpencodeSession?>(null) }
-    var renameTarget by remember { mutableStateOf<OpencodeSession?>(null) }
-    var deleteTarget by remember { mutableStateOf<OpencodeSession?>(null) }
-    var moveTarget by remember { mutableStateOf<OpencodeSession?>(null) }
+    var menuTarget by remember { mutableStateOf<Sesion?>(null) }
+    var renameTarget by remember { mutableStateOf<Sesion?>(null) }
+    var deleteTarget by remember { mutableStateOf<Sesion?>(null) }
+    var moveTarget by remember { mutableStateOf<Sesion?>(null) }
 
     // Build sessionId -> projectName map
     val sessionToProject = remember(projects) {
@@ -88,7 +88,7 @@ fun ChatsScreen(
         }
         // Pinned sessions first, then chronological (most recent first)
         baseList.sortedWith(
-            compareByDescending<OpencodeSession> { it.pinned }
+            compareByDescending<Sesion> { it.pinned }
                 .thenByDescending { it.lastActivityIso ?: "" }
         )
     }

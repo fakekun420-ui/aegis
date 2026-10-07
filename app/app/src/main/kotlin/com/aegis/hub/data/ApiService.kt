@@ -17,7 +17,7 @@ interface ApiService {
     suspend fun deleteProject(@Path("id") id: String): Envelope<Project>
 
     @GET("api/opencode/sessions")
-    suspend fun getOpencodeSessions(): Envelope<List<OpencodeSession>>
+    suspend fun getOpencodeSessions(): Envelope<List<Sesion>>
 
     @PATCH("api/opencode/sessions/{id}")
     suspend fun renameSession(@Path("id") id: String, @Body body: Map<String, String>): Envelope<Map<String, Any>>
@@ -206,7 +206,7 @@ interface ApiService {
     // MEDIDO 2026-10-03: los dos ViewModels la creaban con POST crudo al Hub en :8765,
     // que ya no escucha. Ahora van por aqui, que es OpenCode directo.
     @POST("api/opencode/session")
-    suspend fun createSession(@Body body: CreateOpenCodeSessionRequest): Envelope<OpencodeSession>
+    suspend fun createSession(@Body body: CreateOpenCodeSessionRequest): Envelope<Sesion>
 }
 
 /** Referencia de modelo que devuelve el Hub para una sesión. */

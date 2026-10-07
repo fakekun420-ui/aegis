@@ -32,8 +32,8 @@ class MainViewModel : ViewModel() {
     private val _projects = MutableStateFlow<List<Project>>(emptyList())
     val projects: StateFlow<List<Project>> = _projects
 
-    private val _sessions = MutableStateFlow<List<OpencodeSession>>(emptyList())
-    val sessions: StateFlow<List<OpencodeSession>> = _sessions
+    private val _sessions = MutableStateFlow<List<Sesion>>(emptyList())
+    val sessions: StateFlow<List<Sesion>> = _sessions
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error

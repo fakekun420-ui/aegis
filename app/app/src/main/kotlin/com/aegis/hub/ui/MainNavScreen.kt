@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.aegis.hub.data.OpencodeSession
+import com.aegis.hub.data.Sesion
 import com.aegis.hub.data.Project
 import com.aegis.hub.ui.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
@@ -23,7 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 @Composable
 fun MainNavScreen(
     projects: List<Project>,
-    sessions: List<OpencodeSession>,
+    sessions: List<Sesion>,
     draftVm: ChatViewModel,
     onNavigateProjects: () -> Unit,
     onNavigateChats: () -> Unit,

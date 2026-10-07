@@ -122,9 +122,9 @@ class RutaNativa(
         //
         // Este mapa NO usa la conversion con Gson que si usaba en los agentes: alli el campo
         // `model` es un objeto donde la app espera un `String`, y Gson fallaba al DESERIALIZAR.
-        // Aqui `OpencodeSession.model` es `Any?` a proposito, asi que el objeto entra sin drama —
+        // Aqui `Sesion.model` es `Any?` a proposito, asi que el objeto entra sin drama —
         // y por eso este mapeo es explicito campo a campo y el de agentes no lo podia ser.
-        override suspend fun getOpencodeSessions(): Envelope<List<OpencodeSession>> {
+        override suspend fun getOpencodeSessions(): Envelope<List<Sesion>> {
             // MEDIDO el 2026-10-02: `GET /api/session` devuelve las sesiones de
             // primer nivel Y las que crean los subagentes, mezcladas y sin
             // ningun flag que las separe. La lista de "Chats" por eso se
@@ -146,15 +146,15 @@ class RutaNativa(
             val lista = oc.listSessions().data.orEmpty()
                 .filter { it.parentID.isNullOrBlank() }
                 .map { s ->
-                OpencodeSession(
+                Sesion(
                     id = s.id,
                     title = s.title,
-                    // MEDIDO: `OpencodeSession` (el de la app) NO tiene campo `agent` — son
+                    // MEDIDO: `Sesion` (el de la app) NO tiene campo `agent` — son
                     // id, ID, title, name, providerTitle, model, createdAt... Escribi `agent`
                     // aqui de memoria y no compila. El agente de la sesion se lee por otra
                     // via, `GET /api/session/{id}`, en `getSessionAgent`.
                     model = s.model,
-                    // MEDIDO: `projectID` tampoco esta en `OpencodeSession` (la app). Es el
+                    // MEDIDO: `projectID` tampoco esta en `Sesion` (la app). Es el
                     // segundo campo de esta función que escribi de memoria. El vinculo
                     // sesion-proyecto lo lleva `ProjectsStore`, no el modelo de la sesion.
                     // MEDIDO: `time.created` es un numero en milisegundos, y la app espera un
@@ -300,7 +300,7 @@ class RutaNativa(
     // createSession: POST /api/session nativo (tambien envuelto en `data`).
     // F2: fachada delgada sobre SesionesRepo (el unico camino). Los avisos de exito
     // parcial van al log: los llamadores con UI usan el repo directo.
-        override suspend fun createSession(body: CreateOpenCodeSessionRequest): Envelope<OpencodeSession> {
+        override suspend fun createSession(body: CreateOpenCodeSessionRequest): Envelope<Sesion> {
             return when (
                 val r = sesiones.crear(
                     NuevaSesion(
@@ -313,7 +313,7 @@ class RutaNativa(
             ) {
                 is Resultado.Ok -> {
                     r.avisos.forEach { Log.w(TAG, "createSession: $it") }
-                    envoltura(OpencodeSession(id = r.valor.id, title = r.valor.titulo))
+                    envoltura(Sesion(id = r.valor.id, title = r.valor.titulo))
                 }
                 is Resultado.Fallo -> envolturaFallo(r.motivo)
             }

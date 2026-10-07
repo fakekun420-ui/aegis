@@ -69,7 +69,7 @@ data class LinkSessionRequest(
 
 // ---- Sessions (proxy /api/opencode/sessions -> opencode /session) ----
 
-data class OpencodeSession(
+data class Sesion(
     val id: String? = null,
     @SerializedName("ID") val ID: String? = null,
     val title: String? = null,
