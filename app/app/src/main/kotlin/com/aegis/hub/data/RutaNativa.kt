@@ -549,7 +549,22 @@ class RutaNativa(
      * El separador es un salto de linea y los nombres de skill no lo pueden contener (es un
      * nombre de carpeta), asi que no hace falta un delimitador exotico.
      */
+    /** F7.2: caches cortas (skills 10 s, health 5 s). La invalidacion va en
+     * crear/borrar; el TTL solo evita repetir el `su` al volver a una pantalla. */
+    private var cacheSkills: Pair<Long, Envelope<SkillListResponse>>? = null
+    private var cacheSystemSkills: Pair<Long, Response<SkillsResponse>>? = null
+    private var cacheHealth: Pair<Long, Response<HealthResponse>>? = null
+
+    private fun cacheVigente(ms: Long, ttlMs: Long): Boolean =
+        System.currentTimeMillis() - ms < ttlMs
+
+    private fun invalidarSkills() {
+        cacheSkills = null
+        cacheSystemSkills = null
+    }
+
     override suspend fun getSkills(projectId: String?): Envelope<SkillListResponse> {
+        cacheSkills?.takeIf { cacheVigente(it.first, 10_000L) }?.let { return it.second }
         val base = rutaDeSkills()
         // F7: UN solo `su` (antes: 1 ls + N head). Cada SKILL.md sale tras su
         // delimitador; tope 2 MB de salida para no reventar memoria.
@@ -594,7 +609,7 @@ class RutaNativa(
                 projectId = projectId,
                 counts = mapOf(scopeDe("", base) to skills.size)
             )
-        )
+        ).also { cacheSkills = System.currentTimeMillis() to it }
     }
 
     /**
@@ -636,6 +651,7 @@ class RutaNativa(
             return envolturaFallo("No se pudo apartar '$name': ${r.stderr.take(140)}")
         }
         Log.i(TAG, "deleteSkill: '$name' -> $destino (NO se borro)")
+        invalidarSkills()
         return envoltura(mapOf("name" to name, "movido" to destino))
     }
 
@@ -663,6 +679,7 @@ class RutaNativa(
             return envolturaFallo("Error creando skill '$name': ${r.stderr.take(140)}")
         }
         Log.i(TAG, "createSkill: creado skill '$name' bajo $dir")
+        invalidarSkills()
         return envoltura(
             Skill(
                 scope = scope,
@@ -792,6 +809,7 @@ class RutaNativa(
     private val setupNative: SetupNative by lazy { SetupNative() }
 
     override suspend fun getSystemHealth(): Response<HealthResponse> {
+        cacheHealth?.takeIf { cacheVigente(it.first, 5_000L) }?.let { return it.second }
         // F7: UN solo `su` (antes: 4 ejecuciones). Secciones separadas por
         // `@@AEGIS_SALUD@@<nombre>`; sin regex en el parseo (F7.4).
         return try {
@@ -861,6 +879,7 @@ class RutaNativa(
                 adapters = adaptersMap
             )
             Response.success(HealthResponse(ok = true, data = healthData))
+                .also { cacheHealth = System.currentTimeMillis() to it }
         } catch (e: Exception) {
             Log.w(TAG, "getSystemHealth fallo: ${e.message}")
             Response.success(HealthResponse(ok = false, data = null))
@@ -1064,6 +1083,7 @@ class RutaNativa(
 
 
     override suspend fun getSystemSkills(): Response<SkillsResponse> {
+        cacheSystemSkills?.takeIf { cacheVigente(it.first, 10_000L) }?.let { return it.second }
         val base = rutaDeSkills()
         // F7: UN solo `su` (antes: 1 ls + N test -f).
         val listado = sh(
@@ -1124,7 +1144,7 @@ class RutaNativa(
                     available = availableList
                 )
             )
-        )
+        ).also { cacheSystemSkills = System.currentTimeMillis() to it }
     }
 
     override suspend fun installSkill(body: InstallSkillRequest): Response<TaskResponse> =

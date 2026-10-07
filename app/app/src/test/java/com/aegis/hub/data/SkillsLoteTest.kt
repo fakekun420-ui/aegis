@@ -47,4 +47,25 @@ class SkillsLoteTest {
 
         assertFalse(r.ok)
     }
+
+    @Test
+    fun `la segunda lectura sale de cache y crear invalida`() = runBlocking {
+        val lote = IntArray(1)
+        val loteSalida = "@@AEGIS_SKILL@@a\nuno\n"
+        val fake: (String, Long) -> RootShell.Result = { cmd, _ ->
+            if (cmd.contains("@@AEGIS_SKILL@@")) {
+                lote[0]++
+                RootShell.Result(0, loteSalida, "")
+            } else {
+                RootShell.Result(0, "", "")
+            }
+        }
+        val ruta = RutaNativa(shell = fake)
+        ruta.getSkills(null)
+        ruta.getSkills(null)
+        assertEquals("sin crear no se repite el su", 1, lote[0])
+        ruta.createSkill(SkillCreateRequest(scope = "global", name = "nuevo", content = "# x"))
+        ruta.getSkills(null)
+        assertEquals("tras crear se vuelve a pedir", 2, lote[0])
+    }
 }
