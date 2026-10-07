@@ -126,3 +126,29 @@ data class AuthGuideResponse(
 // Cuando una herramienta lanza una pregunta, el TUI del CLI la pinta y se responde
 // con flechas + Enter. Estos modelos permiten que Aegis la muestre y la conteste
 // con un toque, sin depender del CLI.
+
+
+// F8.4: supervivientes de ModelsHub.kt (mismo contenido).
+
+data class HealthResponse(
+    val ok: Boolean,
+    val data: HealthData?
+)
+
+data class HealthData(
+    val server: String?,
+    val port: Int?,
+    val uptime: Long?,
+    val memory: MemoryData?,
+    val workspace: String?,
+    val projects: Int?,
+    val agents: AgentsSummary?,
+    val jobs: JobsSummary?,
+    val skills: SkillsSummary?,
+    val adapters: Map<String, String>?
+)
+
+data class MemoryData(val heapUsed: String?, val heapTotal: String?)
+data class AgentsSummary(val active: Int?, val registered: Int?)
+data class JobsSummary(val active: Int?, val lastRun: String?)
+data class SkillsSummary(val installed: List<String>?)

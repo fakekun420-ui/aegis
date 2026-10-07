@@ -122,3 +122,38 @@ data class SkillCreateRequest(
     val name: String,
     val content: String
 )
+
+
+// F8.4: supervivientes de ModelsHub.kt (mismo contenido).
+
+data class BaseResponse(val ok: Boolean, val error: ErrorBody? = null)
+data class SkillItem(
+    val id: String,
+    val name: String,
+    val version: String?,
+    val description: String?,
+    val installed: Boolean,
+    val enabled: Boolean
+)
+
+data class SkillsResponse(val ok: Boolean, val data: SkillsData?)
+data class SkillsData(val installed: List<SkillItem>?, val available: List<SkillItem>?)
+
+data class InstallSkillRequest(val skillId: String)
+data class TaskResponse(val ok: Boolean, val data: TaskData?)
+data class TaskData(val taskId: String?, val message: String?)
+
+data class ProjectItem(
+    val id: String,
+    val name: String,
+    val path: String?,
+    val tieneWorkspace: Boolean,
+    val lastCommit: String?
+)
+
+data class ProjectsResponse(val ok: Boolean, val data: List<ProjectItem>?)
+data class WorkflowItem(val id: String, val name: String, val steps: Int)
+data class WorkflowsResponse(val ok: Boolean, val data: List<WorkflowItem>?)
+data class RunWorkflowRequest(val workflowId: String)
+data class WorkflowStatusResponse(val ok: Boolean, val data: WorkflowStatus?)
+data class WorkflowStatus(val id: String, val status: String, val currentStep: String?, val progress: Int)

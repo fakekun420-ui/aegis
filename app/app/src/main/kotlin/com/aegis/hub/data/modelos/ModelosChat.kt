@@ -403,3 +403,8 @@ object TurnState {
     /** ¿Este registro dice que el turno terminó? */
     fun isOver(s: InflightSession?): Boolean = s != null && s.turnOver
 }
+
+
+// F8.4: supervivientes de ModelsHub.kt (mismo contenido).
+
+data class AgentItem(val id: String, val name: String, val status: String)
