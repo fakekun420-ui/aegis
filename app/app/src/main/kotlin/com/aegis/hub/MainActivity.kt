@@ -9,6 +9,7 @@ import android.os.Environment
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import android.os.StrictMode
 import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.widget.Toast
@@ -83,6 +84,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // F0 (T-F0.4): en debug, cualquier E/S, red o `su` en el hilo principal sale
+        // en logcat. Solo penaltyLog, nunca penaltyDeath: esto es un radar, no un muro.
+        if (BuildConfig.DEBUG) {
+            StrictMode.setThreadPolicy(
+                StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build()
+            )
+        }
         // Los ViewModel necesitan leer preferencias (p. ej. el modelo por sesión) y no
         // llevan Context en el constructor a propósito. Se les da el de aplicación aquí.
         AppContext.init(applicationContext)

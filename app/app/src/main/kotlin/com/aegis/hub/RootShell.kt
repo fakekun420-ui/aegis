@@ -1,5 +1,6 @@
 package com.aegis.hub
 
+import android.os.Looper
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -14,6 +15,18 @@ object RootShell {
     private fun shQuote(arg: String): String = "'" + arg.replace("'", "'\\''") + "'"
 
     fun exec(cmd: String, timeoutMs: Long = 15000): Result {
+        // F0 (T-F0.4): cazar llamadas desde el hilo principal en debug. El `main != null`
+        // es intencionado: en tests JVM los stubs de android.jar devuelven null y el
+        // chequeo debe quedar inerte ahí, no romper la suite.
+        if (BuildConfig.DEBUG) {
+            val principal = Looper.getMainLooper()
+            if (principal != null && Looper.myLooper() === principal) {
+                throw IllegalStateException(
+                    "RootShell.exec en el hilo principal (cmd=${cmd.take(80)}). " +
+                        "Todo `su` va a IO (regla 4 del plan de estabilización)."
+                )
+            }
+        }
         // intenta su -c, si falla sh -c
         val shells = listOf(arrayOf("su","-c", cmd), arrayOf("sh","-c", cmd))
         var last: Result? = null
