@@ -46,6 +46,8 @@ class EventosServidor(
     companion object {
         const val ESPERA_INICIAL_MS = 1_000L
         const val ESPERA_MAX_MS = 15_000L
+        /** Pausa entre reaperturas tras EOF limpio (sin flap: se sigue Conectado). */
+        const val PAUSA_REAPERTURA_MS = 250L
     }
 
     private val _conexion = MutableStateFlow<Conexion>(Conexion.Reconectando)
@@ -78,8 +80,14 @@ class EventosServidor(
 
     private suspend fun bucle() {
         var espera = ESPERA_INICIAL_MS
+        var primeraVez = true
         while (coroutineContext.isActive) {
             try {
+                // EOF limpio (el servidor rota el stream): pausa corta y se reabre
+                // SIN flap ni backoff — el backoff es para fallos, y un parpadeo de
+                // "reconectando" cada rotacion seria ruido en la UI.
+                if (!primeraVez) delay(PAUSA_REAPERTURA_MS)
+                primeraVez = false
                 abrir().use { cuerpo ->
                     espera = ESPERA_INICIAL_MS
                     _conexion.value = Conexion.Conectado
@@ -87,16 +95,14 @@ class EventosServidor(
                     for (linea in lector.lineSequence()) {
                         if (linea.isNotBlank()) _lineas.emit(linea)
                     }
-                    // Fin limpio del stream sin error: reconectar igual (el servidor
-                    // lo corta; no es un estado estable).
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                if (!coroutineContext.isActive) break
+                _conexion.value = Conexion.Reconectando
+                delay(espera)
+                espera = (espera * 2).coerceAtMost(ESPERA_MAX_MS)
             }
-            if (!coroutineContext.isActive) break
-            _conexion.value = Conexion.Reconectando
-            delay(espera)
-            espera = (espera * 2).coerceAtMost(ESPERA_MAX_MS)
         }
     }
 }
