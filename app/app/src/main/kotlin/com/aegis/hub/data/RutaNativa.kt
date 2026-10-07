@@ -1137,10 +1137,8 @@ class RutaNativa(
         val todos = oc.listModels().data.orEmpty()
             .filter { it.enabled }
             // MEDIDO 2026-10-02: el filtro por `providerID` es lo que hacia que los modelos
-            // aparecieran "a veces". `loadModels` usa `_selectedProvider`, que viene de la
-            // sesion; si ese proveedor no es `opencode`, `space-bunny-free` (que es
-            // providerID=opencode, MEDIDO en el catalogo) se queda fuera de la lista, y el chip
-            // pasa a decir "No disponible: space-bunny-free" con la lista cargada.
+            // aparecieran "a veces" (el chip decia "No disponible" con la lista cargada).
+            // F1: `loadModels` ya no trae proveedor elegido; manda "opencode" fijo.
             //
             // Es el mismo patron que el del sintoma que ya se corrigio dos veces: un filtro que
             // descarta en silencio y deja una pantalla vacia sin explicar por que. Por eso el

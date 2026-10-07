@@ -160,11 +160,10 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                 onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) },
                 onCreateChatPlaceholder = {
                     scope.launch {
-                        // Se pasa el proveedor que el usuario tenga elegido en el
-                        // compositor; sin esto el chat nacía siempre como antigravity.
-                        val wanted = draftVm.selectedProvider.value
+                        // F1: motor unico; antes se leia el proveedor elegido en el
+                        // compositor (siempre "opencode" desde que no hay selector).
                         val sid = vm.createSessionForProject(
-                            "", "Chat ${System.currentTimeMillis() % 10000}", wanted
+                            "", "Chat ${System.currentTimeMillis() % 10000}", "opencode"
                         )
                         if (!sid.isNullOrBlank()) {
                             navController.navigate(NavRoutes.chat(sid))
@@ -191,7 +190,6 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
             val sid = backStack.arguments?.getString("sessionId") ?: ""
             val chatVm: ChatViewModel = viewModel(key = "chat_$sid")
             val session = sessions.find { it.resolvedId == sid || it.id == sid || it.ID == sid }
-            val prov = session?.provider ?: "opencode"
             LaunchedEffect(sid, session?.title) {
                 if (!session?.title.isNullOrBlank()) {
                     chatVm.setSessionTitle(session.title)
@@ -200,18 +198,7 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
             ChatScreen(
                 sessionId = sid,
                 vm = chatVm,
-                onBack = { navController.popBackStack() },
-                sessionProvider = prov,
-                onNavigateToSession = { nuevo ->
-                    // Cambiar de motor abre una sesión nueva: se quita la actual del
-                    // stack para que "atrás" no devuelva al chat del motor viejo, y se
-                    // empuja la nueva con launchSingleTop para no apilar repetidos si
-                    // el usuario alterna varias veces.
-                    navController.popBackStack(NavRoutes.CHATS, inclusive = false)
-                    navController.navigate(NavRoutes.chat(nuevo)) {
-                        launchSingleTop = true
-                    }
-                }
+                onBack = { navController.popBackStack() }
             )
         }
         

@@ -72,11 +72,7 @@ fun ChatScreen(
     sessionId: String,
     vm: ChatViewModel,
     onBack: () -> Unit,
-    showTopBar: Boolean = sessionId.isNotBlank(),
-    sessionProvider: String? = null,
-    // Al cambiar de motor se crea una sesión nueva (el proveedor es el prefijo del
-    // id) y hay que navegar a ella. La app lo inyecta; si es null no navega.
-    onNavigateToSession: ((String) -> Unit)? = null
+    showTopBar: Boolean = sessionId.isNotBlank()
 ) {
     val context = LocalContext.current
     val messages by vm.messages.collectAsState()
@@ -87,9 +83,6 @@ fun ChatScreen(
     val hubReachable by vm.hubReachable.collectAsState()
     val models by vm.models.collectAsState()
     val selectedModel by vm.selectedModel.collectAsState()
-    val selectedProvider by vm.selectedProvider.collectAsState()
-    val sessionProviderBound by vm.sessionProviderBound.collectAsState()
-    val pendingSessionNav by vm.pendingSessionNav.collectAsState()
     val pendingForms by vm.pendingForms.collectAsState()
     val pendingPermissions by vm.pendingPermissions.collectAsState()
     val replyingPermission by vm.replyingPermission.collectAsState()
@@ -106,15 +99,6 @@ fun ChatScreen(
     // function"). El divisor de fin de turno se intercala entre los mensajes aquí.
     val filas = remember(messages, turnFinished) { buildChatRows(messages, turnFinished) }
 
-    // Cambiar de motor crea una sesión nueva en el destino (el proveedor vive en el
-    // prefijo del id) y aquí se navega a ella.
-    LaunchedEffect(pendingSessionNav) {
-        val target = pendingSessionNav
-        if (!target.isNullOrBlank()) {
-            vm.consumePendingNav()
-            onNavigateToSession?.invoke(target)
-        }
-    }
     val modelsLoading by vm.modelsLoading.collectAsState()
     val streamingText by vm.streamingText.collectAsState()
     val streamingTools by vm.streamingTools.collectAsState()
@@ -135,8 +119,8 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(sessionId, sessionProvider) {
-        vm.load(sessionId, sessionProvider)
+    LaunchedEffect(sessionId) {
+        vm.load(sessionId)
     }
 
     // El ViewModel suele estar scoped a la Activity, así que onCleared NO se dispara
@@ -335,7 +319,6 @@ fun ChatScreen(
                     }
                     else -> "Nuevo chat"
                 }
-                val effectiveProvider = sessionProvider ?: selectedProvider
 
                 TopAppBar(
                     title = {
@@ -348,9 +331,6 @@ fun ChatScreen(
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
-                                if (!effectiveProvider.isNullOrBlank()) {
-                                    ProviderBadge(effectiveProvider)
-                                }
                             }
                             if (sessionId.isNotBlank()) {
                                 Text(
@@ -390,7 +370,7 @@ fun ChatScreen(
                     onSend = {
                         val t = composerText.trim()
                         if (t.isNotBlank() || attachedFiles.isNotEmpty()) {
-                            vm.sendWithFiles(sessionId, t, attachedFiles, sessionProvider)
+                            vm.sendWithFiles(sessionId, t, attachedFiles)
                             composerText = ""
                             attachedFiles = emptyList()
                         }

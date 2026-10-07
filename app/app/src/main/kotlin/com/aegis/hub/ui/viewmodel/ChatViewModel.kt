@@ -95,15 +95,8 @@ class ChatViewModel : ViewModel() {
     // servidor, que es la fuente autoritativa. Ver la nota de `load()`.
     private var currentSessionForModel: String = ""
 
-    // OpenCode es el unico motor de la sesion. Antes arrancaba en "antigravity" y, con
-    // el default del Hub tambien en antigravity, ningun chat nuevo era de OpenCode.
-    private val _selectedProvider = MutableStateFlow<String>("opencode")
-    val selectedProvider: StateFlow<String> = _selectedProvider
-
-    // F6: sesión ya vinculada a un proveedor — el pill queda fijo para que
-    // cambiar de motor en un chat abierto NO re-bindea ni "borra" la sesión.
-    private val _sessionProviderBound = MutableStateFlow(false)
-    val sessionProviderBound: StateFlow<Boolean> = _sessionProviderBound
+    // F1: motor unico (OpenCode). El estado de "proveedor elegido" y de "sesion
+    // vinculada a proveedor" (Antigravity) se elimino: solo ses_ existe.
 
     private val _sessionTitle = MutableStateFlow<String?>("Nuevo chat")
     val sessionTitle: StateFlow<String?> = _sessionTitle
@@ -235,14 +228,6 @@ class ChatViewModel : ViewModel() {
     private val _finishedTurnId = MutableStateFlow<String?>(null)
     val finishedTurnId: StateFlow<String?> = _finishedTurnId
 
-    // Cuando se cambia de motor hay que crear una sesión nueva (el proveedor vive en
-    // el prefijo del id). Este estado lleva la id recién creada para que ChatScreen
-    // navegue a ella; se consume una sola vez.
-    private val _pendingSessionNav = MutableStateFlow<String?>(null)
-    val pendingSessionNav: StateFlow<String?> = _pendingSessionNav
-
-    fun consumePendingNav() { _pendingSessionNav.value = null }
-
     // FASE A-5 (anti doble envío): clave del envío actualmente en vuelo
     // ("proveedor|sesión|texto|nº archivos"). Si llega un segundo click o una
     // reentrada con el MISMO contenido antes de que termine el envío actual,
@@ -291,7 +276,7 @@ class ChatViewModel : ViewModel() {
      * Nada de esto sustituye al usuario por un `first()` de la lista: un modelo
      * desconocido se deja como está, para que la elección sea siempre explícita.
      */
-    private fun restoreModelFor(sessionId: String, provider: String) {
+    private fun restoreModelFor(sessionId: String) {
         viewModelScope.launch {
             val ctx = runCatching { AppContext.require() }.getOrNull()
             // MEDIDO 2026-10-03: hay prefs con `proveedor/id` de una version vieja. Se migran
@@ -352,53 +337,6 @@ class ChatViewModel : ViewModel() {
             try { api.setSessionModel(sid, SessionModelRef(id = limpio, providerID = prov)) }
             catch (_: Exception) { }
         }
-    }
-
-    fun selectProvider(provider: String) {
-        val p = provider.lowercase().trim()
-        if (p == _selectedProvider.value) return
-
-        // El proveedor NO es una etiqueta: el Hub lo deriva del prefijo del id de
-        // sesión (agy_ -> antigravity, ses_ -> opencode, ver _conventionProvider en
-        // providers.js). Por eso cambiar el chip en un chat existente NO podía
-        // funcionar: un id agy_ se enruta SIEMPRE a antigravity, diga lo que diga la
-        // app. La Sesión vive en el espacio de conversación de su motor.
-        //
-        // Así que cambiar de motor implica una sesión NUEVA en el motor destino. Si
-        // el usuario elige otro, se crea y se navega a ella; el chat viejo queda
-        // intacto. Esto era lo que faltaba cuando solo se desbloqueaba el chip: la
-        // app dejaba cambiar y luego no llegaba ninguna respuesta.
-        val sid = _currentSessionId.value.orEmpty()
-        val sessionProvider = when {
-            sid.startsWith("ses_") -> "opencode"
-            else -> null
-        }
-        if (sessionProvider != null && sessionProvider != p) {
-            viewModelScope.launch {
-                _error.value = null
-                val ns = createNewSession(p)
-                if (ns.isNullOrBlank()) {
-                    _error.value = "No se pudo crear un chat de $p."
-                } else {
-                    _pendingSessionNav.value = ns
-                }
-            }
-            return
-        }
-
-        // Mismo motor (o sesión aún sin prefijo): aquí sí se puede recolocar, y solo
-        // mientras no haya respuesta real — en cuanto el asistente contesta, el
-        // historial pertenece a ese motor y se queda fijo.
-        val tieneRespuestaReal = _messages.value.any {
-            it.role == "assistant" && it.text.isNotBlank() && !it.text.trimStart().startsWith("⚠️")
-        }
-        if (_sessionProviderBound.value && tieneRespuestaReal) {
-            _error.value = "El asistente ya respondió en este chat, así que el motor queda fijo. Para usar otro, crea un chat nuevo."
-            return
-        }
-        _selectedProvider.value = p
-        _sessionProviderBound.value = false
-        loadModels(p)
     }
 
     /**
@@ -500,12 +438,13 @@ class ChatViewModel : ViewModel() {
         _error.value = null
     }
 
-    fun loadModels(provider: String? = null) {
-        val prov = (provider ?: _selectedProvider.value).lowercase().trim().ifBlank { "opencode" }
+    fun loadModels() {
         viewModelScope.launch {
             _modelsLoading.value = true
             try {
-                val resp = api.getModels(prov)
+                // F1: motor unico. Antes se filtraba por el proveedor elegido; el valor
+                // efectivo era siempre "opencode", asi que se fija aqui.
+                val resp = api.getModels("opencode")
                 if (resp.ok && resp.data != null && resp.data.isNotEmpty()) {
                     _models.value = resp.data
                     // Antes, si el modelo elegido no venia en la lista, se sustituia en
@@ -998,7 +937,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         stopViewRefresh()
     }
 
-    fun load(sessionId: String, provider: String? = null) {
+    fun load(sessionId: String) {
         pollingJob?.cancel()
         if (sessionId.isBlank()) {
             stopViewRefresh()
@@ -1007,11 +946,6 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             // la misma sesión tampoco deja el refresco muerto.
             startViewRefresh(sessionId)
         }
-        val prov = (provider ?: "opencode").lowercase().trim()
-        _selectedProvider.value = prov
-        // F6: sólo una sesión existente queda vinculada al proveedor de nacimiento;
-        // los chats nuevos pueden cambiar libremente de motor.
-        _sessionProviderBound.value = sessionId.isNotBlank()
         currentSessionForModel = sessionId
         // Al cambiar de sesion, el modelo se vuelve a resolver desde cero: lo elige
         // `loadModels` con el primer free real de la lista. El comentario que estaba
@@ -1021,11 +955,11 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         if (_selectedModel.value.isNullOrBlank()) {
             _selectedModel.value = null
         }
-        restoreModelFor(sessionId, prov)
+        restoreModelFor(sessionId)
         restoreAgentFor(sessionId)
         if (sessionId.isBlank()) {
             _sessionTitle.value = "Nuevo chat"
-            loadModels(prov)
+            loadModels()
             loadAgents()
             return
         }
@@ -1033,7 +967,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
-            loadModels(prov)
+            loadModels()
             loadAgents()
 
             // Try to resolve human-readable title from sessions list
@@ -1064,8 +998,8 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         }
     }
 
-    fun send(sessionId: String, text: String, provider: String? = null) {
-        sendWithFiles(sessionId, text, emptyList(), provider)
+    fun send(sessionId: String, text: String) {
+        sendWithFiles(sessionId, text, emptyList())
     }
 
     fun retryMessage(failedMsg: Message, sessionId: String) {
@@ -1088,17 +1022,15 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
     fun sendWithFiles(
         sessionId: String,
         text: String,
-        files: List<AttachedFile>,
-        explicitProvider: String? = null
+        files: List<AttachedFile>
     ) {
         if (text.isBlank() && files.isEmpty()) return
 
-        val provider = (explicitProvider ?: _selectedProvider.value).lowercase().trim().ifBlank { "opencode" }
         val tempMsgId = "local_${System.currentTimeMillis()}"
 
         // FASE A-5: guarda anti doble envío — un segundo click/reentrada con el mismo
         // mensaje mientras sigue en vuelo no debe reenviarlo (ver inFlightSendKey).
-        val sendKey = "$provider|${sessionId.trim()}|${text.trim()}|${files.size}"
+        val sendKey = "${sessionId.trim()}|${text.trim()}|${files.size}"
         if (sendKey == inFlightSendKey) return
         inFlightSendKey = sendKey
 
@@ -1141,7 +1073,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
 
             // 2. Resolve Target Session ID
             val activeSessionId = sessionId.ifBlank { _currentSessionId.value ?: "" }
-            val targetSessionId = if (activeSessionId.isBlank()) createNewSession(provider) else activeSessionId
+            val targetSessionId = if (activeSessionId.isBlank()) createNewSession() else activeSessionId
             if (targetSessionId == null) {
                 _error.value = "No se pudo crear o resolver la sesión en el servidor"
                 _messages.value = _messages.value.map {
@@ -1349,11 +1281,11 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         }
     }
 
-    private suspend fun createNewSession(provider: String = "opencode"): String? = withContext(Dispatchers.IO) {
+    private suspend fun createNewSession(): String? = withContext(Dispatchers.IO) {
         // MEDIDO 2026-10-03: esto era un POST crudo al Hub en :8765, que ya no escucha, asi que
         // crear un chat desde cero fallaba siempre en silencio (null). Ahora va por la costura,
-        // que es OpenCode directo. El parametro provider se conserva por firma pero ya no decide:
-        // OpenCode no tiene proveedores de sesion, solo modelos por sesion.
+        // que es OpenCode directo (F1: sin parametro provider; OpenCode no tiene
+        // proveedores de sesion, solo modelos por sesion).
         try {
             val resp = api.createSession(CreateOpenCodeSessionRequest(title = "Nuevo chat"))
             resp.data?.resolvedId?.takeIf { it.isNotBlank() }
