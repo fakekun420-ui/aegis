@@ -31,7 +31,7 @@ class FlujoEventosDirectoTest {
         val oc = fake.api()
         val eventos = EventosServidor(this, abrir = { oc.openEventStream() })
         val recibidas = mutableListOf<String>()
-        val recolector = kotlinx.coroutines.launch {
+        val recolector = launch {
             eventos.lineas.collect { recibidas.add(it) }
         }
         eventos.iniciar()
