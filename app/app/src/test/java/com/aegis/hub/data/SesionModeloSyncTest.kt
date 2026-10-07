@@ -94,8 +94,7 @@ class SesionModeloSyncTest {
     }
 
     @Test
-    fun `el modelo del agente sale de su definicion y si no tiene es null`() {
-        // Forma real medida en GET /api/agent para orchestrator.
+    fun `el modelo del agente sale de su definicion y si no tiene es null`() {        // Forma real medida en GET /api/agent para orchestrator.
         val agentes = listOf(
             OpenCodeNativeAgent(
                 id = "orchestrator",
@@ -110,5 +109,28 @@ class SesionModeloSyncTest {
         assertEquals(null, ruta.modeloDelAgente("build", agentes))
         assertEquals(null, ruta.modeloDelAgente("inexistente", agentes))
         assertEquals(null, ruta.modeloDelAgente(null, agentes))
+    }
+
+    @Test
+    fun `el default de sesion con agente prefiere el modelo del agente`() {
+        val agentes = listOf(
+            OpencodeAgent(name = "orchestrator", model = "muse-spark-1.3-contributor-free"),
+            OpencodeAgent(name = "Build", model = null)
+        )
+        val modelos = listOf(
+            ModelOption(id = "space-bunny-free", name = "Space Bunny", free = true),
+            ModelOption(id = "muse-spark-1.3-contributor-free", name = "Muse Spark", free = true)
+        )
+        assertEquals(
+            "muse-spark-1.3-contributor-free",
+            modeloPorDefectoPara("orchestrator", agentes, modelos)
+        )
+        assertEquals("space-bunny-free", modeloPorDefectoPara("Build", agentes, modelos))
+        assertEquals("space-bunny-free", modeloPorDefectoPara("inexistente", agentes, modelos))
+        assertEquals("space-bunny-free", modeloPorDefectoPara(null, agentes, modelos))
+        assertEquals(
+            "space-bunny-free",
+            modeloPorDefectoPara("orchestrator", agentes, listOf(modelos[0]))
+        )
     }
 }

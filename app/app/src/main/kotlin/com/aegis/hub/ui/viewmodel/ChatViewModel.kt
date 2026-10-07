@@ -512,11 +512,22 @@ class ChatViewModel : ViewModel() {
                     // cuando no hay nada elegido; si hay eleccion, se respeta aunque la
                     // lista no la traiga (puede ser un modelo filtrado o de otro motor).
                     if (_selectedModel.value.isNullOrBlank()) {
-                        // El primero FREE de la lista. Antes se buscaba un id concreto
-                        // ("gemini-3.8-flash-high") y, si no estaba, caia en el
-                        // primero de la lista sin mirar si era gratis: o sea, un
-                        // default de pago disfrazado de neutro.
-                        _selectedModel.value = resp.data.modeloPorDefecto
+                        // MEDIDO 2026-10-07 (chip con Space Bunny en sesion de orchestrator):
+                        // el default global (primer free) pisaba al modelo DEFINIDO del agente
+                        // de la sesion, y al enviar se fijaba ese en el servidor. Si la sesion
+                        // trabaja con un agente que trae modelo propio y esta en la lista, ese
+                        // manda; si no, el global de siempre.
+                        // Los agentes se leen aqui y no de `_agents`: `loadAgents()` vuelve al
+                        // instante (lanza su propia corrutina) y el estado aun estaria vacio.
+                        // Carrera real, no teorica: con `_agents` el default caia al global a
+                        // veces si y a veces no segun quien llegara antes.
+                        val ags = _agents.value.takeIf { it.isNotEmpty() }
+                            ?: runCatching { api.getOpencodeAgents() }.getOrNull()?.data.orEmpty()
+                        _selectedModel.value = modeloPorDefectoPara(
+                            _agentMode.value,
+                            ags,
+                            resp.data
+                        )
                     }
                 } else {
                     // F6: sin lista fiable NO se conserva la del proveedor anterior

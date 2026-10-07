@@ -418,6 +418,27 @@ val List<ModelOption>.modeloPorDefecto: String?
         ?: firstOrNull { it.free }?.id
 
 /**
+ * Default de modelo para una sesion que trabaja con un agente.
+ *
+ * MEDIDO 2026-10-07: `modeloPorDefecto` (global, primer free) se usaba tambien para
+ * sesiones de orchestrator, cuyo agente trae modelo propio (muse-spark). El chip
+ * mostraba Space Bunny y al enviar se fijaba ese en el servidor, contra el agente.
+ * Si el agente tiene modelo definido y esta en la lista, manda el; si no, el global.
+ * Puro para probarlo sin servidor.
+ */
+internal fun modeloPorDefectoPara(
+    agente: String?,
+    agentes: List<OpencodeAgent>,
+    modelos: List<ModelOption>
+): String? {
+    val nombre = agente?.trim()?.takeIf { it.isNotBlank() }
+    val delAgente = nombre?.let { n -> agentes.firstOrNull { it.name == n }?.model?.trim() }
+        ?.takeIf { it.isNotBlank() }
+    if (delAgente != null && modelos.any { it.id == delAgente }) return delAgente
+    return modelos.modeloPorDefecto
+}
+
+/**
  * El id del modelo que abre una sesion nueva. Verificado contra el catalogo vivo, no supuesto.
  */
 const val ID_MODELO_POR_DEFECTO = "space-bunny-free"
