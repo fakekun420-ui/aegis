@@ -1,6 +1,8 @@
 package com.aegis.hub.data.flujo
 
 import com.aegis.hub.data.sync.EventosServidor
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -30,19 +32,13 @@ class FlujoEventosDirectoTest {
     fun `el stream entrega lineas y conecta`() = runBlocking {
         val oc = fake.api()
         val eventos = EventosServidor(this, abrir = { oc.openEventStream() })
-        val recibidas = mutableListOf<String>()
-        val recolector = launch {
-            eventos.lineas.collect { recibidas.add(it) }
-        }
         eventos.iniciar()
 
-        val fin = System.currentTimeMillis() + 8_000L
-        while (System.currentTimeMillis() < fin && recibidas.size < 4) {
-            kotlinx.coroutines.delay(100)
-        }
+        val recibidas = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
+            eventos.lineas.take(4).toList()
+        }.orEmpty()
         val conexion = eventos.conexion.value
         eventos.detener()
-        recolector.cancel()
 
         assertTrue(
             "conexion=${conexion} peticiones=${fake.eventosPeticiones}",
