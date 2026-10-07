@@ -426,9 +426,12 @@ class MainActivity : ComponentActivity() {
     // turno terminar y recibia ademas una notificacion de lo que estaba viendo.
     override fun onStart() {
         super.onStart()
+        // F5: la conexion SSE vive mientras la app esta en primer plano.
+        com.aegis.hub.data.sync.EventosServidor.Compartida.servidor.iniciar()
     }
 
     override fun onStop() {
+        com.aegis.hub.data.sync.EventosServidor.Compartida.servidor.detener()
         super.onStop()
     }
 

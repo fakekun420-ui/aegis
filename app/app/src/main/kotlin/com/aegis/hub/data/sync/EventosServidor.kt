@@ -2,7 +2,9 @@ package com.aegis.hub.data.sync
 
 import com.aegis.hub.data.OpenCodeApi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.BufferOverflow
@@ -56,6 +58,12 @@ class EventosServidor(
     override val lineas: SharedFlow<String> = _lineas.asSharedFlow()
 
     private var trabajo: Job? = null
+
+    /** Conexion compartida por todos los chats (una sola, ver T-F5.1). */
+    object Compartida {
+        private val ambito = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val servidor = EventosServidor(ambito)
+    }
 
     /** Idempotente: si ya hay conexion en curso no lanza otra. */
     fun iniciar() {

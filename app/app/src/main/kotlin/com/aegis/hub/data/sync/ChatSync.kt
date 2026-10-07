@@ -110,6 +110,11 @@ class ChatSync(
         _mensajes.value = _mensajes.value + mensaje
     }
 
+    /** Transicion de estado de un mensaje local (p. ej. PENDING -> ERROR). */
+    fun actualizarMensaje(tempId: String, f: (Message) -> Message) {
+        _mensajes.value = _mensajes.value.map { if (it.info?.id == tempId) f(it) else it }
+    }
+
     private suspend fun vigilarConexion(sid: String) {
         var era: EventosServidor.Conexion? = null
         eventos.conexion.collect { c ->

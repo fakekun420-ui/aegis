@@ -8,6 +8,9 @@ import com.aegis.hub.data.repo.Resultado
 import com.aegis.hub.data.repo.ConfigSesion
 import com.aegis.hub.data.repo.SesionConfigRepo
 import com.aegis.hub.data.repo.SesionesRepo
+import com.aegis.hub.data.sync.ChatSync
+import com.aegis.hub.data.sync.EstadoTurno
+import com.aegis.hub.data.sync.EventosServidor
 import com.aegis.hub.data.AppContext
 import com.aegis.hub.data.InflightSession
 import com.aegis.hub.data.ModelPreferences
@@ -59,6 +62,13 @@ class ChatViewModel(
     private val configRepo: SesionConfigRepo = SesionConfigRepo(),
     private val sesionesRepo: SesionesRepo = SesionesRepo()
 ) : ViewModel() {
+    companion object {
+        /**
+         * F5: canal unico de sincronizacion por eventos. `false` = bucle actual
+         * (`SyncPorPoll` intacto). Solo se pone `true` tras V-06/V-08 tres dias.
+         */
+        const val SYNC_POR_EVENTOS = false
+    }
     /**
      * MEDIDO 2026-10-01: esta era `ApiClient.service`, el cliente del Hub, en las 18 llamadas
      * de este fichero. Ahora sale de [Conexion], que decide entre Hub y OpenCode nativo.
@@ -74,6 +84,20 @@ class ChatViewModel(
     private val api = Conexion.api
     /** F3: config (modelo/agente) por el repo; `sesionesRepo` para crear. */
     private val sesiones = sesionesRepo
+
+    /** F5: un solo canal (tras flag; apagado = bucle actual). */
+    private val chatSync = ChatSync(
+        viewModelScope,
+        EventosServidor.Compartida.servidor,
+        leerCola = { sid -> api.getMessagesTail(sid, 200).data.orEmpty() },
+        leerFormularios = { sid -> api.getPendingForms(sid).data.orEmpty() },
+        leerPermisos = { sid -> api.getPendingPermissions(sid).data.orEmpty() },
+        leerOcupados = {
+            api.getInflight().data.orEmpty()
+                .filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
+        }
+    )
+    private var espejoJob: Job? = null
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
@@ -922,6 +946,42 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         viewRefreshJob?.cancel()
         viewRefreshJob = null
         viewRefreshSessionId = null
+        // F5: con el flag, el espejo y el canal se cierran aqui tambien.
+        espejoJob?.cancel()
+        espejoJob = null
+        if (SYNC_POR_EVENTOS) chatSync.cerrar()
+    }
+
+    /**
+     * F5: espejo del canal unico a los estados de pantalla. Unico escritor de
+     * `_messages` con el flag (el resto de escritores se saltan tras el flag).
+     */
+    private fun arrancarEspejo(sid: String) {
+        espejoJob?.cancel()
+        chatSync.abrir(sid)
+        espejoJob = viewModelScope.launch {
+            launch { chatSync.mensajes.collect { _messages.value = it } }
+            launch { chatSync.textoEnVivo.collect { _streamingText.value = it } }
+            launch { chatSync.formularios.collect { _pendingForms.value = it } }
+            launch { chatSync.permisos.collect { _pendingPermissions.value = it } }
+            launch {
+                chatSync.turno.collect { t ->
+                    when (t) {
+                        is EstadoTurno.Ocupado -> {
+                            _turnBusy.value = true
+                            _turnFinished.value = false
+                        }
+                        is EstadoTurno.Terminado -> {
+                            _turnBusy.value = false
+                            announceFinishedTurnIfAny(_messages.value)
+                        }
+                        is EstadoTurno.Ocioso -> {
+                            _turnBusy.value = false
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun onCleared() {
@@ -931,7 +991,14 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
 
     fun load(sessionId: String) {
         pollingJob?.cancel()
-        if (sessionId.isBlank()) {
+        if (SYNC_POR_EVENTOS) {
+            // F5: sin bucle viejo; el canal unico alimenta el espejo.
+            if (sessionId.isBlank()) {
+                chatSync.cerrar()
+            } else {
+                arrancarEspejo(sessionId)
+            }
+        } else if (sessionId.isBlank()) {
             stopViewRefresh()
         } else if (viewRefreshSessionId != sessionId) {
             // startViewRefresh cancela el job anterior por su cuenta, así que recargar
@@ -963,6 +1030,8 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
 
             // F4: la cola primero (rapida) para pintar ya; el historial completo
             // despues reconcilia por id (F5 lo hara bajo demanda por scroll).
+            // F5: con el flag el espejo es el unico escritor; estos dos bloques se saltan.
+            if (!SYNC_POR_EVENTOS) {
             try {
                 val colaResp = api.getMessagesTail(sessionId, 200)
                 if (colaResp.ok && colaResp.data != null) {
@@ -987,6 +1056,40 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             } finally {
                 _loading.value = false
             }
+            } // if (!SYNC_POR_EVENTOS)
+        }
+    }
+
+    /**
+     * F5: envio por el canal unico. Sin pollingJob ni stream propio: el espejo ya trae
+     * el texto en vivo y la reconciliacion confirma el eco (fusion por id). El motivo
+     * de fallo sale del cuerpo HTTP real, igual que el camino viejo.
+     */
+    private suspend fun envioPorEventos(
+        targetSessionId: String,
+        sendReq: SendMessageRequest,
+        tempMsgId: String
+    ) {
+        _sendingInFlight.value = true
+        try {
+            api.sendMessage(sessionId = targetSessionId, body = sendReq)
+            _sendingInFlight.value = false
+            chatSync.refrescarAhora()
+            _loading.value = false
+        } catch (e: Exception) {
+            _sendingInFlight.value = false
+            chatSync.actualizarMensaje(tempMsgId) { it.withStatus(MessageDeliveryStatus.ERROR) }
+            val http = e as? retrofit2.HttpException
+            _error.value = if (http != null) {
+                val cuerpo = runCatching { http.response()?.errorBody()?.string() }.getOrNull()
+                ErroresRed.parsear(cuerpo, http.code())
+            } else {
+                "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
+            }
+        } finally {
+            _loading.value = false
+            _sendingInFlight.value = false
+            inFlightSendKey = null
         }
     }
 
@@ -1061,7 +1164,10 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 info = MessageInfo(id = tempMsgId, role = "user", status = MessageDeliveryStatus.PENDING),
                 parts = optimisticParts
             )
-            _messages.value = _messages.value + optimistic
+            // F5: con el flag el optimista entra por el canal (el espejo es el unico
+            // escritor de _messages); si no, directo como siempre.
+            if (SYNC_POR_EVENTOS) chatSync.insertarOptimista(optimistic)
+            else _messages.value = _messages.value + optimistic
 
             // 2. Resolve Target Session ID
             val activeSessionId = sessionId.ifBlank { _currentSessionId.value ?: "" }
@@ -1101,6 +1207,13 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             // mantenía en la última). Ahora se compara el id del último asistente.
             val lastAssistantIdBefore =
                 _messages.value.lastOrNull { it.role == "assistant" && !it.isEmpty }?.info?.id
+
+            // F5: con el flag el envio va por el canal unico (sin pollingJob ni stream
+            // propio: el espejo ya los cubre). El camino viejo sigue intacto debajo.
+            if (SYNC_POR_EVENTOS) {
+                envioPorEventos(targetSessionId, sendReq, tempMsgId)
+                return@launch
+            }
 
             // 4. Start active background polling in parallel to catch assistant output or SSE stream completions
             pollingJob?.cancel()
