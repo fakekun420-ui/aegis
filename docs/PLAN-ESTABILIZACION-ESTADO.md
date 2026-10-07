@@ -10,7 +10,7 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
 | Fase | Estado | Commit | CI | Checklist manual | Notas | Decisiones pendientes |
 |---|---|---|---|---|---|---|
 | F0 Base y medición | 🟢 CI verde; pendiente móvil | `4d21768` + `ea0181e` en `main` | ✅ 7 jobs (6 success + instrumented skipped, es manual) en runs `37555482229` y `37555520373` | pendiente: AegisTrace en logcat + cifras PERF-BASELINE (lo hace Leonardo) | T-F0.5 (cifras en el móvil) pendiente de medición manual. AVISO: el merge arrastró el borrado ya staged de `.opencode/plugins/graphify-staleness.js` (preexistente, no es del plan §8 — decidir si se restaura) | T-F0.6: alinear a `1.1.2` (aplicado) |
-| F1 Limpieza de legado | ⬜ no empezada | — | — | V-01, V-02, V-07 | — | Antigravity descartado (por defecto: sí) |
+| F1 Limpieza de legado | 🟢 CI verde en rama; pendiente móvil + merge | `estabilizar/F1-limpieza` (9 commits: T-F1.1×3, gitleaks, T-F1.2×2, T-F1.3×2, T-F1.4, T-F1.5) | ✅ run `37560627846` (6 jobs: 5 success + instrumented skipped) | pendiente V-01, V-02, V-07 (APK debug en `_tmp/f1-apk/app-debug.apk`) | 11/11 métodos muertos fuera; provider fuera; vocabulario Hub fuera; ErroresRed con fixtures reales; docs a la realidad; CI sin backend-checks. AVISO: cambio ajeno sin commitear en `ChatViewModel.kt` (AGENTE_POR_DEFECTO orchestrator→build, 01:08) — no es mío, no lo toco | Antigravity descartado (aplicado) |
 | F2 Crear sesión | ⬜ no empezada | — | — | V-04, V-05 | — | — |
 | F3 Modelo/agente | ⬜ no empezada | — | — | V-03 | — | `OMITIR_FIJADO_REDUNDANTE = true` (por defecto: implementar) |
 | F4 Menos peticiones | ⬜ no empezada | — | — | E3 vs PERF-BASELINE | — | — |
