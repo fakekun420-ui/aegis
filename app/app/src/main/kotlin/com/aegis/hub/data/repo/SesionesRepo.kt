@@ -36,9 +36,10 @@ data class SesionCreada(val id: String, val titulo: String, val carpeta: String?
 class SesionesRepo(
     private val oc: OpenCodeApi = OpenCodeApi.default,
     private val store: ProjectsStore = ProjectsStore.default,
-    private val config: SesionConfigRepo = SesionConfigRepo(),
+    configInyectada: SesionConfigRepo? = null,
     private val reloj: () -> Long = { System.currentTimeMillis() }
 ) {
+    private val config: SesionConfigRepo by lazy { configInyectada ?: SesionConfigRepo(oc) }
     companion object {
         private const val TAG = "SesionesRepo"
 
