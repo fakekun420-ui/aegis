@@ -2,14 +2,11 @@ package com.aegis.hub.data.repo
 
 import android.util.Log
 import com.aegis.hub.data.CreateOpenCodeSessionRequest
-import com.aegis.hub.data.ModelosUtil
 import com.aegis.hub.data.OpenCodeApi
 import com.aegis.hub.data.OpenCodeLocation
 import com.aegis.hub.data.OpenCodeModelRef
 import com.aegis.hub.data.Project
 import com.aegis.hub.data.ProjectsStore
-import com.aegis.hub.data.SetSessionAgentRequest
-import com.aegis.hub.data.SetSessionModelRequest
 import com.aegis.hub.data.UpdateOpenCodeSessionRequest
 
 /**
@@ -39,6 +36,7 @@ data class SesionCreada(val id: String, val titulo: String, val carpeta: String?
 class SesionesRepo(
     private val oc: OpenCodeApi = OpenCodeApi.default,
     private val store: ProjectsStore = ProjectsStore.default,
+    private val config: SesionConfigRepo = SesionConfigRepo(),
     private val reloj: () -> Long = { System.currentTimeMillis() }
 ) {
     companion object {
@@ -86,20 +84,17 @@ class SesionesRepo(
         val avisos = mutableListOf<String>()
 
         val agente = req.agente?.trim()?.takeIf { it.isNotBlank() } ?: AGENTE_POR_DEFECTO
-        try {
-            val r = oc.setSessionAgent(id, SetSessionAgentRequest(agente))
-            if (!r.isSuccessful) avisos.add("No se pudo fijar el agente $agente (HTTP ${r.code()})")
-        } catch (e: Exception) {
-            Log.w(TAG, "crear: no se pudo fijar agente $agente en $id: ${e.message}")
-            avisos.add("No se pudo fijar el agente $agente")
+        when (val r = config.fijarAgente(id, agente)) {
+            is Resultado.Ok -> Unit
+            is Resultado.Fallo -> avisos.add("No se pudo fijar el agente $agente")
         }
 
-        val modelo = req.modelo ?: runCatching {
-            ModelosUtil.modeloDelAgente(agente, oc.listAgents().data.orEmpty())
-        }.getOrNull()
+        val modelo = req.modelo ?: config.modeloDeAgente(agente)
         if (modelo != null) {
-            val okModelo = fijarModelo(id, modelo)
-            if (!okModelo) avisos.add("No se pudo fijar el modelo ${modelo.id}")
+            when (val r = config.fijarModelo(id, modelo.id, modelo.variant, modelo.providerID)) {
+                is Resultado.Ok -> Unit
+                is Resultado.Fallo -> avisos.add("No se pudo fijar el modelo ${modelo.id}")
+            }
         }
 
         val pid = req.proyectoId?.trim()?.takeIf { it.isNotBlank() }
@@ -170,26 +165,6 @@ class SesionesRepo(
         }
     }
 
-    private suspend fun fijarModelo(sessionId: String, modelo: OpenCodeModelRef): Boolean {
-        return try {
-            val id = ModelosUtil.normalizarIdModelo(modelo.id)
-            if (id.isEmpty()) return false
-            val catalogo = oc.listModels().data.orEmpty()
-            val prov = ModelosUtil.proveedorDeRef(modelo.id)
-                ?: ModelosUtil.resolveProviderFor(id, modelo.providerID, catalogo)
-            val variante = modelo.variant?.trim()?.takeIf { it.isNotBlank() }
-                ?: ModelosUtil.resolveVariantFor(id, catalogo)
-            val resp = oc.setSessionModel(
-                sessionId,
-                SetSessionModelRequest(OpenCodeModelRef(id = id, providerID = prov, variant = variante))
-            )
-            if (!resp.isSuccessful) Log.w(TAG, "fijarModelo HTTP ${resp.code()} para $sessionId")
-            resp.isSuccessful
-        } catch (e: Exception) {
-            Log.w(TAG, "fijarModelo fallo para $sessionId: ${e.message}")
-            false
-        }
-    }
 }
 
 /**

@@ -89,8 +89,7 @@ interface ApiService {
     // Sin esto la app no tenia de donde recuperarlo al reabrir un chat, y por eso salia
     // el de por defecto. MEDIDO 2026-09-30: una sesion de este mismo dispositivo
     // devolvia {agent: "orchestrator", model: "space-bunny-free"}.
-    @GET("api/sessions/{id}/agent")
-    suspend fun getSessionAgent(@Path("id") sessionId: String): Envelope<SessionAgentRef?>
+    // F3: lo lee SesionConfigRepo.leer (un solo GET); esta ruta queda fuera.
 
     // System
     @GET("api/system/health")
@@ -191,8 +190,7 @@ interface ApiService {
     // Modelo real con el que trabaja una sesión. La fuente autoritativa: OpenCode la
     // tiene en el objeto de sesión, así que también refleja un cambio hecho desde el
     // CLI. Devuelve {id, providerID, variant} o null si no hay modelo fijado.
-    @GET("api/sessions/{id}/model")
-    suspend fun getSessionModel(@Path("id") sessionId: String): Envelope<SessionModelRef?>
+    // F3: lo lee SesionConfigRepo.leer (un solo GET); esta ruta queda fuera.
 
     // Fija el modelo de una sesion en el servidor (POST /api/session/{id}/model del CLI).
     // MEDIDO 2026-10-03: no existia en la interfaz. La app guardaba el modelo solo en

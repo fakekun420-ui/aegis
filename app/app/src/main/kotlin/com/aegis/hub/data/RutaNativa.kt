@@ -7,6 +7,7 @@ import android.util.Log
 import com.aegis.hub.RootShell
 import com.aegis.hub.data.repo.NuevaSesion
 import com.aegis.hub.data.repo.Resultado
+import com.aegis.hub.data.repo.SesionConfigRepo
 import com.aegis.hub.data.repo.SesionesRepo
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -89,6 +90,9 @@ class RutaNativa(
 
     /** F2: el unico camino de crear/renombrar/borrar/vincular; aqui solo fachadas. */
     private val sesiones = SesionesRepo()
+
+    /** F3: modelo/agente con el servidor como verdad (con salto de redundante). */
+    private val config = SesionConfigRepo()
 
     private fun <T> envoltura(datos: T?): Envelope<T> =
         if (datos == null) Envelope(ok = false, data = null)
@@ -257,13 +261,6 @@ class RutaNativa(
             return envoltura(lista.filter { it.mode == "primary" && !it.hidden })
         }
 
-    // getSessionAgent: GET /api/session/{id} trae agent
-    // MEDIDO: el mismo `GET /api/session/{id}` trae `agent`. Con la sesion ausente se devuelve
-    // ok=true con dato nulo, que es lo que la app ya sabe leer (`.data?.agent`).
-    // MEDIDO 2026-10-03: el endpoint envuelve en `data` (ver `OpenCodeSessionResponse`); sin
-    // desenvolver, esto siempre devolvia null y la app creia que no habia agente.
-        override suspend fun getSessionAgent(sessionId: String): Envelope<SessionAgentRef?> = envoltura(oc.getSession(sessionId).data?.agent?.let { SessionAgentRef(it) })
-
     // getPendingForms: mismos tipos; con sessionId nulo se delega
     // MEDIDO: OpenCode devuelve YA los tipos de la app (PendingForm), sin traduccion.
     // MEDIDO 2026-10-03: con sessionId nulo se delegaba al Hub, que ya no escucha. Sin sesion
@@ -276,58 +273,19 @@ class RutaNativa(
         override suspend fun getPendingPermissions(sessionId: String?): Envelope<List<PendingPermission>> = if (sessionId == null) envoltura(emptyList())
            else envoltura(oc.getSessionPermissions(sessionId).data)
 
-    // getSessionModel: GET /api/session/{id} trae model con los tres campos
-    // MEDIDO: `GET /api/session/{id}` trae `model` con id, providerID y variant poblados. Es
-    // el dato que el ponytail daba por inexistente, y de ahi que existiera ModelPreferences.
-    // MEDIDO 2026-10-03: el endpoint envuelve en `data` (ver `OpenCodeSessionResponse`); sin
-    // desenvolver, esto siempre devolvia null y la app jamas veia el modelo del CLI.
-        override suspend fun getSessionModel(sessionId: String): Envelope<SessionModelRef?> = envoltura(oc.getSession(sessionId).data?.model?.let { SessionModelRef(it.id, it.providerID, it.variant) })
-
     // F2: pistas puras en ModelosUtil (misma logica; SesionesRepo las usa sin costura).
 
-    /**
-     * Fija el modelo de una sesion en el servidor (la unica via: POST /api/session/{id}/model
-     * ANTES del prompt, porque el prompt no acepta modelo). Resuelve proveedor (prefijo,
-     * pista, catalogo) y variant (`max` si lo hay). Devuelve si el servidor lo acepto.
-     */
-    private suspend fun fijarModelo(
-        sessionId: String,
-        modelId: String?,
-        providerHint: String?,
-        variantExplicit: String? = null
-    ): Boolean {
-        return try {
-            val id = ModelosUtil.normalizarIdModelo(modelId)
-            if (id.isEmpty()) return false
-            val catalogo = oc.listModels().data.orEmpty()
-            val prov = ModelosUtil.proveedorDeRef(modelId)
-                ?: ModelosUtil.resolveProviderFor(id, providerHint, catalogo)
-            val variante = variantExplicit?.trim()?.takeIf { it.isNotBlank() }
-                ?: ModelosUtil.resolveVariantFor(id, catalogo)
-            val resp = oc.setSessionModel(
-                sessionId,
-                SetSessionModelRequest(OpenCodeModelRef(id = id, providerID = prov, variant = variante))
-            )
-            if (!resp.isSuccessful) Log.w(TAG, "fijarModelo HTTP ${resp.code()} para $sessionId")
-            resp.isSuccessful
-        } catch (e: Exception) {
-            Log.w(TAG, "fijarModelo fallo para $sessionId: ${e.message}")
-            false
-        }
-    }
-
-    // setSessionModel: empuja el modelo al servidor (POST /api/session/{id}/model del CLI).
-    // MEDIDO 2026-10-03: la app nunca llamaba a esta ruta. `selectModel` solo escribia en
-    // prefs y `sendMessage` mandaba el modelo en el cuerpo, que el CLI ignora: el prompt
-    // no acepta modelo. Resultado: el modelo del CLI mandaba siempre y la app mostraba el
-    // suyo. Ahora el modelo se fija ANTES del prompt, y el servidor es la unica verdad.
+    // F3: el fijado vive en SesionConfigRepo (con salto de redundante y motivo).
+    // La costura delega; `sendMessage` fija por aqui antes de cada prompt.
         override suspend fun setSessionModel(sessionId: String, body: SessionModelRef): Envelope<Boolean> {
             val ref = ModelosUtil.normalizarIdModelo(body.id)
             if (ref.isEmpty()) return Envelope(ok = false, data = null)
-            val prov = body.providerID?.trim()?.takeIf { it.isNotBlank() }
-                ?: ModelosUtil.proveedorDeRef(body.id)
-            val ok = fijarModelo(sessionId, ref, prov, body.variant)
-            return if (ok) envoltura(true) else Envelope(ok = false, data = null)
+            return when (
+                val r = config.fijarModelo(sessionId, ref, body.variant, body.providerID)
+            ) {
+                is Resultado.Ok -> envoltura(true)
+                is Resultado.Fallo -> Envelope(ok = false, data = null, error = ErrorBody("MODEL_FIJO_FALLO", r.motivo))
+            }
         }
 
     // createSession: POST /api/session nativo (tambien envuelto en `data`).
@@ -790,9 +748,9 @@ class RutaNativa(
         // poder fijar el modelo seria peor.
         val modeloId = ModelosUtil.normalizarIdModelo(body.model)
         if (modeloId.isNotEmpty()) {
-            // F1: sin pista de proveedor del cuerpo (era siempre "opencode"); el prefijo
-            // del id o el catalogo deciden en fijarModelo.
-            fijarModelo(sessionId, modeloId, ModelosUtil.proveedorDeRef(body.model))
+            // F3: con salto de redundante. Se pasa el ref ORIGINAL (con prefijo: es la
+            // pista de proveedor) en vez del ya normalizado.
+            config.fijarModelo(sessionId, body.model ?: modeloId)
         }
 
         oc.sendPrompt(

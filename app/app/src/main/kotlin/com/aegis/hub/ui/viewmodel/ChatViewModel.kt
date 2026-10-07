@@ -5,6 +5,8 @@ import com.aegis.hub.data.FormReplyBody
 import com.aegis.hub.data.ErroresRed
 import com.aegis.hub.data.repo.NuevaSesion
 import com.aegis.hub.data.repo.Resultado
+import com.aegis.hub.data.repo.ConfigSesion
+import com.aegis.hub.data.repo.SesionConfigRepo
 import com.aegis.hub.data.repo.SesionesRepo
 import com.aegis.hub.data.AppContext
 import com.aegis.hub.data.InflightSession
@@ -25,14 +27,13 @@ import com.aegis.hub.data.MessageDeliveryStatus
 import com.aegis.hub.data.MessageInfo
 import com.aegis.hub.data.MessagePart
 import android.util.Log
-import com.aegis.hub.data.AgentPreferences
 import com.aegis.hub.data.ModelOption
 import com.aegis.hub.data.OpencodeAgent
 import com.aegis.hub.data.seleccionables
 import com.aegis.hub.data.modeloPorDefecto
+import com.aegis.hub.data.ModelosUtil
 import com.aegis.hub.data.modeloPorDefectoPara
 import com.aegis.hub.data.SendMessageRequest
-import com.aegis.hub.data.SessionModelRef
 import com.aegis.hub.data.EventStream
 import com.aegis.hub.data.OpenCodeStreamItem
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +55,10 @@ import com.aegis.hub.data.TurnState
  */
 private const val AGENTE_POR_DEFECTO = "build"
 
-class ChatViewModel : ViewModel() {
+class ChatViewModel(
+    private val configRepo: SesionConfigRepo = SesionConfigRepo(),
+    private val sesionesRepo: SesionesRepo = SesionesRepo()
+) : ViewModel() {
     /**
      * MEDIDO 2026-10-01: esta era `ApiClient.service`, el cliente del Hub, en las 18 llamadas
      * de este fichero. Ahora sale de [Conexion], que decide entre Hub y OpenCode nativo.
@@ -68,8 +72,8 @@ class ChatViewModel : ViewModel() {
      * cliente del Hub de siempre. Ver la nota de por qué el valor por defecto NO es el nativo.
      */
     private val api = Conexion.api
-    /** F2: creacion por el repo; la costura queda para lectura y envio. */
-    private val sesiones = SesionesRepo()
+    /** F3: config (modelo/agente) por el repo; `sesionesRepo` para crear. */
+    private val sesiones = sesionesRepo
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
@@ -93,12 +97,6 @@ class ChatViewModel : ViewModel() {
     // OpenCode.
     private val _selectedModel = MutableStateFlow<String?>(null)
     val selectedModel: StateFlow<String?> = _selectedModel
-
-    // El modelo ya NO se guarda en un mapa del ViewModel: ese mapa muria con el
-    // ViewModel, que esta scopeado a la entrada de navegacion, y por eso no arreglaba
-    // nada. Ahora vive en SharedPreferences (ModelPreferences) y además se consulta al
-    // servidor, que es la fuente autoritativa. Ver la nota de `load()`.
-    private var currentSessionForModel: String = ""
 
     // F1: motor unico (OpenCode). El estado de "proveedor elegido" y de "sesion
     // vinculada a proveedor" (Antigravity) se elimino: solo ses_ existe.
@@ -281,43 +279,23 @@ class ChatViewModel : ViewModel() {
      * Nada de esto sustituye al usuario por un `first()` de la lista: un modelo
      * desconocido se deja como está, para que la elección sea siempre explícita.
      */
-    private fun restoreModelFor(sessionId: String) {
-        viewModelScope.launch {
+    // F3: una sola carga de config por sesion, con guardia anti-carreras (H-06).
+    // Cancela la anterior y, al volver, comprueba que se siga mostrando la misma
+    // sesion antes de escribir estado. Una respuesta tardia de A nunca pisa a B.
+    private var configJob: Job? = null
+    private var modeloManualEnSesion = false
+
+    fun cargarConfig(sid: String) {
+        configJob?.cancel()
+        modeloManualEnSesion = false
+        configJob = viewModelScope.launch {
             val ctx = runCatching { AppContext.require() }.getOrNull()
-            // MEDIDO 2026-10-03: hay prefs con `proveedor/id` de una version vieja. Se migran
-            // al abrir, una vez e idempotente; si ya corrio no toca nada.
             runCatching { ctx?.let { ModelPreferences.migrarPrefijos(it) } }
-
-            if (sessionId.isNotBlank()) {
-                runCatching {
-                    val r = api.getSessionModel(sessionId)
-                    // El servidor tambien puede traer el id con prefijo: se corta aqui para
-                    // que la comparacion con la lista (ids cortos) no falle nunca por eso.
-                    val fromServer = ModelPreferences.normalizar(r.data?.id)
-                    if (r.ok && fromServer.isNotBlank()) {
-                        if (_selectedModel.value != fromServer) _selectedModel.value = fromServer
-                        runCatching { ModelPreferences.setModel(ctx!!, sessionId, fromServer) }
-                        return@runCatching
-                    }
-                }.onFailure {
-                    android.util.Log.w("AegisChat", "No se pudo leer el modelo de $sessionId: ${it.message}")
-                }
-                val saved = runCatching { ctx?.let { ModelPreferences.modelFor(it, sessionId) } }.getOrNull()
-                if (!saved.isNullOrBlank()) {
-                    if (_selectedModel.value != saved) _selectedModel.value = saved
-                    return@launch
-                }
-            }
-
-            // MEDIDO 2026-10-01: aqui habia un `ModelPreferences.lastModel()` que ponia como
-            // modelo inicial el ULTIMO elegido en cualquier chat. Es lo que hacia que al abrir
-            // una sesion nueva se cambiara el modelo: esta linea corre ANTES que `loadModels`,
-            // dejaba `_selectedModel` relleno, y el default de la regla (Space Bunny Free) no
-            // llegaba a aplicarse nunca.
-            // Se quita. Lo que decide ahora el modelo inicial de una sesion nueva es la unica
-            // fuente de verdad: la lista de OpenCode, via `modeloPorDefecto`. Una sesion YA
-            // EXISTENTE no pasa por aqui: su modelo sale del servidor o de su propio registro
-            // en `ModelPreferences`, unas lineas mas arriba.
+            val cfg = configRepo.leer(sid)
+            if (_currentSessionId.value != sid) return@launch
+            _servidorAlcanzable.value = cfg.origen == ConfigSesion.Origen.SERVIDOR || sid.isBlank()
+            if (cfg.modelo != null) _selectedModel.value = cfg.modelo
+            _agentMode.value = cfg.agente ?: AGENTE_POR_DEFECTO
         }
     }
 
@@ -325,22 +303,27 @@ class ChatViewModel : ViewModel() {
         // Nunca se guarda ni se envia con prefijo: la lista trae ids cortos y el servidor
         // distingue por pareja id mas providerID, no por un id compuesto.
         val limpio = ModelPreferences.normalizar(modelId)
-        _selectedModel.value = limpio.ifBlank { null }
         if (limpio.isBlank()) return
-        // Se persiste por sesión Y como "última elección" (que es lo que usarán los chats
-        // nuevos). Es lo que evita que un chat nuevo vuelva al default.
-        runCatching { ModelPreferences.setModel(AppContext.require(), currentSessionForModel, limpio) }
-        // MEDIDO 2026-10-03: esto solo escribia en prefs. El servidor seguia con el modelo
-        // viejo y el CLI lo veia: la app y el CLI discrebaban. Ahora se empuja al servidor,
-        // que es la unica verdad. Sin variant: al cambiar de modelo el variant viejo puede
-        // no existir en el nuevo, asi que decide el servidor.
-        val sid = currentSessionForModel
-        if (sid.isBlank()) return
-        val prov = _models.value.firstOrNull { it.id == limpio }?.providerID
-            ?: modelId?.trim()?.takeIf { it.contains("/") }?.substringBeforeLast("/")?.trim()?.takeIf { it.isNotBlank() }
+        // F3: optimista con reversa. Se pinta ya; si el servidor rechaza, se restaura el
+        // previo y el motivo va a _error (antes: prefs primero y catch mudo, H-05).
+        val previo = _selectedModel.value
+        _selectedModel.value = limpio
+        modeloManualEnSesion = true
+        val sid = (_currentSessionId.value ?: "").trim()
+        if (sid.isBlank()) {
+            // Chat nuevo sin id: no hay servidor al que empujar; el repo guardara la
+            // ultima eleccion cuando se fije de verdad.
+            viewModelScope.launch { configRepo.fijarModelo("", limpio) }
+            return
+        }
         viewModelScope.launch {
-            try { api.setSessionModel(sid, SessionModelRef(id = limpio, providerID = prov)) }
-            catch (_: Exception) { }
+            when (val r = configRepo.fijarModelo(sid, limpio)) {
+                is Resultado.Ok -> Unit
+                is Resultado.Fallo -> {
+                    if (_currentSessionId.value == sid) _selectedModel.value = previo
+                    _error.value = r.motivo
+                }
+            }
         }
     }
 
@@ -352,27 +335,48 @@ class ChatViewModel : ViewModel() {
         val limpio = name.trim()
         if (limpio.isBlank()) return
         val lista = _agents.value
-        // Sin lista no se bloquea: el Hub vuelve a validar contra /api/agent y es la
+        // Sin lista no se bloquea: el servidor valida contra /api/agent y es la
         // validacion que de verdad importa (MEDIDO: OpenCode guarda CUALQUIER nombre, y
         // uno inexistente produce un turno vacio sin decir nada). Este filtro es solo
-        // para que un toque en la hoja no installs un nombre imposible.
+        // para que un toque en la hoja no instale un nombre imposible.
         if (lista.isNotEmpty() && lista.none { it.name == limpio }) {
             _error.value = "«$limpio» no es un agente de OpenCode."
             return
         }
+        // F3: optimista con reversa (igual que el modelo) + el modelo del agente si el
+        // usuario no eligio modelo a mano en esta sesion.
+        val previo = _agentMode.value
+        val modeloPrevio = _selectedModel.value
         _agentMode.value = limpio
-        // Se guarda por sesion. Sin esto, abrir el chat, elegir agente, salir y volver a
-        // entrar devolvia el de por defecto: el `ChatViewModel` muere con el
-        // `NavBackStackEntry` y un estado en memoria no recuerda nada.
-        val ctx = runCatching { AppContext.require() }.getOrNull()
-        // `_currentSessionId` y no un `sessionId`: ese es un PARAMETRO de send()/load() y
-        // dentro de selectAgent no existe (daria 'unresolved reference'). El StateFlow si
-        // es miembro y es la sesion en la que esta trabajando el ViewModel. En blanco
-        // significa chat nuevo todavia sin id, y entonces solo queda la "ultima eleccion".
         val sid = (_currentSessionId.value ?: "").trim()
-        runCatching {
-            if (ctx != null) AgentPreferences.setAgent(ctx, sid, limpio)
-        }.onFailure { Log.w("AegisChat", "No se pudo guardar el agente de $sid: ${it.message}") }
+        viewModelScope.launch {
+            when (val r = configRepo.fijarAgente(sid, limpio)) {
+                is Resultado.Fallo -> {
+                    if ((_currentSessionId.value ?: "").trim() == sid) _agentMode.value = previo
+                    _error.value = r.motivo
+                    return@launch
+                }
+                is Resultado.Ok -> Unit
+            }
+            if (!modeloManualEnSesion && sid.isNotBlank()) {
+                val mod = configRepo.modeloDeAgente(limpio)?.id
+                if (!mod.isNullOrBlank()) {
+                    when (val r2 = configRepo.fijarModelo(sid, mod)) {
+                        is Resultado.Ok -> {
+                            if ((_currentSessionId.value ?: "").trim() == sid) {
+                                _selectedModel.value = ModelosUtil.normalizarIdModelo(mod)
+                            }
+                        }
+                        is Resultado.Fallo -> {
+                            if ((_currentSessionId.value ?: "").trim() == sid) {
+                                _selectedModel.value = modeloPrevio
+                            }
+                            _error.value = r2.motivo
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -383,36 +387,6 @@ class ChatViewModel : ViewModel() {
      * El orden importa: si se leyera primero la copia local, un agente cambiado DESDE EL
      * CLI no se veria en la app, que es el mismo bug que se corrigio para el modelo.
      */
-    private fun restoreAgentFor(sessionId: String) {
-        if (sessionId.isBlank()) {
-            _agentMode.value = AGENTE_POR_DEFECTO
-            return
-        }
-        viewModelScope.launch {
-            val ctx = runCatching { AppContext.require() }.getOrNull()
-            val delServidor = runCatching { api.getSessionAgent(sessionId).data?.agent }
-                .onFailure { Log.w("AegisChat", "No se pudo leer el agente de $sessionId: ${it.message}") }
-                .getOrNull()
-            val guardado = runCatching { ctx?.let { AgentPreferences.agentFor(it, sessionId) } }.getOrNull()
-            val elegido = when {
-                !delServidor.isNullOrBlank() -> delServidor
-                !guardado.isNullOrBlank() -> guardado
-                else -> AGENTE_POR_DEFECTO
-            }
-            // Si el agente elegido ya no existe (se borro un cargo), se vuelve al de por
-            // defecto en vez de mandar un nombre que el Hub va a descartar: medido, un
-            // nombre que no existe produce un turno VACIO sin ningun error.
-            if (_agents.value.isNotEmpty() && _agents.value.none { it.name == elegido }) {
-                _agentMode.value = AGENTE_POR_DEFECTO
-                return@launch
-            }
-            if (_agentMode.value != elegido) _agentMode.value = elegido
-            if (!delServidor.isNullOrBlank() && ctx != null) {
-                runCatching { AgentPreferences.setAgent(ctx, sessionId, delServidor) }
-            }
-        }
-    }
-
     fun loadAgents() {
         if (_agentsLoading.value) return
         viewModelScope.launch {
@@ -951,24 +925,19 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             // la misma sesión tampoco deja el refresco muerto.
             startViewRefresh(sessionId)
         }
-        currentSessionForModel = sessionId
-        // Al cambiar de sesion, el modelo se vuelve a resolver desde cero: lo elige
-        // `loadModels` con el primer free real de la lista. El comentario que estaba
-        // aqui decia que el default "solo se aplica si el proveedor es ANTIGRAVITY",
-        // y eso era FALSO: no habia ninguna condicion, y Antigravity hace dias que no
-        // existe. Se deja el reset explicito, que si hace falta.
-        if (_selectedModel.value.isNullOrBlank()) {
-            _selectedModel.value = null
-        }
-        restoreModelFor(sessionId)
-        restoreAgentFor(sessionId)
+        // F3: la sesion actual se fija ANTES de cargar config (la guardia anti-carreras
+        // compara contra este valor). Al cambiar de sesion el chip se limpia: nunca se
+        // muestra el modelo/agente de otra sesion mientras llega la lectura.
+        _currentSessionId.value = sessionId
+        _selectedModel.value = null
+        _agentMode.value = AGENTE_POR_DEFECTO
+        cargarConfig(sessionId)
         if (sessionId.isBlank()) {
             _sessionTitle.value = "Nuevo chat"
             loadModels()
             loadAgents()
             return
         }
-        _currentSessionId.value = sessionId
         viewModelScope.launch {
             _loading.value = true
             _error.value = null

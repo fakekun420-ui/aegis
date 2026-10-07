@@ -48,15 +48,3 @@ object AgentPreferences {
         prefs(ctx).edit().remove(KEY_PREFIX_AGENT + sessionId).apply()
     }
 }
-
-/**
- * Lo que devuelve `GET /api/sessions/:id/agent`.
- *
- * El `model` viene como TEXTO plano a proposito: el Hub lo aplana porque en Kotlin un
- * objeto aqui seria un tipo distinto y se veria como `[object Object]`. Mismo criterio que
- * en [OpencodeAgent.model].
- */
-data class SessionAgentRef(
-    val agent: String,
-    val model: String? = null
-)
