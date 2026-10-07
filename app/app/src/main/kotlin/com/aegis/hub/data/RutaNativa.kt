@@ -792,22 +792,45 @@ class RutaNativa(
     private val setupNative: SetupNative by lazy { SetupNative() }
 
     override suspend fun getSystemHealth(): Response<HealthResponse> {
+        // F7: UN solo `su` (antes: 4 ejecuciones). Secciones separadas por
+        // `@@AEGIS_SALUD@@<nombre>`; sin regex en el parseo (F7.4).
         return try {
-            val upRes = sh("cat /proc/uptime 2>/dev/null", 2000)
-            val uptimeSec = upRes.stdout.trim().split("\\s+".toRegex()).firstOrNull()?.toDoubleOrNull()?.toLong() ?: 0L
+            val baseSkills = rutaDeSkills()
+            val lote = sh(
+                "cat /proc/uptime 2>/dev/null; echo '@@AEGIS_SALUD@@mem'\n" +
+                    "cat /proc/meminfo 2>/dev/null; echo '@@AEGIS_SALUD@@ls'\n" +
+                    "ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null | wc -l; echo '@@AEGIS_SALUD@@skills'\n" +
+                    "ls -1d '$baseSkills'/*/ 2>/dev/null",
+                5000
+            )
+            val secciones = mutableMapOf<String, StringBuilder>()
+            var actual = StringBuilder()
+            var nombre = "uptime"
+            for (linea in lote.stdout.lines()) {
+                if (linea.startsWith("@@AEGIS_SALUD@@")) {
+                    secciones[nombre] = actual
+                    nombre = linea.removePrefix("@@AEGIS_SALUD@@")
+                    actual = StringBuilder()
+                } else {
+                    actual.appendLine(linea)
+                }
+            }
+            secciones[nombre] = actual
 
-            val memRes = sh("cat /proc/meminfo 2>/dev/null", 2000)
-            val lines = memRes.stdout.lines()
+            val uptimeSec = secciones["uptime"]?.toString()
+                ?.split(' ', '\t', '\n')?.firstOrNull { it.isNotBlank() }
+                ?.toDoubleOrNull()?.toLong() ?: 0L
+
             var totalKb = 0L
             var freeKb = 0L
             var availableKb = 0L
-            for (line in lines) {
-                if (line.startsWith("MemTotal:")) {
-                    totalKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                } else if (line.startsWith("MemAvailable:")) {
-                    availableKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                } else if (line.startsWith("MemFree:")) {
-                    freeKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
+            for (line in (secciones["mem"]?.toString() ?: "").lines()) {
+                val valor = line.substringAfter(":").trim().split(' ', '\t')
+                    .firstOrNull { it.isNotBlank() }?.toLongOrNull() ?: continue
+                when {
+                    line.startsWith("MemTotal:") -> totalKb = valor
+                    line.startsWith("MemAvailable:") -> availableKb = valor
+                    line.startsWith("MemFree:") -> freeKb = valor
                 }
             }
             val usedKb = if (availableKb > 0) (totalKb - availableKb) else (totalKb - freeKb)
@@ -816,12 +839,9 @@ class RutaNativa(
                 heapTotal = "${totalKb / 1024}MB"
             )
 
-            val pRes = sh("ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null | wc -l", 3000)
-            val projectCount = pRes.stdout.trim().toIntOrNull() ?: 0
+            val projectCount = secciones["ls"]?.toString()?.trim()?.toIntOrNull() ?: 0
 
-            val baseSkills = rutaDeSkills()
-            val skRes = sh("ls -1d '$baseSkills'/*/ 2>/dev/null", 3000)
-            val skillNames = skRes.stdout.lines()
+            val skillNames = (secciones["skills"]?.toString() ?: "").lines()
                 .map { it.trim().trimEnd('/') }
                 .filter { it.isNotEmpty() }
                 .map { it.substringAfterLast('/') }
@@ -1045,7 +1065,12 @@ class RutaNativa(
 
     override suspend fun getSystemSkills(): Response<SkillsResponse> {
         val base = rutaDeSkills()
-        val listado = sh("ls -1 '$base' 2>/dev/null", 5000)
+        // F7: UN solo `su` (antes: 1 ls + N test -f).
+        val listado = sh(
+            "cd '$base' 2>/dev/null || exit 0\n" +
+                "for d in */; do n=\"\${d%/}\"; [ -f \"\$n/SKILL.md\" ] && printf '%s\\n' \"\$n\"; done",
+            5000
+        )
         val carpetas = if (listado.code == 0) {
             listado.stdout.split("\n")
                 .map { it.trim() }
@@ -1057,20 +1082,17 @@ class RutaNativa(
         val installedSet = mutableSetOf<String>()
         val installedList = mutableListOf<SkillItem>()
         for (id in carpetas) {
-            val mdCheck = sh("test -f '$base/$id/SKILL.md' && echo SI", 3000)
-            if (mdCheck.stdout.trim() == "SI") {
-                installedSet.add(id)
-                installedList.add(
-                    SkillItem(
-                        id = id,
-                        name = id,
-                        version = null,
-                        description = "Skill local ($id)",
-                        installed = true,
-                        enabled = true
-                    )
+            installedSet.add(id)
+            installedList.add(
+                SkillItem(
+                    id = id,
+                    name = id,
+                    version = null,
+                    description = "Skill local ($id)",
+                    installed = true,
+                    enabled = true
                 )
-            }
+            )
         }
 
         val availableCatalog = listOf(
