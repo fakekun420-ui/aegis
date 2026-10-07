@@ -62,7 +62,9 @@ class FlujoCrearSesionProyectoTest {
         assertTrue(r is Resultado.Ok)
         val creada = (r as Resultado.Ok).valor
 
-        assertEquals(1, fake.contar("POST", "/api/session"))
+        assertEquals(1, fake.contarExacto("POST", "/api/session"))
+        assertEquals(1, fake.contar("POST", "/api/session/ses_nueva_1/model"))
+        assertEquals(1, fake.contar("POST", "/api/session/ses_nueva_1/agent"))
         assertTrue("la carpeta real viaja en location: ${fake.cuerposCreacion}",
             fake.cuerposCreacion[0].contains("/sdcard/projects/carpeta-real"))
         assertTrue(fake.agentesFijados.isNotEmpty())

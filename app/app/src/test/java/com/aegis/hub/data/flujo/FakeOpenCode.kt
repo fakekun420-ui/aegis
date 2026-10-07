@@ -134,6 +134,10 @@ class FakeOpenCode {
     fun contar(metodo: String, prefijoRuta: String): Int =
         peticiones.count { it.metodo == metodo && it.ruta.startsWith(prefijoRuta) }
 
+    /** Solo la ruta exacta (sin contar subrutas como /model o /agent). */
+    fun contarExacto(metodo: String, ruta: String): Int =
+        peticiones.count { it.metodo == metodo && it.ruta == ruta }
+
     fun cerrar() {
         servidor.shutdown()
     }

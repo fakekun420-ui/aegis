@@ -44,6 +44,7 @@ class FlujoReconexionTest {
             leerCola = { sid -> api.getMessagesTail(sid, 200).data.orEmpty() }
         )
         eventos.iniciar()
+        eventos.iniciar()
         sync.abrir("ses_test")
 
         // Espera real: el corte + backoff (1 s) + stream bueno + eventos.
