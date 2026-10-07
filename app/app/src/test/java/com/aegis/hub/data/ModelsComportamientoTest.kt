@@ -33,14 +33,14 @@ class ModelsComportamientoTest {
     @Test
     fun `seleccionables devuelve solo los primary visibles`() {
         val lista = listOf(
-            OpencodeAgent(name = "Build"),                              // primary, visible
-            OpencodeAgent(name = "Plan"),                               // primary, visible
-            OpencodeAgent(name = "orchestrator"),                       // primary, visible
-            OpencodeAgent(name = "Compaction", hidden = true),           // primary, OCULTO
-            OpencodeAgent(name = "Title", mode = "subagent"),            // subagent
-            OpencodeAgent(name = "kaenor-ai-engineer", mode = "subagent"),
-            OpencodeAgent(name = "general", mode = "subagent"),
-            OpencodeAgent(name = "explore", mode = "subagent")
+            Agente(name = "Build"),                              // primary, visible
+            Agente(name = "Plan"),                               // primary, visible
+            Agente(name = "orchestrator"),                       // primary, visible
+            Agente(name = "Compaction", hidden = true),           // primary, OCULTO
+            Agente(name = "Title", mode = "subagent"),            // subagent
+            Agente(name = "kaenor-ai-engineer", mode = "subagent"),
+            Agente(name = "general", mode = "subagent"),
+            Agente(name = "explore", mode = "subagent")
         )
         // El orden es el de `sortedBy { it.name.lowercase() }`: build < orchestrator < plan.
         // Lo escribi primero como "Build, Plan, orchestrator" y FALLO en la primera ejecucion
@@ -63,9 +63,9 @@ class ModelsComportamientoTest {
     @Test
     fun `seleccionables ordena por nombre en minusculas, no por orden de llegada`() {
         val desordenado = listOf(
-            OpencodeAgent(name = "orchestrator"),
-            OpencodeAgent(name = "Plan"),
-            OpencodeAgent(name = "Build")
+            Agente(name = "orchestrator"),
+            Agente(name = "Plan"),
+            Agente(name = "Build")
         )
         assertEquals(
             listOf("Build", "orchestrator", "Plan"),
@@ -82,8 +82,8 @@ class ModelsComportamientoTest {
     @Test
     fun `seleccionables descarta los subagentes aunque no esten ocultos`() {
         val soloSubagentes = listOf(
-            OpencodeAgent(name = "kaenor-backend-architect", mode = "subagent"),
-            OpencodeAgent(name = "kaenor-reality-checker", mode = "subagent")
+            Agente(name = "kaenor-backend-architect", mode = "subagent"),
+            Agente(name = "kaenor-reality-checker", mode = "subagent")
         )
         assertEquals(emptyList<String>(), soloSubagentes.seleccionables().map { it.name })
     }
@@ -91,10 +91,10 @@ class ModelsComportamientoTest {
     /** Lista vacia: vacio, sin crash. Y TODOS ocultos: tambien vacio. */
     @Test
     fun `seleccionables con lista vacia o toda oculta devuelve vacio`() {
-        assertEquals(emptyList<String>(), emptyList<OpencodeAgent>().seleccionables().map { it.name })
+        assertEquals(emptyList<String>(), emptyList<Agente>().seleccionables().map { it.name })
         val todaOculta = listOf(
-            OpencodeAgent(name = "Compaction", hidden = true),
-            OpencodeAgent(name = "Title", hidden = true)
+            Agente(name = "Compaction", hidden = true),
+            Agente(name = "Title", hidden = true)
         )
         assertEquals(emptyList<String>(), todaOculta.seleccionables().map { it.name })
     }
@@ -105,7 +105,7 @@ class ModelsComportamientoTest {
      */
     @Test
     fun `un agente sin hidden explícito se considera visible`() {
-        val soloNombre = listOf(OpencodeAgent(name = "Build"))
+        val soloNombre = listOf(Agente(name = "Build"))
         assertEquals(listOf("Build"), soloNombre.seleccionables().map { it.name })
     }
 

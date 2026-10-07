@@ -258,7 +258,7 @@ data class AttachedFile(
  * usan el de la sesion. Por eso la hoja lo enseña tal cual, sin inventar un valor.
  */
 
-data class OpencodeAgent(
+data class Agente(
     val name: String,
     val mode: String = "primary",
     val model: String? = null,
@@ -290,7 +290,7 @@ data class OpencodeAgent(
  * habria que tocar.
  */
 
-fun List<OpencodeAgent>.seleccionables(): List<OpencodeAgent> =
+fun List<Agente>.seleccionables(): List<Agente> =
     filter { it.mode == "primary" && !it.hidden }
         .sortedBy { it.name.lowercase() }
 
@@ -342,7 +342,7 @@ val List<ModelOption>.modeloPorDefecto: String?
 
 internal fun modeloPorDefectoPara(
     agente: String?,
-    agentes: List<OpencodeAgent>,
+    agentes: List<Agente>,
     modelos: List<ModelOption>
 ): String? {
     val nombre = agente?.trim()?.takeIf { it.isNotBlank() }

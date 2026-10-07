@@ -113,8 +113,8 @@ class SesionModeloSyncTest {
     @Test
     fun `el default de sesion con agente prefiere el modelo del agente`() {
         val agentes = listOf(
-            OpencodeAgent(name = "orchestrator", model = "muse-spark-1.3-contributor-free"),
-            OpencodeAgent(name = "Build", model = null)
+            Agente(name = "orchestrator", model = "muse-spark-1.3-contributor-free"),
+            Agente(name = "Build", model = null)
         )
         val modelos = listOf(
             ModelOption(id = "space-bunny-free", name = "Space Bunny", free = true),

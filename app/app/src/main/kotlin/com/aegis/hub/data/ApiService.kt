@@ -85,7 +85,7 @@ interface ApiService {
     // Los agentes de OpenCode de verdad. Ruta propia del Hub (no el proxy /opencode/*):
     // MEDIDO 2026-09-30, ese proxy NO anade el Basic de OpenCode y devuelve 401.
     @GET("api/opencode/agents")
-    suspend fun getOpencodeAgents(): Envelope<List<OpencodeAgent>>
+    suspend fun getOpencodeAgents(): Envelope<List<Agente>>
 
     // El agente REAL con el que esta trabajando la sesion. El Hub lo lee de OpenCode
     // (`GET /api/session/:id` -> `.agent`), que es quien lo guardo al activar el agente.

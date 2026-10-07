@@ -237,7 +237,7 @@ class RutaNativa(
     // JSON (name, mode, model, description, hidden). Traducir a mano 6 campos es otra cosa.
     // Se conserva `hidden` a proposito: de 40 agentes, 37 son visibles y 3 no, y la hoja
     // depende de ese filtro.
-        // MEDIDO 2026-10-02: aquí usaba `gson.fromJson(gson.toJson(nativo), OpencodeAgent::class.java)`
+        // MEDIDO 2026-10-02: aquí usaba `gson.fromJson(gson.toJson(nativo), Agente::class.java)`
         // con el comentario de que "los dos data class describen el mismo JSON". Es FALSO, y lo
         // reportó el usuario al abrir la app:
         //
@@ -252,10 +252,10 @@ class RutaNativa(
         // (`primary && !hidden`), y `GET /api/agent` devuelve el catalogo entero. Con el mapeo
         // anterior la hoja habria recibido los 40 y `seleccionables()` los habria dejado en 3, pero
         // el filtro se queda aqui, que es donde estaba.
-        override suspend fun getOpencodeAgents(): Envelope<List<OpencodeAgent>> {
+        override suspend fun getOpencodeAgents(): Envelope<List<Agente>> {
             // F4: catalogo con cache (antes: GET /api/agent entero en cada llamada).
             val lista = catalogo.agentesNativos().mapNotNull { a ->
-                OpencodeAgent(
+                Agente(
                     name = a.name,
                     mode = a.mode ?: "primary",
                     // MEDIDO: aquí viene el OBJETO {id, providerID}; lo que la app quiere es el

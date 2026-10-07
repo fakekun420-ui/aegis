@@ -31,7 +31,7 @@ import com.aegis.hub.data.MessageInfo
 import com.aegis.hub.data.MessagePart
 import android.util.Log
 import com.aegis.hub.data.ModelOption
-import com.aegis.hub.data.OpencodeAgent
+import com.aegis.hub.data.Agente
 import com.aegis.hub.data.seleccionables
 import com.aegis.hub.data.modeloPorDefecto
 import com.aegis.hub.data.ModelosUtil
@@ -187,8 +187,8 @@ class ChatViewModel(
 
     // Los agentes reales, tal cual. Sin lista no hay selector: se muestran los 6 primary
     // y se dice, en vez de fingir que la lista esta completa.
-    private val _agents = MutableStateFlow<List<OpencodeAgent>>(emptyList())
-    val agents: StateFlow<List<OpencodeAgent>> = _agents
+    private val _agents = MutableStateFlow<List<Agente>>(emptyList())
+    val agents: StateFlow<List<Agente>> = _agents
 
     private val _agentsLoading = MutableStateFlow(false)
     val agentsLoading: StateFlow<Boolean> = _agentsLoading
