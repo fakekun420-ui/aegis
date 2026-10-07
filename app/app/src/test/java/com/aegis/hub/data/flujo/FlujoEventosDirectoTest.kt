@@ -30,6 +30,14 @@ class FlujoEventosDirectoTest {
 
     @Test
     fun `el stream entrega lineas y conecta`() = runBlocking {
+        // Paso 0 (bypass): el GET crudo trae bytes sin bucle de por medio.
+        // Con timeout propio: si el streaming HTTP se cuelga, esto lo dice en 5 s
+        // en vez de colgar el worker hasta el readTimeout (660 s).
+        val crudo = kotlinx.coroutines.withTimeoutOrNull(5_000L) {
+            fake.api().openEventStream().string()
+        }.orEmpty()
+        assertTrue("el GET crudo trae lineas: '${crudo.take(80)}'", crudo.lines().any { it.startsWith("data:") })
+
         val oc = fake.api()
         val eventos = EventosServidor(this, abrir = { oc.openEventStream() })
         eventos.iniciar()
