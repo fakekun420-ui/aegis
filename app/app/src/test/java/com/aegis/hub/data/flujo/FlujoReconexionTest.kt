@@ -44,25 +44,34 @@ class FlujoReconexionTest {
             leerCola = { sid -> api.getMessagesTail(sid, 200).data.orEmpty() }
         )
         eventos.iniciar()
-        eventos.iniciar()
         sync.abrir("ses_test")
 
-        // Espera real: el corte + backoff (1 s) + stream bueno + eventos.
-        var turnos = 0
-        repeat(60) {
-            kotlinx.coroutines.delay(100)
-            if (sync.turno.value is EstadoTurno.Terminado) {
-                turnos++
-                return@runBlocking
-            }
+        // Etapa 1: la conexion se establece (tras el corte + backoff de 1 s).
+        val conectado = esperarHasta(10_000L) {
+            eventos.conexion.value is EventosServidor.Conexion.Conectado
+        }
+        assertTrue("la conexion SSE se establecio tras el corte", conectado)
+        assertTrue("se reconecto al menos una vez", fake.eventosPeticiones >= 2)
+
+        // Etapa 2: los eventos del stream bueno mueven el turno hasta el fin.
+        val terminado = esperarHasta(10_000L) {
+            sync.turno.value is EstadoTurno.Terminado
         }
 
         eventos.detener()
         sync.cerrar()
 
-        assertTrue("el turno termino tras reconectar", turnos > 0)
-        assertTrue("se reconecto al menos una vez", fake.eventosPeticiones >= 2)
+        assertTrue("el turno termino tras reconectar", terminado)
         val ids = sync.mensajes.value.mapNotNull { it.info?.id }
         assertEquals("sin duplicados", ids.size, ids.toSet().size)
+    }
+
+    private suspend fun esperarHasta(ms: Long, cond: () -> Boolean): Boolean {
+        val fin = System.currentTimeMillis() + ms
+        while (System.currentTimeMillis() < fin) {
+            if (cond()) return true
+            kotlinx.coroutines.delay(100)
+        }
+        return cond()
     }
 }
