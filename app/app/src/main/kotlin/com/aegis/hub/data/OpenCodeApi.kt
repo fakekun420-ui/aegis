@@ -1,5 +1,7 @@
 package com.aegis.hub.data
 
+import com.aegis.hub.BuildConfig
+
 import android.util.Log
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
@@ -275,7 +277,7 @@ interface OpenCodeApi {
             credentials: Credentials = Credentials.default,
             timeoutSeconds: Long = 660L
         ): OkHttpClient {
-            return OkHttpClient.Builder()
+            val constructor = OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
                 .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
@@ -283,7 +285,14 @@ interface OpenCodeApi {
                 .addInterceptor(HttpLoggingInterceptor().apply {
                     level = HttpLoggingInterceptor.Level.BASIC
                 })
-                .build()
+            // F0 (T-F0.3): contador de peticiones solo en debug. En release no se
+            // instala nada y TraceoPeticiones.activo se queda en false (coste cero).
+            if (BuildConfig.DEBUG) {
+                TraceoPeticiones.activo = true
+                constructor.addInterceptor(TraceoPeticiones.crearInterceptor())
+                TraceoPeticiones.iniciarInformePeriodico()
+            }
+            return constructor.build()
         }
 
         /**
