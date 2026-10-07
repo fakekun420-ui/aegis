@@ -34,7 +34,7 @@ class EstadoTurnoTest {
     }
 
     @Test
-    fun `texto reproducido: ocupa al empezar y NO termina al cerrar el segmento`() {
+    fun `texto reproducido ocupa al empezar y NO termina al cerrar el segmento`() {
         val seq = secuencia("turno-texto.ndjson")
         assertTrue(seq.isNotEmpty())
         assertEquals(EstadoTurno.Ocupado, seq.first())
@@ -50,7 +50,7 @@ class EstadoTurnoTest {
     }
 
     @Test
-    fun `ejecucion: started ocupa y succeeded termina con su seq`() {
+    fun `ejecucion con started ocupa y con succeeded termina con su seq`() {
         val seq = secuencia("turno-ejecucion.ndjson")
         assertEquals(
             listOf(EstadoTurno.Ocupado, EstadoTurno.Ocupado, EstadoTurno.Terminado(101L)),

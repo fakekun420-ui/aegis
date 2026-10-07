@@ -1,6 +1,5 @@
 package com.aegis.hub.data.sync
 
-import com.aegis.hub.data.EventosServidor
 import com.aegis.hub.data.Message
 import com.aegis.hub.data.MessageInfo
 import com.aegis.hub.data.MessagePart
@@ -90,14 +89,10 @@ class ChatSyncTest {
         sync.abrir("ses_x")
         sync.insertarOptimista(msg("local_1", "hola"))
 
-        sync.refrescarAhoraNEsteHilo(sync)
+        kotlinx.coroutines.runBlocking { sync.refrescarAhora() }
 
         assertEquals(listOf("msg_1"), sync.mensajes.value.map { it.info?.id })
     }
-
-    // refrescarAhora es suspend: en Unconfined corre con ansia con runBlocking.
-    private fun refrescarAhoraNEsteHilo(sync: ChatSync) =
-        kotlinx.coroutines.runBlocking { sync.refrescarAhora() }
 
     @Test
     fun `caida pasa a respaldo sin perder y al volver reconcilia`() {
