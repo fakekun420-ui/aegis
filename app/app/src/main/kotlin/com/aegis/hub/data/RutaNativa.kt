@@ -551,28 +551,43 @@ class RutaNativa(
      */
     override suspend fun getSkills(projectId: String?): Envelope<SkillListResponse> {
         val base = rutaDeSkills()
-        val listado = sh("ls -1 '$base' 2>/dev/null", 5000)
-        if (listado.code != 0) {
-            return envolturaFallo("No se pudo leer $base (exit ${listado.code})")
+        // F7: UN solo `su` (antes: 1 ls + N head). Cada SKILL.md sale tras su
+        // delimitador; tope 2 MB de salida para no reventar memoria.
+        val lote = sh(
+            "cd '$base' 2>/dev/null || exit 0\n" +
+                "for d in */; do\n" +
+                "  n=\"\${d%/}\"; [ -f \"\$n/SKILL.md\" ] || continue\n" +
+                "  printf '@@AEGIS_SKILL@@%s\\n' \"\$n\"; head -c 200000 \"\$n/SKILL.md\"; printf '\\n'\n" +
+                "done",
+            15000
+        )
+        if (lote.code != 0) {
+            return envolturaFallo("No se pudo leer $base (exit ${lote.code})")
         }
-        val nombres = listado.stdout.split("\n")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() && it != ".papelera" }
+        val crudo = lote.stdout.let { if (it.length > 2_000_000) it.take(2_000_000) else it }
         val skills = mutableListOf<Skill>()
-        var leidos = 0
-        for (nombre in nombres) {
-            val md = sh("head -c 200000 '$base/$nombre/SKILL.md' 2>/dev/null", 5000)
-            if (md.code != 0 || md.stdout.isBlank()) continue
-            // `head -c` evita el fallo de `cat` cuando el fichero es grande: un skill de 40 KB
-            // entra, pero uno de varios MB no cabe en el buffer del shell.
-            skills += Skill(
-                scope = scopeDe(nombre, base),
-                name = nombre,
-                content = md.stdout
-            )
-            leidos++
+        var nombre: String? = null
+        val contenido = StringBuilder()
+        fun volcar() {
+            val n = nombre
+            if (n != null && contenido.isNotBlank()) {
+                skills += Skill(scope = scopeDe(n, base), name = n, content = contenido.toString())
+            }
         }
-        Log.i(TAG, "getSkills: $leidos de ${nombres.size} entradas bajo $base")
+        for (linea in crudo.lines()) {
+            // El primero que aparezca al inicio de linea parte; si el contenido trae
+            // el delimitador, se trata como corte (documentado, no silencioso: el
+            // contenido sale igual menos esa linea).
+            if (linea.startsWith(DELIMITADOR_SKILLS)) {
+                volcar()
+                nombre = linea.removePrefix(DELIMITADOR_SKILLS)
+                contenido.clear()
+            } else {
+                contenido.appendLine(linea)
+            }
+        }
+        volcar()
+        Log.i(TAG, "getSkills: ${skills.size} skills bajo $base en 1 exec")
         return envoltura(
             SkillListResponse(
                 skills = skills,
@@ -1474,5 +1489,8 @@ class RutaNativa(
 
         /** Shell real (con `su`); los tests inyectan su fake en el constructor. */
         val SHELL_REAL: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+
+        /** F7: delimitador del lote unico de getSkills. */
+        const val DELIMITADOR_SKILLS = "@@AEGIS_SKILL@@"
     }
 }
