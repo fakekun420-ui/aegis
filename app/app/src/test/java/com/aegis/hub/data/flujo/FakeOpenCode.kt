@@ -98,7 +98,9 @@ class FakeOpenCode {
                     ruta.startsWith("/api/event") -> {
                         eventosPeticiones++
                         if (primerEventoCorta && eventosPeticiones == 1) {
-                            MockResponse().withSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START)
+                            // Corte limpio con error: el cliente reconecta igual
+                            // que ante un EOF (mismo backoff, mismo camino).
+                            MockResponse().setResponseCode(500).setBody("corte")
                         } else {
                             sse()
                         }
