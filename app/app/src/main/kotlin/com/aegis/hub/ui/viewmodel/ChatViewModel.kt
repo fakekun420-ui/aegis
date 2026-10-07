@@ -268,14 +268,7 @@ class ChatViewModel(
         }
     }
 
-    private fun isTechnicalTitle(t: String?): Boolean {
-        if (t == null) return true
-        val s = t.trim()
-        if (s.isBlank()) return true
-        if (s.startsWith("ses_") || s.startsWith("companion:") || s.startsWith("local_")) return true
-        if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
-        return false
-    }
+    private fun isTechnicalTitle(t: String?): Boolean = com.aegis.hub.util.esTituloTecnico(t)
 
     private fun updateTitleFromFirstMessage(msgList: List<Message>) {
         if (_sessionTitle.value.isNullOrBlank() || isTechnicalTitle(_sessionTitle.value)) {

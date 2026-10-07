@@ -189,7 +189,8 @@ object OpenCodeLauncher {
         // Por eso antes de lanzar se mira si ya hay un PROCESO `serve --service`: si lo hay, no
         // se lanza otro — se informa y quien llama espera a que abra el puerto.
         val yaProceso = shell("pgrep -f 'opencode serve --service' 2>/dev/null", 3000)
-        val pids = yaProceso.stdout.split(Regex("\\s+")).mapNotNull { it.trim().toIntOrNull() }
+        // F7: sin regex (una vez por arranque, pero gratis hacerlo bien).
+        val pids = yaProceso.stdout.split(' ', '\t', '\n', '\r').mapNotNull { it.trim().toIntOrNull() }
         if (pids.isNotEmpty()) {
             Log.i(TAG, "asegurarAbierto: hay proceso serve vivo (pids=${pids.joinToString()}), " +
                 "pero aun no responde. No se lanza otro.")

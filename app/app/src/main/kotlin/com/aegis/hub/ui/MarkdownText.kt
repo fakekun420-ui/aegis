@@ -39,6 +39,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.fillMaxWidth
 
+/** F7: regex compilados una vez (antes se construian por linea/token en cada render). */
+private val RX_CODIGO_TOKEN = Regex("""(//.*|#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b|[^\sA-Za-z0-9_]+|\s+)""")
+private val RX_NUMERO = Regex("""\b\d+(\.\d+)?\b""")
+private val RX_IDENTIFICADOR = Regex("""[A-Za-z0-9_]+""")
+private val RX_HERRAMIENTA = Regex("^[❯●>]\\s*(bash|run_command|view_file|write_to_file|replace_file_content|sed_file|grep_search|list_dir|command_status|manage_task|edit|read|glob|grep|lsp|websearch|webfetch)\\((.*?)\\)", RegexOption.IGNORE_CASE)
+private val RX_VINETA = Regex("^[-*]\\s+")
+private val RX_ORDENADA = Regex("^\\d+\\.\\s+")
+private val RX_ENLACE = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)""")
+private val RX_INLINE_TOKEN = Regex("""(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|[^\s`*]+|\s+)""")
+
 /**
  * Terminal / CLI Wizard Markdown Renderer for OpenCode & Antigravity.
  * Estandarizado a tipografía de consola limpia (sans-serif / monospace en #E6EDF3 / #8B949E).
@@ -422,7 +432,7 @@ private fun highlightCode(code: String, language: String): AnnotatedString {
             return@forEachIndexed
         }
 
-        val tokenRegex = Regex("""(//.*|#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b|[^\sA-Za-z0-9_]+|\s+)""")
+        val tokenRegex = RX_CODIGO_TOKEN
         val tokens = tokenRegex.findAll(line)
 
         for (match in tokens) {
@@ -438,7 +448,7 @@ private fun highlightCode(code: String, language: String): AnnotatedString {
                         append(token)
                     }
                 }
-                token.matches(Regex("""\b\d+(\.\d+)?\b""")) -> {
+                token.matches(RX_NUMERO) -> {
                     builder.withStyle(SpanStyle(color = numberColor)) {
                         append(token)
                     }
@@ -448,7 +458,7 @@ private fun highlightCode(code: String, language: String): AnnotatedString {
                         append(token)
                     }
                 }
-                token.firstOrNull()?.isUpperCase() == true && token.matches(Regex("""[A-Za-z0-9_]+""")) -> {
+                token.firstOrNull()?.isUpperCase() == true && token.matches(RX_IDENTIFICADOR) -> {
                     builder.withStyle(SpanStyle(color = typeColor)) {
                         append(token)
                     }
@@ -662,7 +672,7 @@ internal fun parseMarkdown(src: String): List<MdBlock> {
         if (inCode) { codeBuf.appendLine(line); i++; continue }
         if (trimmed.isEmpty()) { flushLists(); i++; continue }
 
-        val toolMatch = Regex("^[❯●>]\\s*(bash|run_command|view_file|write_to_file|replace_file_content|sed_file|grep_search|list_dir|command_status|manage_task|edit|read|glob|grep|lsp|websearch|webfetch)\\((.*?)\\)", RegexOption.IGNORE_CASE).find(trimmed)
+        val toolMatch = RX_HERRAMIENTA.find(trimmed)
 
         when {
             toolMatch != null -> {
@@ -682,8 +692,8 @@ internal fun parseMarkdown(src: String): List<MdBlock> {
             trimmed.startsWith("## ") -> { flushLists(); blocks += MdBlock.Header(2, trimmed.removePrefix("## ").trim()); i++ }
             trimmed.startsWith("### ") -> { flushLists(); blocks += MdBlock.Header(3, trimmed.removePrefix("### ").trim()); i++ }
             trimmed.startsWith("> ") -> { flushLists(); blocks += MdBlock.Quote(trimmed.removePrefix("> ").trim()); i++ }
-            Regex("^[-*]\\s+").containsMatchIn(trimmed) -> { if (orderedBuf.isNotEmpty()) flushLists(); bulletBuf += trimmed.replace(Regex("^[-*]\\s+"), ""); i++ }
-            Regex("^\\d+\\.\\s+").containsMatchIn(trimmed) -> { if (bulletBuf.isNotEmpty()) flushLists(); orderedBuf += trimmed.replace(Regex("^\\d+\\.\\s+"), ""); i++ }
+            RX_VINETA.containsMatchIn(trimmed) -> { if (orderedBuf.isNotEmpty()) flushLists(); bulletBuf += trimmed.replace(RX_VINETA, ""); i++ }
+            RX_ORDENADA.containsMatchIn(trimmed) -> { if (bulletBuf.isNotEmpty()) flushLists(); orderedBuf += trimmed.replace(RX_ORDENADA, ""); i++ }
             // MEDIDO 2026-10-01: una tabla se reconoce por la fila de separacion que va
             // justo debajo de la cabecera. Sin este brazo caia en `Paragraph` y se veian los
             // `|` en crudo. Va antes del `else` porque ningun otro brazo la captura: sus
@@ -723,7 +733,7 @@ private fun buildInline(src: String, cursor: String = ""): AnnotatedString {
     var s = src
 
     // 1. First process links: [text](url) -> extract text
-    val linkRegex = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)""")
+    val linkRegex = RX_ENLACE
     val linkMatches = linkRegex.findAll(s).toList()
     val linkRanges = mutableListOf<Triple<Int, Int, String>>()
 
@@ -747,7 +757,7 @@ private fun buildInline(src: String, cursor: String = ""): AnnotatedString {
 
     // 2. Tokenize inline markers: `code`, **bold**, *italic*
     // Using a regex to extract clean spans
-    val tokenRegex = Regex("""(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|[^\s`*]+|\s+)""")
+    val tokenRegex = RX_INLINE_TOKEN
     val tokens = tokenRegex.findAll(cleanText)
 
     for (match in tokens) {

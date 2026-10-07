@@ -1,5 +1,8 @@
 package com.aegis.hub.ui.chat
 
+private val RX_SUBAGENT_APERTURA = Regex("^\\s*<subagent[^>]*>")
+private val RX_SUBAGENT_CIERRE = Regex("</subagent>\\s*$")
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -82,8 +85,8 @@ fun SubagentCard(
     // etiqueta para no ensuciar la lectura, pero SOLO si queda texto detras: si el
     // envoltorio fuera todo el contenido, se enseña tal cual antes que inventar.
     val cleanBody = body
-        ?.replace(Regex("^\\s*<subagent[^>]*>"), "")
-        ?.replace(Regex("</subagent>\\s*$"), "")
+        ?.replace(RX_SUBAGENT_APERTURA, "")
+        ?.replace(RX_SUBAGENT_CIERRE, "")
         ?.trim()
         ?.takeIf { it.isNotBlank() } ?: body
 

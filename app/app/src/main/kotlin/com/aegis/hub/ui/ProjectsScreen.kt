@@ -1,5 +1,7 @@
 package com.aegis.hub.ui
 
+private val RX_NOMBRE_PROYECTO = Regex("[^a-z0-9_-]")
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
@@ -377,7 +379,7 @@ fun ProjectsScreen(
                         val trimmedName = name.trim()
                         onCreateProject(trimmedName, desc.trim(), selectedProvider)
                         showCreate = false
-                        val safe = trimmedName.lowercase().replace(" ", "-").replace(Regex("[^a-z0-9_-]"), "")
+                        val safe = trimmedName.lowercase().replace(" ", "-").replace(RX_NOMBRE_PROYECTO, "")
                         scope.launch {
                             snackbarHostState.showSnackbar("Proyecto creado en /sdcard/projects/$safe/")
                         }

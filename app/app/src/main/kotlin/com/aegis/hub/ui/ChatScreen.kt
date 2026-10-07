@@ -1648,14 +1648,7 @@ private fun startListeningInternal(
     try { sr.startListening(intent); setListening(true) } catch (e: Exception) { setError(e.message); setListening(false) }
 }
 
-private fun isTechnicalSessionId(t: String?): Boolean {
-    if (t == null) return true
-    val s = t.trim()
-    if (s.isBlank()) return true
-    if (s.startsWith("ses_") || s.startsWith("companion:") || s.startsWith("local_")) return true
-    if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
-    return false
-}
+private fun isTechnicalSessionId(t: String?): Boolean = com.aegis.hub.util.esTituloTecnico(t)
 
 /**
  * Divisor que confirma que la IA terminó su turno.

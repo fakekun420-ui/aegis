@@ -2,6 +2,9 @@ package com.aegis.hub.data
 
 import com.google.gson.annotations.SerializedName
 
+/** F7: compilado una vez (antes se compilaba en cada lectura del getter). */
+private val RX_NOMBRE_CARPETA = Regex("[^a-z0-9_-]")
+
 // Generic envelope server.js returns: { ok:true, data: ... } or { ok:false, error:{code,message} }
 data class ErrorBody(
     val code: String? = null,
@@ -45,7 +48,7 @@ data class Project(
     val linkedProjects: List<String>? = null
 ) {
     val resolvedProvider: String get() = "OpenCode"
-    val resolvedFolder: String get() = folder ?: "/sdcard/projects/${name.lowercase().replace(" ", "-").replace(Regex("[^a-z0-9_-]"), "")}/"
+    val resolvedFolder: String get() = folder ?: "/sdcard/projects/${name.lowercase().replace(" ", "-").replace(RX_NOMBRE_CARPETA, "")}/"
 }
 
 data class CreateProjectRequest(
