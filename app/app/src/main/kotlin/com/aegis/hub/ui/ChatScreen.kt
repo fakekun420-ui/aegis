@@ -787,7 +787,16 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("Modelo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("Elige el modelo para esta sesión:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Elige el modelo para esta sesión:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // F4: la lista sale del catalogo con cache (5 min); esto la invalida
+                    // y la vuelve a pedir (p. ej. tras instalar un proveedor nuevo).
+                    TextButton(onClick = { vm.refrescarCatalogo() }) { Text("Actualizar") }
+                }
 
                 // El selector de motor se fue con Antigravity: queda uno solo, asi
                 // que una fila de chips donde una opcion esta siempre activa es ruido

@@ -296,6 +296,10 @@ class ChatViewModel(
             _servidorAlcanzable.value = cfg.origen == ConfigSesion.Origen.SERVIDOR || sid.isBlank()
             if (cfg.modelo != null) _selectedModel.value = cfg.modelo
             _agentMode.value = cfg.agente ?: AGENTE_POR_DEFECTO
+            // F4: el titulo viene del mismo GET (antes: lista completa solo para esto).
+            if (!cfg.titulo.isNullOrBlank() && !isTechnicalTitle(cfg.titulo)) {
+                _sessionTitle.value = cfg.titulo
+            }
         }
     }
 
@@ -387,6 +391,15 @@ class ChatViewModel(
      * El orden importa: si se leyera primero la copia local, un agente cambiado DESDE EL
      * CLI no se veria en la app, que es el mismo bug que se corrigio para el modelo.
      */
+    /** F4: invalida el catalogo con cache y lo vuelve a pedir. */
+    fun refrescarCatalogo() {
+        viewModelScope.launch {
+            runCatching { api.refrescarCatalogo() }
+            loadModels()
+            loadAgents()
+        }
+    }
+
     fun loadAgents() {
         if (_agentsLoading.value) return
         viewModelScope.launch {
@@ -945,22 +958,27 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             loadAgents()
 
             // Try to resolve human-readable title from sessions list
+            // F4: fuera (el titulo viene de cargarConfig/leer con el mismo GET de
+            // modelo+agente). Esta era 1 peticion de lista completa solo por el titulo.
+
+            // F4: la cola primero (rapida) para pintar ya; el historial completo
+            // despues reconcilia por id (F5 lo hara bajo demanda por scroll).
             try {
-                val sessResp = api.getOpencodeSessions()
-                if (sessResp.ok && sessResp.data != null) {
-                    val found = sessResp.data.find { it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId }
-                    if (found != null && !found.title.isNullOrBlank() && !isTechnicalTitle(found.title)) {
-                        _sessionTitle.value = found.title
-                    }
+                val colaResp = api.getMessagesTail(sessionId, 200)
+                if (colaResp.ok && colaResp.data != null) {
+                    val nonEmpties = colaResp.data.filterNot { it.isEmpty }
+                    _messages.value = nonEmpties
+                    updateTitleFromFirstMessage(nonEmpties)
+                    _loading.value = false
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) { }
 
             try {
                 val resp = api.getMessages(sessionId)
                 if (resp.ok && resp.data != null) {
                     val nonEmpties = resp.data.filterNot { it.isEmpty }
-                    _messages.value = nonEmpties
-                    updateTitleFromFirstMessage(nonEmpties)
+                    _messages.value = mergeTail(_messages.value, nonEmpties)
+                    updateTitleFromFirstMessage(_messages.value)
                 } else if (!resp.ok) {
                     _error.value = resp.error?.message ?: resp.error?.code ?: "Error al obtener mensajes"
                 }
@@ -1093,9 +1111,14 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     delay(1500)
                     if (!isActive || messageDelivered) break
                     try {
-                        val pollResp = api.getMessages(targetSessionId)
+                        // F4: la cola (rapida) en vez del historial entero; se fusiona
+                        // por id con lo ya pintado (F5 lo sustituye por eventos).
+                        val pollResp = api.getMessagesTail(targetSessionId, 50)
                         if (pollResp.ok && pollResp.data != null) {
-                            val nonEmpties = pollResp.data.filterNot { it.isEmpty }
+                            val nonEmpties = mergeTail(
+                                _messages.value,
+                                pollResp.data.filterNot { it.isEmpty }
+                            )
                             // Un asistente NUEVO: último assistant con id distinto al baseline.
                             val lastAssistant = nonEmpties.lastOrNull { it.role == "assistant" && !it.isEmpty }
                             val newAssistantArrived = lastAssistant != null &&

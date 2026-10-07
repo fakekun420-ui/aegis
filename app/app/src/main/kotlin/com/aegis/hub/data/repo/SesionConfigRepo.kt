@@ -66,8 +66,12 @@ class PrefsConfigCache : ConfigCache {
 class SesionConfigRepo(
     private val oc: OpenCodeApi = OpenCodeApi.default,
     private val cache: ConfigCache = PrefsConfigCache(),
+    catalogoInyectado: CatalogoRepo? = null,
     private val reloj: () -> Long = { System.currentTimeMillis() }
 ) {
+    // El catalogo deriva del mismo `oc` si no se inyecta: en tests basta pasar el
+    // fake una vez; en produccion son los singletons de siempre.
+    private val catalogo: CatalogoRepo by lazy { catalogoInyectado ?: CatalogoRepo(oc) }
     companion object {
         private const val TAG = "SesionConfigRepo"
 
@@ -147,11 +151,12 @@ class SesionConfigRepo(
             return Resultado.Ok(Unit)
         }
         try {
-            val catalogo = oc.listModels().data.orEmpty()
+            // F4: catalogo con cache (antes: GET /api/model entero por fijado).
+            val nativos = catalogo.modelosNativos()
             val prov = ModelosUtil.proveedorDeRef(ref)
-                ?: ModelosUtil.resolveProviderFor(limpio, pistaProveedor, catalogo)
+                ?: ModelosUtil.resolveProviderFor(limpio, pistaProveedor, nativos)
             val variante = variantExplicita?.trim()?.takeIf { it.isNotBlank() }
-                ?: ModelosUtil.resolveVariantFor(limpio, catalogo)
+                ?: ModelosUtil.resolveVariantFor(limpio, nativos)
             val r = oc.setSessionModel(
                 sid,
                 SetSessionModelRequest(
@@ -159,6 +164,9 @@ class SesionConfigRepo(
                 )
             )
             if (!r.isSuccessful) {
+                // Catalogo rancio (el modelo ya no existe): se invalida para que la
+                // proxima lo vuelva a descargar.
+                if (r.code() == 404) catalogo.invalidar()
                 return Resultado.Fallo("El servidor no aceptó el modelo $limpio (HTTP ${r.code()})")
             }
         } catch (e: Exception) {
@@ -194,6 +202,6 @@ class SesionConfigRepo(
 
     /** Modelo que un agente trae definido, o null si delega en el de la sesion. */
     suspend fun modeloDeAgente(nombre: String): OpenCodeModelRef? = runCatching {
-        ModelosUtil.modeloDelAgente(nombre, oc.listAgents().data.orEmpty())
+        ModelosUtil.modeloDelAgente(nombre, catalogo.agentesNativos())
     }.getOrNull()
 }

@@ -94,6 +94,9 @@ class RutaNativa(
     /** F3: modelo/agente con el servidor como verdad (con salto de redundante). */
     private val config = SesionConfigRepo()
 
+    /** F4: catalogos con cache corta (modelos + agentes). */
+    private val catalogo = CatalogoRepo()
+
     private fun <T> envoltura(datos: T?): Envelope<T> =
         if (datos == null) Envelope(ok = false, data = null)
         else Envelope(ok = true, data = datos)
@@ -245,7 +248,8 @@ class RutaNativa(
         // anterior la hoja habria recibido los 40 y `seleccionables()` los habria dejado en 3, pero
         // el filtro se queda aqui, que es donde estaba.
         override suspend fun getOpencodeAgents(): Envelope<List<OpencodeAgent>> {
-            val lista = oc.listAgents().data.orEmpty().mapNotNull { a ->
+            // F4: catalogo con cache (antes: GET /api/agent entero en cada llamada).
+            val lista = catalogo.agentesNativos().mapNotNull { a ->
                 OpencodeAgent(
                     name = a.name,
                     mode = a.mode ?: "primary",
@@ -961,59 +965,18 @@ class RutaNativa(
     }
 
     // El campo `free` que usa la app lo calculaba el Hub mirando el COSTE del modelo (medido:
-    // 39 de 472). OpenCode manda `cost`, no `free`: reimplementar ese criterio es una decision
-    // con su propio test, no una traduccion.
-        /**
-     * MEDIDO 2026-10-02, y aquí el campo `free` NO viene de OpenCode: lo CALCULABA el Hub.
-     *
-     * OpenCode manda `cost`, no `free`. Y el criterio del Hub estaba en `providers.js:940-944`,
-     * que ahora está en `_tmp/hub-retirado-2026-10-02/` y está portado aquí literal, con sus
-     * DOS ramas:
-     *
-     *     costs.every(c => c && c.input === 0 && c.output === 0)   -> gratis
-     *     id termina en ":free" o "-free"                          -> gratis
-     *
-     * MEDIDO 2026-10-02, y esto es un OR, no una prioridad: **las dos ramas se suman.** La
-     * primera PUEDE añadir gratis, pero nunca lo quita. Ejecuté el criterio original del Hub
-     * en node para no discutir de memoria:
-     *
-     *     coste 0/0  + id normal  -> true
-     *     coste 3/15 + id "-free" -> true      (yo creia false, y el test que escribi lo fijo
-     *                                                como false: por eso el test cayo)
-     *     coste 3/15 + id normal  -> false
-     *     sin coste  + id "-free" -> true
-     *
-     * Lo que EXCLUYE un modelo de pago es el coste, y el sufijo solo puede añadir. Cambiar eso
-     * para que "el coste mande sobre el nombre" haría que un modelo que el proveedor da gratis
-     * apareciera como de pago. MEDIDO 2026-09-29 en el catálogo real: 39 de 472 dan `free=true`
-     * con este criterio, y no son los que llevan "-free" en el id — de ahí que hagan falta las
-     * dos ramas y no una.
-     *
-     * Por qué importa: sin `free` la app no puede distinguir un modelo de pago de uno gratis, y
-     * el modelo por defecto acabaría siendo el PRIMERO de la lista en vez del primero gratis. Ese
-     * exactodefecto se corrigió una vez y volvió cuando el campo desapareció.
-     */
-    private fun esFree(m: OpenCodeNativeModel): Boolean {
-        val costes = when (val c = m.cost) {
-            is List<*> -> c.filterNotNull()
-            null -> emptyList<Any?>()
-            else -> listOf(c)
-        }
-        if (costes.isNotEmpty()) {
-            val todosGratis = costes.all { c ->
-                val mapa = c as? Map<*, *>
-                val in0 = (mapa?.get("input") as? Number)?.toDouble() ?: 0.0
-                val out0 = (mapa?.get("output") as? Number)?.toDouble() ?: 0.0
-                in0 == 0.0 && out0 == 0.0
-            }
-            if (todosGratis) return true
-        }
-        val id = (m.id ?: m.modelID ?: "").lowercase()
-        return id.endsWith(":free") || id.endsWith("-free")
+    // 39 de 472). OpenCode manda `cost`, no `free`: el criterio vive en CatalogoRepo.esGratis
+    // (calculado una vez al cachear) con su propio test.
+
+    /** F4: invalida el catalogo (pantalla de modelos, tras "modelo no encontrado"). */
+    override suspend fun refrescarCatalogo(): Envelope<Boolean> {
+        catalogo.invalidar()
+        return envoltura(true)
     }
 
     override suspend fun getModels(provider: String?): Envelope<List<ModelOption>> {
-        val todos = oc.listModels().data.orEmpty()
+        // F4: catalogo con cache (antes: GET /api/model entero en cada llamada).
+        val todos = catalogo.modelosNativos()
             .filter { it.enabled }
             // MEDIDO 2026-10-02: el filtro por `providerID` es lo que hacia que los modelos
             // aparecieran "a veces" (el chip decia "No disponible" con la lista cargada).
@@ -1032,7 +995,7 @@ class RutaNativa(
             // de otro. Un cambio de orden de modelos es exactamente de los que el usuario no ve
             // hasta que el modelo por defecto es otro.
             .sortedWith(
-                compareBy<OpenCodeNativeModel> { if (esFree(it)) 0 else 2 }
+                compareBy<OpenCodeNativeModel> { if (catalogo.esGratis(it.id ?: it.modelID)) 0 else 2 }
                     .thenBy { if (it.providerID == "opencode") 0 else 1 }
             )
         val etiquetas = mapOf(
@@ -1047,9 +1010,9 @@ class RutaNativa(
                     append(etiquetas[m.providerID] ?: m.providerID)
                     append(" · ")
                     append(m.family ?: "AI")
-                    if (esFree(m)) append(" · gratis")
+                    if (catalogo.esGratis(m.id ?: m.modelID)) append(" · gratis")
                 },
-                free = esFree(m),
+                free = catalogo.esGratis(m.id ?: m.modelID),
                 // MEDIDO 2026-10-03: sin el proveedor la app no puede fijar el modelo en el
                 // servidor, que distingue por pareja id mas providerID. Antes se tiraba.
                 providerID = m.providerID

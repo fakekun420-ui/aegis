@@ -79,6 +79,9 @@ interface ApiService {
     @GET("api/opencode/models")
     suspend fun getModels(@Query("provider") provider: String? = null): Envelope<List<ModelOption>>
 
+    // F4: invalida el catalogo con cache (no es una ruta de red; es local).
+    suspend fun refrescarCatalogo(): Envelope<Boolean>
+
     // Los agentes de OpenCode de verdad. Ruta propia del Hub (no el proxy /opencode/*):
     // MEDIDO 2026-09-30, ese proxy NO anade el Basic de OpenCode y devuelve 401.
     @GET("api/opencode/agents")
