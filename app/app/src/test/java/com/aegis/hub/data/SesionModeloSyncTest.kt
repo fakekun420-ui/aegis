@@ -18,7 +18,6 @@ class SesionModeloSyncTest {
 
     private val gson = Gson()
 
-    private val ruta: RutaNativa = RutaNativa()
 
     @Test
     fun `la sesion individual se desenvuelve de data con su modelo completo`() {
@@ -47,7 +46,7 @@ class SesionModeloSyncTest {
             OpenCodeNativeModel(id = "m", providerID = "opencode"),
             OpenCodeNativeModel(id = "m", providerID = "openrouter")
         )
-        assertEquals("openrouter", ruta.resolveProviderFor("m", "openrouter", catalogo))
+        assertEquals("openrouter", ModelosUtil.resolveProviderFor("m", "openrouter", catalogo))
     }
 
     @Test
@@ -56,24 +55,24 @@ class SesionModeloSyncTest {
             OpenCodeNativeModel(id = "m", providerID = "openrouter"),
             OpenCodeNativeModel(id = "m", providerID = "opencode")
         )
-        assertEquals("opencode", ruta.resolveProviderFor("m", null, catalogo))
+        assertEquals("opencode", ModelosUtil.resolveProviderFor("m", null, catalogo))
     }
 
     @Test
     fun `sin candidatos se usa la pista y sin pista opencode`() {
-        assertEquals("google", ruta.resolveProviderFor("desconocido", "google", emptyList()))
-        assertEquals("opencode", ruta.resolveProviderFor("desconocido", null, emptyList()))
-        assertEquals("opencode", ruta.resolveProviderFor(null, null, emptyList()))
+        assertEquals("google", ModelosUtil.resolveProviderFor("desconocido", "google", emptyList()))
+        assertEquals("opencode", ModelosUtil.resolveProviderFor("desconocido", null, emptyList()))
+        assertEquals("opencode", ModelosUtil.resolveProviderFor(null, null, emptyList()))
     }
 
     @Test
     fun `el id con prefijo se corta y el proveedor queda como pista`() {
         // Forma real guardada en el movil por una version vieja.
-        assertEquals("muse-spark-1.3-contributor-free", ruta.normalizarIdModelo("opencode/muse-spark-1.3-contributor-free"))
-        assertEquals("opencode", ruta.proveedorDeRef("opencode/muse-spark-1.3-contributor-free"))
-        assertEquals("space-bunny-free", ruta.normalizarIdModelo("space-bunny-free"))
-        assertEquals(null, ruta.proveedorDeRef("space-bunny-free"))
-        assertEquals("", ruta.normalizarIdModelo(null))
+        assertEquals("muse-spark-1.3-contributor-free", ModelosUtil.normalizarIdModelo("opencode/muse-spark-1.3-contributor-free"))
+        assertEquals("opencode", ModelosUtil.proveedorDeRef("opencode/muse-spark-1.3-contributor-free"))
+        assertEquals("space-bunny-free", ModelosUtil.normalizarIdModelo("space-bunny-free"))
+        assertEquals(null, ModelosUtil.proveedorDeRef("space-bunny-free"))
+        assertEquals("", ModelosUtil.normalizarIdModelo(null))
     }
 
     @Test
@@ -83,14 +82,14 @@ class SesionModeloSyncTest {
                 variants = listOf(OpenCodeModelVariant(id = "low"), OpenCodeModelVariant(id = "max"))
             )
         )
-        assertEquals("max", ruta.resolveVariantFor("muse-spark-1.3-contributor-free", conMax))
+        assertEquals("max", ModelosUtil.resolveVariantFor("muse-spark-1.3-contributor-free", conMax))
         // Con prefijo tambien resuelve, porque normaliza antes de buscar.
-        assertEquals("max", ruta.resolveVariantFor("opencode/muse-spark-1.3-contributor-free", conMax))
+        assertEquals("max", ModelosUtil.resolveVariantFor("opencode/muse-spark-1.3-contributor-free", conMax))
         val sinMax = listOf(
             OpenCodeNativeModel(id = "otro", variants = listOf(OpenCodeModelVariant(id = "low")))
         )
-        assertEquals(null, ruta.resolveVariantFor("otro", sinMax))
-        assertEquals(null, ruta.resolveVariantFor("ausente", conMax))
+        assertEquals(null, ModelosUtil.resolveVariantFor("otro", sinMax))
+        assertEquals(null, ModelosUtil.resolveVariantFor("ausente", conMax))
     }
 
     @Test
@@ -103,12 +102,12 @@ class SesionModeloSyncTest {
             ),
             OpenCodeNativeAgent(id = "build", name = "Build", model = null)
         )
-        val mod = ruta.modeloDelAgente("orchestrator", agentes)
+        val mod = ModelosUtil.modeloDelAgente("orchestrator", agentes)
         assertEquals("muse-spark-1.3-contributor-free", mod?.id)
         assertEquals("opencode", mod?.providerID)
-        assertEquals(null, ruta.modeloDelAgente("build", agentes))
-        assertEquals(null, ruta.modeloDelAgente("inexistente", agentes))
-        assertEquals(null, ruta.modeloDelAgente(null, agentes))
+        assertEquals(null, ModelosUtil.modeloDelAgente("build", agentes))
+        assertEquals(null, ModelosUtil.modeloDelAgente("inexistente", agentes))
+        assertEquals(null, ModelosUtil.modeloDelAgente(null, agentes))
     }
 
     @Test
