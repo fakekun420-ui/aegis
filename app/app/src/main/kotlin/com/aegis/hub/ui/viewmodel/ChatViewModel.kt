@@ -43,12 +43,13 @@ import kotlinx.coroutines.withContext
 import com.aegis.hub.data.TurnState
 
 /**
- * Agente con el que arranca un chat que no sabe cual usar. "orchestrator" a proposito:
- * MEDIDO 2026-09-30 es el unico de los tres elegibles con modelo propio y el unico que
- * delega en los cargos. "build" era el valor anterior y mandaba los turnos del chat a un
- * agente distinto del que se esta usando en el resto del sistema.
+ * Agente con el que arranca un chat que no sabe cual usar. "build" desde 2026-10-07:
+ * "orchestrator" era el valor medido el 2026-09-30 (único primario con modelo propio),
+ * pero desapareció en la migración ECC del 2026-10-06 (F2 recortó `agent` a solo `build`)
+ * y los chats nuevos fallaban con `AgentNotFoundError`. "build" es además el
+ * `default_agent` del servidor, así que el chat usa el mismo agente que el resto del sistema.
  */
-private const val AGENTE_POR_DEFECTO = "orchestrator"
+private const val AGENTE_POR_DEFECTO = "build"
 
 class ChatViewModel : ViewModel() {
     /**
