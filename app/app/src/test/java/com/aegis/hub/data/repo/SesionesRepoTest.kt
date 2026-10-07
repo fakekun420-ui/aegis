@@ -111,7 +111,21 @@ class SesionesRepoTest {
             clock = { ahora }
         )
 
-    private fun repo(oc: FakeOc, st: ProjectsStore) = SesionesRepo(oc, st) { ahora }
+    private class FakeCache : com.aegis.hub.data.repo.ConfigCache {
+        val modelos = mutableMapOf<String, String>()
+        val agentes = mutableMapOf<String, String>()
+        override fun leerModelo(sid: String) = modelos[sid]
+        override fun guardarModelo(sid: String, modelo: String) { modelos[sid] = modelo }
+        override fun leerAgente(sid: String) = agentes[sid]
+        override fun guardarAgente(sid: String, agente: String) { agentes[sid] = agente }
+        override fun ultimoModelo(): String? = null
+        override fun guardarUltimoModelo(modelo: String) = Unit
+        override fun ultimoAgente(): String? = null
+        override fun guardarUltimoAgente(agente: String) = Unit
+    }
+
+    private fun repo(oc: FakeOc, st: ProjectsStore) =
+        SesionesRepo(oc, st, com.aegis.hub.data.repo.SesionConfigRepo(oc, FakeCache()) { ahora }) { ahora }
 
     @Test
     fun `crear global deja una sesion con agente y modelo fijados`() = runBlocking {
