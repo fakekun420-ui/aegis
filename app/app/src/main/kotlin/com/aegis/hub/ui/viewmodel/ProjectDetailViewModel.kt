@@ -3,6 +3,10 @@ package com.aegis.hub.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.*
+import com.aegis.hub.data.repo.NuevaSesion
+import com.aegis.hub.data.repo.Resultado
+import com.aegis.hub.data.repo.SesionesRepo
+import com.aegis.hub.data.carpetaDeProyecto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -15,6 +19,8 @@ class ProjectDetailViewModel : ViewModel() {
      * rutas para el mismo dato. Ese es el fallo que la costura existe para evitar.
      */
     private val api = Conexion.api
+    /** F2: creacion por el repo; la costura queda para lectura y envio. */
+    private val sesiones = SesionesRepo()
 
     /** Sustituye al Hub como dueño del vinculo sesion-proyecto. Ver `linkProject`. */
     private val projectsStore = ProjectsStore.default
@@ -105,36 +111,29 @@ class ProjectDetailViewModel : ViewModel() {
                 // directorio del proyecto. Es la unica informacion que sirve para agrupar.
                 val provider = _project.value?.provider ?: "opencode"
                 val title = "companion:${_project.value?.name ?: projectId}:${System.currentTimeMillis() % 100000}"
-                // MEDIDO 2026-10-06 (sesion en blanco): esto armaba la carpeta desde el NOMBRE
-                // (`/sdcard/projects/<nombre>`), pero un proyecto vinculado trae su propia
-                // carpeta (`folder`), que no tiene por que coincidir con el nombre. Con la
-                // carpeta equivocada la sesion nacia en otro directorio y el vinculo por
-                // carpeta fallaba. La real primero, la derivada solo como ultimo recurso.
-                val dirPath = _project.value?.folder?.takeIf { it.isNotBlank() }
-                    ?: _project.value?.resolvedFolder
+                // F2: carpeta y vinculo salen del repo (una sola funcion y una sola
+                // escritura; la derivacion inline desaparece).
+                val proyecto = _project.value
+                val dirPath = proyecto?.let { carpetaDeProyecto(it) }
                     ?: java.io.File("/sdcard/projects/${_project.value?.name ?: projectId}").absolutePath
-                val creado = api.createSession(
-                    CreateOpenCodeSessionRequest(title = title, location = OpenCodeLocation(directory = dirPath))
+                val creado = sesiones.crear(
+                    NuevaSesion(
+                        titulo = title,
+                        proyectoId = projectId,
+                        carpeta = dirPath
+                    ),
+                    claveIdempotencia = "$title|$projectId"
                 )
                 // MEDIDO 2026-10-06: esto hacia `?: return@launch` en silencio. Crear fallaba
                 // (o devolvia sin id) y la UI no navegaba ni avisaba: el usuario pulsaba "+"
                 // y no pasaba nada visible. Un fallo mudo en el boton principal de la pantalla.
-                val sid = creado.data?.resolvedId?.takeIf { it.isNotBlank() }
-                if (sid == null) {
-                    _error.value = "No se pudo crear la sesión en OpenCode"
+                if (creado is Resultado.Fallo) {
+                    _error.value = creado.motivo
                     return@launch
                 }
-
-                // Link to project (if not automatically linked)
-                // MEDIDO 2026-10-06: esto iba en `try/catch` mudo. Si el vinculo fallaba, el
-                // chat se abria fuera de todo proyecto sin decirlo ("no se vincula").
-                try {
-                    val vinculo = api.linkSession(projectId, LinkSessionRequest(sessionId = sid, title = title, provider = provider))
-                    if (vinculo.ok != true) {
-                        _error.value = "Sesión creada pero no vinculada al proyecto"
-                    }
-                } catch (e: Exception) {
-                    _error.value = "Sesión creada pero no vinculada: ${e.message ?: "error de red"}"
+                val sid = (creado as Resultado.Ok).valor.id
+                if (creado.avisos.isNotEmpty()) {
+                    _error.value = creado.avisos.joinToString("\n")
                 }
 
                 // Optimistically add to local sessions list

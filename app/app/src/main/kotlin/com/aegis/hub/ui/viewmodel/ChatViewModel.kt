@@ -3,6 +3,9 @@ package com.aegis.hub.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import com.aegis.hub.data.FormReplyBody
 import com.aegis.hub.data.ErroresRed
+import com.aegis.hub.data.repo.NuevaSesion
+import com.aegis.hub.data.repo.Resultado
+import com.aegis.hub.data.repo.SesionesRepo
 import com.aegis.hub.data.AppContext
 import com.aegis.hub.data.InflightSession
 import com.aegis.hub.data.ModelPreferences
@@ -30,7 +33,6 @@ import com.aegis.hub.data.modeloPorDefecto
 import com.aegis.hub.data.modeloPorDefectoPara
 import com.aegis.hub.data.SendMessageRequest
 import com.aegis.hub.data.SessionModelRef
-import com.aegis.hub.data.CreateOpenCodeSessionRequest
 import com.aegis.hub.data.EventStream
 import com.aegis.hub.data.OpenCodeStreamItem
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +68,8 @@ class ChatViewModel : ViewModel() {
      * cliente del Hub de siempre. Ver la nota de por qué el valor por defecto NO es el nativo.
      */
     private val api = Conexion.api
+    /** F2: creacion por el repo; la costura queda para lectura y envio. */
+    private val sesiones = SesionesRepo()
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
@@ -1292,13 +1296,16 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
     }
 
     private suspend fun createNewSession(): String? = withContext(Dispatchers.IO) {
-        // MEDIDO 2026-10-03: esto era un POST crudo al Hub en :8765, que ya no escucha, asi que
-        // crear un chat desde cero fallaba siempre en silencio (null). Ahora va por la costura,
-        // que es OpenCode directo (F1: sin parametro provider; OpenCode no tiene
-        // proveedores de sesion, solo modelos por sesion).
-        try {
-            val resp = api.createSession(CreateOpenCodeSessionRequest(title = "Nuevo chat"))
-            resp.data?.resolvedId?.takeIf { it.isNotBlank() }
-        } catch (_: Exception) { null }
+        // F2: por el repo (antes: catch -> null mudo, H-01). El motivo va a _error.
+        when (val r = sesiones.crear(NuevaSesion("Nuevo chat"))) {
+            is Resultado.Ok -> {
+                r.avisos.forEach { android.util.Log.w("AegisChat", "createNewSession: $it") }
+                r.valor.id
+            }
+            is Resultado.Fallo -> {
+                _error.value = r.motivo
+                null
+            }
+        }
     }
 }
