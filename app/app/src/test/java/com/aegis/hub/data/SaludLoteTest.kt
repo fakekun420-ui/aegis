@@ -45,7 +45,7 @@ class SaludLoteTest {
         assertEquals("1953MB", datos.memory?.heapUsed)
         assertEquals("7812MB", datos.memory?.heapTotal)
         assertEquals(7, datos.projects)
-        assertEquals(listOf("graphify"), datos.skills.installed)
+        assertEquals(listOf("graphify"), datos.skills?.installed)
     }
 
     @Test
@@ -55,6 +55,6 @@ class SaludLoteTest {
 
         assertTrue(r.isSuccessful)
         assertEquals(1, llamadas[0])
-        assertEquals(2, r.body()!!.data!!.installed.size)
+        assertEquals(2, r.body()!!.data?.installed?.size)
     }
 }
