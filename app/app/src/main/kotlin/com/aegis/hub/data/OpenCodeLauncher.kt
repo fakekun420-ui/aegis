@@ -45,12 +45,15 @@ import com.aegis.hub.RootShell
  *     las sesiones con agentes trabajando y §5.2 exige permiso explicito. Lo que si esta medido es
  *     todo lo que hay alrededor: el binario, el interprete, los montajes y el comando.
  *
- * ## Por que NO se copia el binario dentro del APK
+ * F6 (2026-10-08): el lanzador Kotlin YA NO contiene la cadena de montajes ni el
+ * `chroot ... serve --service` — esa logica vive UNA sola vez en
+ * `app/app/src/main/assets/aegis-serve.sh`, que esto despliega a
+ * `/data/local/tmp/` (con `chmod 755`; `/sdcard` es `noexec`) y ejecuta.
  *
- * Son 196 MB, y ademas el runtime completo (chroot, `node`, config y la base de datos de sesiones
- * de 2 GB) ya existe en este movil con todo el trabajo del usuario dentro. Copiarlo seria tirar
- * lo que hay y empezar de cero. Decision del usuario 2026-10-02: el runtime se queda donde esta y
- * el APK lo levanta si falta.
+ * MEDIDO 2026-10-08: `/data/adb/service.d/` NO trae hook de Aegis (solo
+ * `.zn_cleanup.sh`); el `flock` del movil es toybox (solo descriptores) — el
+ * cerrojo del script es `mkdir`. Y el `pgrep` sin corchete se cuenta a si mismo
+ * (3 PIDs vs 1 real): la guarda usa `[o]pencode` (H-11).
  */
 object OpenCodeLauncher {
 
@@ -58,6 +61,9 @@ object OpenCodeLauncher {
 
     /** MEDIDO: la raiz del chroot. */
     const val CHROOT = "/data/local/ubuntu"
+
+    /** Donde vive el script desplegado (ejecutable; NO en /sdcard por `noexec`). */
+    const val RUTA_SCRIPT_DESPLEGADO = "/data/local/tmp/aegis-serve.sh"
 
     /**
      * MEDIDO, por orden de probabilidad, de donde sale el binario de verdad:
@@ -80,32 +86,6 @@ object OpenCodeLauncher {
      * Es el mismo error que el del namespace, por segunda vez: **medir una ruta desde donde no se
      * usa**. Un symlink es relativo a quien lo resuelve, y solo lo resuelve quien va a ejecutarlo.
      */
-    private val RUTAS_BINARIO = listOf(
-        "/data/data/com.termux/files/usr/lib/node_modules/@opencode/cli/bin/opencode.exe",
-        "/usr/local/bin/opencode",
-        "/data/data/com.termux/files/lib/node_modules/opencode-ai/bin/opencode.exe"
-    )
-
-    /**
-     * Los montajes que el chroot necesita. Idempotentes por construccion: cada uno comprueba si
-     * ya esta antes de montar, que es exactamente lo que hace `start-ubuntu.sh`.
-     *
-     * MEDIDO que sin `proc` y `sys` el binario aborta; `dev` es lo que le da `/dev/null` y
-     * `/dev/urandom`, y bun los usa en el arranque.
-     */
-    private val MONTajes = listOf(
-        "mkdir -p \$U/dev \$U/dev/pts \$U/proc \$U/sys \$U/sdcard",
-        "grep -q \" \$U/dev \" /proc/mounts || mount -o bind /dev \$U/dev",
-        "grep -q \" \$U/dev/pts \" /proc/mounts || mount -o bind /dev/pts \$U/dev/pts",
-        "grep -q \" \$U/proc \" /proc/mounts || mount -t proc proc \$U/proc",
-        "grep -q \" \$U/sys \" /proc/mounts || mount -t sysfs sysfs \$U/sys",
-        // MEDIDO 2026-10-03: sin este bind el chroot ve su propia carpeta aislada en vez del
-        // almacenamiento real, y OpenCode escribe en el arbol equivocado. Solo se monta si
-        // /sdcard esta listo (en el boot temprano aun no existe FUSE); si no esta, se registra
-        // y el script de arranque lo reintenta con espera.
-        "grep -q \" \$U/sdcard \" /proc/mounts || { [ -d /sdcard/projects ] && mount -o bind /sdcard \$U/sdcard || echo SIN_SDCARD; }"
-    )
-
     data class Resultado(
         val ok: Boolean,
         val detalle: String,
@@ -113,138 +93,48 @@ object OpenCodeLauncher {
     )
 
     /**
-     * El binario real, deducido del proceso que esta corriendo antes que de una lista.
-     *
-     * MEDIDO: `/proc/<pid>/exe` del opencode vivo da la ruta DENTRO del chroot. Es mas fiable que
-     * cualquier constante porque no depende de donde se instalo: si el usuario actualiza OpenCode,
-     * esta lista se queda obsoleta y este metodo no.
+     * Lee el script desde los assets del APK. Nulo si no hay contexto (tests JVM);
+     * ahi se inyecta `leerScript`.
      */
-    fun rutaDelProcesoVivo(shell: (String, Long) -> RootShell.Result = RootShell::exec): String? {
-        val r = shell("for p in \$(pgrep -f '@opencode/cli/bin/opencode'); do " +
-            "readlink -f /proc/\${p}/exe 2>/dev/null; done | head -1", 3000)
-        val ruta = r.stdout.trim().substringAfterLast('\n').trim()
-        // `readlink -f` dentro del chroot puede devolver la ruta ya resuelta en el host
-        // (/data/local/ubuntu/...), y `chroot` necesita la relativa. De ahi el recorte.
-        if (ruta.isBlank()) return null
-        return if (ruta.startsWith("$CHROOT/")) ruta.removePrefix("$CHROOT/") else ruta
-    }
-
-    private fun primerBinarioQueExista(
-        shell: (String, Long) -> RootShell.Result
-    ): String? {
-        rutaDelProcesoVivo(shell)?.let { return it }
-        for (ruta in RUTAS_BINARIO) {
-            // Se prueba DENTRO del chroot, que es donde se va a ejecutar. Comprobarlo en el host
-            // daria un falso positivo: el fichero existe pero su interprete no.
-            val r = shell("chroot $CHROOT /bin/sh -c 'test -x \"$ruta\" && echo OK'", 3000)
-            if (r.code == 0 && r.stdout.contains("OK")) return ruta
-        }
-        return null
+    private fun leerScriptDeAssets(): String? = try {
+        AppContext.require().assets.open("aegis-serve.sh").bufferedReader().use { it.readText() }
+    } catch (e: Exception) {
+        Log.w(TAG, "leerScriptDeAssets: ${e.message}")
+        null
     }
 
     /**
-     * Monta el chroot. Idempotente, y no falla si ya estaba montado.
-     */
-    fun montarChroot(shell: (String, Long) -> RootShell.Result = RootShell::exec): RootShell.Result {
-        for (cmd in MONTajes) {
-            val r = shell("U=$CHROOT; $cmd", 5000)
-            if (r.code != 0) {
-                Log.w(TAG, "montarChroot: '$cmd' devolvio ${r.code}: ${r.stderr.take(120)}")
-            }
-        }
-        val r = shell("grep -c \"$CHROOT/\" /proc/mounts", 3000)
-        return r
-    }
-
-    /**
-     * La ruta del binario tal y como la necesita `chroot`: con una sola barra inicial.
+     * Despliega `aegis-serve.sh` a [RUTA_SCRIPT_DESPLEGADO] y lo ejecuta.
      *
-     * MEDIDO: concatenar `/$ruta` con una ruta ya absoluta daba `//usr/local/bin/opencode`.
-     * Funciona —MEDIDO: `//usr/local/bin/opencode --version` y `/usr/local/bin/opencode
-     * --version` dan los dos `opencode v2.0.14`, porque Linux resuelve `//` como `/`— pero es una
-     * construccion que depende de una regla POSIX marcada como *implementation-defined*, y no
-     * hace falta depender de ella.
+     * El despliegue viaja en base64 en una sola orden (sin heredoc: las comillas
+     * del script romperian el `su -c`). Idempotente: solo escribe si el contenido
+     * cambio (evita escrituras FUSE en cada arranque).
      */
-    private fun rutaEnChroot(ruta: String): String =
-        if (ruta.startsWith("/")) ruta else "/$ruta"
-
-    /**
-     * Arranca `opencode serve --service` si no esta ya responding.
-     *
-     * @param comprobarSiVivo decision que se ya ha tomado por fuera (una sonda HTTP). Se recibe en
-     *   vez de hacerla aqui porque un `curl` con Basic necesita la contrasena, que es cosa de
-     *   [Credentials] y no de este objeto.
-     */
-    suspend fun asegurarAbierto(
-        comprobarSiVivo: suspend () -> Boolean,
-        shell: (String, Long) -> RootShell.Result = RootShell::exec
-    ): Resultado {
-        if (comprobarSiVivo()) {
-            return Resultado(true, "OpenCode ya responde; no se toca nada.")
+    suspend fun lanzarViaScript(
+        shell: (String, Long) -> RootShell.Result = RootShell::exec,
+        leerScript: () -> String? = { leerScriptDeAssets() }
+    ): Lanzamiento {
+        val texto = leerScript()
+            ?: return Lanzamiento.Error("sin-script: no se pudo leer aegis-serve.sh de los assets")
+        if (texto.isBlank()) return Lanzamiento.Error("sin-script: aegis-serve.sh vacio")
+        val b64 = java.util.Base64.getEncoder().encodeToString(texto.toByteArray(Charsets.UTF_8))
+        val despliegue = "B=\$(echo '$b64' | base64 -d | sha256sum | cut -d' ' -f1); " +
+            "A=\$(sha256sum $RUTA_SCRIPT_DESPLEGADO 2>/dev/null | cut -d' ' -f1); " +
+            "if [ \"\$B\" != \"\$A\" ]; then echo '$b64' | base64 -d > $RUTA_SCRIPT_DESPLEGADO && " +
+            "chmod 755 $RUTA_SCRIPT_DESPLEGADO || exit 11; fi; " +
+            "/system/bin/sh $RUTA_SCRIPT_DESPLEGADO"
+        val r = try {
+            shell(despliegue, 30000)
+        } catch (e: Exception) {
+            return Lanzamiento.Error("sin-shell: ${e.message?.take(120)}")
         }
-
-        // MEDIDO 2026-10-03: habia DOS servidores `opencode serve` vivos a la vez (~660 MB cada
-        // uno) y el movil se quedaba sin RAM. La sonda HTTP dice "no responde" tambien cuando el
-        // servidor esta ARRANCANDO (puerto aun sin ligar), asi que lanzar ahi crea el duplicado.
-        // Por eso antes de lanzar se mira si ya hay un PROCESO `serve --service`: si lo hay, no
-        // se lanza otro — se informa y quien llama espera a que abra el puerto.
-        val yaProceso = shell("pgrep -f 'opencode serve --service' 2>/dev/null", 3000)
-        // F7: sin regex (una vez por arranque, pero gratis hacerlo bien).
-        val pids = yaProceso.stdout.split(' ', '\t', '\n', '\r').mapNotNull { it.trim().toIntOrNull() }
-        if (pids.isNotEmpty()) {
-            Log.i(TAG, "asegurarAbierto: hay proceso serve vivo (pids=${pids.joinToString()}), " +
-                "pero aun no responde. No se lanza otro.")
-            return Resultado(
-                ok = false,
-                detalle = "Hay un servidor arrancando (pids=${pids.joinToString()}); " +
-                    "espera a que abra el puerto en vez de lanzar otro.",
-                arrancoAhora = false
-            )
+        val linea = r.stdout.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
+        return when {
+            linea == null -> Lanzamiento.Error("sin-salida (rc=${r.code})")
+            linea.startsWith("YA_HAY:") -> Lanzamiento.YaHay
+            linea == "LANZADO" -> Lanzamiento.Lanzado
+            linea.startsWith("ERROR:") -> Lanzamiento.Error(linea.removePrefix("ERROR:"))
+            else -> Lanzamiento.Error("salida-inesperada: ${linea.take(120)}")
         }
-
-        montarChroot(shell)
-
-        val binario = primerBinarioQueExista(shell)
-            ?: return Resultado(false, "No encuentro el binario de OpenCode dentro de $CHROOT. " +
-                "Rutas probadas: ${RUTAS_BINARIO.joinToString()}. Sin el, la app no puede " +
-                "arrancarlo sola.")
-
-        // MEDIDO 2026-10-02: `HOME=/root` va DENTRO del `sh -c`, no con `env`. Escribi
-        // `chroot $CHROOT env HOME=/root ...` y falla:
-        //
-        //     chroot: exec env: No such file or directory
-        //
-        // MEDIDO tambien que dentro del chroot no existe ni `env` ni `ls`: el `/bin` es minimo.
-        // O sea que ahi no se puede lanzar nada que no sea `/bin/sh` o el binario de opencode
-        // (que es un ELF estatico). Con `/bin/sh -c` la misma orden da `opencode v2.0.14`, y el
-        // control negativo —el mismo comando con un binario inexistente— falla como debe.
-        //
-        // MEDIDO: `serve --help` lista `--service`, y `service status` responde
-        // `http://127.0.0.1:49374` a traves de toda esta cadena.
-        // MEDIDO: `serve --service` y no `serve --port`, por el motivo que ya esta escrito en el
-        // ponytail §4.1: sin `--service` no hay entrada de registro, la contrasena se genera al
-        // azar y no se anuncia, y el CLI da "Timed out waiting for the background service".
-        //
-        // MEDIDO 2026-10-03: el servidor vivo corre con oom_score_adj=-1000 (heredado del
-        // boot), o sea que el LMK de Android no lo mata aunque se abra una app pesada. Se fija
-        // explicito en el lanzamiento para que valga igual cuando el padre es la app (con otro
-        // adj): un servidor matado a mitad de turno corta todas las sesiones de todos los
-        // clientes, incluido el TUI de Termux.
-        //
-        // `nohup ... &` porque el proceso debe sobrevivir al shell que lo lanzo: la app abre un
-        // `su` por orden, y si OpenCode cuelga de ese shell se muere con el.
-        val cmd = "chroot $CHROOT /bin/sh -c \"echo -1000 > /proc/self/oom_score_adj; " +
-            "HOME=/root ${rutaEnChroot(binario)} serve --service\" " +
-            ">/data/local/ubuntu/root/.local/share/opencode/app-launch.log 2>&1 &"
-        Log.i(TAG, "asegurarAbierto: lanzo $binario")
-        val r = shell(cmd, 5000)
-        if (r.code != 0) {
-            return Resultado(false, "El arranque devolvio ${r.code}: ${r.stderr.take(160)}")
-        }
-        return Resultado(
-            ok = true,
-            detalle = "OpenCode arrancado desde $binario (serve --service).",
-            arrancoAhora = true
-        )
     }
 }
