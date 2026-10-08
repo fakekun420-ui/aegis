@@ -28,7 +28,6 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -245,40 +244,19 @@ class MainActivity : ComponentActivity() {
     }
 
 
+    // F6: la orquestacion (lanzar + sondear con backoff) vive en
+    // `ServidorOpenCode` (un solo vuelo idempotente); aqui solo se observa el
+    // estado y se pinta. El nombre se conserva para acotar el diff.
     private fun startRootSystemAndPoll() {
         if (isStartingSystem) return
         isStartingSystem = true
         lifecycleScope.launch(Dispatchers.IO) {
-            // MEDIDO 2026-10-02: esto antes NO levantaba nada. Preguntaba a OpenCode 90 veces y
-            // se rindia, con el boton etiquetado "Reintentar" que no reintentaba: solo esperaba.
-            // Con el Hub fuera, `opencode serve` hay que lanzarlo desde aqui, y se puede:
-            // el binario esta DENTRO del chroot (medido en /proc/<pid>/exe) y el chroot es un
-            // arbol de ficheros, no un namespace.
-            var arranque = com.aegis.hub.data.OpenCodeLauncher.asegurarAbierto(
-                comprobarSiVivo = { isOpenCodeReady() }
+            val final = com.aegis.hub.data.ServidorOpenCode.asegurar(
+                comprobarSiVivo = { isOpenCodeReady() },
+                lanzar = { com.aegis.hub.data.OpenCodeLauncher.lanzarViaScript() }
             )
-            android.util.Log.i(TAG, "asegurarAbierto: ok=${arranque.ok} " +
-                "arrancoAhora=${arranque.arrancoAhora} detalle=${arranque.detalle}")
-
-            var attempts = 0
-            var ready = arranque.ok && isOpenCodeReady()
-            // MEDIDO 2026-10-02: eran 90 medias -> 45 s. En un arranque en frío no basta: el boot
-            // script entra por `bash --login` y OpenCode tarda en abrir su base de datos de 2 GB. Con
-            // 45 s la app se rendía y pintaba el overlay aunque el servidor fuera a levantarse.
-            val maxAttempts = 360
-            while (attempts < maxAttempts && !ready) {
-                delay(500)
-                ready = isOpenCodeReady()
-                attempts++
-                // Si el primer lanzamiento no prende, no se reintenta a lo loco: uno mas y ya esta
-                // dicho. Reintentar `serve` cada 500 ms con el puerto ocupado solo genera ruido.
-                if (!ready && attempts == 10 && !arranque.arrancoAhora) {
-                    arranque = com.aegis.hub.data.OpenCodeLauncher.asegurarAbierto(
-                        comprobarSiVivo = { isOpenCodeReady() }
-                    )
-                    android.util.Log.i(TAG, "reintento de arranque: ${arranque.detalle}")
-                }
-            }
+            android.util.Log.i(TAG, "ServidorOpenCode: $final")
+            val ready = final is com.aegis.hub.data.EstadoServidor.Listo
             withContext(Dispatchers.Main) {
                 isStartingSystem = false
                 if (ready) {
@@ -293,10 +271,9 @@ class MainActivity : ComponentActivity() {
                     lastBootError = null
                     toast("OpenCode responde")
                 } else {
-                    // MEDIDO 2026-10-02: estos tres mensajes describian el Hub y su watchdog
-                    // (namespace de node, exit de keepalive, "hub sin 200"), ya eliminados,
-                    // asi que se sustituyen por la unica causa real que queda.
-                    val reason = "OpenCode no responde en 127.0.0.1:49374 tras 3 minutos. Arranca 'opencode serve --service' (Termux) o reinicia el servicio registrado."
+                    // F6: el motivo viene de ServidorOpenCode (del script o del timeout).
+                    val reason = (final as? com.aegis.hub.data.EstadoServidor.Error)?.motivo
+                        ?: "OpenCode no responde en 127.0.0.1:49374. Arranca 'opencode serve --service' (Termux) o reinicia el servicio registrado."
                     lastBootError = reason
                     android.util.Log.e(TAG, "timeout 3min sin respuesta: $reason")
                     toast("OpenCode no responde")
