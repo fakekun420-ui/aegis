@@ -2,6 +2,42 @@
 
 Todo notable de Aegis se documenta aquí. Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [1.2.0] - 2026-10-07 (plan de estabilización F0–F8/F10, código)
+
+Un solo camino por operación, una fuente de verdad por dato, errores siempre con
+motivo y sin trabajo pesado en el hilo principal. Detalle por fase en
+`docs/PLAN-ESTABILIZACION-ESTADO.md`; crónica en `docs/AUDITORIA-2026-10-07.md`.
+Pendiente de validación en el móvil (V-01…V-11 + `PERF-BASELINE.md`) antes de
+fusionar a `main`; F6 y F9 quedan bloqueadas (dispositivo y 3 días estables).
+
+### Añadido
+- **`SesionesRepo`** (F2): crear/renombrar/borrar/vincular en un solo camino, con
+  avisos de éxito parcial e idempotencia 3 s. **`SesionConfigRepo`** (F3):
+  modelo/agente con el servidor como verdad, guardia anti-carreras y rollback.
+  **`CatalogoRepo`** (F4): caché TTL 5 min con vuelo único. **`ChatSync` +
+  `EventosServidor`** (F5, tras `SYNC_POR_EVENTOS=false`): un canal por eventos.
+- **`ErroresRed`** (F1): motivos desde cuerpos reales (`_tag`/`message`, 404
+  vacío, HTML, sobre viejo). **`AegisTrace`** (F0): contador de peticiones debug.
+- **Guardia `tools/check_hilo_principal.py`** (F7, en CI): ni Regex en caliente,
+  ni `su` fuera de permiso, ni `catch` mudo sin motivo.
+- **`FakeOpenCode`** (F10): 6 tests de flujo JVM contra MockWebServer.
+- **`docs/CONTRATO-OPENCODE.md`**: contrato real (20 rutas + 23 tipos SSE
+  capturados) generado desde `OpenCodeApi.kt`.
+
+### Cambiado
+- Abrir un chat: 1 GET de config + cola rápida + historial que reconcilia (antes:
+  2 GET + lista completa + historial entero). Poll de envío por `tail(50)`.
+- Skills/salud en 1 `su` cada una + TTL; `Raiz` acota a 2 `su` en vuelo.
+- `Models.kt` → `data/modelos/`; `Sesion`/`Agente`/`ModeloElegible`/`ModeloRef`;
+  fuera `ModelsHub` y 11 métodos muertos; fuera el flujo "proveedor" y el
+  vocabulario Hub (incluidos 5 textos de UI).
+- CI sin `backend-checks`; `versionName` a `1.1.2` y esta versión `1.2.0`.
+
+### Arreglado
+- Sesión duplicada por reintento fantasma; chip con modelo de otra sesión al
+  cambiar rápido; título local escrito antes de confirmar; smoke test que dejaba
+  sesiones huérfanas; test instrumentado con texto `:8765` obsoleto.
+
 ## [No publicado] — F0 base y medición (plan de estabilización)
 
 Solo instrumentación debug; cero cambio de comportamiento en release.

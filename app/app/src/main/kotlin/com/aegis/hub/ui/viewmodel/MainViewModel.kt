@@ -3,6 +3,9 @@ package com.aegis.hub.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.*
+import com.aegis.hub.data.repo.NuevaSesion
+import com.aegis.hub.data.repo.Resultado
+import com.aegis.hub.data.repo.SesionesRepo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,14 +25,15 @@ class MainViewModel : ViewModel() {
      * y en su chat podrían discrepar. Un solo sitio decide de dónde vienen los datos.
      */
     private val api = Conexion.api
-    private val openCodeApi: OpenCodeApi = OpenCodeApi.default
     private val projectsStore: ProjectsStore = ProjectsStore.default
+    /** F2: creacion/vinculo por el repo; la costura queda para lectura. */
+    private val sesiones = SesionesRepo()
 
     private val _projects = MutableStateFlow<List<Project>>(emptyList())
     val projects: StateFlow<List<Project>> = _projects
 
-    private val _sessions = MutableStateFlow<List<OpencodeSession>>(emptyList())
-    val sessions: StateFlow<List<OpencodeSession>> = _sessions
+    private val _sessions = MutableStateFlow<List<Sesion>>(emptyList())
+    val sessions: StateFlow<List<Sesion>> = _sessions
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
@@ -97,22 +101,16 @@ class MainViewModel : ViewModel() {
     val finishedIds: StateFlow<Set<String>> = _finishedIds
     private val finishedAt = mutableMapOf<String, Long>()
 
-    fun applyActiveSessions(activeMap: Map<String, ActiveSessionStatus>) {
-        // Sesiones ocupadas segun OpenCode: { type: "running" }
-        val busyNow = activeMap.filter { it.value.type == "running" }.keys
-        val previousBusy = _inflightIds.value
-        _inflightIds.value = busyNow
-
+    // F2: un solo camino (antes se saltaba la costura con `openCodeApi` directo y
+    // solo caia a `api.getInflight` si fallaba: dos capas, mismo destino).
+    private fun aplicarInflight(filas: List<InflightSession>) {
+        _inflightIds.value = filas.filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
         val now = System.currentTimeMillis()
-        // Sesiones que estaban ocupadas y ya no lo estan pasan a terminadas temporalmente
-        for (sid in previousBusy) {
-            if (sid !in busyNow) {
-                finishedAt[sid] = now
-            }
+        for (row in filas) {
+            val id = row.id ?: continue
+            if (TurnState.isOver(row)) finishedAt[id] = now
         }
-        finishedAt.keys.retainAll { id ->
-            now - (finishedAt[id] ?: 0L) < FINISHED_TTL_MS
-        }
+        finishedAt.keys.retainAll { id -> now - (finishedAt[id] ?: 0L) < FINISHED_TTL_MS }
         _finishedIds.value = finishedAt.keys.toSet()
     }
 
@@ -124,9 +122,8 @@ class MainViewModel : ViewModel() {
     }
 
     /**
-     * Sondeo con backoff contra /api/session/active de OpenCode.
-     * Si falla, conmuta al fallback del Hub (/api/sessions/inflight) si estuviera disponible,
-     * y si ambos fallan marca desconocido con la edad real.
+     * Sondeo con backoff de `api.getInflight` (el unico camino; F2 elimino el doble
+     * intento directo + costura). Si falla, marca desconocido con la edad real.
      */
     private fun startInflightPolling() {
         inflightJob?.cancel()
@@ -137,9 +134,11 @@ class MainViewModel : ViewModel() {
             while (isActive) {
                 var ok = false
                 try {
-                    val activeMap = openCodeApi.getActiveSessions().data.orEmpty()
-                    applyActiveSessions(activeMap)
-                    ok = true
+                    val r = api.getInflight()
+                    if (r.ok && r.data != null) {
+                        aplicarInflight(r.data)
+                        ok = true
+                    }
                     ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
                     if (fallosDelPoll > 0) {
                         android.util.Log.i(
@@ -151,23 +150,6 @@ class MainViewModel : ViewModel() {
                         fallosDelPoll = 0
                     }
                 } catch (e: Exception) {
-                    try {
-                        val r = api.getInflight()
-                        if (r.ok && r.data != null) {
-                            val rows = r.data
-                            _inflightIds.value = rows.filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
-                            val now = System.currentTimeMillis()
-                            for (row in rows) {
-                                val id = row.id ?: continue
-                                if (TurnState.isOver(row)) finishedAt[id] = now
-                            }
-                            finishedAt.keys.retainAll { id -> now - (finishedAt[id] ?: 0L) < FINISHED_TTL_MS }
-                            _finishedIds.value = finishedAt.keys.toSet()
-                            ok = true
-                            ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
-                        }
-                    } catch (_: Exception) {}
-
                     if (!ok) {
                         fallosDelPoll++
                         android.util.Log.w(
@@ -194,25 +176,17 @@ class MainViewModel : ViewModel() {
     fun refreshInflightNow() {
         viewModelScope.launch {
             try {
-                val activeMap = openCodeApi.getActiveSessions().data.orEmpty()
-                applyActiveSessions(activeMap)
-                ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
-                _inflightFiable.value = calcularEsFiable()
-            } catch (e: Exception) {
-                try {
-                    val r = api.getInflight()
-                    if (r.ok && r.data != null) {
-                        val rows = r.data
-                        _inflightIds.value = rows.filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
-                        ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
-                        _inflightFiable.value = calcularEsFiable()
-                    }
-                } catch (_: Exception) {
-                    android.util.Log.w(
-                        "AegisChats",
-                        "refreshInflightNow fallo: " + e.javaClass.simpleName + ": " + e.message
-                    )
+                val r = api.getInflight()
+                if (r.ok && r.data != null) {
+                    aplicarInflight(r.data)
+                    ultimoAciertoMs = android.os.SystemClock.elapsedRealtime()
+                    _inflightFiable.value = calcularEsFiable()
                 }
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "AegisChats",
+                    "refreshInflightNow fallo: " + e.javaClass.simpleName + ": " + e.message
+                )
             }
         }
     }
@@ -362,51 +336,37 @@ class MainViewModel : ViewModel() {
 
 fun moveSession(sessionId: String, projectId: String) {
         viewModelScope.launch {
-            try {
-                projectsStore.linkSessionToProject(sessionId, projectId)
-                val currentSession = _sessions.value.find { it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId }
-                val currentTitle = currentSession?.resolvedTitle
-                val currentProvider = currentSession?.provider
-                try {
-                    api.linkSession(
-                        projectId,
-                        LinkSessionRequest(sessionId = sessionId, title = currentTitle, provider = currentProvider)
-                    )
-                } catch (_: Exception) {}
-                refreshAll()
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Error de red"
+            // F2: una sola escritura via repo (antes: store + api.linkSession, dos veces).
+            when (val r = sesiones.vincular(sessionId, projectId, null)) {
+                is Resultado.Ok -> refreshAll()
+                is Resultado.Fallo -> {
+                    _error.value = r.motivo
+                    refreshAll()
+                }
             }
         }
     }
 
     fun renameSession(sessionId: String, newTitle: String) {
         viewModelScope.launch {
-            projectsStore.setSessionTitle(sessionId, newTitle)
-            val current = _sessions.value
-            _sessions.value = current.map {
+            // F2: servidor primero via costura (el repo escribe el titulo local solo si
+            // confirma). La lista optimista se reconcilia con refreshAll/refreshSessions.
+            _sessions.value = _sessions.value.map {
                 if (it.resolvedId == sessionId) it.copy(title = newTitle, name = newTitle) else it
             }
             try {
                 val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    openCodeApi.updateSession(sessionId, UpdateOpenCodeSessionRequest(title = newTitle))
+                    api.renameSession(sessionId, mapOf("title" to newTitle))
                 }
-                if (resp.isSuccessful) {
+                if (resp.ok) {
                     refreshAll()
                 } else {
-                    _error.value = "Error renombrando sesion (${resp.code()})"
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error renombrando sesión"
                     refreshSessions()
                 }
             } catch (e: Exception) {
-                try {
-                    val respHub = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        api.renameSession(sessionId, mapOf("title" to newTitle))
-                    }
-                    if (respHub.ok) refreshAll() else refreshSessions()
-                } catch (_: Exception) {
-                    _error.value = e.message ?: "Error renombrando sesion"
-                    refreshSessions()
-                }
+                _error.value = e.message ?: "Error renombrando sesión"
+                refreshSessions()
             }
         }
     }
@@ -422,7 +382,9 @@ fun moveSession(sessionId: String, projectId: String) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     api.pinSession(sessionId)
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                _error.value = "No se pudo fijar el pin: ${e.message ?: "error de red"}"
+            }
             refreshSessions()
         }
     }
@@ -438,7 +400,9 @@ fun moveSession(sessionId: String, projectId: String) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     api.unpinSession(sessionId)
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                _error.value = "No se pudo quitar el pin: ${e.message ?: "error de red"}"
+            }
             refreshSessions()
         }
     }
@@ -454,82 +418,63 @@ fun moveSession(sessionId: String, projectId: String) {
 
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
-            _deletedSessionIds.add(sessionId)
-            val current = _sessions.value
-            _sessions.value = current.filter {
-                it.resolvedId != sessionId && it.id != sessionId && it.ID != sessionId && it.resolvedId !in _deletedSessionIds
-            }
-            _projects.value = _projects.value.map { proj ->
-                if (proj.sessions != null) {
-                    proj.copy(sessions = proj.sessions.filter { it.sessionId != sessionId && it.sessionId !in _deletedSessionIds })
-                } else proj
-            }
+            // F2: servidor primero; el filtrado local solo tras confirmar (antes se
+            // filtraba antes de saber si el servidor borro).
             try {
                 val resp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    openCodeApi.deleteSession(sessionId)
+                    api.deleteSession(sessionId)
                 }
-                if (resp.isSuccessful) {
+                if (resp.ok) {
+                    _deletedSessionIds.add(sessionId)
+                    _sessions.value = _sessions.value.filter {
+                        it.resolvedId != sessionId && it.id != sessionId && it.ID != sessionId && it.resolvedId !in _deletedSessionIds
+                    }
+                    _projects.value = _projects.value.map { proj ->
+                        if (proj.sessions != null) {
+                            proj.copy(sessions = proj.sessions.filter { it.sessionId != sessionId && it.sessionId !in _deletedSessionIds })
+                        } else proj
+                    }
                     refreshAll()
                 } else {
-                    try { api.deleteSession(sessionId) } catch (_: Exception) {}
-                    refreshAll()
+                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error eliminando sesión"
+                    refreshSessions()
                 }
             } catch (e: Exception) {
-                try { api.deleteSession(sessionId) } catch (_: Exception) {}
+                _error.value = e.message ?: "Error eliminando sesión"
                 refreshSessions()
             }
         }
     }
 
-    suspend fun createSessionForProject(projectId: String, title: String, providerOverride: String? = null): String? {
+    suspend fun createSessionForProject(projectId: String, title: String): String? {
         return try {
             val proj = _projects.value.find { it.id == projectId }
             val effectiveProjectId = projectId.trim().ifBlank { null }
             val effectiveFolder = proj?.folder ?: proj?.resolvedFolder
-            val location = if (!effectiveFolder.isNullOrBlank()) OpenCodeLocation(directory = effectiveFolder) else null
-
-            val createdSession = try {
-                // MEDIDO 2026-10-03: antes se llamaba a OpenCode directo y, si fallaba, a la
-                // via vieja del Hub. Las dos hacian lo mismo menos el agente y el modelo: la
-                // sesion nacia sin ellos. Una sola via por la costura, que fija agente (el de
-                // por defecto si no se dice otro) y su modelo tras crear.
-                api.createSession(
-                    CreateOpenCodeSessionRequest(
-                        title = title,
-                        location = location
-                    )
+            // F2: el repo es el unico camino (1 POST, aviso si algo parcial falla).
+            when (
+                val r = sesiones.crear(
+                    NuevaSesion(
+                        titulo = title,
+                        proyectoId = effectiveProjectId,
+                        carpeta = effectiveFolder?.takeIf { it.isNotBlank() }
+                    ),
+                    claveIdempotencia = "$title|$effectiveProjectId"
                 )
-            } catch (_: Exception) {
-                null
-            }
-
-            val sid = createdSession?.data?.id ?: createSessionViaHub(title, effectiveProjectId, providerOverride ?: proj?.provider ?: "opencode")
-
-            if (sid != null) {
-                if (effectiveProjectId != null) {
-                    projectsStore.linkSessionToProject(sid, effectiveProjectId)
-                    try { api.linkSession(effectiveProjectId, LinkSessionRequest(sessionId = sid, title = title, provider = "opencode")) } catch (_: Exception) {}
+            ) {
+                is Resultado.Ok -> {
+                    if (r.avisos.isNotEmpty()) _error.value = r.avisos.joinToString("\n")
+                    refreshSessions()
+                    refreshProjects()
+                    r.valor.id
                 }
-                projectsStore.setSessionTitle(sid, title)
-                refreshSessions()
-                refreshProjects()
+                is Resultado.Fallo -> {
+                    _error.value = r.motivo
+                    null
+                }
             }
-            sid
         } catch (e: Exception) {
             _error.value = e.message
-            null
-        }
-    }
-
-    private suspend fun createSessionViaHub(title: String, projectId: String? = null, provider: String = "opencode"): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        // MEDIDO 2026-10-03: esto era un POST crudo al Hub en :8765, que ya no escucha. Ahora va
-        // por la costura (`api.createSession`), que es OpenCode directo. Se conserva el nombre
-        // por firma: hay llamadas y no aporta nada renombrarlo.
-        try {
-            val resp = api.createSession(CreateOpenCodeSessionRequest(title = title))
-            resp.data?.resolvedId?.takeIf { it.isNotBlank() }
-        } catch (e: Exception) {
-            _error.value = "No se pudo crear la sesion: " + (e.message ?: e::class.simpleName)
             null
         }
     }

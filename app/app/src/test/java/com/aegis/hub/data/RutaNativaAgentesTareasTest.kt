@@ -11,22 +11,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Las nueve funciones de `RutaNativa` que leavesaban en el Hub: `getAgents`, `dispatchAgent`,
- * `getAgentStatus`, `getWorkflows`, `runWorkflow`, `getWorkflowStatus`, `getJobs`, `runJob` y
- * `getProjectState`.
+ * Las tres funciones de `RutaNativa` que quedaron del bloque del Hub: `getWorkflows`,
+ * `runWorkflow` y `getWorkflowStatus`.
  *
  * MEDIDO 2026-10-03 contra el OpenAPI vivo del servidor (113 rutas) y contra el Hub retirado.
- * Resultado: UNA tiene equivalente nativo real (`GET /api/agent`) y las otras OCHO no lo tienen,
- * porque sus endpoints eran del Hub y sus routers nunca se montaron
- * (`docs/audits/AUDITORIA_BACKEND.md` BUG-03). Por eso respondem `ok=false` con motivo en vez de
- * inventar una traduccion.
+ * Resultado: ninguna tiene equivalente nativo, porque sus endpoints eran del Hub y sus routers
+ * nunca se montaron (`docs/audits/AUDITORIA_BACKEND.md` BUG-03). Por eso responden `ok=false`
+ * con motivo en vez de inventar una traduccion.
  *
- * ESTE FICHERO NO PUEDE LLAMAR A `getAgents`. Razon medida: `RutaNativa` saca su cliente de
- * `OpenCodeApi.default`, que es un singleton con la URL real, y no hay donde inyectar otro. En la
- * CI no hay servidor en el puerto 49374, asi que `listAgents()` falla y con ella la funcion. Por
- * eso la parte de `getAgents` que se puede comprobar —el JSON medido y el filtro que deja tres
+ * F1 (2026-10-07): las otras seis (`getAgents`, `dispatchAgent`, `getAgentStatus`, `getJobs`,
+ * `runJob`, `getProjectState`) se eliminaron con sus tests (grep: 0 usos fuera de su
+ * definicion). El catalogo de agentes vive en `getOpencodeAgents` (`GET /api/agent`).
+ *
+ * La parte del catalogo que se puede comprobar —el JSON medido y el filtro que deja tres
  * agentes— se comprueba aqui con el JSON real, igual que hizo `SubagentSessionFilterTest`: el
- * contrato queda fijado, y el metodo entero depende de el.
+ * contrato queda fijado.
  */
 class RutaNativaAgentesTareasTest {
 
@@ -41,24 +40,8 @@ class RutaNativaAgentesTareasTest {
     private val ruta: RutaNativa = RutaNativa()
 
     // ==================================================================
-    // 1. Las ocho sin equivalente: ok=false, sin datos, sin llamar al Hub
+    // 1. Las tres sin equivalente: ok=false, sin datos
     // ==================================================================
-
-    @Test
-    fun `getProjectState responde sin datos porque el workspace era del Hub`() = runBlocking {
-        val r = ruta.getProjectState("proj-kaenor")
-        assertTrue("ok=false con HTTP 200 es lo que permite el tipo", r.isSuccessful)
-        assertFalse(r.body()!!.ok)
-        assertNull(r.body()!!.data)
-    }
-
-    @Test
-    fun `getAgentStatus responde sin datos porque el estado era por proyecto`() = runBlocking {
-        val r = ruta.getAgentStatus("proj-kaenor")
-        assertTrue(r.isSuccessful)
-        assertFalse(r.body()!!.ok)
-        assertNull("responder con el catalogo global SERIA ignores el projectId", r.body()!!.data)
-    }
 
     @Test
     fun `getWorkflows responde sin datos porque no hay workflows`() = runBlocking {
@@ -77,44 +60,6 @@ class RutaNativaAgentesTareasTest {
     }
 
     @Test
-    fun `getJobs responde sin datos porque el planificador nunca arranco`() = runBlocking {
-        val r = ruta.getJobs()
-        assertTrue(r.isSuccessful)
-        assertFalse(r.body()!!.ok)
-        assertNull(r.body()!!.data)
-    }
-
-    @Test
-    fun `runJob lleva el motivo en el error con el codigo del Hub retirado`() = runBlocking {
-        val r = ruta.runJob("job-1")
-        assertTrue(r.isSuccessful)
-        val cuerpo = r.body()!!
-        assertFalse(cuerpo.ok)
-        // MEDIDO: la local NO se llama `error` porque ese es el nombre de la funcion de kotlin
-        // `error()`, y una variable con ese nombre la tapa dentro de su ambito.
-        val campoError = cuerpo.error
-        assertNotNull("este es el unico de los ocho con campo error donde poner el motivo", campoError)
-        val motivo = campoError!!
-        assertEquals("hub-retirado", motivo.code)
-        assertTrue(motivo.message!!.contains("job"))
-    }
-
-    @Test
-    fun `dispatchAgent deja el motivo en el mensaje de la tarea`() = runBlocking {
-        val cuerpo = DispatchAgentRequest("orchestrator", "proj-kaenor", emptyMap())
-        val r = ruta.dispatchAgent(cuerpo)
-        assertTrue(r.isSuccessful)
-        assertFalse(r.body()!!.ok)
-        val tarea = r.body()!!.data
-        assertNotNull(tarea)
-        val motivo = tarea!!
-        assertNull("sin id de tarea, porque no hay tarea: esto es un motivo", motivo.taskId)
-        assertTrue(
-            "el motivo tiene que decir cual es el casi equivalente y por que no sirve",
-            motivo.message!!.contains("session.switchAgent"))
-    }
-
-    @Test
     fun `runWorkflow deja el motivo en el mensaje de la tarea`() = runBlocking {
         val r = ruta.runWorkflow("proj-kaenor", RunWorkflowRequest("wf-1"))
         assertTrue(r.isSuccessful)
@@ -127,20 +72,16 @@ class RutaNativaAgentesTareasTest {
     }
 
     @Test
-    fun `ninguna de las ocho vuelve a preguntar al Hub`() = runBlocking {
-        // Si alguna delegara, el `hubQueFalla` de arriba reventaria aqui con el nombre del metodo.
-        ruta.getProjectState("p")
-        ruta.dispatchAgent(DispatchAgentRequest("orchestrator", "p", emptyMap()))
-        ruta.getAgentStatus("p")
-        ruta.getWorkflows("p")
-        ruta.runWorkflow("p", RunWorkflowRequest("wf"))
-        ruta.getWorkflowStatus("p")
-        ruta.getJobs()
-        val ultima = ruta.runJob("j")
+    fun `las tres responden sin tocar red del Hub`() = runBlocking {
+        val w = ruta.getWorkflows("p")
+        val s = ruta.getWorkflowStatus("p")
+        val ultima = ruta.runWorkflow("p", RunWorkflowRequest("wf"))
         // MEDIDO: la ultima llamada tambien tiene que ser la que devuelve el cuerpo, porque si
-        // aqui se acabara en la propia llamada, `runBlocking` devolveria `Response<BaseResponse>`
+        // aqui se acabara en la propia llamada, `runBlocking` devolveria `Response<TaskResponse>`
         // y JUnit4 no acepta un metodo de test que no sea void.
-        assertNotNull("las ocho se ejecutaron sin tocar el Hub", ultima.body())
+        assertFalse(w.body()!!.ok)
+        assertFalse(s.body()!!.ok)
+        assertNotNull("las tres se ejecutaron sin equivalente nativo", ultima.body())
     }
 
     // ==================================================================
@@ -213,9 +154,9 @@ class RutaNativaAgentesTareasTest {
      * mapa que sale tiene UNA clave, `data`, y el valor de esa clave no trae los ids de sesion.
      *
      * O sea: la senal no se pierde al leerla, se pierde al DESERIALIZARLA, y por eso no se puede
-     * marcar un agente como ocupado con ella. Por eso `getAgents` responde `status = idle` como
-     * definicion, y este test existe para que el dia que alguien TOQUE desenvolver la envoltura,
-     * se entere de que el mapa tiene una sola clave.
+     * marcar un agente como ocupado con ella. F1: `getAgents` se elimino (0 usos; el catalogo
+     * vive en `getOpencodeAgents`), y este test queda como candado de la envoltura: el dia que
+     * alguien TOQUE desenvolverla, se entera de que el mapa tiene una sola clave.
      */
     private val activeMedido = """
         {"data":{

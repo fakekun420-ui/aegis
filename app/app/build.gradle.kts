@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 android {
     namespace = "com.aegis.hub"
     compileSdk = 35
@@ -13,7 +16,7 @@ android {
         // Auto-increment versionCode via BUILD_NUMBER (GitHub run_number) — each CI build unique (spec 2)
         // F5 (v1.0.0): fallback LOCAL subido 1 -> 2; en CI manda BUILD_NUMBER/GITHUB_RUN_NUMBER
         versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 2
-        versionName = "1.1.2"
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // MEDIDO 2026-10-03: POCO F3 arm64. Sin filtro el APK trae 4 ABIs de
         // libandroidx.graphics.path.so; solo se ejecuta una.
@@ -76,6 +79,17 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 }
+// F10: trazas completas en CI (sin esto el log solo muestra la primera
+// linea y los mensajes de los asserts se pierden).
+tasks.withType<Test> {
+    testLogging {
+        events("failed")
+        showStandardStreams = true
+        exceptionFormat = TestExceptionFormat.FULL
+        showStackTraces = true
+        showCauses = true
+    }
+}
 dependencies {
     // Core + legacy views (kept for existing non-Compose code path)
     implementation("androidx.core:core-ktx:1.13.1")
@@ -109,6 +123,8 @@ dependencies {
     // los fakes construyen retrofit2.Response a mano y no hay red real.
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1") // misma versión que coroutines-android
+    // F10: servidor falso de OpenCode (misma versión que okhttp).
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     // Instrumentada (src/androidTest): ext junit + espresso + compose ui-test.
     // El BOM se REUTILIZA (el mismo de release, 2024.10.00): no se introduce una
     // segunda versión de compose-bom que pudiera desalinear ui-test y la app.

@@ -1,0 +1,2 @@
+404 con cuerpo vacio (POST /api/session/ses_noexiste123/message contra :49374 vivo,
+2026-10-07). El fichero existe para documentar la forma; el caso se prueba con "".

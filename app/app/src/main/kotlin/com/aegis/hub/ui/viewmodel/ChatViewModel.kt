@@ -2,6 +2,15 @@ package com.aegis.hub.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.aegis.hub.data.FormReplyBody
+import com.aegis.hub.data.ErroresRed
+import com.aegis.hub.data.repo.NuevaSesion
+import com.aegis.hub.data.repo.Resultado
+import com.aegis.hub.data.repo.ConfigSesion
+import com.aegis.hub.data.repo.SesionConfigRepo
+import com.aegis.hub.data.repo.SesionesRepo
+import com.aegis.hub.data.sync.ChatSync
+import com.aegis.hub.data.sync.EstadoTurno
+import com.aegis.hub.data.sync.EventosServidor
 import com.aegis.hub.data.AppContext
 import com.aegis.hub.data.InflightSession
 import com.aegis.hub.data.ModelPreferences
@@ -21,15 +30,13 @@ import com.aegis.hub.data.MessageDeliveryStatus
 import com.aegis.hub.data.MessageInfo
 import com.aegis.hub.data.MessagePart
 import android.util.Log
-import com.aegis.hub.data.AgentPreferences
-import com.aegis.hub.data.ModelOption
-import com.aegis.hub.data.OpencodeAgent
+import com.aegis.hub.data.ModeloElegible
+import com.aegis.hub.data.Agente
 import com.aegis.hub.data.seleccionables
 import com.aegis.hub.data.modeloPorDefecto
+import com.aegis.hub.data.ModelosUtil
 import com.aegis.hub.data.modeloPorDefectoPara
 import com.aegis.hub.data.SendMessageRequest
-import com.aegis.hub.data.SessionModelRef
-import com.aegis.hub.data.CreateOpenCodeSessionRequest
 import com.aegis.hub.data.EventStream
 import com.aegis.hub.data.OpenCodeStreamItem
 import kotlinx.coroutines.Dispatchers
@@ -43,14 +50,25 @@ import kotlinx.coroutines.withContext
 import com.aegis.hub.data.TurnState
 
 /**
- * Agente con el que arranca un chat que no sabe cual usar. "orchestrator" a proposito:
- * MEDIDO 2026-09-30 es el unico de los tres elegibles con modelo propio y el unico que
- * delega en los cargos. "build" era el valor anterior y mandaba los turnos del chat a un
- * agente distinto del que se esta usando en el resto del sistema.
+ * Agente con el que arranca un chat que no sabe cual usar. "build" desde 2026-10-07:
+ * "orchestrator" era el valor medido el 2026-09-30 (único primario con modelo propio),
+ * pero desapareció en la migración ECC del 2026-10-06 (F2 recortó `agent` a solo `build`)
+ * y los chats nuevos fallaban con `AgentNotFoundError`. "build" es además el
+ * `default_agent` del servidor, así que el chat usa el mismo agente que el resto del sistema.
  */
-private const val AGENTE_POR_DEFECTO = "orchestrator"
+private const val AGENTE_POR_DEFECTO = "build"
 
-class ChatViewModel : ViewModel() {
+class ChatViewModel(
+    private val configRepo: SesionConfigRepo = SesionConfigRepo(),
+    private val sesionesRepo: SesionesRepo = SesionesRepo()
+) : ViewModel() {
+    companion object {
+        /**
+         * F5: canal unico de sincronizacion por eventos. `false` = bucle actual
+         * (`SyncPorPoll` intacto). Solo se pone `true` tras V-06/V-08 tres dias.
+         */
+        const val SYNC_POR_EVENTOS = false
+    }
     /**
      * MEDIDO 2026-10-01: esta era `ApiClient.service`, el cliente del Hub, en las 18 llamadas
      * de este fichero. Ahora sale de [Conexion], que decide entre Hub y OpenCode nativo.
@@ -64,6 +82,22 @@ class ChatViewModel : ViewModel() {
      * cliente del Hub de siempre. Ver la nota de por qué el valor por defecto NO es el nativo.
      */
     private val api = Conexion.api
+    /** F3: config (modelo/agente) por el repo; `sesionesRepo` para crear. */
+    private val sesiones = sesionesRepo
+
+    /** F5: un solo canal (tras flag; apagado = bucle actual). */
+    private val chatSync = ChatSync(
+        viewModelScope,
+        EventosServidor.Compartida.servidor,
+        leerCola = { sid -> api.getMessagesTail(sid, 200).data.orEmpty() },
+        leerFormularios = { sid -> api.getPendingForms(sid).data.orEmpty() },
+        leerPermisos = { sid -> api.getPendingPermissions(sid).data.orEmpty() },
+        leerOcupados = {
+            api.getInflight().data.orEmpty()
+                .filter { TurnState.isBusy(it) }.mapNotNull { it.id }.toSet()
+        }
+    )
+    private var espejoJob: Job? = null
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
@@ -74,8 +108,8 @@ class ChatViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
-    private val _models = MutableStateFlow<List<ModelOption>>(emptyList())
-    val models: StateFlow<List<ModelOption>> = _models
+    private val _models = MutableStateFlow<List<ModeloElegible>>(emptyList())
+    val models: StateFlow<List<ModeloElegible>> = _models
 
     private val _modelsLoading = MutableStateFlow(false)
     val modelsLoading: StateFlow<Boolean> = _modelsLoading
@@ -88,21 +122,8 @@ class ChatViewModel : ViewModel() {
     private val _selectedModel = MutableStateFlow<String?>(null)
     val selectedModel: StateFlow<String?> = _selectedModel
 
-    // El modelo ya NO se guarda en un mapa del ViewModel: ese mapa muria con el
-    // ViewModel, que esta scopeado a la entrada de navegacion, y por eso no arreglaba
-    // nada. Ahora vive en SharedPreferences (ModelPreferences) y además se consulta al
-    // servidor, que es la fuente autoritativa. Ver la nota de `load()`.
-    private var currentSessionForModel: String = ""
-
-    // OpenCode es el unico motor de la sesion. Antes arrancaba en "antigravity" y, con
-    // el default del Hub tambien en antigravity, ningun chat nuevo era de OpenCode.
-    private val _selectedProvider = MutableStateFlow<String>("opencode")
-    val selectedProvider: StateFlow<String> = _selectedProvider
-
-    // F6: sesión ya vinculada a un proveedor — el pill queda fijo para que
-    // cambiar de motor en un chat abierto NO re-bindea ni "borra" la sesión.
-    private val _sessionProviderBound = MutableStateFlow(false)
-    val sessionProviderBound: StateFlow<Boolean> = _sessionProviderBound
+    // F1: motor unico (OpenCode). El estado de "proveedor elegido" y de "sesion
+    // vinculada a proveedor" (Antigravity) se elimino: solo ses_ existe.
 
     private val _sessionTitle = MutableStateFlow<String?>("Nuevo chat")
     val sessionTitle: StateFlow<String?> = _sessionTitle
@@ -116,13 +137,13 @@ class ChatViewModel : ViewModel() {
     // estado viejo y un 429/502 no dejaba ni una pista, de modo que "Trabajando en
     // ello" podia quedarse pegado para un turno que ya habia acabado. Con el
     // contador, la app puede distinguir "un fallo" de "el Hub no esta" y decirlo.
-    private val _hubReachable = MutableStateFlow(true)
-    val hubReachable: StateFlow<Boolean> = _hubReachable
+    private val _servidorAlcanzable = MutableStateFlow(true)
+    val servidorAlcanzable: StateFlow<Boolean> = _servidorAlcanzable
     private var refreshFailStreak = 0
 
     /**
      * Un ciclo del refresco salio bien -> el Hub responde.
-     * Uno fallo -> se cuenta; a partir de [HUB_FAIL_STREAK_FOR_DEGRADED] se dice.
+     * Uno fallo -> se cuenta; a partir de [SERVIDOR_FAIL_STREAK_FOR_DEGRADED] se dice.
      *
      * El umbral son 3 ciclos (6 s) y no 1 a proposito: el criterio del codigo es que
      * un fallo puntual se ignora, y eso se respeta. Lo que se cambia no es tragarse
@@ -132,12 +153,12 @@ class ChatViewModel : ViewModel() {
         if (ok) {
             if (refreshFailStreak != 0) {
                 refreshFailStreak = 0
-                _hubReachable.value = true
+                _servidorAlcanzable.value = true
             }
             return
         }
         refreshFailStreak++
-        if (refreshFailStreak >= HUB_FAIL_STREAK_FOR_DEGRADED) _hubReachable.value = false
+        if (refreshFailStreak >= SERVIDOR_FAIL_STREAK_FOR_DEGRADED) _servidorAlcanzable.value = false
     }
 
     private val _streamingText = MutableStateFlow<String?>(null)
@@ -166,8 +187,8 @@ class ChatViewModel : ViewModel() {
 
     // Los agentes reales, tal cual. Sin lista no hay selector: se muestran los 6 primary
     // y se dice, en vez de fingir que la lista esta completa.
-    private val _agents = MutableStateFlow<List<OpencodeAgent>>(emptyList())
-    val agents: StateFlow<List<OpencodeAgent>> = _agents
+    private val _agents = MutableStateFlow<List<Agente>>(emptyList())
+    val agents: StateFlow<List<Agente>> = _agents
 
     private val _agentsLoading = MutableStateFlow(false)
     val agentsLoading: StateFlow<Boolean> = _agentsLoading
@@ -234,14 +255,6 @@ class ChatViewModel : ViewModel() {
     private val _finishedTurnId = MutableStateFlow<String?>(null)
     val finishedTurnId: StateFlow<String?> = _finishedTurnId
 
-    // Cuando se cambia de motor hay que crear una sesión nueva (el proveedor vive en
-    // el prefijo del id). Este estado lleva la id recién creada para que ChatScreen
-    // navegue a ella; se consume una sola vez.
-    private val _pendingSessionNav = MutableStateFlow<String?>(null)
-    val pendingSessionNav: StateFlow<String?> = _pendingSessionNav
-
-    fun consumePendingNav() { _pendingSessionNav.value = null }
-
     // FASE A-5 (anti doble envío): clave del envío actualmente en vuelo
     // ("proveedor|sesión|texto|nº archivos"). Si llega un segundo click o una
     // reentrada con el MISMO contenido antes de que termine el envío actual,
@@ -255,14 +268,7 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    private fun isTechnicalTitle(t: String?): Boolean {
-        if (t == null) return true
-        val s = t.trim()
-        if (s.isBlank()) return true
-        if (s.startsWith("ses_") || s.startsWith("companion:") || s.startsWith("local_")) return true
-        if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
-        return false
-    }
+    private fun isTechnicalTitle(t: String?): Boolean = com.aegis.hub.util.esTituloTecnico(t)
 
     private fun updateTitleFromFirstMessage(msgList: List<Message>) {
         if (_sessionTitle.value.isNullOrBlank() || isTechnicalTitle(_sessionTitle.value)) {
@@ -290,43 +296,27 @@ class ChatViewModel : ViewModel() {
      * Nada de esto sustituye al usuario por un `first()` de la lista: un modelo
      * desconocido se deja como está, para que la elección sea siempre explícita.
      */
-    private fun restoreModelFor(sessionId: String, provider: String) {
-        viewModelScope.launch {
+    // F3: una sola carga de config por sesion, con guardia anti-carreras (H-06).
+    // Cancela la anterior y, al volver, comprueba que se siga mostrando la misma
+    // sesion antes de escribir estado. Una respuesta tardia de A nunca pisa a B.
+    private var configJob: Job? = null
+    private var modeloManualEnSesion = false
+
+    fun cargarConfig(sid: String) {
+        configJob?.cancel()
+        modeloManualEnSesion = false
+        configJob = viewModelScope.launch {
             val ctx = runCatching { AppContext.require() }.getOrNull()
-            // MEDIDO 2026-10-03: hay prefs con `proveedor/id` de una version vieja. Se migran
-            // al abrir, una vez e idempotente; si ya corrio no toca nada.
             runCatching { ctx?.let { ModelPreferences.migrarPrefijos(it) } }
-
-            if (sessionId.isNotBlank()) {
-                runCatching {
-                    val r = api.getSessionModel(sessionId)
-                    // El servidor tambien puede traer el id con prefijo: se corta aqui para
-                    // que la comparacion con la lista (ids cortos) no falle nunca por eso.
-                    val fromServer = ModelPreferences.normalizar(r.data?.id)
-                    if (r.ok && fromServer.isNotBlank()) {
-                        if (_selectedModel.value != fromServer) _selectedModel.value = fromServer
-                        runCatching { ModelPreferences.setModel(ctx!!, sessionId, fromServer) }
-                        return@runCatching
-                    }
-                }.onFailure {
-                    android.util.Log.w("AegisChat", "No se pudo leer el modelo de $sessionId: ${it.message}")
-                }
-                val saved = runCatching { ctx?.let { ModelPreferences.modelFor(it, sessionId) } }.getOrNull()
-                if (!saved.isNullOrBlank()) {
-                    if (_selectedModel.value != saved) _selectedModel.value = saved
-                    return@launch
-                }
+            val cfg = configRepo.leer(sid)
+            if (_currentSessionId.value != sid) return@launch
+            _servidorAlcanzable.value = cfg.origen == ConfigSesion.Origen.SERVIDOR || sid.isBlank()
+            if (cfg.modelo != null) _selectedModel.value = cfg.modelo
+            _agentMode.value = cfg.agente ?: AGENTE_POR_DEFECTO
+            // F4: el titulo viene del mismo GET (antes: lista completa solo para esto).
+            if (!cfg.titulo.isNullOrBlank() && !isTechnicalTitle(cfg.titulo)) {
+                _sessionTitle.value = cfg.titulo
             }
-
-            // MEDIDO 2026-10-01: aqui habia un `ModelPreferences.lastModel()` que ponia como
-            // modelo inicial el ULTIMO elegido en cualquier chat. Es lo que hacia que al abrir
-            // una sesion nueva se cambiara el modelo: esta linea corre ANTES que `loadModels`,
-            // dejaba `_selectedModel` relleno, y el default de la regla (Space Bunny Free) no
-            // llegaba a aplicarse nunca.
-            // Se quita. Lo que decide ahora el modelo inicial de una sesion nueva es la unica
-            // fuente de verdad: la lista de OpenCode, via `modeloPorDefecto`. Una sesion YA
-            // EXISTENTE no pasa por aqui: su modelo sale del servidor o de su propio registro
-            // en `ModelPreferences`, unas lineas mas arriba.
         }
     }
 
@@ -334,70 +324,28 @@ class ChatViewModel : ViewModel() {
         // Nunca se guarda ni se envia con prefijo: la lista trae ids cortos y el servidor
         // distingue por pareja id mas providerID, no por un id compuesto.
         val limpio = ModelPreferences.normalizar(modelId)
-        _selectedModel.value = limpio.ifBlank { null }
         if (limpio.isBlank()) return
-        // Se persiste por sesión Y como "última elección" (que es lo que usarán los chats
-        // nuevos). Es lo que evita que un chat nuevo vuelva al default.
-        runCatching { ModelPreferences.setModel(AppContext.require(), currentSessionForModel, limpio) }
-        // MEDIDO 2026-10-03: esto solo escribia en prefs. El servidor seguia con el modelo
-        // viejo y el CLI lo veia: la app y el CLI discrebaban. Ahora se empuja al servidor,
-        // que es la unica verdad. Sin variant: al cambiar de modelo el variant viejo puede
-        // no existir en el nuevo, asi que decide el servidor.
-        val sid = currentSessionForModel
-        if (sid.isBlank()) return
-        val prov = _models.value.firstOrNull { it.id == limpio }?.providerID
-            ?: modelId?.trim()?.takeIf { it.contains("/") }?.substringBeforeLast("/")?.trim()?.takeIf { it.isNotBlank() }
+        // F3: optimista con reversa. Se pinta ya; si el servidor rechaza, se restaura el
+        // previo y el motivo va a _error (antes: prefs primero y catch mudo, H-05).
+        val previo = _selectedModel.value
+        _selectedModel.value = limpio
+        modeloManualEnSesion = true
+        val sid = (_currentSessionId.value ?: "").trim()
+        if (sid.isBlank()) {
+            // Chat nuevo sin id: no hay servidor al que empujar; el repo guardara la
+            // ultima eleccion cuando se fije de verdad.
+            viewModelScope.launch { configRepo.fijarModelo("", limpio) }
+            return
+        }
         viewModelScope.launch {
-            try { api.setSessionModel(sid, SessionModelRef(id = limpio, providerID = prov)) }
-            catch (_: Exception) { }
-        }
-    }
-
-    fun selectProvider(provider: String) {
-        val p = provider.lowercase().trim()
-        if (p == _selectedProvider.value) return
-
-        // El proveedor NO es una etiqueta: el Hub lo deriva del prefijo del id de
-        // sesión (agy_ -> antigravity, ses_ -> opencode, ver _conventionProvider en
-        // providers.js). Por eso cambiar el chip en un chat existente NO podía
-        // funcionar: un id agy_ se enruta SIEMPRE a antigravity, diga lo que diga la
-        // app. La Sesión vive en el espacio de conversación de su motor.
-        //
-        // Así que cambiar de motor implica una sesión NUEVA en el motor destino. Si
-        // el usuario elige otro, se crea y se navega a ella; el chat viejo queda
-        // intacto. Esto era lo que faltaba cuando solo se desbloqueaba el chip: la
-        // app dejaba cambiar y luego no llegaba ninguna respuesta.
-        val sid = _currentSessionId.value.orEmpty()
-        val sessionProvider = when {
-            sid.startsWith("ses_") -> "opencode"
-            else -> null
-        }
-        if (sessionProvider != null && sessionProvider != p) {
-            viewModelScope.launch {
-                _error.value = null
-                val ns = createNewSession(p)
-                if (ns.isNullOrBlank()) {
-                    _error.value = "No se pudo crear un chat de $p."
-                } else {
-                    _pendingSessionNav.value = ns
+            when (val r = configRepo.fijarModelo(sid, limpio)) {
+                is Resultado.Ok -> Unit
+                is Resultado.Fallo -> {
+                    if (_currentSessionId.value == sid) _selectedModel.value = previo
+                    _error.value = r.motivo
                 }
             }
-            return
         }
-
-        // Mismo motor (o sesión aún sin prefijo): aquí sí se puede recolocar, y solo
-        // mientras no haya respuesta real — en cuanto el asistente contesta, el
-        // historial pertenece a ese motor y se queda fijo.
-        val tieneRespuestaReal = _messages.value.any {
-            it.role == "assistant" && it.text.isNotBlank() && !it.text.trimStart().startsWith("⚠️")
-        }
-        if (_sessionProviderBound.value && tieneRespuestaReal) {
-            _error.value = "El asistente ya respondió en este chat, así que el motor queda fijo. Para usar otro, crea un chat nuevo."
-            return
-        }
-        _selectedProvider.value = p
-        _sessionProviderBound.value = false
-        loadModels(p)
     }
 
     /**
@@ -408,27 +356,48 @@ class ChatViewModel : ViewModel() {
         val limpio = name.trim()
         if (limpio.isBlank()) return
         val lista = _agents.value
-        // Sin lista no se bloquea: el Hub vuelve a validar contra /api/agent y es la
+        // Sin lista no se bloquea: el servidor valida contra /api/agent y es la
         // validacion que de verdad importa (MEDIDO: OpenCode guarda CUALQUIER nombre, y
         // uno inexistente produce un turno vacio sin decir nada). Este filtro es solo
-        // para que un toque en la hoja no installs un nombre imposible.
+        // para que un toque en la hoja no instale un nombre imposible.
         if (lista.isNotEmpty() && lista.none { it.name == limpio }) {
             _error.value = "«$limpio» no es un agente de OpenCode."
             return
         }
+        // F3: optimista con reversa (igual que el modelo) + el modelo del agente si el
+        // usuario no eligio modelo a mano en esta sesion.
+        val previo = _agentMode.value
+        val modeloPrevio = _selectedModel.value
         _agentMode.value = limpio
-        // Se guarda por sesion. Sin esto, abrir el chat, elegir agente, salir y volver a
-        // entrar devolvia el de por defecto: el `ChatViewModel` muere con el
-        // `NavBackStackEntry` y un estado en memoria no recuerda nada.
-        val ctx = runCatching { AppContext.require() }.getOrNull()
-        // `_currentSessionId` y no un `sessionId`: ese es un PARAMETRO de send()/load() y
-        // dentro de selectAgent no existe (daria 'unresolved reference'). El StateFlow si
-        // es miembro y es la sesion en la que esta trabajando el ViewModel. En blanco
-        // significa chat nuevo todavia sin id, y entonces solo queda la "ultima eleccion".
         val sid = (_currentSessionId.value ?: "").trim()
-        runCatching {
-            if (ctx != null) AgentPreferences.setAgent(ctx, sid, limpio)
-        }.onFailure { Log.w("AegisChat", "No se pudo guardar el agente de $sid: ${it.message}") }
+        viewModelScope.launch {
+            when (val r = configRepo.fijarAgente(sid, limpio)) {
+                is Resultado.Fallo -> {
+                    if ((_currentSessionId.value ?: "").trim() == sid) _agentMode.value = previo
+                    _error.value = r.motivo
+                    return@launch
+                }
+                is Resultado.Ok -> Unit
+            }
+            if (!modeloManualEnSesion && sid.isNotBlank()) {
+                val mod = configRepo.modeloDeAgente(limpio)?.id
+                if (!mod.isNullOrBlank()) {
+                    when (val r2 = configRepo.fijarModelo(sid, mod)) {
+                        is Resultado.Ok -> {
+                            if ((_currentSessionId.value ?: "").trim() == sid) {
+                                _selectedModel.value = ModelosUtil.normalizarIdModelo(mod)
+                            }
+                        }
+                        is Resultado.Fallo -> {
+                            if ((_currentSessionId.value ?: "").trim() == sid) {
+                                _selectedModel.value = modeloPrevio
+                            }
+                            _error.value = r2.motivo
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -439,33 +408,12 @@ class ChatViewModel : ViewModel() {
      * El orden importa: si se leyera primero la copia local, un agente cambiado DESDE EL
      * CLI no se veria en la app, que es el mismo bug que se corrigio para el modelo.
      */
-    private fun restoreAgentFor(sessionId: String) {
-        if (sessionId.isBlank()) {
-            _agentMode.value = AGENTE_POR_DEFECTO
-            return
-        }
+    /** F4: invalida el catalogo con cache y lo vuelve a pedir. */
+    fun refrescarCatalogo() {
         viewModelScope.launch {
-            val ctx = runCatching { AppContext.require() }.getOrNull()
-            val delHub = runCatching { api.getSessionAgent(sessionId).data?.agent }
-                .onFailure { Log.w("AegisChat", "No se pudo leer el agente de $sessionId: ${it.message}") }
-                .getOrNull()
-            val guardado = runCatching { ctx?.let { AgentPreferences.agentFor(it, sessionId) } }.getOrNull()
-            val elegido = when {
-                !delHub.isNullOrBlank() -> delHub
-                !guardado.isNullOrBlank() -> guardado
-                else -> AGENTE_POR_DEFECTO
-            }
-            // Si el agente elegido ya no existe (se borro un cargo), se vuelve al de por
-            // defecto en vez de mandar un nombre que el Hub va a descartar: medido, un
-            // nombre que no existe produce un turno VACIO sin ningun error.
-            if (_agents.value.isNotEmpty() && _agents.value.none { it.name == elegido }) {
-                _agentMode.value = AGENTE_POR_DEFECTO
-                return@launch
-            }
-            if (_agentMode.value != elegido) _agentMode.value = elegido
-            if (!delHub.isNullOrBlank() && ctx != null) {
-                runCatching { AgentPreferences.setAgent(ctx, sessionId, delHub) }
-            }
+            runCatching { api.refrescarCatalogo() }
+            loadModels()
+            loadAgents()
         }
     }
 
@@ -499,12 +447,13 @@ class ChatViewModel : ViewModel() {
         _error.value = null
     }
 
-    fun loadModels(provider: String? = null) {
-        val prov = (provider ?: _selectedProvider.value).lowercase().trim().ifBlank { "opencode" }
+    fun loadModels() {
         viewModelScope.launch {
             _modelsLoading.value = true
             try {
-                val resp = api.getModels(prov)
+                // F1: motor unico. Antes se filtraba por el proveedor elegido; el valor
+                // efectivo era siempre "opencode", asi que se fija aqui.
+                val resp = api.getModels("opencode")
                 if (resp.ok && resp.data != null && resp.data.isNotEmpty()) {
                     _models.value = resp.data
                     // Antes, si el modelo elegido no venia en la lista, se sustituia en
@@ -581,7 +530,7 @@ class ChatViewModel : ViewModel() {
     // Ciclos de refresco seguidos fallidos antes de decir que el Hub no esta.
     // El refresco va cada 2 s, asi que 3 son ~6 s: suficiente para no Destapar un
     // fallo puntual, suficiente para no dejar la pantalla mintiendo un minuto.
-    private val HUB_FAIL_STREAK_FOR_DEGRADED = 3
+    private val SERVIDOR_FAIL_STREAK_FOR_DEGRADED = 3
 
     private fun mergeTail(actual: List<Message>, cola: List<Message>): List<Message> {
         if (cola.isEmpty()) return actual
@@ -630,7 +579,7 @@ class ChatViewModel : ViewModel() {
                 // para esto costaria peticiones en el turno que mas las necesita. El
                 // efecto honesto es una ventana: con texto en vivo, el refresco hace
                 // como mucho 6 ciclos de espera (~12 s) y despues uno completo, asi
-                // que hubReachable puede tardar hasta ~14 s en corregirse. No queda
+                // que servidorAlcanzable puede tardar hasta ~14 s en corregirse. No queda
                 // pegado: en cuanto hay un ciclo completo, si responde, se resetea.
                 if (pollingJob?.isActive == true) continue
                 // El stream manda mientras hay texto en vivo, pero con un tope: si el
@@ -990,6 +939,42 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         viewRefreshJob?.cancel()
         viewRefreshJob = null
         viewRefreshSessionId = null
+        // F5: con el flag, el espejo y el canal se cierran aqui tambien.
+        espejoJob?.cancel()
+        espejoJob = null
+        if (SYNC_POR_EVENTOS) chatSync.cerrar()
+    }
+
+    /**
+     * F5: espejo del canal unico a los estados de pantalla. Unico escritor de
+     * `_messages` con el flag (el resto de escritores se saltan tras el flag).
+     */
+    private fun arrancarEspejo(sid: String) {
+        espejoJob?.cancel()
+        chatSync.abrir(sid)
+        espejoJob = viewModelScope.launch {
+            launch { chatSync.mensajes.collect { _messages.value = it } }
+            launch { chatSync.textoEnVivo.collect { _streamingText.value = it } }
+            launch { chatSync.formularios.collect { _pendingForms.value = it } }
+            launch { chatSync.permisos.collect { _pendingPermissions.value = it } }
+            launch {
+                chatSync.turno.collect { t ->
+                    when (t) {
+                        is EstadoTurno.Ocupado -> {
+                            _turnBusy.value = true
+                            _turnFinished.value = false
+                        }
+                        is EstadoTurno.Terminado -> {
+                            _turnBusy.value = false
+                            announceFinishedTurnIfAny(_messages.value)
+                        }
+                        is EstadoTurno.Ocioso -> {
+                            _turnBusy.value = false
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun onCleared() {
@@ -997,61 +982,69 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         stopViewRefresh()
     }
 
-    fun load(sessionId: String, provider: String? = null) {
+    fun load(sessionId: String) {
         pollingJob?.cancel()
-        if (sessionId.isBlank()) {
+        if (SYNC_POR_EVENTOS) {
+            // F5: sin bucle viejo; el canal unico alimenta el espejo.
+            if (sessionId.isBlank()) {
+                chatSync.cerrar()
+            } else {
+                arrancarEspejo(sessionId)
+            }
+        } else if (sessionId.isBlank()) {
             stopViewRefresh()
         } else if (viewRefreshSessionId != sessionId) {
             // startViewRefresh cancela el job anterior por su cuenta, así que recargar
             // la misma sesión tampoco deja el refresco muerto.
             startViewRefresh(sessionId)
         }
-        val prov = (provider ?: "opencode").lowercase().trim()
-        _selectedProvider.value = prov
-        // F6: sólo una sesión existente queda vinculada al proveedor de nacimiento;
-        // los chats nuevos pueden cambiar libremente de motor.
-        _sessionProviderBound.value = sessionId.isNotBlank()
-        currentSessionForModel = sessionId
-        // Al cambiar de sesion, el modelo se vuelve a resolver desde cero: lo elige
-        // `loadModels` con el primer free real de la lista. El comentario que estaba
-        // aqui decia que el default "solo se aplica si el proveedor es ANTIGRAVITY",
-        // y eso era FALSO: no habia ninguna condicion, y Antigravity hace dias que no
-        // existe. Se deja el reset explicito, que si hace falta.
-        if (_selectedModel.value.isNullOrBlank()) {
-            _selectedModel.value = null
-        }
-        restoreModelFor(sessionId, prov)
-        restoreAgentFor(sessionId)
+        // F3: la sesion actual se fija ANTES de cargar config (la guardia anti-carreras
+        // compara contra este valor). Al cambiar de sesion el chip se limpia: nunca se
+        // muestra el modelo/agente de otra sesion mientras llega la lectura.
+        _currentSessionId.value = sessionId
+        _selectedModel.value = null
+        _agentMode.value = AGENTE_POR_DEFECTO
+        cargarConfig(sessionId)
         if (sessionId.isBlank()) {
             _sessionTitle.value = "Nuevo chat"
-            loadModels(prov)
+            loadModels()
             loadAgents()
             return
         }
-        _currentSessionId.value = sessionId
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
-            loadModels(prov)
+            loadModels()
             loadAgents()
 
             // Try to resolve human-readable title from sessions list
+            // F4: fuera (el titulo viene de cargarConfig/leer con el mismo GET de
+            // modelo+agente). Esta era 1 peticion de lista completa solo por el titulo.
+
+            // F4: la cola primero (rapida) para pintar ya; el historial completo
+            // despues reconcilia por id (F5 lo hara bajo demanda por scroll).
+            // F5: con el flag el espejo es el unico escritor; estos dos bloques se saltan.
+            if (!SYNC_POR_EVENTOS) {
             try {
-                val sessResp = api.getOpencodeSessions()
-                if (sessResp.ok && sessResp.data != null) {
-                    val found = sessResp.data.find { it.resolvedId == sessionId || it.id == sessionId || it.ID == sessionId }
-                    if (found != null && !found.title.isNullOrBlank() && !isTechnicalTitle(found.title)) {
-                        _sessionTitle.value = found.title
-                    }
+                val colaResp = api.getMessagesTail(sessionId, 200)
+                if (colaResp.ok && colaResp.data != null) {
+                    val nonEmpties = colaResp.data.filterNot { it.isEmpty }
+                    _messages.value = nonEmpties
+                    updateTitleFromFirstMessage(nonEmpties)
+                    _loading.value = false
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                    // La cola es optimizacion (rapida); si falla va el historial
+                    // completo debajo, que si avisa. Un aviso aqui duplicaria.
+                    android.util.Log.d("AegisChat", "cola rapida fallo, va historial: ${e.message}")
+                }
 
             try {
                 val resp = api.getMessages(sessionId)
                 if (resp.ok && resp.data != null) {
                     val nonEmpties = resp.data.filterNot { it.isEmpty }
-                    _messages.value = nonEmpties
-                    updateTitleFromFirstMessage(nonEmpties)
+                    _messages.value = mergeTail(_messages.value, nonEmpties)
+                    updateTitleFromFirstMessage(_messages.value)
                 } else if (!resp.ok) {
                     _error.value = resp.error?.message ?: resp.error?.code ?: "Error al obtener mensajes"
                 }
@@ -1060,11 +1053,45 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             } finally {
                 _loading.value = false
             }
+            } // if (!SYNC_POR_EVENTOS)
         }
     }
 
-    fun send(sessionId: String, text: String, provider: String? = null) {
-        sendWithFiles(sessionId, text, emptyList(), provider)
+    /**
+     * F5: envio por el canal unico. Sin pollingJob ni stream propio: el espejo ya trae
+     * el texto en vivo y la reconciliacion confirma el eco (fusion por id). El motivo
+     * de fallo sale del cuerpo HTTP real, igual que el camino viejo.
+     */
+    private suspend fun envioPorEventos(
+        targetSessionId: String,
+        sendReq: SendMessageRequest,
+        tempMsgId: String
+    ) {
+        _sendingInFlight.value = true
+        try {
+            api.sendMessage(sessionId = targetSessionId, body = sendReq)
+            _sendingInFlight.value = false
+            chatSync.refrescarAhora()
+            _loading.value = false
+        } catch (e: Exception) {
+            _sendingInFlight.value = false
+            chatSync.actualizarMensaje(tempMsgId) { it.withStatus(MessageDeliveryStatus.ERROR) }
+            val http = e as? retrofit2.HttpException
+            _error.value = if (http != null) {
+                val cuerpo = runCatching { http.response()?.errorBody()?.string() }.getOrNull()
+                ErroresRed.parsear(cuerpo, http.code())
+            } else {
+                "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
+            }
+        } finally {
+            _loading.value = false
+            _sendingInFlight.value = false
+            inFlightSendKey = null
+        }
+    }
+
+    fun send(sessionId: String, text: String) {
+        sendWithFiles(sessionId, text, emptyList())
     }
 
     fun retryMessage(failedMsg: Message, sessionId: String) {
@@ -1087,17 +1114,15 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
     fun sendWithFiles(
         sessionId: String,
         text: String,
-        files: List<AttachedFile>,
-        explicitProvider: String? = null
+        files: List<AttachedFile>
     ) {
         if (text.isBlank() && files.isEmpty()) return
 
-        val provider = (explicitProvider ?: _selectedProvider.value).lowercase().trim().ifBlank { "opencode" }
         val tempMsgId = "local_${System.currentTimeMillis()}"
 
         // FASE A-5: guarda anti doble envío — un segundo click/reentrada con el mismo
         // mensaje mientras sigue en vuelo no debe reenviarlo (ver inFlightSendKey).
-        val sendKey = "$provider|${sessionId.trim()}|${text.trim()}|${files.size}"
+        val sendKey = "${sessionId.trim()}|${text.trim()}|${files.size}"
         if (sendKey == inFlightSendKey) return
         inFlightSendKey = sendKey
 
@@ -1136,11 +1161,14 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 info = MessageInfo(id = tempMsgId, role = "user", status = MessageDeliveryStatus.PENDING),
                 parts = optimisticParts
             )
-            _messages.value = _messages.value + optimistic
+            // F5: con el flag el optimista entra por el canal (el espejo es el unico
+            // escritor de _messages); si no, directo como siempre.
+            if (SYNC_POR_EVENTOS) chatSync.insertarOptimista(optimistic)
+            else _messages.value = _messages.value + optimistic
 
             // 2. Resolve Target Session ID
             val activeSessionId = sessionId.ifBlank { _currentSessionId.value ?: "" }
-            val targetSessionId = if (activeSessionId.isBlank()) createNewSession(provider) else activeSessionId
+            val targetSessionId = if (activeSessionId.isBlank()) createNewSession() else activeSessionId
             if (targetSessionId == null) {
                 _error.value = "No se pudo crear o resolver la sesión en el servidor"
                 _messages.value = _messages.value.map {
@@ -1186,9 +1214,14 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     delay(1500)
                     if (!isActive || messageDelivered) break
                     try {
-                        val pollResp = api.getMessages(targetSessionId)
+                        // F4: la cola (rapida) en vez del historial entero; se fusiona
+                        // por id con lo ya pintado (F5 lo sustituye por eventos).
+                        val pollResp = api.getMessagesTail(targetSessionId, 50)
                         if (pollResp.ok && pollResp.data != null) {
-                            val nonEmpties = pollResp.data.filterNot { it.isEmpty }
+                            val nonEmpties = mergeTail(
+                                _messages.value,
+                                pollResp.data.filterNot { it.isEmpty }
+                            )
                             // Un asistente NUEVO: último assistant con id distinto al baseline.
                             val lastAssistant = nonEmpties.lastOrNull { it.role == "assistant" && !it.isEmpty }
                             val newAssistantArrived = lastAssistant != null &&
@@ -1206,6 +1239,8 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                 _messages.value = nonEmpties
                             }
                         }
+                    // GUARD-SILENCIO-OK: poll de 1,5 s por diseno (reintenta solo;
+                    // el estado final lo marca el bloque sync de abajo con motivo).
                     } catch (_: Exception) { }
                 }
             }
@@ -1219,10 +1254,18 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 val sendReq = SendMessageRequest(
                     parts = reqParts,
                     model = currentModel,
-                    provider = provider,
                     agent = currentAgentMode,
                     mode = currentAgentMode
                 )
+
+                // F5: con el flag el envio va por el canal unico (sin pollingJob ni
+                // stream propio: el espejo ya los cubre). Se cancela el poll que se
+                // acaba de crear arriba. El camino viejo sigue intacto debajo.
+                if (SYNC_POR_EVENTOS) {
+                    pollingJob?.cancel()
+                    envioPorEventos(targetSessionId, sendReq, tempMsgId)
+                    return@launch
+                }
 
                 // MEDIDO 2026-10-03: esto era un POST SSE al Hub en :8765, que ya no escucha.
                 // El Hub adaptaba el stream del CLI a eventos accepted/chunk/tool_start/done; sin
@@ -1249,6 +1292,8 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                 _streamingText.value = item.textAccumulated
                             }
                         }
+                    // GUARD-SILENCIO-OK: stream best-effort (el poll trae lo mismo;
+                    // si el stream muere, el parcial sigue llegando por el poll).
                     } catch (_: Exception) { }
                 }
 
@@ -1256,8 +1301,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 try {
                     val responseMsg = api.sendMessage(
                         sessionId = targetSessionId,
-                        body = sendReq,
-                        provider = provider
+                        body = sendReq
                     )
                     _sendingInFlight.value = false
                     if (!responseMsg.isEmpty) {
@@ -1328,12 +1372,26 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                 return@launch
                             }
                         }
-                    } catch (_: Exception) { }
+                    } catch (e: Exception) {
+                        // Ultimo intento antes del ERROR visible de abajo: se deja
+                        // rastro en log para distinguir "fallo el reintento" de
+                        // "ni se intento".
+                        android.util.Log.w("AegisChat", "reintento final fallo: ${e.message}")
+                    }
 
                     _messages.value = _messages.value.map {
                         if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
                     }
-                    _error.value = "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
+                    // F1: si el fallo es HTTP, el motivo sale del cuerpo real (ver
+                    // ErroresRed y los fixtures de `test/resources/errores/`); si no,
+                    // el mensaje de la excepcion como antes.
+                    val http = e as? retrofit2.HttpException
+                    _error.value = if (http != null) {
+                        val cuerpo = runCatching { http.response()?.errorBody()?.string() }.getOrNull()
+                        ErroresRed.parsear(cuerpo, http.code())
+                    } else {
+                        "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
+                    }
                     _messages.value = _messages.value.map {
                         if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it
                     }
@@ -1350,41 +1408,17 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         }
     }
 
-    private suspend fun createNewSession(provider: String = "opencode"): String? = withContext(Dispatchers.IO) {
-        // MEDIDO 2026-10-03: esto era un POST crudo al Hub en :8765, que ya no escucha, asi que
-        // crear un chat desde cero fallaba siempre en silencio (null). Ahora va por la costura,
-        // que es OpenCode directo. El parametro provider se conserva por firma pero ya no decide:
-        // OpenCode no tiene proveedores de sesion, solo modelos por sesion.
-        try {
-            val resp = api.createSession(CreateOpenCodeSessionRequest(title = "Nuevo chat"))
-            resp.data?.resolvedId?.takeIf { it.isNotBlank() }
-        } catch (_: Exception) { null }
-    }
-}
-
-    /**
-     * Saca el motivo real de un cuerpo de error del Hub.
-     *
-     * El Hub responde `{ok:false, error:{code, message}}` y providers.js YA mete ahi
-     * el motivo accionable ("Antigravity no tiene cuota disponible (cuota agotada)",
-     * o el final de stderr de agy). Antes la app se tragaba el cuerpo y pintaba un
-     * error generico, losing justo la informacion que dice si fue cuota, 429 o token.
-     */
-    private fun parseDeliveryError(crudo: String?): String {
-        if (crudo.isNullOrBlank()) return "El servidor no acepto el mensaje"
-        val txt = crudo.trim()
-        return try {
-            val env = org.json.JSONObject(txt)
-            val err = env.optJSONObject("error")
-            val msg = err?.optString("message")?.takeIf { it.isNotBlank() }
-                ?: env.optString("message").takeIf { it.isNotBlank() }
-            val code = err?.optString("code")?.takeIf { it.isNotBlank() }
-            when {
-                msg != null && code != null -> "$code: $msg"
-                msg != null -> msg
-                else -> txt.take(300)
+    private suspend fun createNewSession(): String? = withContext(Dispatchers.IO) {
+        // F2: por el repo (antes: catch -> null mudo, H-01). El motivo va a _error.
+        when (val r = sesiones.crear(NuevaSesion("Nuevo chat"))) {
+            is Resultado.Ok -> {
+                r.avisos.forEach { android.util.Log.w("AegisChat", "createNewSession: $it") }
+                r.valor.id
             }
-        } catch (_: Exception) {
-            txt.take(300)
+            is Resultado.Fallo -> {
+                _error.value = r.motivo
+                null
+            }
         }
     }
+}

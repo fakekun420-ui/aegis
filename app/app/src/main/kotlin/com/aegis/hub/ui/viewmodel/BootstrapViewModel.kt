@@ -10,7 +10,7 @@ import com.aegis.hub.data.BootstrapRepository
 import com.aegis.hub.data.BootstrapRunRequest
 import com.aegis.hub.data.BootstrapState
 import com.aegis.hub.data.FinalCheckResponse
-import com.aegis.hub.data.RetrofitBootstrapRepository
+import com.aegis.hub.data.NativoBootstrapRepository
 import com.aegis.hub.data.SetupCheckStatus
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
@@ -28,7 +28,7 @@ data class BootstrapUiState(
     val state: BootstrapState? = null,
     val loading: Boolean = false,
     val actionError: String? = null,
-    val hubReachable: Boolean = true,
+    val servidorAlcanzable: Boolean = true,
     // ---- F3: verificación final + smoke test + guía de auth (/api/setup/*) ----
     val finalCheck: FinalCheckResponse? = null,
     val finalCheckLoading: Boolean = false,
@@ -45,22 +45,22 @@ data class BootstrapUiState(
  * F1 — dominio de bootstrap bajo el prefijo /api/bootstrap/ (state, run, step, cancel) —ApiClient + token del hub.
  *
  * - Polling en vivo cada 1000 ms mientras phase == running; carga única en el resto de fases.
- * - Red/403 → hubReachable=false ("Esperando el hub…") + reintento suave cada 5 s.
+ * - Red/403 → servidorAlcanzable=false ("Esperando OpenCode (127.0.0.1:49374)…") + reintento suave cada 5 s.
  * - error.code → mensajes en español; 409 ALREADY_RUNNING en run() = sólo recarga (sin error).
  * - Nunca lanza: todo fallo queda reflejado en el estado local.
  * F2: friendlyError() (top-level, al final de este archivo) traduce los códigos
  * crudos del motor de instalación a mensajes guía; el raw sigue visible en
  * SetupWizardScreen (cabecera y card del paso).
  * F3: runFinalCheck()/runSmokeTest()/guideAuth() bajo el prefijo /api/setup/ (final-check, smoke-test, auth). Sus fallos
- * quedan LOCALES (actionError o smokeError) sin alternar hubReachable, para que
+ * quedan LOCALES (actionError o smokeError) sin alternar servidorAlcanzable, para que
  * la tarjeta "Verificación final" siga visible con su error; el bloqueo
- * "Esperando el hub…" queda reservado al polling de estado (fetchState).
- * F4: la fuente de datos se inyecta con DEFAULT ([RetrofitBootstrapRepository]);
+ * "Esperando OpenCode (127.0.0.1:49374)…" queda reservado al polling de estado (fetchState).
+ * F4: la fuente de datos se inyecta con DEFAULT ([NativoBootstrapRepository]);
  * la firma sin argumentos que usan AppNavHost/MainActivity (viewModel()) sigue
  * intacta porque Kotlin genera el ctor sin args al tener todos los params default.
  */
 class BootstrapViewModel(
-    private val repo: BootstrapRepository = RetrofitBootstrapRepository
+    private val repo: BootstrapRepository = NativoBootstrapRepository
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(BootstrapUiState())
@@ -105,14 +105,14 @@ class BootstrapViewModel(
             val st = resp.body()?.data
             when {
                 resp.isSuccessful && st != null -> {
-                    _ui.value = _ui.value.copy(state = st, loading = false, hubReachable = true)
+                    _ui.value = _ui.value.copy(state = st, loading = false, servidorAlcanzable = true)
                     hubRetryJob?.cancel()
                     if (!pendingActionError) _ui.value = _ui.value.copy(actionError = null)
                     if (st.phase == BootstrapPhase.running) startPolling()
                 }
                 // Sin token/permiso → tratado como hub inaccesible (mensaje de espera)
                 resp.code() == 403 -> markUnreachable()
-                resp.isSuccessful -> _ui.value = _ui.value.copy(loading = false, hubReachable = true)
+                resp.isSuccessful -> _ui.value = _ui.value.copy(loading = false, servidorAlcanzable = true)
                 else -> {
                     // 5xx u otro error HTTP: conserva el estado local y lo muestra, nunca crashea
                     pendingActionError = false
@@ -143,14 +143,14 @@ class BootstrapViewModel(
     }
 
     private fun markUnreachable() {
-        _ui.value = _ui.value.copy(loading = false, hubReachable = false)
+        _ui.value = _ui.value.copy(loading = false, servidorAlcanzable = false)
         pollJob?.cancel()
         pollJob = null
-        scheduleHubRetry()
+        programarReintento()
     }
 
     /** Reintento suave cada 5000 ms; si sigue caído se reprograma (una ventana cada vez). */
-    private fun scheduleHubRetry() {
+    private fun programarReintento() {
         hubRetryJob?.cancel()
         hubRetryJob = viewModelScope.launch {
             delay(5000)
@@ -195,7 +195,7 @@ class BootstrapViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Red/403 → bloqueo "Esperando el hub…" + reintento a los 5 s
+                // Red/403 → bloqueo "Esperando OpenCode (127.0.0.1:49374)…" + reintento a los 5 s
                 markUnreachable()
             } finally {
                 // Tras cada acción → recarga inmediata del estado
@@ -212,7 +212,7 @@ class BootstrapViewModel(
      * Éxito → finalCheck (ready + checks); si ALGUN check queda en fail/manual se carga
      * además la guía de comandos (guideAuth()). Cualquier
      * error queda LOCAL en actionError con la guía friendlyError() sin perder el
-     * raw (hubReachable NO se alterna: la tarjeta permanece visible).
+     * raw (servidorAlcanzable NO se alterna: la tarjeta permanece visible).
      */
     fun runFinalCheck() {
         finalCheckJob?.cancel()

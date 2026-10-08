@@ -1,0 +1,15 @@
+# Gitleaks: solo lo que puede ser un secreto de verdad.
+#
+# MEDIDO 2026-10-07: el job `gitleaks` fallaba en CI con 9 hallazgos, todos falsos
+# positivos: 1 era `curl -i -u opencode:PASS` escrito como EJEMPLO en el plan
+# (regla curl-auth-user; reescrito sin credencial literal) y 8 son
+# `generic-api-key` sobre `opencode-companion-apk/graphify-out/cache/stat-index.json`,
+# un indice generado por graphify que solo existe en commits viejos (ya no esta en el
+# arbol). Ninguno es una credencial real. Se excluye el directorio generado en vez de
+# reescribir historia.
+
+[allowlist]
+description = "directorios generados (indices de graphify), sin secretos posibles"
+paths = [
+  '''opencode-companion-apk/graphify-out/''',
+]
