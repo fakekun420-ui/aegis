@@ -21,7 +21,7 @@ class RootShellDrenajeTest {
         override fun read(cbuf: CharArray, off: Int, len: Int): Int {
             if (entregado) throw InterruptedIOException("corte simulado")
             val n = minOf(len, texto.length)
-            texto.toCharArray(cbuf, off, off + n)
+            texto.toCharArray(cbuf, off, 0, n)
             entregado = true
             return n
         }
