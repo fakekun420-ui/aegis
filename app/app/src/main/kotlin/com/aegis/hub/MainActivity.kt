@@ -93,6 +93,15 @@ class MainActivity : ComponentActivity() {
         // Los ViewModel necesitan leer preferencias (p. ej. el modelo por sesión) y no
         // llevan Context en el constructor a propósito. Se les da el de aplicación aquí.
         AppContext.init(applicationContext)
+        // MEDIDO 2026-10-08 (StrictMode DiskReadViolation en arranque 1.2.0):
+        // `ProjectsStore.default` es `by lazy` y sus argumentos por defecto tocan
+        // `filesDir` (crea el dir tras instalar). Quien lo estrene en el hilo
+        // principal paga ~1 s de E/S ahi. Se estrena aqui en IO; lo posterior
+        // reutiliza el valor cacheado y no toca disco por este camino.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { com.aegis.hub.data.ProjectsStore.default }
+                .onFailure { android.util.Log.w(TAG, "precalentado ProjectsStore: ${it.message}") }
+        }
         // El ViewModel no tiene Context; se lo damos una vez para el aviso de
         // "respuesta final" en la barra de notificaciones.
         com.aegis.hub.ui.TurnNotifier.init(this)

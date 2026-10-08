@@ -11,7 +11,7 @@ APK: artifact `aegis-debug` del run de CI verde de `estabilizar/integracion`
 
 ## V-09 — un solo servidor (bloquea fusión a main y F9)
 - Tras arranque, tras `am force-stop` + relanzar ×5, tras `kill` del serve +
-  reabrir app: `pgrep -f '[o]pencode serve --service' | wc -l` siempre **1**.
+  reabrir app: `pgrep -f '[o]pencode(.exe)? serve --service' | wc -l` siempre **1**.
 - Si alguna da 2 → AUTO-FALLÓ: revertir F6 y registrar.
 
 ## V-01…V-08, V-10, V-11 — ver `docs/qa/QA_CHECKLIST.md`

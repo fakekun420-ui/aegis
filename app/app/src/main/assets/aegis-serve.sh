@@ -46,7 +46,10 @@ else
 fi
 
 # Guarda anti-duplicado (H-11): con corchete para no contarse a si mismo.
-n=$(pgrep -f '[o]pencode serve --service' 2>/dev/null | wc -l)
+# MEDIDO 2026-10-08: el proceso real es `opencode.exe serve --service` (con
+# `.exe`); el patron sin `(.exe)?` NO lo ve (0 PIDs con el servidor vivo) y la
+# guarda dejaria pasar un segundo servidor. Verificado: con `(.exe)?` -> 1 PID.
+n=$(pgrep -f '[o]pencode(.exe)? serve --service' 2>/dev/null | wc -l)
 if [ "$n" -gt 0 ]; then
     echo "YA_HAY:$n"
     exit 0
