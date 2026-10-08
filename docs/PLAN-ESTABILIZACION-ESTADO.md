@@ -106,6 +106,11 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
 - §6.5: `createSessionViaHub` 0; `createSession(` prod solo en repo+costura+smoke;
   `catch (_: Exception) {}` en viewmodel solo 2 con marcador GUARD-SILENCIO-OK;
   `SYNC_POR_EVENTOS=false`; `versionName=1.2.0`; guardias verdes; tests 282+11.
+- Integracion final (merge F6 + cierre): CI verde run 37784710096 (6 jobs),
+  292 tests JVM (minimo 277). APK debug = artifact `aegis-debug` de ese run.
+- Grafo local: `graphify update` intentado; aborta en `_rebuild_lock` (FUSE errno 38,
+  trampa conocida de §2). Indice local sin tracking git: queda STALE=yes (79 por
+  ruido de mtime FUSE + 3 ficheros nuevos reales). No es entregable; se registra.
 - Matiz honesto a §6.5: `RootShell.` directo sigue en `OpenCodeLauncher`
   (lanzador, permitido) + `Credentials`/`SetupNative` (excepciones F7 fuera de
   main documentadas); `RutaNativa` va por `Raiz`. No es 0 literal: es lo que F7
