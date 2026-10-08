@@ -17,7 +17,7 @@ interface ApiService {
     suspend fun deleteProject(@Path("id") id: String): Envelope<Project>
 
     @GET("api/opencode/sessions")
-    suspend fun getOpencodeSessions(): Envelope<List<OpencodeSession>>
+    suspend fun getOpencodeSessions(): Envelope<List<Sesion>>
 
     @PATCH("api/opencode/sessions/{id}")
     suspend fun renameSession(@Path("id") id: String, @Body body: Map<String, String>): Envelope<Map<String, Any>>
@@ -46,9 +46,6 @@ interface ApiService {
     @POST("api/skills")
     suspend fun createSkill(@Body body: SkillCreateRequest): Envelope<Skill>
 
-    @PATCH("api/skills/{scope}/{name}")
-    suspend fun updateSkill(@Path("scope") scope: String, @Path("name") name: String, @Body body: Map<String, String>): Envelope<Skill>
-
     @DELETE("api/skills/{scope}/{name}")
     suspend fun deleteSkill(@Path("scope") scope: String, @Path("name") name: String): Envelope<Map<String, String>>
 
@@ -71,39 +68,35 @@ interface ApiService {
     ): Envelope<PartFull>
 
     // Send message via hub proxy POST /opencode/session/:id/message (handles injection)
+    // F1: sin cabeceras X-Provider/X-Project-Id (RutaNativa nunca las leia; el modelo
+    // viaja en el cuerpo y el proyecto vive en ProjectsStore).
     @POST("opencode/session/{id}/message")
     suspend fun sendMessage(
         @Path("id") sessionId: String,
-        @Body body: SendMessageRequest,
-        @Header("X-Provider") provider: String? = null,
-        @Header("X-Project-Id") projectId: String? = null
+        @Body body: SendMessageRequest
     ): Message
 
     @GET("api/opencode/models")
-    suspend fun getModels(@Query("provider") provider: String? = null): Envelope<List<ModelOption>>
+    suspend fun getModels(@Query("provider") provider: String? = null): Envelope<List<ModeloElegible>>
+
+    // F4: invalida el catalogo con cache (no es una ruta de red; es local).
+    suspend fun refrescarCatalogo(): Envelope<Boolean>
 
     // Los agentes de OpenCode de verdad. Ruta propia del Hub (no el proxy /opencode/*):
     // MEDIDO 2026-09-30, ese proxy NO anade el Basic de OpenCode y devuelve 401.
     @GET("api/opencode/agents")
-    suspend fun getOpencodeAgents(): Envelope<List<OpencodeAgent>>
+    suspend fun getOpencodeAgents(): Envelope<List<Agente>>
 
     // El agente REAL con el que esta trabajando la sesion. El Hub lo lee de OpenCode
     // (`GET /api/session/:id` -> `.agent`), que es quien lo guardo al activar el agente.
     // Sin esto la app no tenia de donde recuperarlo al reabrir un chat, y por eso salia
     // el de por defecto. MEDIDO 2026-09-30: una sesion de este mismo dispositivo
     // devolvia {agent: "orchestrator", model: "space-bunny-free"}.
-    @GET("api/sessions/{id}/agent")
-    suspend fun getSessionAgent(@Path("id") sessionId: String): Envelope<SessionAgentRef?>
+    // F3: lo lee SesionConfigRepo.leer (un solo GET); esta ruta queda fuera.
 
     // System
     @GET("api/system/health")
     suspend fun getSystemHealth(): Response<HealthResponse>
-
-    @GET("api/system/logs")
-    suspend fun getSystemLogs(@Query("limit") limit: Int = 100): Response<LogsResponse>
-
-    @GET("api/system/memory")
-    suspend fun getSystemMemory(): Response<MemoryResponse>
 
     // Skills
     @GET("api/skills")
@@ -115,15 +108,6 @@ interface ApiService {
     @DELETE("api/skills/{id}")
     suspend fun uninstallSkill(@Path("id") skillId: String): Response<BaseResponse>
 
-    @GET("api/skills/{id}/config")
-    suspend fun getSkillConfig(@Path("id") skillId: String): Response<SkillConfigResponse>
-
-    @PATCH("api/skills/{id}/config")
-    suspend fun updateSkillConfig(
-        @Path("id") skillId: String,
-        @Body config: Map<String, Any>
-    ): Response<BaseResponse>
-
     // Workspace / Projects
     @GET("api/workspace/projects")
     suspend fun getWorkspaceProjects(): Response<ProjectsResponse>
@@ -131,21 +115,8 @@ interface ApiService {
     @POST("api/workspace/projects/{id}/init")
     suspend fun initProject(@Path("id") projectId: String): Response<BaseResponse>
 
-    @GET("api/workspace/projects/{id}/state")
-    suspend fun getProjectState(@Path("id") projectId: String): Response<ProjectStateResponse>
-
     @POST("api/workspace/projects/{id}/index")
     suspend fun indexProject(@Path("id") projectId: String): Response<TaskResponse>
-
-    // Agents
-    @GET("api/agents")
-    suspend fun getAgents(): Response<AgentsResponse>
-
-    @POST("api/agents/dispatch")
-    suspend fun dispatchAgent(@Body body: DispatchAgentRequest): Response<TaskResponse>
-
-    @GET("api/agents/status/{projectId}")
-    suspend fun getAgentStatus(@Path("projectId") projectId: String): Response<AgentStatusResponse>
 
     // Workflows
     @GET("api/workflows/{projectId}")
@@ -159,13 +130,6 @@ interface ApiService {
 
     @GET("api/workflows/{projectId}/status")
     suspend fun getWorkflowStatus(@Path("projectId") projectId: String): Response<WorkflowStatusResponse>
-
-    // Jobs
-    @GET("api/jobs")
-    suspend fun getJobs(): Response<JobsResponse>
-
-    @POST("api/jobs/{id}/run")
-    suspend fun runJob(@Path("id") jobId: String): Response<BaseResponse>
 
     // F1 — Bootstrap / asistente de configuración inicial (contrato /api/bootstrap/*)
     @GET("api/bootstrap/state")
@@ -229,8 +193,7 @@ interface ApiService {
     // Modelo real con el que trabaja una sesión. La fuente autoritativa: OpenCode la
     // tiene en el objeto de sesión, así que también refleja un cambio hecho desde el
     // CLI. Devuelve {id, providerID, variant} o null si no hay modelo fijado.
-    @GET("api/sessions/{id}/model")
-    suspend fun getSessionModel(@Path("id") sessionId: String): Envelope<SessionModelRef?>
+    // F3: lo lee SesionConfigRepo.leer (un solo GET); esta ruta queda fuera.
 
     // Fija el modelo de una sesion en el servidor (POST /api/session/{id}/model del CLI).
     // MEDIDO 2026-10-03: no existia en la interfaz. La app guardaba el modelo solo en
@@ -243,7 +206,7 @@ interface ApiService {
     // MEDIDO 2026-10-03: los dos ViewModels la creaban con POST crudo al Hub en :8765,
     // que ya no escucha. Ahora van por aqui, que es OpenCode directo.
     @POST("api/opencode/session")
-    suspend fun createSession(@Body body: CreateOpenCodeSessionRequest): Envelope<OpencodeSession>
+    suspend fun createSession(@Body body: CreateOpenCodeSessionRequest): Envelope<Sesion>
 }
 
 /** Referencia de modelo que devuelve el Hub para una sesión. */

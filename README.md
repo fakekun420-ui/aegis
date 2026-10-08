@@ -1,112 +1,72 @@
 # Aegis — Mobile Development Hub
 
-> ⚠️ **Un solo servidor de OpenCode.** El Hub proxea a `:49374`, que es el servicio
-> registrado y el MISMO que usa el TUI del CLI. Antes había dos (`:4096` para el Hub y
-> `:49374` para el CLI): compartían la base de datos pero no el estado de turno en curso,
-> que vive en la memoria de cada proceso, así que el CLI no veía los turnos de Aegis.
-> `server.js` ignora `--opencode-port` a propósito y lo avisa con un WARN. **No lancés un
-> segundo `opencode serve` en otro puerto.**
+App Android (`com.aegis.hub`, Jetpack Compose) que habla **directo con OpenCode**
+(`127.0.0.1:49374`, servicio registrado, el mismo que usa el TUI del CLI) desde un
+POCO F3 con root + chroot Ubuntu. El Hub intermedio (`:8765`) se retiró entero el
+2026-10-02 por decisión del usuario: no hay `backend/`, no hay `server.js`, no hay
+`keepalive.sh`.
 
-Aegis is a self-contained AI orchestration platform running entirely from an Android device (POCO F3, Android 15, root Magisk, Ubuntu chroot), **with root secured by token and a self-service setup wizard**: install the APK, follow the 6-step wizard, and the device provisions itself (Ubuntu + Node + OpenCode + Antigravity + skills) with SHA256-verified downloads and rollback.
+> ⚠️ **Un solo `opencode serve --service`.** Si un turno parece vacío o atascado,
+> busca un segundo servidor antes de depurar nada. Nunca lances otro `serve`.
 
-**Estado: `v1.1.2` (2026-09-26)** — un solo servidor de OpenCode (`:49374`), formularios respondibles desde la app, y el estado de ejecución real de los turnos.
+**Estado: `v1.1.2`** — ver [CHANGELOG](CHANGELOG.md).
 
-Lo nuevo en `1.1.x`:
+- Chat con OpenCode (modelos, agentes, formularios y permisos respondibles).
+- Proyectos vinculados a carpetas reales (`ProjectsStore` local; OpenCode no conoce
+  el vínculo).
+- Skills, Workspace, Workflow, Control Center, TTS/STT, Setup Wizard de 6 pasos.
+- Plan de estabilización en curso: [plan](docs/PLAN-ESTABILIZACION-AEGIS.md) ·
+  [tablero](docs/PLAN-ESTABILIZACION-ESTADO.md) · [contrato OpenCode](docs/CONTRATO-OPENCODE.md).
 
-- **El "final del final".** El divisor de "✓ respuesta final" ya no salta tras cada
-  `bash`: depende de `session.execution.succeeded`, el evento que emite el propio
-  OpenCode cuando el agente de verdad ha terminado y espera. Antes se apoyaba en
-  `info.time.completed`, que cierra el *mensaje*, no el turno. Ver
-  [ADR-003](docs/adr/ADR-003-turn-final-signal.md).
-- **Formularios respondibles desde la app**, incluida una encuesta de varias
-  preguntas. Antes solo se podían contestar desde el TUI del CLI, con flechas.
-- **Fases "Enviando" → "Generando" separadas**, con confirmación de que el servidor
-  recibió el mensaje y el motivo real si lo rechaza (cuota de Antigravity, 429…).
-- **El scroll deja de robar la navegación** al releer el historial, con botón para
-  volver al mensaje más reciente.
-- **Círculo de "ejecutando"** en los chats que siguen trabajando, y funciona igual si
-  el turno se lanzó desde la app o desde el CLI.
+```
+app (Kotlin, :49374 directo) ──►  opencode serve --service 127.0.0.1:49374
+       │                                     ▲
+       └──── CompanionService :8766 ─────────┘  (a11y/TTS/STT, loopback)
+```
 
-→ [CHANGELOG](CHANGELOG.md) · [Quickstart](docs/QUICKSTART.md) · [QA checklist](docs/qa/QA_CHECKLIST.md)
+→ [Quickstart](docs/QUICKSTART.md) · [QA checklist](docs/qa/QA_CHECKLIST.md) ·
+[Arquitectura](docs/ARCHITECTURE.md)
 
 ![Build](https://github.com/fakekun420-ui/aegis/actions/workflows/build-apk.yml/badge.svg)
 
-## Architecture
-
-- **App**: Jetpack Compose Android app (`com.aegis.hub`) — Control Center, Project Workspace, Skill Manager, Workflow Runner, Chat and the **Setup Wizard** (bootstrap de 6 pasos + verificación final + smoke test).
-- **Hub**: Node.js orchestrator on **`127.0.0.1:8765`** (loopback only, `X-Aegis-Token` en todo `/api/*` y `/opencode/*`, rate-limit 429) with modular routers, workflow engine, agent system and skill manager.
-- **opencode**: daemon on **`127.0.0.1:49374`**, proxyado por el hub; la app sólo habla con el hub.
-- **Agents**: Specialized AI agents (Research, Architect, Auditor) operating via artifact-driven communication.
-- **Skills**: Graphify, opencode-mem, y un motor de skills con **allowlist** verificada por hash.
-- **Workflows**: YAML DAG-based workflow engine for autonomous multi-agent pipelines.
-- **Supervisión**: `keepalive.sh` sondea `GET /api/health` cada 10 s y relanza lo caído (hook Magisk `service.d`).
-
-```
-app (Kotlin)  ──X-Aegis-Token──►  hub Node 127.0.0.1:8765  ──►  opencode 127.0.0.1:49374
-      │                                   │
-      └──── CompanionService :8766 ◄──────┘  (a11y/TTS/STT, loopback)
-```
-
-## Project Structure
+## Estructura
 
 ```
 Aegis/
-├── backend/     # Node.js Hub orchestrator (server.js, src/, tests/, keepalive.sh)
-├── app/         # Android Jetpack Compose app + install-su.sh
-├── agents/      # Agency agents (vendor)
-├── docs/        # QUICKSTART, ADRs, QA, architecture, contracts, audits
-│   ├── adr/     # ADR-001 seguridad · ADR-002 bootstrap
+├── app/         # App Android (Compose + Gradle) + install-su.sh + scripts/
+├── docs/        # QUICKSTART, ADRs, QA, arquitectura, contratos, auditorías, plan
+│   ├── adr/     # ADR-001 seguridad · ADR-002 bootstrap · ADR-003 fin de turno
 │   ├── qa/      # QA_CHECKLIST de aceptación
 │   └── audits/  # auditorías históricas (crónicas, no se reescriben)
-└── .hub/        # Project metadata
+├── tools/       # check_composable.py, chk_forma.py (contratos vs :49374 vivo)
+├── .hub/        # Metadatos del proyecto
+└── graphify-out/ # Índice del código (ignorado por git; ver AGENTS.md)
 ```
 
-## Setup de desarrollo
+## Compilar
 
-```sh
-cd backend
-npm test                 # node --test tests/*.test.js → 54 tests
-node --check server.js   # (o find backend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check)
-
-# projects.json: runtime file (ignorado por git), copiar plantilla si es una instalación limpia:
-# cp projects.json.example projects.json
-
-# hub manual (NO hacerlo si ya corre el de producción en :8765)
-sh start-hub.sh          # opencode serve :49374 + hub :8765
-```
-
-CI (`.github/workflows/build-apk.yml`): `backend-checks` · `lint` · `build-debug` · `build-release` (condicional a secrets) · `semgrep`/`gitleaks` no bloqueantes · `instrumented` manual.
+Sin toolchain Android en el host: la única compilación real es la CI
+(`.github/workflows/build-apk.yml`: `lint` · `build-debug` (+ tests JVM) ·
+`build-release` · `semgrep` · `gitleaks` · `instrumented` manual). Commits
+pequeños, un push por tarea, esperar verde antes de seguir.
 
 ## Seguridad
 
-- **Modelo: root total *con* token, cero acceso sin él** — ver [ADR-001](docs/adr/ADR-001-security-model.md).
-- `X-Aegis-Token` (comparación *timing-safe*) exigido en **todo** `/api/*` y `/opencode/*`; única exención `GET /api/health` (sonda de keepalive).
-- Bind `127.0.0.1`, CORS con allowlist, rate limit 120 req/min/IP → `429` + `Retry-After`, ids validados contra traversal, meta-caracteres de shell rechazados (`400`).
-- Acceso desde otro equipo: **`adb forward tcp:8765 tcp:8765` + token** (no hay URL de red).
-- Token en `backend/.aegis_token` (`0600`, 32 bytes aleatorios); keystore de release fuera del repo (plan de rotación en ADR-001).
+Ver [ADR-001](docs/adr/ADR-001-security-model.md). Keystore de release fuera del
+repo. La app usa `su` para leer el chroot y lanzar `opencode serve --service`
+(servicio registrado, se levanta solo).
 
 ## Documentación
 
 | Doc | Contenido |
 |---|---|
-| [docs/QUICKSTART.md](docs/QUICKSTART.md) | De cero a producto: APK → wizard → verificación → uso → troubleshooting |
-| [CHANGELOG.md](CHANGELOG.md) | v1.1.0: Added / Changed / Fixed |
-| [docs/adr/ADR-001-security-model.md](docs/adr/ADR-001-security-model.md) | Modelo de seguridad y rotación del keystore |
-| [docs/adr/ADR-002-bootstrap-design.md](docs/adr/ADR-002-bootstrap-design.md) | Wizard idempotente/reanudable, SHA256 y rollback |
-| [docs/qa/QA_CHECKLIST.md](docs/qa/QA_CHECKLIST.md) | Aceptación reproducible por otra persona |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Estructura del monorepo |
-| [backend/docs/FRONTEND_CONTRACT.md](backend/docs/FRONTEND_CONTRACT.md) | Contrato app ↔ hub (envelope, health, setup, F4) |
-| [backend/docs/BACKEND_ARCHITECTURE.md](backend/docs/BACKEND_ARCHITECTURE.md) | Arquitectura del hub y keepalive |
-| [docs/audits/](docs/audits/) | 3 auditorías + plan de mejora Fase 0 (históricas) |
-
-## Web UI Dashboard
-
-Aegis includes a vanilla JavaScript dashboard served from `backend/public/index.html` at `http://127.0.0.1:8765/`:
-- **Real-time health**: Memory heap, server uptime, active providers (`opencode` + `antigravity`).
-- **Session management**: Active and pinned sessions viewer.
-- **System logs**: Live inspection of `/api/system/logs`.
-- **Token authentication**: Prompts and stores `X-Aegis-Token` in local browser storage.
+| [docs/QUICKSTART.md](docs/QUICKSTART.md) | De cero a producto: APK → wizard → verificación → uso |
+| [CHANGELOG.md](CHANGELOG.md) | Historial por versión |
+| [docs/CONTRATO-OPENCODE.md](docs/CONTRATO-OPENCODE.md) | Contrato app ↔ OpenCode (generado desde `OpenCodeApi.kt`) |
+| [docs/PLAN-ESTABILIZACION-AEGIS.md](docs/PLAN-ESTABILIZACION-AEGIS.md) | Plan de estabilización F0–F10 |
+| [docs/audits/](docs/audits/) | Auditorías históricas |
 
 ## Stack
 
-Android 15 · Jetpack Compose · Node.js v24 · Ubuntu 24.04.5 chroot · Magisk root · OpenCode · Antigravity · Artemis · agency-agents
+POCO F3 (crDroid, Magisk root) · Ubuntu chroot · Jetpack Compose · Kotlin 2.0.21 ·
+OpenCode `serve --service` · RootShell (`su`) · Artemis (automatización UI)

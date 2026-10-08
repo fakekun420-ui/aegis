@@ -5,6 +5,11 @@ import android.util.Log
 // Es el segundo vez que lo doy por hecho; lo pillo el mismo comprobador de simbolos
 // que lo pillo la primera, asi que el control positivo existe y funciona.
 import com.aegis.hub.RootShell
+import com.aegis.hub.data.repo.NuevaSesion
+import com.aegis.hub.data.repo.Resultado
+import com.aegis.hub.data.repo.CatalogoRepo
+import com.aegis.hub.data.repo.SesionConfigRepo
+import com.aegis.hub.data.repo.SesionesRepo
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -63,26 +68,46 @@ class RutaNativa(
      * inyectable, y por eso el codigo que habla con el shell no tenia ni un test. Una sola
      * propiedad con el mismo valor por defecto: produccion igual, tests con fake posible.
      */
-    private val shell: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+    private val shell: (String, Long) -> RootShell.Result = SHELL_REAL,
+    /**
+     * F10: `oc` y `store` inyectables (mismos defaults de siempre): los tests de flujo
+     * levantan la costura real contra un MockWebServer. Los repos derivan del mismo
+     * `oc` para no ir a red por otro lado.
+     */
+    private val oc: OpenCodeApi = OpenCodeApi.default,
+    private val store: ProjectsStore = ProjectsStore.default
 ) : ApiService {
     /**
      * MEDIDO 2026-10-06 (ANR con traza): `shell()` bifurca un proceso `su` y lo espera.
      * Invocado en el hilo principal (viewModelScope), un `su` lento (>5 s) cuelga la UI.
      * Este es el UNICO punto de llamada: todo `su` sale a IO, la inyeccion para tests
      * se conserva tal cual en `shell`.
+     *
+     * F7: con el shell real se pasa por [Raiz] (mismo IO + semaforo de 2 para no
+     * lanzar 10 `su` a la vez); con el fake de tests se llama directo.
      */
     private suspend fun sh(cmd: String, timeoutMs: Long): RootShell.Result =
-        withContext(Dispatchers.IO) { shell(cmd, timeoutMs) }
+        if (shell === SHELL_REAL) Raiz.ejecutar(cmd, timeoutMs)
+        else withContext(Dispatchers.IO) { shell(cmd, timeoutMs) }
 
 
     private val gson = Gson()
-    private val oc: OpenCodeApi get() = OpenCodeApi.default
 
     /**
      * MEDIDO 2026-10-02: el registro de proyectos, que antes era del Hub y ahora es de la app.
      * Se usa en `getProjects`, `createProject`, `patchProject` y `deleteProject`.
+     *
+     * F10: `store` es parametro (ver arriba); este comentario documentaba el getter.
      */
-    private val store: ProjectsStore get() = ProjectsStore.default
+
+    /** F2: el unico camino de crear/renombrar/borrar/vincular; aqui solo fachadas. */
+    private val sesiones = SesionesRepo(oc)
+
+    /** F3: modelo/agente con el servidor como verdad (con salto de redundante). */
+    private val config = SesionConfigRepo(oc)
+
+    /** F4: catalogos con cache corta (modelos + agentes). */
+    private val catalogo = CatalogoRepo(oc)
 
     private fun <T> envoltura(datos: T?): Envelope<T> =
         if (datos == null) Envelope(ok = false, data = null)
@@ -104,9 +129,9 @@ class RutaNativa(
         //
         // Este mapa NO usa la conversion con Gson que si usaba en los agentes: alli el campo
         // `model` es un objeto donde la app espera un `String`, y Gson fallaba al DESERIALIZAR.
-        // Aqui `OpencodeSession.model` es `Any?` a proposito, asi que el objeto entra sin drama —
-        // y por eso este mapeo es explicito campo a campo y el de agentes no lo podia ser.
-        override suspend fun getOpencodeSessions(): Envelope<List<OpencodeSession>> {
+        // Aqui el nativo ya trae el objeto y se mapea a `ModeloRef`, asi que el mapeo es
+        // explicito campo a campo.
+        override suspend fun getOpencodeSessions(): Envelope<List<Sesion>> {
             // MEDIDO el 2026-10-02: `GET /api/session` devuelve las sesiones de
             // primer nivel Y las que crean los subagentes, mezcladas y sin
             // ningun flag que las separe. La lista de "Chats" por eso se
@@ -128,15 +153,16 @@ class RutaNativa(
             val lista = oc.listSessions().data.orEmpty()
                 .filter { it.parentID.isNullOrBlank() }
                 .map { s ->
-                OpencodeSession(
+                Sesion(
                     id = s.id,
                     title = s.title,
-                    // MEDIDO: `OpencodeSession` (el de la app) NO tiene campo `agent` — son
+                    // MEDIDO: `Sesion` (el de la app) NO tiene campo `agent` — son
                     // id, ID, title, name, providerTitle, model, createdAt... Escribi `agent`
                     // aqui de memoria y no compila. El agente de la sesion se lee por otra
                     // via, `GET /api/session/{id}`, en `getSessionAgent`.
-                    model = s.model,
-                    // MEDIDO: `projectID` tampoco esta en `OpencodeSession` (la app). Es el
+                    // F8: el modelo nativo se mapea a ModeloRef (ya no entra como Any).
+                    model = s.model?.let { ModeloRef(id = it.id, providerID = it.providerID, variant = it.variant) },
+                    // MEDIDO: `projectID` tampoco esta en `Sesion` (la app). Es el
                     // segundo campo de esta función que escribi de memoria. El vinculo
                     // sesion-proyecto lo lleva `ProjectsStore`, no el modelo de la sesion.
                     // MEDIDO: `time.created` es un numero en milisegundos, y la app espera un
@@ -219,7 +245,7 @@ class RutaNativa(
     // JSON (name, mode, model, description, hidden). Traducir a mano 6 campos es otra cosa.
     // Se conserva `hidden` a proposito: de 40 agentes, 37 son visibles y 3 no, y la hoja
     // depende de ese filtro.
-        // MEDIDO 2026-10-02: aquí usaba `gson.fromJson(gson.toJson(nativo), OpencodeAgent::class.java)`
+        // MEDIDO 2026-10-02: aquí usaba `gson.fromJson(gson.toJson(nativo), Agente::class.java)`
         // con el comentario de que "los dos data class describen el mismo JSON". Es FALSO, y lo
         // reportó el usuario al abrir la app:
         //
@@ -234,9 +260,10 @@ class RutaNativa(
         // (`primary && !hidden`), y `GET /api/agent` devuelve el catalogo entero. Con el mapeo
         // anterior la hoja habria recibido los 40 y `seleccionables()` los habria dejado en 3, pero
         // el filtro se queda aqui, que es donde estaba.
-        override suspend fun getOpencodeAgents(): Envelope<List<OpencodeAgent>> {
-            val lista = oc.listAgents().data.orEmpty().mapNotNull { a ->
-                OpencodeAgent(
+        override suspend fun getOpencodeAgents(): Envelope<List<Agente>> {
+            // F4: catalogo con cache (antes: GET /api/agent entero en cada llamada).
+            val lista = catalogo.agentesNativos().mapNotNull { a ->
+                Agente(
                     name = a.name,
                     mode = a.mode ?: "primary",
                     // MEDIDO: aquí viene el OBJETO {id, providerID}; lo que la app quiere es el
@@ -251,13 +278,6 @@ class RutaNativa(
             return envoltura(lista.filter { it.mode == "primary" && !it.hidden })
         }
 
-    // getSessionAgent: GET /api/session/{id} trae agent
-    // MEDIDO: el mismo `GET /api/session/{id}` trae `agent`. Con la sesion ausente se devuelve
-    // ok=true con dato nulo, que es lo que la app ya sabe leer (`.data?.agent`).
-    // MEDIDO 2026-10-03: el endpoint envuelve en `data` (ver `OpenCodeSessionResponse`); sin
-    // desenvolver, esto siempre devolvia null y la app creia que no habia agente.
-        override suspend fun getSessionAgent(sessionId: String): Envelope<SessionAgentRef?> = envoltura(oc.getSession(sessionId).data?.agent?.let { SessionAgentRef(it) })
-
     // getPendingForms: mismos tipos; con sessionId nulo se delega
     // MEDIDO: OpenCode devuelve YA los tipos de la app (PendingForm), sin traduccion.
     // MEDIDO 2026-10-03: con sessionId nulo se delegaba al Hub, que ya no escucha. Sin sesion
@@ -270,165 +290,40 @@ class RutaNativa(
         override suspend fun getPendingPermissions(sessionId: String?): Envelope<List<PendingPermission>> = if (sessionId == null) envoltura(emptyList())
            else envoltura(oc.getSessionPermissions(sessionId).data)
 
-    // getSessionModel: GET /api/session/{id} trae model con los tres campos
-    // MEDIDO: `GET /api/session/{id}` trae `model` con id, providerID y variant poblados. Es
-    // el dato que el ponytail daba por inexistente, y de ahi que existiera ModelPreferences.
-    // MEDIDO 2026-10-03: el endpoint envuelve en `data` (ver `OpenCodeSessionResponse`); sin
-    // desenvolver, esto siempre devolvia null y la app jamas veia el modelo del CLI.
-        override suspend fun getSessionModel(sessionId: String): Envelope<SessionModelRef?> = envoltura(oc.getSession(sessionId).data?.model?.let { SessionModelRef(it.id, it.providerID, it.variant) })
+    // F2: pistas puras en ModelosUtil (misma logica; SesionesRepo las usa sin costura).
 
-    /**
-     * Resuelve el providerID de un id de modelo contra el catalogo vivo.
-     *
-     * MEDIDO 2026-10-03: `POST /api/session/{id}/model` exige la pareja id mas providerID, y
-     * la app solo guardaba el id. Si el id existe en varios proveedores, manda la pista
-     * (el provider del chat); si no, prefiere `opencode`; si ni eso, el primero.
-     * Es `internal` para probarlo sin servidor.
-     */
-    internal fun resolveProviderFor(modelId: String?, hint: String?, catalogo: List<OpenCodeNativeModel>): String {
-        val id = normalizarIdModelo(modelId)
-        if (id.isEmpty()) return "opencode"
-        val candidatos = catalogo.filter { (it.id ?: it.modelID) == id }
-        if (candidatos.isEmpty()) return hint?.trim()?.takeIf { it.isNotBlank() } ?: "opencode"
-        val pista = hint?.trim()?.takeIf { it.isNotBlank() }
-        val porPista = pista?.let { h -> candidatos.firstOrNull { it.providerID == h } }
-        if (porPista != null) return porPista.providerID
-        return candidatos.firstOrNull { it.providerID == "opencode" }?.providerID
-            ?: candidatos.first().providerID
-    }
-
-    /**
-     * El id tal y como lo entiende el CLI: sin prefijo de proveedor.
-     *
-     * MEDIDO 2026-10-03 en las prefs del movil: hay sesiones guardadas como
-     * `opencode/muse-spark-1.3-contributor-free`. Ese prefijo lo puso una version vieja al
-     * guardar, y con el la lista (que trae ids cortos) nunca coincide: el chip dice
-     * "No disponible" con la lista cargada. Se corta por la ultima barra, venga de donde venga.
-     * Es `internal` para probarlo sin servidor.
-     */
-    internal fun normalizarIdModelo(ref: String?): String =
-        ref?.trim()?.substringAfterLast("/")?.trim().orEmpty()
-
-    /**
-     * El proveedor que trae un id con prefijo (`opencode/x` -> `opencode`), o null si no hay.
-     * Es la pista que el propio valor da para no tener que adivinarlo en el catalogo.
-     */
-    internal fun proveedorDeRef(ref: String?): String? {
-        val limpio = ref?.trim().orEmpty()
-        if (!limpio.contains("/")) return null
-        return limpio.substringBeforeLast("/").trim().takeIf { it.isNotBlank() }
-    }
-
-    /**
-     * El variant con el que fijar un modelo: `max` si el catalogo lo ofrece, null si no.
-     *
-     * Decision del usuario 2026-10-03 ("5. max"). MEDIDO en el catalogo vivo: tanto
-     * `space-bunny-free` como `muse-spark-1.3-contributor-free` ofrecen `max` entre sus
-     * variants. Si un modelo no lo ofrece, se manda sin variant y decide el servidor en
-     * vez de mandar un variant que no existe.
-     */
-    internal fun resolveVariantFor(modelId: String?, catalogo: List<OpenCodeNativeModel>): String? {
-        val id = normalizarIdModelo(modelId)
-        if (id.isEmpty()) return null
-        val entrada = catalogo.firstOrNull { (it.id ?: it.modelID) == id } ?: return null
-        val ids = entrada.variants.orEmpty().mapNotNull { it.id }
-        return if (ids.contains("max")) "max" else null
-    }
-
-    /**
-     * Fija el modelo de una sesion en el servidor (la unica via: POST /api/session/{id}/model
-     * ANTES del prompt, porque el prompt no acepta modelo). Resuelve proveedor (prefijo,
-     * pista, catalogo) y variant (`max` si lo hay). Devuelve si el servidor lo acepto.
-     */
-    private suspend fun fijarModelo(
-        sessionId: String,
-        modelId: String?,
-        providerHint: String?,
-        variantExplicit: String? = null
-    ): Boolean {
-        return try {
-            val id = normalizarIdModelo(modelId)
-            if (id.isEmpty()) return false
-            val catalogo = oc.listModels().data.orEmpty()
-            val prov = proveedorDeRef(modelId)
-                ?: resolveProviderFor(id, providerHint, catalogo)
-            val variante = variantExplicit?.trim()?.takeIf { it.isNotBlank() }
-                ?: resolveVariantFor(id, catalogo)
-            val resp = oc.setSessionModel(
-                sessionId,
-                SetSessionModelRequest(OpenCodeModelRef(id = id, providerID = prov, variant = variante))
-            )
-            if (!resp.isSuccessful) Log.w(TAG, "fijarModelo HTTP ${resp.code()} para $sessionId")
-            resp.isSuccessful
-        } catch (e: Exception) {
-            Log.w(TAG, "fijarModelo fallo para $sessionId: ${e.message}")
-            false
-        }
-    }
-
-    // setSessionModel: empuja el modelo al servidor (POST /api/session/{id}/model del CLI).
-    // MEDIDO 2026-10-03: la app nunca llamaba a esta ruta. `selectModel` solo escribia en
-    // prefs y `sendMessage` mandaba el modelo en el cuerpo, que el CLI ignora: el prompt
-    // no acepta modelo. Resultado: el modelo del CLI mandaba siempre y la app mostraba el
-    // suyo. Ahora el modelo se fija ANTES del prompt, y el servidor es la unica verdad.
+    // F3: el fijado vive en SesionConfigRepo (con salto de redundante y motivo).
+    // La costura delega; `sendMessage` fija por aqui antes de cada prompt.
         override suspend fun setSessionModel(sessionId: String, body: SessionModelRef): Envelope<Boolean> {
-            val ref = normalizarIdModelo(body.id)
+            val ref = ModelosUtil.normalizarIdModelo(body.id)
             if (ref.isEmpty()) return Envelope(ok = false, data = null)
-            val prov = body.providerID?.trim()?.takeIf { it.isNotBlank() }
-                ?: proveedorDeRef(body.id)
-            val ok = fijarModelo(sessionId, ref, prov, body.variant)
-            return if (ok) envoltura(true) else Envelope(ok = false, data = null)
+            return when (
+                val r = config.fijarModelo(sessionId, ref, body.variant, body.providerID)
+            ) {
+                is Resultado.Ok -> envoltura(true)
+                is Resultado.Fallo -> Envelope(ok = false, data = null, error = ErrorBody("MODEL_FIJO_FALLO", r.motivo))
+            }
         }
-
-    /**
-     * El modelo que un agente trae definido (`GET /api/agent` -> `model`), o null si el
-     * agente delega en el de la sesion. MEDIDO 2026-10-03: solo orchestrator lo tiene
-     * (muse-spark-1.3-contributor-free); Build y Plan lo dejan en null. Es `internal` para
-     * probarlo sin servidor.
-     */
-    internal fun modeloDelAgente(nombre: String?, agentes: List<OpenCodeNativeAgent>): OpenCodeModelRef? {
-        val n = nombre?.trim()?.takeIf { it.isNotBlank() } ?: return null
-        return agentes.firstOrNull { it.id == n || it.name == n }?.model
-    }
 
     // createSession: POST /api/session nativo (tambien envuelto en `data`).
-    // MEDIDO 2026-10-03: los ViewModels la creaban con POST crudo al Hub en :8765.
-    // MEDIDO 2026-10-03 (2): crear sin agente ni modelo dejaba la sesion con los defaults
-    // del servidor (Space Bunny) aunque la app trabajara con orchestrator y su modelo. Por
-    // eso aqui se fija el agente (el del cuerpo o el de por defecto) y despues su modelo:
-    // el prompt no acepta modelo y POST /api/session tampoco lo garantiza, asi que se fija
-    // despues de crear, igual que al enviar. Si fijar falla, la sesion creada igual vale:
-    // fallar la creacion entera por el modelo seria peor.
-        override suspend fun createSession(body: CreateOpenCodeSessionRequest): Envelope<OpencodeSession> {
-            return try {
-                val creado = oc.createSession(body).data
-                    ?: return Envelope(ok = false, data = null)
-                val sid = creado.id
-                val agente = body.agent?.trim()?.takeIf { it.isNotBlank() } ?: AGENTE_POR_DEFECTO
-                try {
-                    oc.setSessionAgent(sid, SetSessionAgentRequest(agente))
-                } catch (e: Exception) {
-                    Log.w(TAG, "createSession: no se pudo fijar agente $agente en $sid: ${e.message}")
-                }
-                val modelo = body.model
-                    ?: runCatching { modeloDelAgente(agente, oc.listAgents().data.orEmpty()) }.getOrNull()
-                if (modelo != null) {
-                    fijarModelo(sid, modelo.id, modelo.providerID, modelo.variant)
-                }
-                envoltura(
-                    OpencodeSession(
-                        id = creado.id,
-                        title = creado.title,
-                        model = creado.model,
-                        createdAt = creado.time?.created?.let { java.time.Instant.ofEpochMilli(it).toString() },
-                        updatedAt = creado.time?.updated?.let { java.time.Instant.ofEpochMilli(it).toString() },
-                        pinned = false,
-                        provider = creado.model?.providerID
+    // F2: fachada delgada sobre SesionesRepo (el unico camino). Los avisos de exito
+    // parcial van al log: los llamadores con UI usan el repo directo.
+        override suspend fun createSession(body: CreateOpenCodeSessionRequest): Envelope<Sesion> {
+            return when (
+                val r = sesiones.crear(
+                    NuevaSesion(
+                        titulo = body.title?.takeIf { it.isNotBlank() } ?: "Nuevo chat",
+                        carpeta = body.location?.directory,
+                        agente = body.agent,
+                        modelo = body.model
                     )
                 )
-            } catch (e: Exception) {
-                Log.w(TAG, "createSession fallo: ${e.message}")
-                Envelope(ok = false, data = null)
+            ) {
+                is Resultado.Ok -> {
+                    r.avisos.forEach { Log.w(TAG, "createSession: $it") }
+                    envoltura(Sesion(id = r.valor.id, title = r.valor.titulo))
+                }
+                is Resultado.Fallo -> envolturaFallo(r.motivo)
             }
         }
 
@@ -539,25 +434,23 @@ class RutaNativa(
      * lee el store: si solo se guardara en OpenCode, el renombrado no se veria hasta que la
      * pantalla volviera a pedir la lista completa, y el store no tendria de donde sacarlo.
      */
+    // F2: fachada sobre el repo (servidor primero, titulo local solo si confirma).
     override suspend fun renameSession(id: String, body: Map<String, String>): Envelope<Map<String, Any>> {
         val titulo = body["title"]?.takeIf { it.isNotBlank() }
             ?: return envolturaFallo("renameSession sin title")
-        val r = oc.updateSession(id, UpdateOpenCodeSessionRequest(title = titulo))
-        if (!r.isSuccessful) return envolturaFallo("PATCH session ${r.code()}")
-        store.setSessionTitle(id, titulo)
-        return envoltura(mapOf("id" to id, "title" to titulo))
+        return when (val r = sesiones.renombrar(id, titulo)) {
+            is Resultado.Ok -> envoltura(mapOf("id" to id, "title" to titulo))
+            is Resultado.Fallo -> envolturaFallo(r.motivo)
+        }
     }
 
-    /**
-     * MEDIDO: `DELETE /api/session/{sessionID}` existe (OpenAPI, ruta 1 de 113).
-     *
-     * Se consulta `isSuccessful` y no se asume excepcion: un 404 significa que la sesion ya no
-     * esta, que para el usuario es el resultado que queria, no un fallo.
-     */
+    // F2: fachada sobre el repo. Mismo contrato que antes (incluido 404 -> fallo);
+    // cambiarlo a ok es decision UX fuera de esta fase.
     override suspend fun deleteSession(id: String): Envelope<Map<String, Any>> {
-        val r = oc.deleteSession(id)
-        return if (r.isSuccessful) envoltura(mapOf("id" to id, "deleted" to true))
-        else envolturaFallo("DELETE session ${r.code()}")
+        return when (val r = sesiones.borrar(id)) {
+            is Resultado.Ok -> envoltura(mapOf("id" to id, "deleted" to true))
+            is Resultado.Fallo -> envolturaFallo(r.motivo)
+        }
     }
 
     override suspend fun pinSession(id: String): Envelope<PinResponse> {
@@ -572,19 +465,22 @@ class RutaNativa(
         return envoltura(PinResponse(id = id, pinned = false))
     }
 
+    // F2: fachada sobre el repo (una sola escritura).
     override suspend fun linkSession(projectId: String, body: LinkSessionRequest): Envelope<SessionRef> {
-        store.linkSessionToProject(body.sessionId, projectId)
-        body.title?.takeIf { it.isNotBlank() }?.let { store.setSessionTitle(body.sessionId, it) }
-        return envoltura(
-            SessionRef(
-                sessionId = body.sessionId,
-                title = body.title ?: store.getSessionTitle(body.sessionId),
-                pinned = store.isSessionPinned(body.sessionId),
-                provider = body.provider
+        return when (val r = sesiones.vincular(body.sessionId, projectId, body.title)) {
+            is Resultado.Ok -> envoltura(
+                SessionRef(
+                    sessionId = body.sessionId,
+                    title = body.title ?: store.getSessionTitle(body.sessionId),
+                    pinned = store.isSessionPinned(body.sessionId),
+                    provider = body.provider
+                )
             )
-        )
+            is Resultado.Fallo -> envolturaFallo(r.motivo)
+        }
     }
 
+    // F2: fachada sobre el repo.
     override suspend fun unlinkSession(projectId: String, sessionId: String): Envelope<Map<String, String>> {
         // MEDIDO 2026-10-02: `unlinkSessionFromProject` no existia en el store, y su ausencia la
         // anote como "desvincular sigue sin estar soportado" en un commit anterior. Era verdad
@@ -661,37 +557,67 @@ class RutaNativa(
      * El separador es un salto de linea y los nombres de skill no lo pueden contener (es un
      * nombre de carpeta), asi que no hace falta un delimitador exotico.
      */
+    /** F7.2: caches cortas (skills 10 s, health 5 s). La invalidacion va en
+     * crear/borrar; el TTL solo evita repetir el `su` al volver a una pantalla. */
+    private var cacheSkills: Pair<Long, Envelope<SkillListResponse>>? = null
+    private var cacheSystemSkills: Pair<Long, Response<SkillsResponse>>? = null
+    private var cacheHealth: Pair<Long, Response<HealthResponse>>? = null
+
+    private fun cacheVigente(ms: Long, ttlMs: Long): Boolean =
+        System.currentTimeMillis() - ms < ttlMs
+
+    private fun invalidarSkills() {
+        cacheSkills = null
+        cacheSystemSkills = null
+    }
+
     override suspend fun getSkills(projectId: String?): Envelope<SkillListResponse> {
+        cacheSkills?.takeIf { cacheVigente(it.first, 10_000L) }?.let { return it.second }
         val base = rutaDeSkills()
-        val listado = sh("ls -1 '$base' 2>/dev/null", 5000)
-        if (listado.code != 0) {
-            return envolturaFallo("No se pudo leer $base (exit ${listado.code})")
+        // F7: UN solo `su` (antes: 1 ls + N head). Cada SKILL.md sale tras su
+        // delimitador; tope 2 MB de salida para no reventar memoria.
+        val lote = sh(
+            "cd '$base' 2>/dev/null || exit 0\n" +
+                "for d in */; do\n" +
+                "  n=\"\${d%/}\"; [ -f \"\$n/SKILL.md\" ] || continue\n" +
+                "  printf '@@AEGIS_SKILL@@%s\\n' \"\$n\"; head -c 200000 \"\$n/SKILL.md\"; printf '\\n'\n" +
+                "done",
+            15000
+        )
+        if (lote.code != 0) {
+            return envolturaFallo("No se pudo leer $base (exit ${lote.code})")
         }
-        val nombres = listado.stdout.split("\n")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() && it != ".papelera" }
+        val crudo = lote.stdout.let { if (it.length > 2_000_000) it.take(2_000_000) else it }
         val skills = mutableListOf<Skill>()
-        var leidos = 0
-        for (nombre in nombres) {
-            val md = sh("head -c 200000 '$base/$nombre/SKILL.md' 2>/dev/null", 5000)
-            if (md.code != 0 || md.stdout.isBlank()) continue
-            // `head -c` evita el fallo de `cat` cuando el fichero es grande: un skill de 40 KB
-            // entra, pero uno de varios MB no cabe en el buffer del shell.
-            skills += Skill(
-                scope = scopeDe(nombre, base),
-                name = nombre,
-                content = md.stdout
-            )
-            leidos++
+        var nombre: String? = null
+        val contenido = StringBuilder()
+        fun volcar() {
+            val n = nombre
+            if (n != null && contenido.isNotBlank()) {
+                skills += Skill(scope = scopeDe(n, base), name = n, content = contenido.toString())
+            }
         }
-        Log.i(TAG, "getSkills: $leidos de ${nombres.size} entradas bajo $base")
+        for (linea in crudo.lines()) {
+            // El primero que aparezca al inicio de linea parte; si el contenido trae
+            // el delimitador, se trata como corte (documentado, no silencioso: el
+            // contenido sale igual menos esa linea).
+            if (linea.startsWith(DELIMITADOR_SKILLS)) {
+                volcar()
+                nombre = linea.removePrefix(DELIMITADOR_SKILLS)
+                contenido.clear()
+            } else {
+                contenido.appendLine(linea)
+            }
+        }
+        volcar()
+        Log.i(TAG, "getSkills: ${skills.size} skills bajo $base en 1 exec")
         return envoltura(
             SkillListResponse(
                 skills = skills,
                 projectId = projectId,
                 counts = mapOf(scopeDe("", base) to skills.size)
             )
-        )
+        ).also { cacheSkills = System.currentTimeMillis() to it }
     }
 
     /**
@@ -733,6 +659,7 @@ class RutaNativa(
             return envolturaFallo("No se pudo apartar '$name': ${r.stderr.take(140)}")
         }
         Log.i(TAG, "deleteSkill: '$name' -> $destino (NO se borro)")
+        invalidarSkills()
         return envoltura(mapOf("name" to name, "movido" to destino))
     }
 
@@ -760,6 +687,7 @@ class RutaNativa(
             return envolturaFallo("Error creando skill '$name': ${r.stderr.take(140)}")
         }
         Log.i(TAG, "createSkill: creado skill '$name' bajo $dir")
+        invalidarSkills()
         return envoltura(
             Skill(
                 scope = scope,
@@ -769,45 +697,8 @@ class RutaNativa(
         )
     }
 
-    override suspend fun updateSkill(
-        scope: String,
-        name: String,
-        body: Map<String, String>
-    ): Envelope<Skill> {
-        val skillName = name.trim()
-        val realScope = scope.trim().ifEmpty { "global" }
-        if (skillName.isEmpty()) {
-            return envolturaFallo("updateSkill sin nombre")
-        }
-        if (skillName.contains("..") || skillName.contains("/")) {
-            return envolturaFallo("Nombre de skill invalido: $skillName")
-        }
-        val base = rutaDeSkills()
-        val dir = "$base/$skillName"
-        val file = "$dir/SKILL.md"
-        val check = sh("test -f '$file' && echo SI", 3000)
-        if (check.stdout.trim() != "SI") {
-            return envolturaFallo("No existe el skill '$skillName'")
-        }
-        val content = body["content"] ?: run {
-            val cur = sh("head -c 200000 '$file' 2>/dev/null", 5000)
-            cur.stdout
-        }
-        val encoded = android.util.Base64.encodeToString(content.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        val cmd = "echo '$encoded' | base64 -d > '$file'"
-        val r = sh(cmd, 5000)
-        if (r.code != 0) {
-            return envolturaFallo("Error actualizando skill '$skillName': ${r.stderr.take(140)}")
-        }
-        Log.i(TAG, "updateSkill: actualizado SKILL.md de '$skillName'")
-        return envoltura(
-            Skill(
-                scope = realScope,
-                name = skillName,
-                content = content
-            )
-        )
-    }
+    // F1: updateSkill eliminado (0 usos fuera de su definicion; crear/borrar
+    // cubren el ciclo de vida que la UI usa).
 
     // El recorte de payload binario (hasBinary/truncated) lo inventaba server.js al pasar por
     // el puente HTTP. En la conexion directa no hay puente: se lee el mensaje entero.
@@ -862,9 +753,7 @@ class RutaNativa(
     // vacio es lo unico honesto: "aceptado, la respuesta va por otro lado".
     override suspend fun sendMessage(
         sessionId: String,
-        body: SendMessageRequest,
-        provider: String?,
-        projectId: String?
+        body: SendMessageRequest
     ): Message {
         // MEDIDO: la app manda `parts` como mapa libre, con type "text" y type "file". OpenCode
         // quiere un `text` plano y `files` con URI OBLIGATORIA. Se traduce aqui.
@@ -906,9 +795,11 @@ class RutaNativa(
         // mandarlo y el CLI ni lo miraba. La unica via es fijarlo ANTES del prompt. Si falla,
         // el turno sigue con el modelo que tenga la sesion: fallar el envio entero por no
         // poder fijar el modelo seria peor.
-        val modeloId = normalizarIdModelo(body.model)
+        val modeloId = ModelosUtil.normalizarIdModelo(body.model)
         if (modeloId.isNotEmpty()) {
-            fijarModelo(sessionId, modeloId, proveedorDeRef(body.model) ?: body.provider)
+            // F3: con salto de redundante. Se pasa el ref ORIGINAL (con prefijo: es la
+            // pista de proveedor) en vez del ya normalizado.
+            config.fijarModelo(sessionId, body.model ?: modeloId)
         }
 
         oc.sendPrompt(
@@ -926,22 +817,46 @@ class RutaNativa(
     private val setupNative: SetupNative by lazy { SetupNative() }
 
     override suspend fun getSystemHealth(): Response<HealthResponse> {
+        cacheHealth?.takeIf { cacheVigente(it.first, 5_000L) }?.let { return it.second }
+        // F7: UN solo `su` (antes: 4 ejecuciones). Secciones separadas por
+        // `@@AEGIS_SALUD@@<nombre>`; sin regex en el parseo (F7.4).
         return try {
-            val upRes = sh("cat /proc/uptime 2>/dev/null", 2000)
-            val uptimeSec = upRes.stdout.trim().split("\\s+".toRegex()).firstOrNull()?.toDoubleOrNull()?.toLong() ?: 0L
+            val baseSkills = rutaDeSkills()
+            val lote = sh(
+                "cat /proc/uptime 2>/dev/null; echo '@@AEGIS_SALUD@@mem'\n" +
+                    "cat /proc/meminfo 2>/dev/null; echo '@@AEGIS_SALUD@@ls'\n" +
+                    "ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null | wc -l; echo '@@AEGIS_SALUD@@skills'\n" +
+                    "ls -1d '$baseSkills'/*/ 2>/dev/null",
+                5000
+            )
+            val secciones = mutableMapOf<String, StringBuilder>()
+            var actual = StringBuilder()
+            var nombre = "uptime"
+            for (linea in lote.stdout.lines()) {
+                if (linea.startsWith("@@AEGIS_SALUD@@")) {
+                    secciones[nombre] = actual
+                    nombre = linea.removePrefix("@@AEGIS_SALUD@@")
+                    actual = StringBuilder()
+                } else {
+                    actual.appendLine(linea)
+                }
+            }
+            secciones[nombre] = actual
 
-            val memRes = sh("cat /proc/meminfo 2>/dev/null", 2000)
-            val lines = memRes.stdout.lines()
+            val uptimeSec = secciones["uptime"]?.toString()
+                ?.split(' ', '\t', '\n')?.firstOrNull { it.isNotBlank() }
+                ?.toDoubleOrNull()?.toLong() ?: 0L
+
             var totalKb = 0L
             var freeKb = 0L
             var availableKb = 0L
-            for (line in lines) {
-                if (line.startsWith("MemTotal:")) {
-                    totalKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                } else if (line.startsWith("MemAvailable:")) {
-                    availableKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                } else if (line.startsWith("MemFree:")) {
-                    freeKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
+            for (line in (secciones["mem"]?.toString() ?: "").lines()) {
+                val valor = line.substringAfter(":").trim().split(' ', '\t')
+                    .firstOrNull { it.isNotBlank() }?.toLongOrNull() ?: continue
+                when {
+                    line.startsWith("MemTotal:") -> totalKb = valor
+                    line.startsWith("MemAvailable:") -> availableKb = valor
+                    line.startsWith("MemFree:") -> freeKb = valor
                 }
             }
             val usedKb = if (availableKb > 0) (totalKb - availableKb) else (totalKb - freeKb)
@@ -950,12 +865,9 @@ class RutaNativa(
                 heapTotal = "${totalKb / 1024}MB"
             )
 
-            val pRes = sh("ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null | wc -l", 3000)
-            val projectCount = pRes.stdout.trim().toIntOrNull() ?: 0
+            val projectCount = secciones["ls"]?.toString()?.trim()?.toIntOrNull() ?: 0
 
-            val baseSkills = rutaDeSkills()
-            val skRes = sh("ls -1d '$baseSkills'/*/ 2>/dev/null", 3000)
-            val skillNames = skRes.stdout.lines()
+            val skillNames = (secciones["skills"]?.toString() ?: "").lines()
                 .map { it.trim().trimEnd('/') }
                 .filter { it.isNotEmpty() }
                 .map { it.substringAfterLast('/') }
@@ -975,55 +887,15 @@ class RutaNativa(
                 adapters = adaptersMap
             )
             Response.success(HealthResponse(ok = true, data = healthData))
+                .also { cacheHealth = System.currentTimeMillis() to it }
         } catch (e: Exception) {
             Log.w(TAG, "getSystemHealth fallo: ${e.message}")
             Response.success(HealthResponse(ok = false, data = null))
         }
     }
 
-    override suspend fun getSystemLogs(limit: Int): Response<LogsResponse> {
-        return try {
-            val n = if (limit in 1..500) limit else 100
-            val res = sh("logcat -d -t $n 2>/dev/null", 4000)
-            if (res.code == 0 && res.stdout.isNotBlank()) {
-                val logLines = res.stdout.lines().filter { it.isNotBlank() }
-                Response.success(LogsResponse(ok = true, data = logLines))
-            } else {
-                Response.success(LogsResponse(ok = false, data = emptyList()))
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "getSystemLogs fallo: ${e.message}")
-            Response.success(LogsResponse(ok = false, data = emptyList()))
-        }
-    }
-
-    override suspend fun getSystemMemory(): Response<MemoryResponse> {
-        return try {
-            val memRes = sh("cat /proc/meminfo 2>/dev/null", 2000)
-            val lines = memRes.stdout.lines()
-            var totalKb = 0L
-            var freeKb = 0L
-            var availableKb = 0L
-            for (line in lines) {
-                if (line.startsWith("MemTotal:")) {
-                    totalKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                } else if (line.startsWith("MemAvailable:")) {
-                    availableKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                } else if (line.startsWith("MemFree:")) {
-                    freeKb = line.substringAfter(":").trim().split(" ").firstOrNull()?.toLongOrNull() ?: 0L
-                }
-            }
-            val usedKb = if (availableKb > 0) (totalKb - availableKb) else (totalKb - freeKb)
-            val memData = MemoryData(
-                heapUsed = "${usedKb / 1024}MB",
-                heapTotal = "${totalKb / 1024}MB"
-            )
-            Response.success(MemoryResponse(ok = true, data = memData))
-        } catch (e: Exception) {
-            Log.w(TAG, "getSystemMemory fallo: ${e.message}")
-            Response.success(MemoryResponse(ok = false, data = null))
-        }
-    }
+    // F1: getSystemLogs/getSystemMemory eliminados (0 usos; el estado del sistema
+    // vive en getSystemHealth, que ya lee /proc/meminfo por su cuenta).
 
     override suspend fun getBootstrapState(): Response<BootstrapResponse> {
         return try {
@@ -1160,65 +1032,22 @@ class RutaNativa(
     }
 
     // El campo `free` que usa la app lo calculaba el Hub mirando el COSTE del modelo (medido:
-    // 39 de 472). OpenCode manda `cost`, no `free`: reimplementar ese criterio es una decision
-    // con su propio test, no una traduccion.
-        /**
-     * MEDIDO 2026-10-02, y aquí el campo `free` NO viene de OpenCode: lo CALCULABA el Hub.
-     *
-     * OpenCode manda `cost`, no `free`. Y el criterio del Hub estaba en `providers.js:940-944`,
-     * que ahora está en `_tmp/hub-retirado-2026-10-02/` y está portado aquí literal, con sus
-     * DOS ramas:
-     *
-     *     costs.every(c => c && c.input === 0 && c.output === 0)   -> gratis
-     *     id termina en ":free" o "-free"                          -> gratis
-     *
-     * MEDIDO 2026-10-02, y esto es un OR, no una prioridad: **las dos ramas se suman.** La
-     * primera PUEDE añadir gratis, pero nunca lo quita. Ejecuté el criterio original del Hub
-     * en node para no discutir de memoria:
-     *
-     *     coste 0/0  + id normal  -> true
-     *     coste 3/15 + id "-free" -> true      (yo creia false, y el test que escribi lo fijo
-     *                                                como false: por eso el test cayo)
-     *     coste 3/15 + id normal  -> false
-     *     sin coste  + id "-free" -> true
-     *
-     * Lo que EXCLUYE un modelo de pago es el coste, y el sufijo solo puede añadir. Cambiar eso
-     * para que "el coste mande sobre el nombre" haría que un modelo que el proveedor da gratis
-     * apareciera como de pago. MEDIDO 2026-09-29 en el catálogo real: 39 de 472 dan `free=true`
-     * con este criterio, y no son los que llevan "-free" en el id — de ahí que hagan falta las
-     * dos ramas y no una.
-     *
-     * Por qué importa: sin `free` la app no puede distinguir un modelo de pago de uno gratis, y
-     * el modelo por defecto acabaría siendo el PRIMERO de la lista en vez del primero gratis. Ese
-     * exactodefecto se corrigió una vez y volvió cuando el campo desapareció.
-     */
-    private fun esFree(m: OpenCodeNativeModel): Boolean {
-        val costes = when (val c = m.cost) {
-            is List<*> -> c.filterNotNull()
-            null -> emptyList<Any?>()
-            else -> listOf(c)
-        }
-        if (costes.isNotEmpty()) {
-            val todosGratis = costes.all { c ->
-                val mapa = c as? Map<*, *>
-                val in0 = (mapa?.get("input") as? Number)?.toDouble() ?: 0.0
-                val out0 = (mapa?.get("output") as? Number)?.toDouble() ?: 0.0
-                in0 == 0.0 && out0 == 0.0
-            }
-            if (todosGratis) return true
-        }
-        val id = (m.id ?: m.modelID ?: "").lowercase()
-        return id.endsWith(":free") || id.endsWith("-free")
+    // 39 de 472). OpenCode manda `cost`, no `free`: el criterio vive en CatalogoRepo.esGratis
+    // (calculado una vez al cachear) con su propio test.
+
+    /** F4: invalida el catalogo (pantalla de modelos, tras "modelo no encontrado"). */
+    override suspend fun refrescarCatalogo(): Envelope<Boolean> {
+        catalogo.invalidar()
+        return envoltura(true)
     }
 
-    override suspend fun getModels(provider: String?): Envelope<List<ModelOption>> {
-        val todos = oc.listModels().data.orEmpty()
+    override suspend fun getModels(provider: String?): Envelope<List<ModeloElegible>> {
+        // F4: catalogo con cache (antes: GET /api/model entero en cada llamada).
+        val todos = catalogo.modelosNativos()
             .filter { it.enabled }
             // MEDIDO 2026-10-02: el filtro por `providerID` es lo que hacia que los modelos
-            // aparecieran "a veces". `loadModels` usa `_selectedProvider`, que viene de la
-            // sesion; si ese proveedor no es `opencode`, `space-bunny-free` (que es
-            // providerID=opencode, MEDIDO en el catalogo) se queda fuera de la lista, y el chip
-            // pasa a decir "No disponible: space-bunny-free" con la lista cargada.
+            // aparecieran "a veces" (el chip decia "No disponible" con la lista cargada).
+            // F1: `loadModels` ya no trae proveedor elegido; manda "opencode" fijo.
             //
             // Es el mismo patron que el del sintoma que ya se corrigio dos veces: un filtro que
             // descarta en silencio y deja una pantalla vacia sin explicar por que. Por eso el
@@ -1233,7 +1062,7 @@ class RutaNativa(
             // de otro. Un cambio de orden de modelos es exactamente de los que el usuario no ve
             // hasta que el modelo por defecto es otro.
             .sortedWith(
-                compareBy<OpenCodeNativeModel> { if (esFree(it)) 0 else 2 }
+                compareBy<OpenCodeNativeModel> { if (catalogo.esGratis(it.id ?: it.modelID)) 0 else 2 }
                     .thenBy { if (it.providerID == "opencode") 0 else 1 }
             )
         val etiquetas = mapOf(
@@ -1241,16 +1070,16 @@ class RutaNativa(
             "openrouter" to "OpenRouter"
         )
         val lista = todos.map { m ->
-            ModelOption(
+            ModeloElegible(
                 id = m.id ?: m.modelID.orEmpty(),
                 name = m.name ?: m.modelID ?: m.id,
                 description = buildString {
                     append(etiquetas[m.providerID] ?: m.providerID)
                     append(" · ")
                     append(m.family ?: "AI")
-                    if (esFree(m)) append(" · gratis")
+                    if (catalogo.esGratis(m.id ?: m.modelID)) append(" · gratis")
                 },
-                free = esFree(m),
+                free = catalogo.esGratis(m.id ?: m.modelID),
                 // MEDIDO 2026-10-03: sin el proveedor la app no puede fijar el modelo en el
                 // servidor, que distingue por pareja id mas providerID. Antes se tiraba.
                 providerID = m.providerID
@@ -1262,8 +1091,14 @@ class RutaNativa(
 
 
     override suspend fun getSystemSkills(): Response<SkillsResponse> {
+        cacheSystemSkills?.takeIf { cacheVigente(it.first, 10_000L) }?.let { return it.second }
         val base = rutaDeSkills()
-        val listado = sh("ls -1 '$base' 2>/dev/null", 5000)
+        // F7: UN solo `su` (antes: 1 ls + N test -f).
+        val listado = sh(
+            "cd '$base' 2>/dev/null || exit 0\n" +
+                "for d in */; do n=\"\${d%/}\"; [ -f \"\$n/SKILL.md\" ] && printf '%s\\n' \"\$n\"; done",
+            5000
+        )
         val carpetas = if (listado.code == 0) {
             listado.stdout.split("\n")
                 .map { it.trim() }
@@ -1275,20 +1110,17 @@ class RutaNativa(
         val installedSet = mutableSetOf<String>()
         val installedList = mutableListOf<SkillItem>()
         for (id in carpetas) {
-            val mdCheck = sh("test -f '$base/$id/SKILL.md' && echo SI", 3000)
-            if (mdCheck.stdout.trim() == "SI") {
-                installedSet.add(id)
-                installedList.add(
-                    SkillItem(
-                        id = id,
-                        name = id,
-                        version = null,
-                        description = "Skill local ($id)",
-                        installed = true,
-                        enabled = true
-                    )
+            installedSet.add(id)
+            installedList.add(
+                SkillItem(
+                    id = id,
+                    name = id,
+                    version = null,
+                    description = "Skill local ($id)",
+                    installed = true,
+                    enabled = true
                 )
-            }
+            )
         }
 
         val availableCatalog = listOf(
@@ -1320,7 +1152,7 @@ class RutaNativa(
                     available = availableList
                 )
             )
-        )
+        ).also { cacheSystemSkills = System.currentTimeMillis() to it }
     }
 
     override suspend fun installSkill(body: InstallSkillRequest): Response<TaskResponse> =
@@ -1357,57 +1189,8 @@ class RutaNativa(
         }
     }
 
-    override suspend fun getSkillConfig(skillId: String): Response<SkillConfigResponse> {
-        val id = skillId.trim()
-        if (id.isEmpty() || id.contains("..") || id.contains("/")) {
-            return Response.success(
-                SkillConfigResponse(ok = false, data = null)
-            )
-        }
-        val base = rutaDeSkills()
-        val r = sh("cat '$base/$id.json' 2>/dev/null", 3000)
-        return if (r.code == 0 && r.stdout.isNotBlank()) {
-            try {
-                val mapType = object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type
-                val map: Map<String, Any> = com.google.gson.Gson().fromJson(r.stdout, mapType)
-                Response.success(SkillConfigResponse(ok = true, data = map))
-            } catch (e: Exception) {
-                Response.success(SkillConfigResponse(ok = true, data = emptyMap()))
-            }
-        } else {
-            Response.success(SkillConfigResponse(ok = true, data = emptyMap()))
-        }
-    }
-
-    override suspend fun updateSkillConfig(
-        skillId: String,
-        config: Map<String, Any>
-    ): Response<BaseResponse> {
-        val id = skillId.trim()
-        if (id.isEmpty() || id.contains("..") || id.contains("/")) {
-            return Response.success(
-                BaseResponse(
-                    ok = false,
-                    error = ErrorBody(code = "SKILL_INVALID", message = "id de skill invalido: $id")
-                )
-            )
-        }
-        val base = rutaDeSkills()
-        val jsonStr = com.google.gson.Gson().toJson(config)
-        val encoded = android.util.Base64.encodeToString(jsonStr.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        val cmd = "mkdir -p '$base' && echo '$encoded' | base64 -d > '$base/$id.json'"
-        val r = sh(cmd, 5000)
-        return if (r.code == 0) {
-            Response.success(BaseResponse(ok = true, error = null))
-        } else {
-            Response.success(
-                BaseResponse(
-                    ok = false,
-                    error = ErrorBody(code = "CONFIG_WRITE_FAILED", message = "No se pudo guardar la configuracion de $id")
-                )
-            )
-        }
-    }
+    // F1: getSkillConfig/updateSkillConfig eliminados (0 usos; ningun JSON de
+    // config bajo rutaDeSkills tiene lector ni escritor).
 
     // ==========================================================================================
     // WORKSPACE
@@ -1445,7 +1228,7 @@ class RutaNativa(
                     // el 2026-10-01. Decir `true` porque hay una carpeta seria mentir, y poner un
                     // sustituto obligaria al usuario a aprender algo que no significa nada. Se deja
                     // en false y queda dicho aqui.
-                    hasHub = false,
+                    tieneWorkspace = false,
                     lastCommit = null
                 )
             }
@@ -1496,10 +1279,8 @@ class RutaNativa(
     // MEDIDO 2026-10-03 contra el OpenAPI VIVO (`_tmp/openapi.json`, 113 rutas, 249.900 bytes) y
     // contra el Hub retirado. Las DOS mediciones cuentan, y en el mismo sentido:
     //
-    //  - `GET /api/agent` EXISTE. Es la unica de las nueve con equivalente real, y de ahi que
-    //    `getAgents` sea el unico `ok=true` de este bloque.
     //  - "workflow": CERO apariciones en las 249.900 bytes. Ni ruta, ni descripcion, ni schema.
-    //    "job": CERO tambien. "dispatch": una, y es la descripcion de
+    //  - "job": CERO tambien. "dispatch": una, y es la descripcion de
     //    `POST /api/rpc/{rpcID}/{method}` ("Dispatch a method to the currently registered RPC"),
     //    que no es despachar un agente de Aegis.
     //
@@ -1510,166 +1291,35 @@ class RutaNativa(
     // y ademas el fallback SPA les contestaba HTML con 200 (BUG-02). Delegar en el Hub no era
     // "funcionar todavia": era fallar de una forma que la app no distinguia de un dato vacio.
     //
-    // Por eso ocho de las nueve son `ok=false` CON MOTIVO y no una traduccion a medias: un
-    // endpoint del Hub que nunca existio no tiene equivalente que buscar, y fingir que lo tiene
-    // devuelve una pantalla vacia sin explicar por que.
+    // F1 (2026-10-07): los metodos de agentes/jobs/estado (`getAgents`, `dispatchAgent`,
+    // `getAgentStatus`, `getJobs`, `runJob`, `getProjectState`) se eliminaron con sus tests
+    // (grep: 0 usos fuera de su definicion). El catalogo de agentes vive en
+    // `getOpencodeAgents` (`GET /api/agent`, nativo). Aqui quedan solo las tres de workflows,
+    // que son `ok=false` CON MOTIVO y no una traduccion a medias: un endpoint del Hub que
+    // nunca existio no tiene equivalente que buscar, y fingir que lo tiene devuelve una
+    // pantalla vacia sin explicar por que.
 
     /**
-     * MEDIDO 2026-10-03: SEIS clases de `Models.kt` de esta costura no tienen donde poner un
-     * motivo, y cinco de las nueve funciones los usan para responder.
+     * MEDIDO 2026-10-03: DOS clases de `Models.kt` de esta costura no tienen donde poner un
+     * motivo, y las tres funciones de workflows las usan para responder.
      *
-     * `BaseResponse` trae `error: ErrorBody?` — por ahi va el motivo de [initProject] y de
-     * [runJob] — y `TaskResponse` lo lleva en `TaskData.message`, como [indexProject]. Pero
-     * `AgentsResponse`, `AgentStatusResponse`, `WorkflowsResponse`, `WorkflowStatusResponse`,
-     * `JobsResponse` y `ProjectStateResponse` son `(ok, data)` a secas: no hay campo `error`, y
-     * `ok=false` con `data=null` es EXACTAMENTE lo que dice `envoltura(null)`, o sea
+     * `BaseResponse` trae `error: ErrorBody?` — por ahi va el motivo de [initProject] — y
+     * `TaskResponse` lo lleva en `TaskData.message`, como [indexProject]. Pero
+     * `WorkflowsResponse` y `WorkflowStatusResponse` son `(ok, data)` a secas: no hay campo
+     * `error`, y `ok=false` con `data=null` es EXACTAMENTE lo que dice `envoltura(null)`, o sea
      * indistinguible de "no hay nada".
      *
      * Poner el motivo dentro de `data` seria una abuse: la pantalla lo pinta como si fuera
      * contenido, que es peor que un null honesto. Asi que va al log, que es lo unico que hay, y
-     * el hueco queda dicho aqui. Arreglarlo es anadir `error: ErrorBody?` a esas seis clases, y
-     * NO lo he hecho porque este encargo limita los cambios de producto a estas nueve funciones.
+     * el hueco queda dicho aqui. Arreglarlo es anadir `error: ErrorBody?` a esas dos clases, y
+     * NO lo he hecho porque este encargo limita los cambios de producto a estas funciones.
      */
     private fun <T> logMotivo(motivo: String, respuesta: Response<T>): Response<T> {
         Log.w(TAG, "RutaNativa: $motivo")
         return respuesta
     }
 
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo, y por la misma razon que [initProject] — con un
-     * matiz que cambia lo que se puede decir en vez de callarselo.
-     *
-     * La ruta era `GET api/workspace/projects/{id}/state` (`ApiService.kt:137`): el estado del
-     * WORKSPACE que montaba el Hub. OpenCode no tiene el concepto de workspace, y el dato que la
-     * app sabe de un proyecto —ruta, ultimo commit, si esta vinculado— ya lo tiene `getProjects`,
-     * que vive en la app y no en ningun servidor.
-     *
-     * `ProjectStateResponse.data` es `Map<String, Any>?` y en un mapa asi cabria cualquier cosa.
-     * No la lleno, y el motivo es concreto: las CLAVES las inventaria yo. Una pantalla que las
-     * leyera estaria leyendo un mapa que ninguna medicion sostiene.
-     *
-     * MEDIDO ademas: esta funcion no tiene NINGUN consumidor en la app (grep de las nueve: solo
-     * `getWorkflows`, `runWorkflow` y `getWorkflowStatus` tienen a alguien llamandolas). Nadie ve
-     * el cambio.
-     */
-    override suspend fun getProjectState(projectId: String): Response<ProjectStateResponse> =
-        logMotivo(
-            "getProjectState($projectId): era el estado del workspace del Hub, " +
-                "GET api/workspace/projects/{id}/state. OpenCode no tiene workspaces; " +
-                "el dato del proyecto esta en getProjects, que es de la app.",
-            Response.success(ProjectStateResponse(ok = false, data = null))
-        )
-
-    /**
-     * MEDIDO 2026-10-03: ESTA TIENE EQUIVALENTE REAL. `GET /api/agent` esta en el OpenAPI vivo y
-     * [OpenCodeApi.listAgents] la declaraba desde el principio (OpenCodeApi.kt:153), o sea que
-     * estaba escrito y desconectado. Es la primera de las nueve que deja de hablar con el Hub.
-     *
-     * MEDIDO contra el endpoint vivo, y son las dos cifras que mandan:
-     *  - el catalogo trae **40** agentes y el filtro `primary && !hidden` deja **3**
-     *    (`orchestrator`, `build`, `plan`). Es el MISMO filtro que ya aplica
-     *    [getOpencodeAgents], por el mismo motivo: el Hub respondia la lista ya filtrada, y
-     *    `GET /api/agent` devuelve el catalogo entero.
-     *  - `id` y `name` NO son lo mismo en 7 de los 40: `build` se llama `Build` y `plan` se llama
-     *    `Plan`. Por eso `AgentItem` lleva los dos campos en vez de uno.
-     *
-     * ## El `status` NO es una medicion, y es lo unico que queda por decidir
-     *
-     * `AgentItem.status` lo ideo el Hub para pintar un punto verde o rojo por agente. MEDIDO: el
-     * Hub NUNCA llego a responderlo — su router no se monto (BUG-03, citado arriba)—, asi que no
-     * hay contrato al que traducir. Y OpenCode no expone estado de ejecucion por agente: los
-     * campos que trae `GET /api/agent` son `id`, `name`, `model`, `request`, `description`,
-     * `mode`, `hidden` y `permissions`, y ninguno es estado.
-     *
-     * Se ha buscado una senal de verdad y NO la hay. Las dos candidatas fallan, y estan medidas:
-     *
-     *  - `GET /api/session/active` responde `{"data":{"<sessionID>":{"type":"running"}}}`, o sea
-     *    ENVUELTO en `data`, y [OpenCodeApi.getActiveSessions] declara `Map<String,
-     *    ActiveSessionStatus>` sin desenvolver. Con el Gson de `ApiClient` el mapa que sale tiene
-     *    una sola clave, "data", cuyo valor no trae los ids de sesion: la senal se pierde al
-     *    deserializar. MEDIDO, y es lo que le pasa hoy a `MainViewModel`, que consulta ese mapa.
-     *  - `time.idle` de `GET /api/session` (nulo = sin idle todavia) MIENTE en las dos
-     *    direcciones: de 50 sesiones, 6 tienen `idle` nulo y solo **3** estan en
-     *    `/api/session/active`; y la sesion `orchestrator` que ahora mismo esta despachando
-     *    subagentes tiene `idle` PUESTO. O sea que marcar con eso es marcar a gente que no esta
-     *    ocupada y no marcar a la que si.
-     *
-     * Un `status` pintado con esa senal seria una pantalla que miente en silencio, que es el
-     * fallo que este fichero lleva tres commits corrigiendo. Asi que se pone "idle" para todos,
-     * que quiere decir "en el catalogo y sin ejecucion que reportar", y se dice aqui que es una
-     * DEFINICION y no una lectura. Si algun dia se quiere el punto rojo de verdad, el arreglo es
-     * desenvolver la envoltura de `getActiveSessions` —una linea en `OpenCodeApi`— y no un filtro
-     * mas aqui.
-     */
-    override suspend fun getAgents(): Response<AgentsResponse> {
-        val lista = oc.listAgents().data.orEmpty()
-            .filter { it.mode == "primary" && !it.hidden }
-            .map { a ->
-                AgentItem(
-                    id = a.id.orEmpty(),
-                    name = a.name,
-                    status = "idle"
-                )
-            }
-        return Response.success(AgentsResponse(ok = true, data = lista))
-    }
-
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo, y hay un casi-equivalente que NO es lo mismo.
-     *
-     * Existe `POST /api/session/{sessionID}/agent`, y por el nombre parece este dispatch. MEDIDO
-     * en el spec: se llama `session.switchAgent` y su descripcion es "Switch the agent used by
-     * subsequent provider turns" — CAMBIA el agente de una sesion que ya existe. `dispatchAgent`
-     * no trae `sessionID`: trae `agentType`, `projectId` y `context`, o sea que ademas de elegir
-     * agente CREA la sesion y la manda. Y devuelve 204 sin cuerpo, mientras que `TaskResponse`
-     * necesita un `TaskData`.
-     *
-     * Hacerlo nativo exigia inventar el `sessionID` que la peticion no trae. Eso es una escritura
-     * en el aire con forma de exito.
-     */
-    override suspend fun dispatchAgent(body: DispatchAgentRequest): Response<TaskResponse> =
-        logMotivo(
-            "dispatchAgent(${body.agentType}): POST api/agents/dispatch era del Hub y su router " +
-                "nunca se monto. No hay equivalente nativo.",
-            Response.success(
-                TaskResponse(
-                    ok = false,
-                    // MEDIDO: `TaskResponse` es `(ok, data: TaskData?)` sin campo `error`, igual
-                    // que en [indexProject]. El motivo va en `TaskData.message`.
-                    data = TaskData(
-                        taskId = null,
-                        message = "Despachar un agente era del Hub (POST /api/agents/dispatch) y " +
-                            "sus routers nunca se montaron: AUDITORIA_BACKEND.md BUG-03. Lo mas " +
-                            "parecido en OpenCode es POST /api/session/{sessionID}/agent, que es " +
-                            "session.switchAgent: cambia el agente de una sesion que ya existe, " +
-                            "necesita un sessionID que esta peticion no trae y devuelve 204 sin " +
-                            "cuerpo. Para lanzar un agente de verdad hay que crear la sesion y " +
-                            "mandarle el prompt."
-                    )
-                )
-            )
-        )
-
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo. La ruta era `GET api/agents/status/{projectId}`.
-     *
-     * Se podria contestar con el mismo catalogo que [getAgents] —el tipo de salida ES el mismo,
-     * `List<AgentItem>`— y por eso es tentador. No lo hago, y la razon es la que mas veces se ha
-     * pagado en este fichero: **una funcion que recibe `projectId` y lo ignora no es una funcion,
-     * es una mentira con parametros.** Ensenaria agentes del catalogo global donde la pantalla
-     * pidio los de un proyecto, y no habria forma de que la UI notase la diferencia.
-     *
-     * Lo que OpenCode si tiene es estado por SESION, y de ahi que la idea de agente ocupado sea
-     * real aunque todavia no se pueda pintar. Por sesion, no por proyecto: ese es el dato que
-     * existe.
-     */
-    override suspend fun getAgentStatus(projectId: String): Response<AgentStatusResponse> =
-        logMotivo(
-            "getAgentStatus($projectId): el estado de agentes por proyecto era del Hub, " +
-                "GET api/agents/status/{projectId}. OpenCode tiene estado por sesion " +
-                "(GET /api/session/active), no por proyecto.",
-            Response.success(AgentStatusResponse(ok = false, data = null))
-        )
+    // --- Workflows (sin equivalente nativo; ok=false con motivo) ---
 
     /**
      * MEDIDO 2026-10-03: sin equivalente nativo, y esta vez la prueba es de las gordas.
@@ -1740,41 +1390,7 @@ class RutaNativa(
             Response.success(WorkflowStatusResponse(ok = false, data = null))
         )
 
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo. "job" aparece CERO veces en el OpenAPI.
-     *
-     * Los jobs del Hub eran `jobScheduler.js` y AUDITORIA_BACKEND.md OBS-02 lo dice medido:
-     * `start()` no se llamaba nunca, de modo que `/api/jobs` habria devuelto `[]` incluso con el
-     * router montado. O sea que la lista de tareas programadas no la perdio OpenCode: no existio
-     * casi nunca, y devuelve `ok=false` en vez de una lista vacia que pareceria "no hay jobs".
-     */
-    override suspend fun getJobs(): Response<JobsResponse> =
-        logMotivo(
-            "getJobs(): GET api/jobs era del Hub, y \"job\" no aparece ni una vez en el OpenAPI " +
-                "de OpenCode. Ademas el planificador del Hub (jobScheduler) no se chegou a arrancar.",
-            Response.success(JobsResponse(ok = false, data = null))
-        )
-
-    /**
-     * MEDIDO 2026-10-03: sin equivalente nativo. La ruta era `POST /api/jobs/{id}/run`, del mismo
-     * planificador que nunca arranco (ver [getJobs]).
-     *
-     * Este si tiene donde llevar el motivo: `BaseResponse` trae `error: ErrorBody?`, igual que
-     * [initProject]. El codigo es `hub-retirado`, el mismo de [initProject], para que quien mire
-     * el error vea la misma causa en las nueve y no nueve causas parecidas.
-     */
-    override suspend fun runJob(jobId: String): Response<BaseResponse> =
-        Response.success(
-            BaseResponse(
-                ok = false,
-                error = ErrorBody(
-                    code = "hub-retirado",
-                    message = "Ejecutar una tarea programada ($jobId) era del Hub, de un " +
-                        "planificador que no se llego a arrancar. OpenCode no expone \"job\" en " +
-                        "ninguna de sus 113 rutas."
-                )
-            )
-        )
+    // --- Jobs: eliminados en F1 (el planificador del Hub nunca arranco; 0 usos) ---
 
 
 
@@ -1921,14 +1537,10 @@ class RutaNativa(
          *  TAG de este fichero, y el segundo: por eso esta escrito. */
         const val RAIZ_PROYECTOS = "/sdcard/projects"
 
-        /**
-         * El agente con el que nace una sesion creada desde la app.
-         *
-         * MEDIDO 2026-10-03: es el mismo valor que `AGENTE_POR_DEFECTO` de ChatViewModel (ahi es
-         * `private`, no se puede importar). La app ya trabajaba con orchestrator en todas
-         * partes menos al crear: la sesion nacia con los defaults del servidor. Duplicar el
-         * literal aqui con el motivo escrito es mejor que dejar la creacion sin agente.
-         */
-        const val AGENTE_POR_DEFECTO = "orchestrator"
+        /** Shell real (con `su`); los tests inyectan su fake en el constructor. */
+        val SHELL_REAL: (String, Long) -> RootShell.Result = { c, t -> RootShell.exec(c, t) }
+
+        /** F7: delimitador del lote unico de getSkills. */
+        const val DELIMITADOR_SKILLS = "@@AEGIS_SKILL@@"
     }
 }

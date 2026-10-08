@@ -8,7 +8,7 @@ import retrofit2.Response
 // que hacía imposible testearlo en JVM sin red ni Android. Esta interfaz expone
 // EXACTAMENTE las 7 llamadas que ya hacía el ViewModel, con las MISMAS firmas
 // (suspend + retrofit2.Response<T>), de modo que:
-//   - producción: BootstrapViewModel(repo = RetrofitBootstrapRepository) — igual
+//   - producción: BootstrapViewModel(repo = NativoBootstrapRepository) — igual
 //     que antes (ApiClient con interceptor de token + parseo de errorBody);
 //   - tests JVM/instrumentados: un fake que devuelve Response.success/error
 //     construidos a mano (sin OkHttp ni servidor).
@@ -32,7 +32,7 @@ interface BootstrapRepository {
  * misma interfaz `ApiService` servida por `RutaNativa` (OpenCode directo), asi que el cambio
  * es de una linea y los tests con fakes no se tocan.
  */
-object RetrofitBootstrapRepository : BootstrapRepository {
+object NativoBootstrapRepository : BootstrapRepository {
 
     private val service: ApiService get() = Conexion.api
 

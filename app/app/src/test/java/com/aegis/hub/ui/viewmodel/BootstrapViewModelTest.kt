@@ -47,7 +47,7 @@ import java.io.IOException
 //
 // Estrategia:
 //  - Refactor de F4: BootstrapViewModel recibe un BootstrapRepository por
-//    PARÁMETRO CON DEFAULT (RetrofitBootstrapRepository). Los tests pasan un
+//    PARÁMETRO CON DEFAULT (NativoBootstrapRepository). Los tests pasan un
 //    fake y ApiClient NUNCA se carga (el default sólo se evalúa si se omite).
 //  - Dispatchers.setMain(StandardTestDispatcher()) en @Before: viewModelScope
 //    usa Main.immediate. runTest hereda automáticamente el scheduler de Main
@@ -80,7 +80,7 @@ class BootstrapViewModelTest {
         val vm = BootstrapViewModel(fake) // init encola refresh() en Main (aún no corre)
 
         val inicial = vm.ui.value
-        assertTrue(inicial.hubReachable)
+        assertTrue(inicial.servidorAlcanzable)
         assertNull(inicial.state)            // phase == null → la UI deriva phaseOrIdle = idle
         assertNull(inicial.actionError)
         assertFalse(inicial.loading)
@@ -91,7 +91,7 @@ class BootstrapViewModelTest {
         // 5 pasos, no 6: el paso "antigravity" salio del wizard. MEDIDO de
         // backend/src/bootstrap/state.js:42-46.
         assertEquals(5, trasCarga.state?.stepList?.size)
-        assertTrue(trasCarga.hubReachable)
+        assertTrue(trasCarga.servidorAlcanzable)
         assertNull(trasCarga.actionError)
         assertFalse(trasCarga.loading)
         assertEquals(1, fake.stateCalls)
@@ -110,17 +110,17 @@ class BootstrapViewModelTest {
         assertEquals(BootstrapPhase.done, ui.state?.phase)
         assertEquals(BootstrapPhase.done, ui.state?.phaseOrIdle)
         assertEquals(5, ui.state?.stepList?.size)
-        assertTrue(ui.hubReachable)
+        assertTrue(ui.servidorAlcanzable)
         assertNull(ui.actionError)
 
-        // phase != running → NO hay polling; hubReachable → NO hay reintento suave:
+        // phase != running → NO hay polling; servidorAlcanzable → NO hay reintento suave:
         // pase el tiempo virtual que pase, sólo existió la carga inicial.
         testScheduler.advanceTimeBy(10_000)
         testScheduler.runCurrent()
         assertEquals(1, fake.stateCalls)
     }
 
-    // ---- 3) load()/refresh() con IOException → hubReachable=false + auto-recuperación ----
+    // ---- 3) load()/refresh() con IOException → servidorAlcanzable=false + auto-recuperación ----
     @Test
     fun refresh_conIOException_marcaHubInaccesible_yElReintentoSeRecupera() = runTest {
         val fake = FakeRepo()
@@ -138,7 +138,7 @@ class BootstrapViewModelTest {
         // Fallo de red → bloqueo "Esperando el hub…" (la screen muestra el texto;
         // friendlyError() se testea aparte: este fallo NO genera actionError)
         val caido = vm.ui.value
-        assertFalse(caido.hubReachable)
+        assertFalse(caido.servidorAlcanzable)
         assertNull(caido.state)
         assertNull(caido.actionError)
         assertFalse(caido.loading)
@@ -148,7 +148,7 @@ class BootstrapViewModelTest {
         testScheduler.advanceTimeBy(5_000)
         testScheduler.runCurrent()
         assertEquals(2, fake.stateCalls)
-        assertTrue(vm.ui.value.hubReachable)
+        assertTrue(vm.ui.value.servidorAlcanzable)
         assertEquals(BootstrapPhase.done, vm.ui.value.state?.phase)
     }
 
@@ -185,7 +185,7 @@ class BootstrapViewModelTest {
         assertNull(ui.actionError)
         assertNull(ui.authGuide)
         assertNull(ui.smokeReply)
-        assertTrue(ui.hubReachable) // F3: un fallo/success de setup no alterna el bloqueo
+        assertTrue(ui.servidorAlcanzable) // F3: un fallo/success de setup no alterna el bloqueo
     }
 
     // ---- 5) runFinalCheck() fallo (envelope de error) → actionError legible ----
@@ -212,7 +212,7 @@ class BootstrapViewModelTest {
         assertEquals("La descarga no coincide con el SHA256 esperado: reintenta el paso\n$raw", ui.actionError)
         assertNull(ui.finalCheck)
         assertFalse(ui.finalCheckLoading)
-        assertTrue(ui.hubReachable) // el error queda LOCAL: la tarjeta sigue visible
+        assertTrue(ui.servidorAlcanzable) // el error queda LOCAL: la tarjeta sigue visible
     }
 
     // ---- 6) runFinalCheck() con un check en "manual" → carga la guía de auth ----
@@ -300,7 +300,7 @@ class BootstrapViewModelTest {
         )
         assertNull(ui.smokeReply) // cada ejecución limpia la respuesta anterior
         assertNull(ui.actionError) // el error de smoke es LOCAL (tarjeta), no de cabecera
-        assertTrue(ui.hubReachable)
+        assertTrue(ui.servidorAlcanzable)
     }
 
     // ---- 9) retry() con envelope NOT_FOUND (errorBody parseado a mano) ----

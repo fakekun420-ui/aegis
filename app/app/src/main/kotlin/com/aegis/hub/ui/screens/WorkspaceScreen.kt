@@ -77,7 +77,7 @@ fun WorkspaceScreen(
                     ProjectCard(
                         project = p,
                         onOpen = { navController.navigate("project/${p.id}") },
-                        onInitHub = { viewModel.initProject(p.id) },
+                        onInicializar = { viewModel.initProject(p.id) },
                         onIndex = { viewModel.indexProject(p.id) },
                         onWorkflows = { navController.navigate("workflow/${p.id}") }
                     )
@@ -91,7 +91,7 @@ fun WorkspaceScreen(
 fun ProjectCard(
     project: com.aegis.hub.data.ProjectItem,
     onOpen: () -> Unit,
-    onInitHub: () -> Unit,
+    onInicializar: () -> Unit,
     onIndex: () -> Unit,
     onWorkflows: () -> Unit
 ) {
@@ -104,7 +104,7 @@ fun ProjectCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(project.name, color = ClaudeOnSurface, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.width(12.dp))
-                if (project.hasHub) {
+                if (project.tieneWorkspace) {
                     BadgeText("[HUB]", Color(0xFF3FB950))
                 } else {
                     BadgeText("[NO HUB]", ClaudeOnSurfaceVariant)
@@ -120,8 +120,8 @@ fun ProjectCard(
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 ActionButton("[ABRIR]", ClaudePrimary, onOpen)
-                if (!project.hasHub) {
-                    ActionButton("[INIT HUB]", ClaudeOnSurface, onInitHub)
+                if (!project.tieneWorkspace) {
+                    ActionButton("[INICIALIZAR]", ClaudeOnSurface, onInicializar)
                 } else {
                     ActionButton("[INDEXAR]", ClaudeTertiary, onIndex)
                     ActionButton("[WORKFLOWS]", ClaudeSecondary, onWorkflows)

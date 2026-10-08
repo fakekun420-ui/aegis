@@ -72,11 +72,7 @@ fun ChatScreen(
     sessionId: String,
     vm: ChatViewModel,
     onBack: () -> Unit,
-    showTopBar: Boolean = sessionId.isNotBlank(),
-    sessionProvider: String? = null,
-    // Al cambiar de motor se crea una sesión nueva (el proveedor es el prefijo del
-    // id) y hay que navegar a ella. La app lo inyecta; si es null no navega.
-    onNavigateToSession: ((String) -> Unit)? = null
+    showTopBar: Boolean = sessionId.isNotBlank()
 ) {
     val context = LocalContext.current
     val messages by vm.messages.collectAsState()
@@ -84,12 +80,9 @@ fun ChatScreen(
     val loading by vm.loading.collectAsState()
     val sendingInFlight by vm.sendingInFlight.collectAsState()
     val error by vm.error.collectAsState()
-    val hubReachable by vm.hubReachable.collectAsState()
+    val servidorAlcanzable by vm.servidorAlcanzable.collectAsState()
     val models by vm.models.collectAsState()
     val selectedModel by vm.selectedModel.collectAsState()
-    val selectedProvider by vm.selectedProvider.collectAsState()
-    val sessionProviderBound by vm.sessionProviderBound.collectAsState()
-    val pendingSessionNav by vm.pendingSessionNav.collectAsState()
     val pendingForms by vm.pendingForms.collectAsState()
     val pendingPermissions by vm.pendingPermissions.collectAsState()
     val replyingPermission by vm.replyingPermission.collectAsState()
@@ -106,15 +99,6 @@ fun ChatScreen(
     // function"). El divisor de fin de turno se intercala entre los mensajes aquí.
     val filas = remember(messages, turnFinished) { buildChatRows(messages, turnFinished) }
 
-    // Cambiar de motor crea una sesión nueva en el destino (el proveedor vive en el
-    // prefijo del id) y aquí se navega a ella.
-    LaunchedEffect(pendingSessionNav) {
-        val target = pendingSessionNav
-        if (!target.isNullOrBlank()) {
-            vm.consumePendingNav()
-            onNavigateToSession?.invoke(target)
-        }
-    }
     val modelsLoading by vm.modelsLoading.collectAsState()
     val streamingText by vm.streamingText.collectAsState()
     val streamingTools by vm.streamingTools.collectAsState()
@@ -135,8 +119,8 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(sessionId, sessionProvider) {
-        vm.load(sessionId, sessionProvider)
+    LaunchedEffect(sessionId) {
+        vm.load(sessionId)
     }
 
     // El ViewModel suele estar scoped a la Activity, así que onCleared NO se dispara
@@ -335,7 +319,6 @@ fun ChatScreen(
                     }
                     else -> "Nuevo chat"
                 }
-                val effectiveProvider = sessionProvider ?: selectedProvider
 
                 TopAppBar(
                     title = {
@@ -348,9 +331,6 @@ fun ChatScreen(
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
-                                if (!effectiveProvider.isNullOrBlank()) {
-                                    ProviderBadge(effectiveProvider)
-                                }
                             }
                             if (sessionId.isNotBlank()) {
                                 Text(
@@ -390,7 +370,7 @@ fun ChatScreen(
                     onSend = {
                         val t = composerText.trim()
                         if (t.isNotBlank() || attachedFiles.isNotEmpty()) {
-                            vm.sendWithFiles(sessionId, t, attachedFiles, sessionProvider)
+                            vm.sendWithFiles(sessionId, t, attachedFiles)
                             composerText = ""
                             attachedFiles = emptyList()
                         }
@@ -468,7 +448,7 @@ fun ChatScreen(
                 // cuanto un ciclo vuelve a salir bien (noteRefreshResult). Sin esto, un
                 // 429/502 durante el refresco dejaba la pantalla con el estado viejo y
                 // sin decir nada: "Trabajando en ello" para un turno ya acabado.
-                if (!hubReachable) {
+                if (!servidorAlcanzable) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(8.dp),
@@ -488,7 +468,7 @@ fun ChatScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "Sin conexión con el Hub: esto puede no reflejar el estado real.",
+                                text = "Sin conexión con OpenCode: lo que ves puede no ser el estado real.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.weight(1f)
@@ -807,7 +787,16 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("Modelo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("Elige el modelo para esta sesión:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Elige el modelo para esta sesión:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // F4: la lista sale del catalogo con cache (5 min); esto la invalida
+                    // y la vuelve a pedir (p. ej. tras instalar un proveedor nuevo).
+                    TextButton(onClick = { vm.refrescarCatalogo() }) { Text("Actualizar") }
+                }
 
                 // El selector de motor se fue con Antigravity: queda uno solo, asi
                 // que una fila de chips donde una opcion esta siempre activa es ruido
@@ -1659,14 +1648,7 @@ private fun startListeningInternal(
     try { sr.startListening(intent); setListening(true) } catch (e: Exception) { setError(e.message); setListening(false) }
 }
 
-private fun isTechnicalSessionId(t: String?): Boolean {
-    if (t == null) return true
-    val s = t.trim()
-    if (s.isBlank()) return true
-    if (s.startsWith("ses_") || s.startsWith("companion:") || s.startsWith("local_")) return true
-    if (s.matches(Regex("^[0-9a-fA-F-]{8,}$"))) return true
-    return false
-}
+private fun isTechnicalSessionId(t: String?): Boolean = com.aegis.hub.util.esTituloTecnico(t)
 
 /**
  * Divisor que confirma que la IA terminó su turno.

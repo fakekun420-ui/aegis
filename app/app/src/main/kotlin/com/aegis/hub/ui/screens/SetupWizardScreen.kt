@@ -106,7 +106,7 @@ fun SetupWizardScreen(
         },
         containerColor = ClaudeBackground
     ) { padding ->
-        if (!ui.hubReachable) {
+        if (!ui.servidorAlcanzable) {
             // ---- Bloqueo amigable: el hub no responde (red/403) y se reintenta solo a los 5 s ----
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),

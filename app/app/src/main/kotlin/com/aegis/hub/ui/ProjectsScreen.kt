@@ -1,5 +1,6 @@
 package com.aegis.hub.ui
 
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
@@ -42,6 +43,8 @@ import com.aegis.hub.ui.theme.OpenCodeBadgeBg
 import com.aegis.hub.ui.theme.OpenCodeBadgeBorder
 import com.aegis.hub.ui.theme.OpenCodeBadgeFg
 import com.aegis.hub.util.relativeTime
+
+private val RX_NOMBRE_PROYECTO = Regex("[^a-z0-9_-]")
 
 @Composable
 fun ProviderBadge(provider: String, modifier: Modifier = Modifier) {
@@ -377,7 +380,7 @@ fun ProjectsScreen(
                         val trimmedName = name.trim()
                         onCreateProject(trimmedName, desc.trim(), selectedProvider)
                         showCreate = false
-                        val safe = trimmedName.lowercase().replace(" ", "-").replace(Regex("[^a-z0-9_-]"), "")
+                        val safe = trimmedName.lowercase().replace(" ", "-").replace(RX_NOMBRE_PROYECTO, "")
                         scope.launch {
                             snackbarHostState.showSnackbar("Proyecto creado en /sdcard/projects/$safe/")
                         }
