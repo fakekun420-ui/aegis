@@ -172,3 +172,12 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
   con el supervisor detenido (requiere autorizacion).
 - V-09 lado app: **AUTO-OK** (0 duplicados causados por la app en 7 arranques).
 - Restriccion vigente: no matar/reiniciar el servidor sin OK explicito.
+
+## FUSION A MAIN — 2026-10-08 (merge dac4956, §7 cumplido)
+- Los 6 criterios en verde; PENDIENTE-OJOS no bloqueo; F9/SYNC bloqueados (§8).
+- LANZADO en dispositivo **confirmado por el usuario**: al matar el servidor,
+  la app lo levanta sola (ya no es pendiente controlado, es hecho testificado).
+- Servidor verificado sano tras la prueba (401, 1 listener). Rama
+  `estabilizar/integracion` conservada (no se borran ramas).
+- Proxima ejecucion de este archivo: cuando `main` tenga >= 72 h desde dac4956
+  + evidencia de estabilidad -> entonces F9 (§8). Sin eso: no avanzar.
