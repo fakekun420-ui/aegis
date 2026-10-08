@@ -19,3 +19,13 @@ APK 1.2.0 **no instalado** (instalar + `am start` toman la pantalla; §0).
 ## PENDIENTE-OJOS → `docs/qa/VERIFICACION-PENDIENTE.md`
 Instalación 1.2.0, arranque 20 s, V-01…V-11, V-09 (5 aperturas + kill),
 E3/E4/E8 con `AegisTrace`, PERF-BASELINE, V-10 TTS.
+
+## Intento UI 13:50 (sin tomar la pantalla)
+- `uiautomator dump` OK al 3er intento (los 2 primeros: `could not get idle
+  state`, UI ocupada). Foreground: `com.brave.browser` (el usuario navega).
+- Decision: NO se lanzan taps ni `am start` a Aegis con el usuario activo en
+  otra app — tomaria el primer plano en mitad de su tarea (§0). V-01…V-08,
+  V-10 y E3/E8 quedan PENDIENTE-OJOS (ya listados en VERIFICACION-PENDIENTE).
+- V-11 parcial (solo lectura): PSS 117 → 127 → 131 MB en ~20 min con la app en
+  segundo plano y sesion con turno vivo (no es curva de reposo ni de uso
+  simulado; es uso real).

@@ -149,3 +149,11 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
 - AegisTrace en vivo: turno real con message=18-20, forms/permissions (el usuario
   usa la app: motivo de mas para no interferir). PSS 117 MB en uso (no curva).
 - §7: **NO fusionar** (V-09 incompleta + PENDIENTE-OJOS). F9/`SYNC` bloqueados.
+
+## Cierre (orden del usuario: reinicio del servidor al final)
+- UI no tocada con usuario activo (Brave en primer plano): V-01…V-08/V-10/E3/E8
+  PENDIENTE-OJOS. `uiautomator` verificado operativo (dump OK).
+- PERF-BASELINE "despues" rellenado con lo medido (6/9 celdas); 3 siguen no
+  medidas (abrir chat, enviar, su Skills: requieren UI).
+- Pendiente final (requiere autorizacion): reinicio del servidor / pruebas de
+  reinicio (ruta LANZADO del script, V-09 kill→reapertura→1, V-08 con corte).
