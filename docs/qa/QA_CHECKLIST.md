@@ -147,8 +147,9 @@ con evidencia. Cada fase del plan exige sus V antes de fusionar a `main`.
 - [ ] **V-02 Enviar mensaje**: fases Enviando → Generando, respuesta completa,
   divisor "✓ respuesta final" solo al final del turno entero (no tras cada `bash`).
 - [ ] **V-03 Cambiar de chat 10 veces seguidas** (alternando dos chats con modelos
-  distintos): el chip nunca muestra el modelo/agente del otro. Cambiar modelo a
-  uno inexistente: el chip vuelve al anterior y aparece el motivo.
+  distintos): el chip nunca muestra el modelo/agente del otro. Elegir un modelo
+  que ya no está en el catálogo (o inexistente): el chip vuelve al anterior y
+  aparece el motivo.
 - [ ] **V-04 Crear chat nuevo global** ("+" en Chats): aparece **una** sola sesión
   nueva con agente y modelo; pulsar "+" dos veces seguidas no crea dos.
 - [ ] **V-05 Crear chat en proyecto vinculado a carpeta con nombre distinto**: la

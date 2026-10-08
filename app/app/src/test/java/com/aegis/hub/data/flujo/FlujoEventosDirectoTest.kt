@@ -52,4 +52,64 @@ class FlujoEventosDirectoTest {
             conexion is EventosServidor.Conexion.Conectado
         )
     }
+
+    @Test
+    fun `EOF limpio reabre sin emitir Reconectando`() = runBlocking {
+        var lecturas = 0
+        val estadosObservados = mutableListOf<EventosServidor.Conexion>()
+        val eventos = EventosServidor(this, abrir = {
+            lecturas++
+            cuerpo()
+        })
+        val recolector = kotlinx.coroutines.launch {
+            eventos.conexion.collect { estadosObservados.add(it) }
+        }
+        eventos.iniciar()
+
+        // Dejar que lea el primer stream (EOF) y reabra el segundo tras la pausa
+        val r = kotlinx.coroutines.withTimeoutOrNull(2_000L) {
+            while (lecturas < 2) {
+                kotlinx.coroutines.delay(50)
+            }
+            true
+        }
+        eventos.detener()
+        recolector.cancel()
+
+        assertTrue("reabrió tras EOF", r == true)
+        assertTrue(
+            "no debe pasar por Reconectando en EOF limpio: $estadosObservados",
+            estadosObservados.none { it is EventosServidor.Conexion.Reconectando && estadosObservados.indexOf(it) > 0 }
+        )
+    }
+
+    @Test
+    fun `excepcion si emite Reconectando`() = runBlocking {
+        var intento = 0
+        val estadosObservados = mutableListOf<EventosServidor.Conexion>()
+        val eventos = EventosServidor(this, abrir = {
+            intento++
+            if (intento == 1) throw java.io.IOException("corte de red simulado")
+            cuerpo()
+        })
+        val recolector = kotlinx.coroutines.launch {
+            eventos.conexion.collect { estadosObservados.add(it) }
+        }
+        eventos.iniciar()
+
+        val r = kotlinx.coroutines.withTimeoutOrNull(3_000L) {
+            while (estadosObservados.none { it is EventosServidor.Conexion.Conectado }) {
+                kotlinx.coroutines.delay(50)
+            }
+            true
+        }
+        eventos.detener()
+        recolector.cancel()
+
+        assertTrue("reconectó tras excepción", r == true)
+        assertTrue(
+            "debe emitir Reconectando tras fallo de red: $estadosObservados",
+            estadosObservados.any { it is EventosServidor.Conexion.Reconectando }
+        )
+    }
 }
