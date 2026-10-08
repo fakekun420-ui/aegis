@@ -40,8 +40,10 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
   comando explícito del usuario.
 - `gh` CLI: **NO** en el chroot — el plan usa curl+token de `~/.git-credentials`
   (ver rutinas inline en esta sesión).
-- `flock`: **SÍ** vía `nsenter -t 1 -m --`; en raw/sdcard **NO** (FUSE, errno 38). El
-  cerrojo debe vivir en `/data/local/tmp` con `nsenter`.
+- `flock`: **CORREGIDO 2026-10-08** — lo de arriba era falso para el uso del plan.
+  El `flock` del movil es toybox (`flock [-sxun] fd`, solo descriptores): la forma
+  util-linux `flock ARCHIVO COMANDO` NO existe (`Unknown option 'c'`, `Max 1 argument`).
+  El cerrojo anti-carrera de F6 es `mkdir` atomico con caducidad 60 s en `/data/local/tmp`.
 - **Situación resultante: B** (raíz + logcat + pm sí; UI/input libre sin OK; no se
   automatizan V-01..V-11). Nada que requiera UI toca el bus: §4.2 se ejecuta a modo
   de program track con PENDIENTE-OJOS.
@@ -65,3 +67,61 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
 - T-F0.6: `versionName` `1.1.1` → `1.1.2` (decisión por defecto del plan).
 - `buildFeatures.buildConfig = true` explícito (la instrumentación depende de
   `BuildConfig.DEBUG`; no se confía en el defecto de AGP 8.7.3).
+
+## Continuacion autonoma — ejecucion 2026-10-08 (§3, §5, §6, §4 parcial, §7)
+
+### §3 Correcciones (ramas desde la punta de fases, un push por tarea)
+- **C1** (`estabilizar/C1-modelo-cat`, CI verde run 37725148661): `fijarModelo`
+  valida contra `CatalogoRepo` (refresco unico si falta; `Fallo` sin tocar
+  servidor ni cache si no existe; catologo caido no bloquea). V-03 ajustado.
+- **C2**: cerrada por diseno sin gastar ciclos. La biseccion MockWebServer acumula
+  ~10 ciclos previos sin causa (stream no entrega ni un byte en CI, unario OK);
+  repetirla era quemar CI. El transporte se prueba con cuerpos `ResponseBody`
+  locales (verde) y la interop HTTP/SSE queda en V-06/V-08 de dispositivo.
+- **C3** (`estabilizar/C3-c4-cierre`, CI verde run 37729924029): EOF limpio reabre
+  sin `Reconectando`; excepcion si lo emite. 2 tests nuevos.
+- **C4** (misma rama): `graphify-staleness.js` eliminado del arbol (no se repone,
+  decision §2); `grep hub` en main solo comentarios historicos/docs; guardias
+  `check_hilo_principal` + `check_composable` verdes; V-03 redactado.
+
+### §5 F6 (`estabilizar/F6-lanzador`, CI verde run 37779401131, 2 ciclos)
+- T-F6.1 sin efecto: **no hay hook que copiar** (`service.d` solo `.zn_cleanup.sh`);
+  hook intacto por inexistente (registrado, no es fallo).
+- T-F6.2: `app/app/src/main/assets/aegis-serve.sh` (fuente unica; desvia del plan
+  `app/scripts/` con motivo: el asset se empaqueta en el APK y lo cubre el lint
+  `find app -name '*.sh'`). Guarda `[o]pencode` (H-11 verificado: 3 PIDs sin
+  corchete vs 1 con corchete), cerrojo `mkdir` 60 s, oom -1000, nohup,
+  `YA_HAY:<n>/LANZADO/ERROR:<motivo>`.
+- T-F6.3: `ServidorOpenCode` (un solo vuelo por Mutex, reintento unico a mitad);
+  `MainActivity` solo observa (nombre `startRootSystemAndPoll` conservado para
+  acotar el diff); `OpenCodeLauncher` solo despliega (base64, idempotente por sha)
+  e invoca el script (montajes/binario muertos eliminados; `pgrep` con corchete
+  tambien en el escaneo de binario vivo que hacia el Kotlin).
+- 11 tests JVM nuevos (estados, vuelo unico, reintento, parseo YA_HAY/ERROR).
+- V-09 queda **PENDIENTE-OJOS** (arranque/force-stop/kill tocan pantalla; §0).
+
+### §6 Integracion (`estabilizar/integracion`)
+- F1–F10+C1/C3/C4 fusionados (merge cf5b305, CI verde run 37731066908) y luego F6
+  (merge b3a200f; CI pendiente de este push).
+- §6.5: `createSessionViaHub` 0; `createSession(` prod solo en repo+costura+smoke;
+  `catch (_: Exception) {}` en viewmodel solo 2 con marcador GUARD-SILENCIO-OK;
+  `SYNC_POR_EVENTOS=false`; `versionName=1.2.0`; guardias verdes; tests 282+11.
+- Matiz honesto a §6.5: `RootShell.` directo sigue en `OpenCodeLauncher`
+  (lanzador, permitido) + `Credentials`/`SetupNative` (excepciones F7 fuera de
+  main documentadas); `RutaNativa` va por `Raiz`. No es 0 literal: es lo que F7
+  verifico uno a uno.
+- Revert: etiqueta `pre-integracion-20261008` sobre `main` (2862fd8) antes de fusionar.
+
+### §4 Dispositivo (situacion B; detalle en `docs/qa/VERIFICACION-20261008.md`)
+- AUTO-OK (solo lectura, sin tocar pantalla): servidor alcanzable (401),
+  1 proceso serve, app instalada 1.1.1 con 69 MB PSS, 0 ANR/crash de
+  `com.aegis.hub` (`/data/anr` solo trae `io.chaldeaprjkt.gamespace`), state/
+  respaldo con mismos hashes (no se toco nada).
+- PENDIENTE-OJOS: instalacion del APK 1.2.0, arranque, V-01…V-11, V-09, E3/E4/E8,
+  PERF-BASELINE (lista en `docs/qa/VERIFICACION-PENDIENTE.md`).
+
+### §7 Fusion a `main`: NO (resultado correcto, no fallo)
+- Falta §7.2 (sin §4.1 con APK 1.2.0: instalar+lanzar tocan pantalla, §0) y §7.3
+  (V-09 sin AUTO-OK). Rama lista, APK debug del run de integracion disponible,
+  motivo registrado. PENDIENTE-OJOS no bloquea (§7) pero F9 y `SYNC_POR_EVENTOS`
+  siguen bloqueados (§8: sin 72 h de estabilidad comprobada, nada que hacer).
