@@ -74,7 +74,13 @@ class ConfigSesionVmTest {
         }
         override suspend fun setSessionAgent(sessionId: String, body: com.aegis.hub.data.SetSessionAgentRequest) = ok()
         override suspend fun listAgents() = OpenCodeNativeAgentListResponse(agentes)
-        override suspend fun listModels() = OpenCodeNativeModelListResponse(emptyList())
+        override suspend fun listModels() = OpenCodeNativeModelListResponse(
+            listOf(
+                com.aegis.hub.data.OpenCodeNativeModel(id = "m-nuevo", providerID = "opencode"),
+                com.aegis.hub.data.OpenCodeNativeModel(id = "m-b", providerID = "opencode"),
+                com.aegis.hub.data.OpenCodeNativeModel(id = "mx", providerID = "opencode")
+            )
+        )
         override suspend fun getSessionForms(sessionId: String) = throw UnsupportedOperationException()
         override suspend fun replyForm(sessionId: String, formID: String, body: OpenCodeFormReplyRequest) = ok()
         override suspend fun getSessionPermissions(sessionId: String) = throw UnsupportedOperationException()
@@ -180,5 +186,17 @@ class ConfigSesionVmTest {
 
         assertEquals("build", vm.agentMode.value)
         assertEquals("mx", vm.selectedModel.value)
+    }
+
+    @Test
+    fun `elegir modelo no disponible en catalogo revierte el chip y pone error`() {
+        val oc = FakeOc()
+        val vm = vm(oc)
+        fijarSesion(vm, "ses_x")
+
+        vm.selectModel("m-inexistente")
+
+        assertNull(vm.selectedModel.value)
+        assertTrue(vm.error.value!!.contains("m-inexistente"))
     }
 }

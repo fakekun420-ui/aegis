@@ -150,13 +150,29 @@ class SesionConfigRepo(
         ) {
             return Resultado.Ok(Unit)
         }
+        var nativos = try {
+            catalogo.modelosNativos()
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (nativos.isNotEmpty() && nativos.none { (it.id ?: it.modelID) == limpio }) {
+            // El modelo no está en la caché del catálogo: refrescar una vez (single-flight)
+            catalogo.invalidar()
+            nativos = try {
+                catalogo.modelosNativos()
+            } catch (e: Exception) {
+                emptyList()
+            }
+            if (nativos.isNotEmpty() && nativos.none { (it.id ?: it.modelID) == limpio }) {
+                return Resultado.Fallo("El modelo «$limpio» no está disponible en OpenCode")
+            }
+        }
+        val nativosFinales = nativos
         try {
-            // F4: catalogo con cache (antes: GET /api/model entero por fijado).
-            val nativos = catalogo.modelosNativos()
             val prov = ModelosUtil.proveedorDeRef(ref)
-                ?: ModelosUtil.resolveProviderFor(limpio, pistaProveedor, nativos)
+                ?: ModelosUtil.resolveProviderFor(limpio, pistaProveedor, nativosFinales)
             val variante = variantExplicita?.trim()?.takeIf { it.isNotBlank() }
-                ?: ModelosUtil.resolveVariantFor(limpio, nativos)
+                ?: ModelosUtil.resolveVariantFor(limpio, nativosFinales)
             val r = oc.setSessionModel(
                 sid,
                 SetSessionModelRequest(

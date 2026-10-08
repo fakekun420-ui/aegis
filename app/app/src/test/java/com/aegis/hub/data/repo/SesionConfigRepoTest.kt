@@ -75,7 +75,11 @@ class SesionConfigRepoTest {
         override suspend fun listAgents() = OpenCodeNativeAgentListResponse(
             listOf(OpenCodeNativeAgent(id = "build", name = "Build"))
         )
-        override suspend fun listModels() = OpenCodeNativeModelListResponse(emptyList())
+        var modelosDisponibles = listOf(
+            OpenCodeNativeModel(id = "m-nuevo", providerID = "opencode")
+        )
+
+        override suspend fun listModels() = OpenCodeNativeModelListResponse(modelosDisponibles)
         override suspend fun getSessionForms(sessionId: String) = throw UnsupportedOperationException()
         override suspend fun replyForm(sessionId: String, formID: String, body: OpenCodeFormReplyRequest) = ok()
         override suspend fun getSessionPermissions(sessionId: String) = throw UnsupportedOperationException()
@@ -163,5 +167,40 @@ class SesionConfigRepoTest {
         assertEquals("m-nuevo", cache.leerModelo("ses_x"))
         assertEquals("m-nuevo", cache.ultimoModelo())
         assertEquals("opencode", oc.ultimoModeloFijado?.providerID)
+    }
+
+    @Test
+    fun `modelo inexistente en catalogo da Fallo sin llamar al servidor ni tocar cache`() = runBlocking {
+        val oc = FakeOc()
+        val cache = FakeCache()
+        val repo = SesionConfigRepo(oc, cache) { ahora }
+
+        val r = repo.fijarModelo("ses_x", "modelo-inexistente-total")
+
+        assertTrue(r is Resultado.Fallo)
+        assertTrue((r as Resultado.Fallo).motivo.contains("no está disponible en OpenCode"))
+        assertEquals(0, oc.setModeloLlamadas)
+        assertNull(cache.leerModelo("ses_x"))
+    }
+
+    @Test
+    fun `catalogo caido deja pasar con aviso o llamada sin bloquear`() = runBlocking {
+        val oc = object : OpenCodeApi by FakeOc() {
+            var setModeloLlamadas = 0
+            override suspend fun listModels(): OpenCodeNativeModelListResponse {
+                throw RuntimeException("catalogo caido")
+            }
+            override suspend fun setSessionModel(sessionId: String, body: com.aegis.hub.data.SetSessionModelRequest): retrofit2.Response<Unit> {
+                setModeloLlamadas++
+                return retrofit2.Response.success(Unit)
+            }
+        }
+        val cache = FakeCache()
+        val repo = SesionConfigRepo(oc, cache) { ahora }
+
+        val r = repo.fijarModelo("ses_x", "cualquier-modelo")
+
+        assertTrue("debe pasar aunque catalogo este caido", r is Resultado.Ok)
+        assertEquals(1, oc.setModeloLlamadas)
     }
 }
