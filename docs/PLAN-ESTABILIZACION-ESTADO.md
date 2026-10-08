@@ -157,3 +157,18 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
   medidas (abrir chat, enviar, su Skills: requieren UI).
 - Pendiente final (requiere autorizacion): reinicio del servidor / pruebas de
   reinicio (ruta LANZADO del script, V-09 kill→reapertura→1, V-08 con corte).
+
+## Prueba de reinicio (con autorizacion) — 2026-10-08 14:07 EDT
+- Secuencia real: kill del hijo `serve` + `am start` (el comando se interrumpio
+  a mitad; el `am start` si llego: START com.aegis.hub en logcat 14:07:08).
+- La app desplego `aegis-serve.sh` a `/data/local/tmp/` (4244 B) con sha256
+  IDENTICO al asset del repo: la cadena base64 esta integra en el dispositivo.
+- El servidor quedo sano en segundos (1 listener :49374, health 401). Conteo
+  pgrep = 2 PIDs pero es 1 servidor logico (envoltorio `sh -c` + hijo):
+  leccion metodologica para V-09 (contar listeners, no PIDs).
+- Atribucion del relanzamiento ambigua (el manager `opencode` repuso un hijo en
+  el mismo segundo; el log muestra boot limpio): YA_HAY verificado (la app no
+  duplico nunca), LANZADO limpio por la app queda PENDIENTE de prueba controlada
+  con el supervisor detenido (requiere autorizacion).
+- V-09 lado app: **AUTO-OK** (0 duplicados causados por la app en 7 arranques).
+- Restriccion vigente: no matar/reiniciar el servidor sin OK explicito.

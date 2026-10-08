@@ -29,3 +29,9 @@ E3/E4/E8 con `AegisTrace`, PERF-BASELINE, V-10 TTS.
 - V-11 parcial (solo lectura): PSS 117 → 127 → 131 MB en ~20 min con la app en
   segundo plano y sesion con turno vivo (no es curva de reposo ni de uso
   simulado; es uso real).
+
+## Prueba de reinicio 14:07 (autorizada)
+- Kill + `am start`: servidor sano en segundos, 1 listener, health 401.
+- Deploy del script F6 verificado en dispositivo (sha256 identico al repo).
+- La app no lanzo duplicado (YA_HAY aguanto). LANZADO limpio: pendiente
+  controlado (supervisor detenido). V-09 lado app: AUTO-OK.
