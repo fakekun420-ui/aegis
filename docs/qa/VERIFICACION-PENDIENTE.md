@@ -26,3 +26,7 @@ APK: artifact `aegis-debug` del run de CI verde de `estabilizar/integracion`
 - Bloqueados hasta: fusión en `main` con ≥ 72 h + evidencia de estabilidad
   (`/data/anr`, tombstones, `meminfo` sin crecimiento, sin FALLÓ) + §4.3 con
   flag en debug sin AUTO-FALLÓ en V-06/V-08. Sin eso: no avanzar, no es error.
+
+## Autorizaciones pendientes del usuario (2026-10-08)
+- Reiniciar/matar `opencode serve` o su supervisor: SOLO con OK explicito.
+  Incluye V-09 kill→reapertura, ruta LANZADO del script y V-08 con corte.

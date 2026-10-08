@@ -130,3 +130,22 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
   (V-09 sin AUTO-OK). Rama lista, APK debug del run de integracion disponible,
   motivo registrado. PENDIENTE-OJOS no bloquea (§7) pero F9 y `SYNC_POR_EVENTOS`
   siguen bloqueados (§8: sin 72 h de estabilidad comprobada, nada que hacer).
+
+## Verificacion con OK de pantalla — 2026-10-08 tarde (restriccion nueva)
+- §4.1 con APK fix3 (run 37815937195): **AUTO-OK** — 0 FATAL, 0 ANR,
+  0 StrictMode con stack aegis tras 2 correcciones (ProjectsStore precalentado
+  en IO; migrarPrefijos a IO + warm de model_prefs/agent_prefs).
+- Hallazgo previo (ya corregido): 1.2.0 sin fix moria en arranque con FATAL x2
+  (`RootShell.drenar` sin atrapar corte; fix + 2 tests JVM).
+- V-09 **PARCIAL**: 5 force-stop+rearranque sin crecimiento (siempre el par del
+  supervisor, 1 listener). Los conteos con el patron viejo eran instrumento
+  invalido (no ve `opencode.exe`); rehechos con `(.exe)?`.
+- Supervisor (servicio Termux 6418): al matar un hijo `serve`, repone otro y el
+  viejo languidece sin puerto (2 PIDs/1 listener transitorio). La app NUNCA lanzo
+  un tercero: la guarda F6 aguanto.
+- **RESTRICCION del usuario 2026-10-08: no matar el servidor; todo reinicio de
+  opencode requiere su autorizacion.** Quedan pendientes con esa condicion:
+  V-09 kill→reapertura→1, ruta LANZADO del script en dispositivo, V-08 visual.
+- AegisTrace en vivo: turno real con message=18-20, forms/permissions (el usuario
+  usa la app: motivo de mas para no interferir). PSS 117 MB en uso (no curva).
+- §7: **NO fusionar** (V-09 incompleta + PENDIENTE-OJOS). F9/`SYNC` bloqueados.
