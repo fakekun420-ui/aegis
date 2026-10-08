@@ -63,7 +63,7 @@ class FlujoEventosDirectoTest {
             lecturas++
             cuerpo()
         })
-        val recolector = kotlinx.coroutines.launch {
+        val recolector = launch {
             eventos.conexion.collect { estadosObservados.add(it) }
         }
         eventos.iniciar()
@@ -94,7 +94,7 @@ class FlujoEventosDirectoTest {
             if (intento == 1) throw java.io.IOException("corte de red simulado")
             cuerpo()
         })
-        val recolector = kotlinx.coroutines.launch {
+        val recolector = launch {
             eventos.conexion.collect { estadosObservados.add(it) }
         }
         eventos.iniciar()
