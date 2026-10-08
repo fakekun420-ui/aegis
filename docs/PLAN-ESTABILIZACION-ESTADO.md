@@ -23,6 +23,36 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
 
 ## Bitácora F0 (2026-10-07)
 
+## Capacidades medidas en el dispositivo (§1 del plan de continuación, 2026-10-07 ~12:20)
+
+- Servidor OpenCode: **SÍ** (`curl .../api/health` → 401, alcanzable; PID 17510,
+  lanzado desde Termux 2026-10-06 20:07, NO desde service.d).
+- Raíz del host: **SÍ** — `su -c id` → uid=0 (en el chroot root). Sin contraseña.
+- Ver el host desde el chroot: **SÍ** — `nsenter -t 1 -m -- ls /data/adb/service.d`
+  funciona (SÍ lista el dir).
+- `logcat`: **SÍ** — `nsenter -t 1 -m -- logcat -d -t 5` entrega (el chroot no tiene
+  `logcat` directo).
+- `pm`: **SÍ** — `nsenter -t 1 -m -- pm list packages com.aegis.hub` → instalada.
+- `service.d`: **SIN hook de Aegis instalado** — solo `.zn_cleanup.sh`. El servidor
+  va levantado por Termux, no por arranque del sistema.
+- Dirección de UI (`input keyevent`): **bus de pantalla NO tocado** (§0): todo lo
+  del dispositivo que requiere tocar la pantalla queda en PENDIENTE-OJOS salvo
+  comando explícito del usuario.
+- `gh` CLI: **NO** en el chroot — el plan usa curl+token de `~/.git-credentials`
+  (ver rutinas inline en esta sesión).
+- `flock`: **SÍ** vía `nsenter -t 1 -m --`; en raw/sdcard **NO** (FUSE, errno 38). El
+  cerrojo debe vivir en `/data/local/tmp` con `nsenter`.
+- **Situación resultante: B** (raíz + logcat + pm sí; UI/input libre sin OK; no se
+  automatizan V-01..V-11). Nada que requiera UI toca el bus: §4.2 se ejecuta a modo
+  de program track con PENDIENTE-OJOS.
+
+## Integraciòn — forma de ramas (§6.1)
+
+- Todas las ramas de fase están **apiladas** (cada una desciende de la anterior por
+  `git merge-base --is-ancestor`), salvo `F8-modelos` que solo aporta 1 commit de
+  docs (`e1b07c7`) sobre la misma punta de código que usa F10.
+- **Punta real = `estabilizar/F10-flujos`** (f569d65). Basta fusionar esa rama.
+
 - T-F0.1: `python3 tools/check_composable.py` → verde local. CI pendiente del push
   (sin toolchain Android en el host; `gh` no disponible en el chroot para leer runs).
 - T-F0.2: este archivo.
