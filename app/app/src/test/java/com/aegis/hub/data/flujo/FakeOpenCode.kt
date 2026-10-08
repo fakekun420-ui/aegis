@@ -42,7 +42,7 @@ class FakeOpenCode {
         """{"id":"ses_test","title":"Chat de prueba","agent":"build","model":{"id":"m-srv","providerID":"opencode"}}"""
     )
     private val modelos = envuelto(
-        """[{"id":"m-srv","modelID":"m-srv","providerID":"opencode","name":"M Srv","enabled":true}]"""
+        """[{"id":"m-srv","modelID":"m-srv","providerID":"opencode","name":"M Srv","enabled":true},{"id":"m-nuevo","modelID":"m-nuevo","providerID":"opencode","name":"M Nuevo","enabled":true}]"""
     )
     private val agentes = envuelto(
         """[{"id":"build","name":"build","mode":"primary","hidden":false,"model":{"id":"m-srv","providerID":"opencode"}}]"""
