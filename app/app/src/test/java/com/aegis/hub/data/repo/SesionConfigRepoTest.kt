@@ -5,6 +5,7 @@ import com.aegis.hub.data.OpenCodeFormReplyRequest
 import com.aegis.hub.data.OpenCodeModelRef
 import com.aegis.hub.data.OpenCodeNativeAgent
 import com.aegis.hub.data.OpenCodeNativeAgentListResponse
+import com.aegis.hub.data.OpenCodeNativeModel
 import com.aegis.hub.data.OpenCodeNativeModelListResponse
 import com.aegis.hub.data.OpenCodePermissionReplyRequest
 import com.aegis.hub.data.OpenCodePromptRequest
