@@ -35,8 +35,18 @@ object RootShell {
                 val p = Runtime.getRuntime().exec(sh)
                 val out = StringBuilder()
                 val err = StringBuilder()
-                val tOut = Thread { BufferedReader(InputStreamReader(p.inputStream)).forEachLine { out.appendLine(it) } }
-                val tErr = Thread { BufferedReader(InputStreamReader(p.errorStream)).forEachLine { err.appendLine(it) } }
+                // MEDIDO 2026-10-08 en el movil (FATAL x2 en arranque 1.2.0): si el
+                // proceso muere o sus flujos se cierran mientras se drenan, el hilo
+                // lector recibe InterruptedIOException ("read interrupted by close()
+                // on another thread"). Sin atraparla, el hilo muere sin capturador
+                // -> FATAL EXCEPTION y la app cae en el arranque. Drenar es
+                // best-effort: lo ya leido se conserva, el cierre es EOF.
+                val tOut = Thread {
+                    drenar(BufferedReader(InputStreamReader(p.inputStream)), out)
+                }
+                val tErr = Thread {
+                    drenar(BufferedReader(InputStreamReader(p.errorStream)), err)
+                }
                 tOut.start(); tErr.start()
                 val finished = if (timeoutMs>0) p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) else { p.waitFor(); true }
                 if (!finished) { p.destroyForcibly(); return Result(124, out.toString(), "timeout ${timeoutMs}ms") }
@@ -52,6 +62,19 @@ object RootShell {
             }
         }
         return last ?: Result(-1, "", "no shell")
+    }
+
+    /**
+     * Drena un flujo al acumulador sin morir nunca con excepcion.
+     *
+     * Interna para poder probarla en JVM ([RootShellDrenajeTest]): el hilo lector
+     * real la llama; aqui se simula el corte.
+     */
+    internal fun drenar(lector: BufferedReader, destino: StringBuilder) {
+        try {
+            lector.forEachLine { destino.appendLine(it) }
+        } catch (_: Exception) { }
+        // GUARD-SILENCIO-OK: drenaje best-effort (ver KDoc de `exec`).
     }
 
     /**
