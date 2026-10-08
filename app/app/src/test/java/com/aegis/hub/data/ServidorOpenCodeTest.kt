@@ -106,10 +106,12 @@ class ServidorOpenCodeTest {
 
     @Test
     fun `sin lanzar al principio reintenta una vez a mitad de camino`() = runBlocking {
+        // OJO: `asegurar` comprueba una vez ANTES del bucle, asi que este contador
+        // va uno por delante del contador interno (el reintento salta en el 10 interno).
         var sondeos = 0
         val lanzamientos = mutableListOf<String>()
         val final = ServidorOpenCode.asegurar(
-            comprobarSiVivo = { ++sondeos >= 11 },
+            comprobarSiVivo = { ++sondeos >= 12 },
             lanzar = {
                 lanzamientos.add("vez-${lanzamientos.size + 1}")
                 if (lanzamientos.size == 1) Lanzamiento.YaHay else Lanzamiento.Lanzado
