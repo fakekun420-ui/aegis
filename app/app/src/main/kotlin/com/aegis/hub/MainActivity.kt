@@ -101,6 +101,23 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             runCatching { com.aegis.hub.data.ProjectsStore.default }
                 .onFailure { android.util.Log.w(TAG, "precalentado ProjectsStore: ${it.message}") }
+            // MEDIDO 2026-10-08 (StrictMode): el primer `getSharedPreferences`
+            // carga el XML y resuelve rutas en disco. Se estrenan aqui los dos
+            // ficheros de prefs; lo posterior reutiliza la instancia cacheada.
+            runCatching { com.aegis.hub.data.AppContext.require() }.getOrNull()?.let { ctx ->
+                runCatching {
+                    ctx.getSharedPreferences(
+                        com.aegis.hub.data.ModelPreferences.PREFS_NAME,
+                        android.content.Context.MODE_PRIVATE
+                    )
+                }
+                runCatching {
+                    ctx.getSharedPreferences(
+                        com.aegis.hub.data.AgentPreferences.PREFS_NAME,
+                        android.content.Context.MODE_PRIVATE
+                    )
+                }
+            }
         }
         // El ViewModel no tiene Context; se lo damos una vez para el aviso de
         // "respuesta final" en la barra de notificaciones.

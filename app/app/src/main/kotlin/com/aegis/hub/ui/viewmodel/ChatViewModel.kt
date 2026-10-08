@@ -307,7 +307,11 @@ class ChatViewModel(
         modeloManualEnSesion = false
         configJob = viewModelScope.launch {
             val ctx = runCatching { AppContext.require() }.getOrNull()
-            runCatching { ctx?.let { ModelPreferences.migrarPrefijos(it) } }
+            // MEDIDO 2026-10-08 (StrictMode): `getSharedPreferences` resuelve rutas
+            // en disco; en main es DiskReadViolation. La migracion va a IO.
+            if (ctx != null) withContext(Dispatchers.IO) {
+                runCatching { ModelPreferences.migrarPrefijos(ctx) }
+            }
             val cfg = configRepo.leer(sid)
             if (_currentSessionId.value != sid) return@launch
             _servidorAlcanzable.value = cfg.origen == ConfigSesion.Origen.SERVIDOR || sid.isBlank()
