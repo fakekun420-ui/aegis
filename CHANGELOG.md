@@ -234,6 +234,9 @@ Cierre de la sesión de estabilización: el Hub y el CLI hablaban con **dos serv
 - **Plantilla `projects.json.example`:** Repositorio limpio con `projects.json` ignorado en `.gitignore`.
 - **Guía de Keystore RSA-4096:** `docs/KEYSTORE_SETUP.md` documentando generación, encoding en base64 y configuración de secretos CI.
 - **Scripts de prueba de QA física:** `docs/qa/QA_TEST_SCRIPTS.md` con 8 casos reproducibles para POCO F3.
+- **F11 chats globales en workspace + serve con toolchain (verificado 2026-10-09):** `SesionesRepo` nace con `directory=/sdcard/projects` (antes `/root`); `aegis-serve.sh` commiteado con `CHROOT_PATH` (el APK instalado lo traía sin él y los shells de sesión no veían ni `sh`).
+- **F12 buscador de modelos + F14 scroll (verificado 2026-10-09):** hoja de modelos con `LazyColumn` (el `Column+verticalScroll` no scrollea en el `BottomSheet`) y `OutlinedTextField` que filtra por nombre/id (`filtrarPorTexto` pura + tests).
+- **F13 catálogo completo + envío honesto (verificado 2026-10-09):** `loadModels` sin recorte de proveedor (79 modelos: 42 opencode + 37 google); guardia `motivoModeloNoDisponible` frena el envío con modelo ausente conservando el texto.
 
 ### Changed
 - **CI / Seguridad:** Promoción de `semgrep` y `gitleaks` a bloqueantes en `.github/workflows/build-apk.yml`. Concurrencia fijada a 1 en pruebas backend.
