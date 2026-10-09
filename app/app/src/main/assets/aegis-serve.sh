@@ -97,7 +97,15 @@ esac
 # para que valga igual cuando el padre es la app).
 echo -1000 > /proc/self/oom_score_adj 2>/dev/null
 
-if chroot "$U" /bin/sh -c "HOME=/root $BINARIO serve --service" \
+# PATH/SHELL explicitos MEDIDO 2026-10-08: el script corre del lado Android,
+# asi que `chroot` hereda el entorno del lanzador (PATH de Android:
+# /product/bin:/apex/...:/system/bin), que DENTRO del chroot no existe (0 de 6
+# directorios presentes). Con ese PATH, context-mode no encuentra sh/python3/
+# node/go/perl y ctx_execute falla con "Executable not found in $PATH" /
+# "No Python runtime available" (reproducido con A/B sobre detectRuntimes()).
+# El tool nativo shell no lo nota porque opencode le inyecta su propio PATH.
+CHROOT_PATH="/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+if chroot "$U" /bin/sh -c "HOME=/root PATH=$CHROOT_PATH SHELL=/usr/bin/bash $BINARIO serve --service" \
     >>"$LOG_ARRANQUE" 2>&1 & then
     echo "LANZADO"
 else

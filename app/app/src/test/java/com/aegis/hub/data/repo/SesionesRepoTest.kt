@@ -138,6 +138,7 @@ class SesionesRepoTest {
         assertEquals(1, oc.crearLlamadas)
         assertEquals("build", oc.agenteFijado)
         assertEquals("m-b", oc.modeloFijado?.id)
+        assertEquals("/sdcard/projects", oc.ultimaCarpeta)
         assertTrue(r.avisos.isEmpty())
     }
 

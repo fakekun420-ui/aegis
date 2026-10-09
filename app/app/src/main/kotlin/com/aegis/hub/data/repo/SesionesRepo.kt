@@ -52,6 +52,14 @@ class SesionesRepo(
 
         /** Ventana anti doble pulsacion para [crear]. */
         const val VENTANA_IDEMPOTENCIA_MS = 3_000L
+
+        /**
+         * Carpeta con la que nace una sesion global (sin carpeta ni proyecto).
+         * MEDIDO 2026-10-09: sin `directory` el servidor usa su cwd (`/root`) y
+         * el agente arranca fuera del workspace (sin proyecto, guard en `ask`,
+         * skills de proyecto sin resolver). Verificado en Chat 3496.
+         */
+        const val CARPETA_POR_DEFECTO = "/sdcard/projects"
     }
 
     private var ultimaClave: String? = null
@@ -69,12 +77,13 @@ class SesionesRepo(
 
         val carpeta = req.carpeta?.takeIf { it.isNotBlank() }
             ?: req.proyectoId?.let { pid -> store.getProject(pid)?.folder?.takeIf { it.isNotBlank() } }
+            ?: CARPETA_POR_DEFECTO
 
         val id = try {
             oc.createSession(
                 CreateOpenCodeSessionRequest(
                     title = req.titulo,
-                    location = carpeta?.let { OpenCodeLocation(directory = it) }
+                    location = OpenCodeLocation(directory = carpeta)
                 )
             ).data?.id?.takeIf { it.isNotBlank() }
         } catch (e: Exception) {
