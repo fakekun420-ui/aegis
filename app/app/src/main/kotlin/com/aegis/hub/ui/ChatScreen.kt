@@ -793,11 +793,6 @@ fun ChatScreen(
             val visibles = remember(busqueda, models) { models.filtrarPorTexto(busqueda) }
             Column(
                 modifier = Modifier.fillMaxWidth()
-                    // MEDIDO 2026-10-09 (V-03): el catalogo es amplio y la hoja
-                    // no scrolleaba: los modelos fuera de pantalla no existian
-                    // para el usuario. Mismo patron que la hoja de agentes.
-                    .verticalScroll(rememberScrollState())
-                    .heightIn(max = 520.dp)
                     .padding(horizontal = 24.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -825,18 +820,27 @@ fun ChatScreen(
                 // que hace creer que se puede cambiar algo que no se puede.
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                visibles.forEach { model ->
-                    ListItem(
-                        headlineContent = { Text(model.name, fontWeight = if (model.id == selectedModel) FontWeight.SemiBold else FontWeight.Normal) },
-                        supportingContent = { model.description?.let { Text(it) } },
-                        leadingContent = {
-                            RadioButton(
-                                selected = model.id == selectedModel,
-                                onClick = { vm.selectModel(model.id); showModelSheet = false }
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth().clickable { vm.selectModel(model.id); showModelSheet = false }
-                    )
+                // MEDIDO 2026-10-09 (F14): Column+verticalScroll NO scrollea dentro
+                // del ModalBottomSheet (los gestos caen en la hoja y la cierran; la
+                // lista queda clavada en los 5 primeros). LazyColumn con alto
+                // acotado si scrollea: es el patron que ya usa la lista de mensajes.
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(visibles, key = { it.id }) { model ->
+                        ListItem(
+                            headlineContent = { Text(model.name, fontWeight = if (model.id == selectedModel) FontWeight.SemiBold else FontWeight.Normal) },
+                            supportingContent = { model.description?.let { Text(it) } },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = model.id == selectedModel,
+                                    onClick = { vm.selectModel(model.id); showModelSheet = false }
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth().clickable { vm.selectModel(model.id); showModelSheet = false }
+                        )
+                    }
                 }
                 if (visibles.isEmpty()) {
                     Text(
