@@ -65,6 +65,7 @@ import com.aegis.hub.data.FormField
 import com.aegis.hub.data.PendingForm
 import com.aegis.hub.data.PendingPermission
 import com.aegis.hub.data.PartFull
+import com.aegis.hub.data.filtrarPorTexto
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -782,8 +783,18 @@ fun ChatScreen(
 
     if (showModelSheet) {
         ModalBottomSheet(onDismissRequest = { showModelSheet = false }) {
+            // La busqueda se reinicia cada vez que se abre la hoja (entra en
+            // composicion): conservar el filtro anterior no tiene sentido.
+            var busqueda by remember { mutableStateOf("") }
+            val visibles = remember(busqueda, models) { models.filtrarPorTexto(busqueda) }
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                modifier = Modifier.fillMaxWidth()
+                    // MEDIDO 2026-10-09 (V-03): el catalogo es amplio y la hoja
+                    // no scrolleaba: los modelos fuera de pantalla no existian
+                    // para el usuario. Mismo patron que la hoja de agentes.
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(max = 520.dp)
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("Modelo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -797,13 +808,20 @@ fun ChatScreen(
                     // y la vuelve a pedir (p. ej. tras instalar un proveedor nuevo).
                     TextButton(onClick = { vm.refrescarCatalogo() }) { Text("Actualizar") }
                 }
+                OutlinedTextField(
+                    value = busqueda,
+                    onValueChange = { busqueda = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Buscar modelo…") },
+                    singleLine = true
+                )
 
                 // El selector de motor se fue con Antigravity: queda uno solo, asi
                 // que una fila de chips donde una opcion esta siempre activa es ruido
                 // que hace creer que se puede cambiar algo que no se puede.
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                models.forEach { model ->
+                visibles.forEach { model ->
                     ListItem(
                         headlineContent = { Text(model.name, fontWeight = if (model.id == selectedModel) FontWeight.SemiBold else FontWeight.Normal) },
                         supportingContent = { model.description?.let { Text(it) } },
@@ -816,10 +834,13 @@ fun ChatScreen(
                         modifier = Modifier.fillMaxWidth().clickable { vm.selectModel(model.id); showModelSheet = false }
                     )
                 }
-                if (models.isEmpty()) {
+                if (visibles.isEmpty()) {
                     Text(
-                        if (modelsLoading) "Cargando modelos…"
-                        else "No se pudieron cargar los modelos. Revisa que OpenCode esté activo.",
+                        when {
+                            modelsLoading -> "Cargando modelos…"
+                            models.isEmpty() -> "No se pudieron cargar los modelos. Revisa que OpenCode esté activo."
+                            else -> "Sin resultados para «$busqueda»."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

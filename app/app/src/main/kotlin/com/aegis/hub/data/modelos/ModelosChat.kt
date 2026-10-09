@@ -294,6 +294,18 @@ fun List<Agente>.seleccionables(): List<Agente> =
     filter { it.mode == "primary" && !it.hidden }
         .sortedBy { it.name.lowercase() }
 
+/**
+ * Filtro del buscador de la hoja de modelos (F12).
+ *
+ * Puro y testeable: la hoja solo lo aplica. Casa por nombre o id, sin
+ * distinguir mayusculas; consulta en blanco devuelve la lista intacta.
+ */
+fun List<ModeloElegible>.filtrarPorTexto(consulta: String): List<ModeloElegible> {
+    val q = consulta.trim()
+    if (q.isBlank()) return this
+    return filter { it.name.contains(q, ignoreCase = true) || it.id.contains(q, ignoreCase = true) }
+}
+
 data class ModeloElegible(
     val id: String,
     val name: String,

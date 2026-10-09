@@ -271,4 +271,27 @@ class ModelsComportamientoTest {
         )
         assertEquals("libre-1", lista.modeloPorDefecto)
     }
+
+    /** F12: el buscador casa por nombre sin distinguir mayusculas. */
+    @Test
+    fun `filtrarPorTexto casa por nombre ignorando mayusculas`() {
+        val lista = listOf(
+            ModeloElegible(id = "a", name = "Space Bunny Free"),
+            ModeloElegible(id = "b", name = "Longcat Preview")
+        )
+        assertEquals(listOf("a"), lista.filtrarPorTexto("bunny").map { it.id })
+        assertEquals(listOf("a"), lista.filtrarPorTexto("BUNNY").map { it.id })
+    }
+
+    /** F12: tambien casa por id, y en blanco devuelve todo. */
+    @Test
+    fun `filtrarPorTexto casa por id y en blanco no filtra`() {
+        val lista = listOf(
+            ModeloElegible(id = "abc-1", name = "X"),
+            ModeloElegible(id = "xyz-2", name = "Y")
+        )
+        assertEquals(listOf("abc-1"), lista.filtrarPorTexto("abc").map { it.id })
+        assertEquals(2, lista.filtrarPorTexto("  ").size)
+        assertTrue(lista.filtrarPorTexto("no-existe").isEmpty())
+    }
 }
