@@ -25,3 +25,28 @@ Hallazgo lateral: 3 `.md` temporales en raíz de `/sdcard/projects`
 Trazas: `/root/artemis-google/traces/` sesiones `139d56a7` (V-04), `5f38dce0`
 (V-01/02), `fa1552f6` (V-03), `4a2b1e4f` (V-05/07), `1862f23a` (V-06), `3c5a295c` (V-10).
 V-11: PASS (PSS 225094@00:41Z → 170638@01:12Z, 30 min, baja; Java Heap 42460 → 43964 estable).
+
+## F13 (2026-10-09 ~03:00Z): catálogo completo + envío honesto — INSTALADO, pendiente ver en pantalla
+- Causa: `getModels("opencode")` escondía 37/79 modelos (medido: 42 opencode + 37
+  google, todos enabled). `antigravity-gemini-3.8-flash` (google, enabled) existe
+  en servidor pero la app decía "No disponible" y el enviar disparaba un turno
+  condenado (el bug reportado con capturas).
+- Fix: `loadModels` pide `null` (sin recorte); guardia pura
+  `motivoModeloNoDisponible` + tests (frena con motivo, conserva texto en composer
+  y reintento; sin catálogo decide el servidor). CI verde (run 37876382923),
+  APK reinstalado (respaldo `app/state` en `_tmp/f13-state-bkp-20261009`).
+- Falta (requiere OK pantalla): abrir picker y confirmar 79 modelos + chip del
+  `antigravity-gemini-3.8-flash` resuelto + enviar frenado con motivo honesto.
+
+## V-08 (2026-10-09 ~04:17Z): PASS con corte REAL
+- Durante la prueba hubo un corte genuino del servidor (ventana de reinicio
+  04:18, duplicado 32495/19366 saneado a uno solo). Artemis testificó: banner
+  "Sin conexión con OpenCode: lo que ves puede no ser el estado real." y
+  recuperación sola sin reabrir (banner fuera, chat interactivo).
+## F12/F14 (2026-10-09): scroll+buscador PASS
+- LazyColumn verificado en dispositivo: scroll llega abajo (Claude, Gemini, GPT,
+  Gemma, Nemotron), "bunny" filtra a Space Bunny Free, limpiar restaura todo.
+## V-09 (2026-10-09 ~04:21Z): PASS parcial (5× abrir/cerrar)
+- 5 ciclos abrir→HOME→reabrir: lista de chats normal siempre, 0 ANR/freeze/crash/spinner.
+- Kill→reapertura cubierto por el incidente 04:18 (corte real, servidor único
+  restaurado, app recuperada sola). Falta: reinicio físico del teléfono.
