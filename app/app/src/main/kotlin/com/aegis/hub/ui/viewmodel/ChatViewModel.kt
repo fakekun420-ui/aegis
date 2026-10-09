@@ -455,9 +455,13 @@ class ChatViewModel(
         viewModelScope.launch {
             _modelsLoading.value = true
             try {
-                // F1: motor unico. Antes se filtraba por el proveedor elegido; el valor
-                // efectivo era siempre "opencode", asi que se fija aqui.
-                val resp = api.getModels("opencode")
+                // F13: catalogo COMPLETO (antes: filtro "opencode"). MEDIDO 2026-10-09:
+                // el servidor provee 79 modelos (42 opencode + 37 google, todos
+                // enabled) y el filtro escondia 37, incluido el modelo fijado en
+                // sesiones reales ("No disponible" + enviar condenado). Los de
+                // otros proveedores llevan su etiqueta en la descripcion y la
+                // guardia de envio frena el turno condenado con motivo honesto.
+                val resp = api.getModels(null)
                 if (resp.ok && resp.data != null && resp.data.isNotEmpty()) {
                     _models.value = resp.data
                     // Antes, si el modelo elegido no venia en la lista, se sustituia en
@@ -1094,8 +1098,8 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         }
     }
 
-    fun send(sessionId: String, text: String) {
-        sendWithFiles(sessionId, text, emptyList())
+    fun send(sessionId: String, text: String): Boolean {
+        return sendWithFiles(sessionId, text, emptyList())
     }
 
     fun retryMessage(failedMsg: Message, sessionId: String) {
@@ -1112,15 +1116,27 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             } else null
         }
         _messages.value = _messages.value.filterNot { it.info?.id == failedMsg.info?.id }
-        sendWithFiles(sessionId, text, files)
+        // F13: si la guardia frena el reintento, se devuelve el mensaje tal cual
+        // estaba (si no, el texto se pierde en silencio).
+        if (!sendWithFiles(sessionId, text, files)) {
+            _messages.value = _messages.value + failedMsg
+        }
     }
 
     fun sendWithFiles(
         sessionId: String,
         text: String,
         files: List<AttachedFile>
-    ) {
-        if (text.isBlank() && files.isEmpty()) return
+    ): Boolean {
+        if (text.isBlank() && files.isEmpty()) return false
+
+        // F13: modelo ausente del catalogo = turno condenado (chip
+        // "No disponible" + enviar que se buguea). Se frena aqui con motivo
+        // honesto y SIN mensaje optimista; la UI conserva el texto.
+        ModelosUtil.motivoModeloNoDisponible(_selectedModel.value, _models.value)?.let {
+            _error.value = it
+            return false
+        }
 
         val tempMsgId = "local_${System.currentTimeMillis()}"
 
@@ -1410,6 +1426,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 inFlightSendKey = null // A-5: libera la guarda anti doble envío al terminar
             }
         }
+        return true
     }
 
     private suspend fun createNewSession(): String? = withContext(Dispatchers.IO) {
