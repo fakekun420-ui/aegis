@@ -50,3 +50,8 @@ V-11: PASS (PSS 225094@00:41Z → 170638@01:12Z, 30 min, baja; Java Heap 42460 �
 - 5 ciclos abrir→HOME→reabrir: lista de chats normal siempre, 0 ANR/freeze/crash/spinner.
 - Kill→reapertura cubierto por el incidente 04:18 (corte real, servidor único
   restaurado, app recuperada sola). Falta: reinicio físico del teléfono.
+
+## V-09 reinicio (2026-10-09 ~04:52Z): PASS
+- Boot 04:51Z → serve arriba 04:52:50 por el hook de arranque (padre init),
+  con el env fijado (PATH Ubuntu + SHELL bash en el cmdline del wrapper).
+  1 servidor (wrapper+child), API 401 OK, app funcional (usuario escribe desde ella).
