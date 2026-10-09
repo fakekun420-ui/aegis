@@ -1143,7 +1143,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         // FASE A-5: guarda anti doble envío — un segundo click/reentrada con el mismo
         // mensaje mientras sigue en vuelo no debe reenviarlo (ver inFlightSendKey).
         val sendKey = "${sessionId.trim()}|${text.trim()}|${files.size}"
-        if (sendKey == inFlightSendKey) return
+        if (sendKey == inFlightSendKey) return false
         inFlightSendKey = sendKey
 
         // Titulo provisional, y SOLO si esta sesion no existe todavia. Es la MISMA
