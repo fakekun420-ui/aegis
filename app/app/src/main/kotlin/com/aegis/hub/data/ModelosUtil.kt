@@ -10,6 +10,20 @@ package com.aegis.hub.data
 object ModelosUtil {
 
     /**
+     * Guardia de envio (F13): si el catalogo YA cargo y el modelo elegido no esta,
+     * enviar seria un turno condenado (el "enviar se buguea" con chip
+     * "No disponible"). Devuelve el motivo o null si se puede enviar.
+     * Con catalogo vacio (sin cargar / sin red) o sin modelo elegido no bloquea:
+     * decide el servidor, como antes.
+     */
+    fun motivoModeloNoDisponible(elegido: String?, catalogo: List<ModeloElegible>): String? {
+        val id = elegido?.trim().orEmpty()
+        if (id.isBlank() || catalogo.isEmpty()) return null
+        if (catalogo.any { it.id == id }) return null
+        return "El modelo «$id» ya no está en el catálogo. Elige otro en el selector de modelo; tu texto se conserva."
+    }
+
+    /**
      * Resuelve el providerID de un id de modelo contra el catalogo vivo.
      *
      * MEDIDO 2026-10-03: `POST /api/session/{id}/model` exige la pareja id mas providerID, y

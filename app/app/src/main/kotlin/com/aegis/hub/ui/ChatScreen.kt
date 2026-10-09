@@ -371,9 +371,13 @@ fun ChatScreen(
                     onSend = {
                         val t = composerText.trim()
                         if (t.isNotBlank() || attachedFiles.isNotEmpty()) {
-                            vm.sendWithFiles(sessionId, t, attachedFiles)
-                            composerText = ""
-                            attachedFiles = emptyList()
+                            // F13: si la guardia frena el envio (modelo ausente del
+                            // catalogo), el texto SE CONSERVA: limpiar aqui lo
+                            // borraria delante del motivo honesto del VM.
+                            if (vm.sendWithFiles(sessionId, t, attachedFiles)) {
+                                composerText = ""
+                                attachedFiles = emptyList()
+                            }
                         }
                     },
                     onAttach = { showAttachSheet = true },

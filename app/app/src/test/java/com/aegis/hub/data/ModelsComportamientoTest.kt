@@ -294,4 +294,16 @@ class ModelsComportamientoTest {
         assertEquals(2, lista.filtrarPorTexto("  ").size)
         assertTrue(lista.filtrarPorTexto("no-existe").isEmpty())
     }
+
+    /** F13: modelo presente = sin motivo; ausente con catalogo cargado = motivo. */
+    @Test
+    fun `motivoModeloNoDisponible solo frena con catalogo cargado y modelo ausente`() {
+        val catalogo = listOf(ModeloElegible(id = "a", name = "A"))
+        assertNull(ModelosUtil.motivoModeloNoDisponible("a", catalogo))
+        assertTrue(ModelosUtil.motivoModeloNoDisponible("b", catalogo)!!.contains("b"))
+        // Sin catalogo (sin cargar / sin red) o sin eleccion: no bloquea.
+        assertNull(ModelosUtil.motivoModeloNoDisponible("b", emptyList()))
+        assertNull(ModelosUtil.motivoModeloNoDisponible(null, catalogo))
+        assertNull(ModelosUtil.motivoModeloNoDisponible("  ", catalogo))
+    }
 }
