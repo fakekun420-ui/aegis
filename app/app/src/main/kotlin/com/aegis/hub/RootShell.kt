@@ -14,6 +14,43 @@ object RootShell {
      */
     private fun shQuote(arg: String): String = "'" + arg.replace("'", "'\\''") + "'"
 
+    /**
+     * Donde vive `su` segun ROM/Magisk. MEDIDO 2026-10-10 en el POCO F3: el unico
+     * `su` esta en `/debug_ramdisk/su`, fuera del PATH de la app (`/system/bin`,
+     * `/system/xbin`, `/sbin` no existen). El `"su"` pelado nunca se resolvia y el
+     * fallback mudo a `sh` escondia el fallo: Magisk jamas veia a la app (0 filas
+     * en `policies`) y nada con root funcionaba (montajes, chroot).
+     */
+    internal val RUTAS_SU_ABSOLUTAS = listOf(
+        "/debug_ramdisk/su",
+        "/sbin/su",
+        "/system/xbin/su",
+        "/system/bin/su",
+        "/su/bin/su"
+    )
+
+    /**
+     * Resuelve el binario `su` sin pedir root (pura y testeable): primero rutas
+     * absolutas que existan, luego `command -v su` con shell normal (sin root,
+     * sin prompt de Magisk). `null` = no hay `su` alcanzable.
+     */
+    internal fun resolverSu(
+        existeArchivo: (String) -> Boolean,
+        cualEnPath: () -> String?
+    ): String? {
+        RUTAS_SU_ABSOLUTAS.firstOrNull { existeArchivo(it) }?.let { return it }
+        return cualEnPath()?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun buscarSuEnPath(): String? = try {
+        val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", "command -v su"))
+        val salida = p.inputStream.bufferedReader().readText().trim()
+        p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
+        salida.ifBlank { null }
+    } catch (_: Exception) {
+        null
+    }
+
     fun exec(cmd: String, timeoutMs: Long = 15000): Result {
         // F0 (T-F0.4): cazar llamadas desde el hilo principal en debug. El `main != null`
         // es intencionado: en tests JVM los stubs de android.jar devuelven null y el
@@ -27,12 +64,18 @@ object RootShell {
                 )
             }
         }
-        // intenta su -c, si falla sh -c
-        val shells = listOf(arrayOf("su","-c", cmd), arrayOf("sh","-c", cmd))
-        var last: Result? = null
-        for (sh in shells) {
-            try {
-                val p = Runtime.getRuntime().exec(sh)
+        // Sin `su` alcanzable no se finge root: antes se caia en mudo a `sh`
+        // y todo lo privilegiado fallaba en silencio (montajes, chroot). Ahora
+        // el motivo es honesto y Magisk pide permiso en el primer uso real.
+        val binarioSu = resolverSu(
+            existeArchivo = { java.io.File(it).canExecute() },
+            cualEnPath = ::buscarSuEnPath
+        ) ?: return Result(
+            -1, "",
+            "su no disponible: la app no tiene acceso root (concede Superusuario a com.aegis.hub en Magisk)"
+        )
+        return try {
+            val p = Runtime.getRuntime().exec(arrayOf(binarioSu, "-c", cmd))
                 val out = StringBuilder()
                 val err = StringBuilder()
                 // MEDIDO 2026-10-08 en el movil (FATAL x2 en arranque 1.2.0): si el
@@ -51,17 +94,10 @@ object RootShell {
                 val finished = if (timeoutMs>0) p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) else { p.waitFor(); true }
                 if (!finished) { p.destroyForcibly(); return Result(124, out.toString(), "timeout ${timeoutMs}ms") }
                 tOut.join(800); tErr.join(800)
-                val code = p.exitValue()
-                // si usamos su y code !=0 pero su not found, probamos siguiente
-                if (sh[0]=="su" && code!=0 && out.toString().contains("not found", true)) {
-                    last = Result(code, out.toString(), err.toString()); continue
-                }
-                return Result(code, out.toString(), err.toString())
+                return Result(p.exitValue(), out.toString(), err.toString())
             } catch (e: Exception) {
-                last = Result(-1, "", e.message ?: "exec error")
+                return Result(-1, "", e.message ?: "fallo al lanzar su")
             }
-        }
-        return last ?: Result(-1, "", "no shell")
     }
 
     /**

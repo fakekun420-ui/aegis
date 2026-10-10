@@ -160,11 +160,11 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
                 onOpenSession = { id -> navController.navigate(NavRoutes.chat(id)) },
                 onCreateChatPlaceholder = {
                     scope.launch {
-                        // F1: motor unico; antes se leia el proveedor elegido en el
-                        // compositor (siempre "opencode" desde que no hay selector).
-                        val sid = vm.createSessionForProject(
-                            "", "Chat ${System.currentTimeMillis() % 10000}"
-                        )
+                        // Camino único (V-04). Antes el título llevaba
+                        // `System.currentTimeMillis()` y como ese título es la mitad de la clave
+                        // de idempotencia, cada toque creaba una sesión nueva: 3 toques seguidos
+                        // = 3 sesiones. Reproducido antes de arreglar; ver TITULO_NUEVO_CHAT.
+                        val sid = vm.nuevoChat()
                         if (!sid.isNullOrBlank()) {
                             navController.navigate(NavRoutes.chat(sid))
                         } else {

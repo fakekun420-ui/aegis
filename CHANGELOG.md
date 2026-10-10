@@ -13,6 +13,13 @@ Posteriores a 1.2.0, verificados en dispositivo (V-01…V-11 PASS, `docs/qa/VERI
   para medir E3/E4/E8 sin pantalla + `tools/extraer_metricas.py` (self-test en CI).
 
 ### Arreglado
+- **V-04 "+ Nuevo chat" no creaba una sino N sesiones:** el título era
+  `"Chat ${System.currentTimeMillis() % 10000}"`, y como el título es la mitad de la clave de
+  idempotencia (`"$title|$proyectoId"`), cada pulsación generaba una clave distinta y la ventana
+  de 3 s de `SesionesRepo` nunca se cumplía: tres toques seguidos en 400 ms creaban tres sesiones.
+  Ahora `MainViewModel.nuevoChat()` es el camino único, con `TITULO_NUEVO_CHAT` constante.
+  Reproducido antes de arreglar (3 claves distintas → 3 sesiones) y fijado con 5 tests de flujo
+  contra MockWebServer sobre el ViewModel real.
 - **F11 chats globales en workspace + serve con toolchain:** `SesionesRepo` nace con
   `directory=/sdcard/projects` (antes `/root`); `aegis-serve.sh` commiteado con `CHROOT_PATH`
   (el APK instalado lo traía sin él y los shells de sesión no veían ni `sh`).

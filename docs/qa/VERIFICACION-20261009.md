@@ -61,5 +61,26 @@ V-11: PASS (PSS 225094@00:41Z → 170638@01:12Z, 30 min, baja; Java Heap 42460 �
   respuesta. Marcas G1 en logcat: E3=3/3/3, enviar=6, reposo 136/38/133 por 60 s,
   api/model 0–1/10 min (logs `METRICAS-20261010-a1.log`).
 - E8 PASS: `skills.abrir:fin su=1 peticiones=2..3` (2 muestras).
-- E2E chat nuevo PASS: `Chat 9802` creado con + (21:26:09Z), `dir=/sdcard/projects`,
-  mensaje + respuesta verificados en servidor.
+- E2E chat nuevo PASS (UN toque): `Chat 9802` creado con + (21:26:09Z),
+  `dir=/sdcard/projects`, mensaje + respuesta verificados en servidor.
+
+## V-04 "+ Nuevo chat" (2026-10-10, revisión de código — SIN pantalla)
+- **La prueba anterior era incompleta y dio un PASS que no era cierto.** Cubría UN toque;
+  el enunciado de `QA_CHECKLIST.md` pide además que "+ dos veces seguidas no crea dos", y esa
+  parte fallaba. Corregido el PASS anterior: **V-04 PASS solo en la mitad de un toque**.
+- Causa: `AppNavHost` pasaba el título `"Chat ${System.currentTimeMillis() % 10000}"`, y ese
+  título es la mitad de la clave de idempotencia (`"$title|$proyectoId"`). Cada toque generaba
+  una clave distinta → la ventana de 3 s de `SesionesRepo` nunca se cumplía.
+- **Reproducido antes de arreglar**, no supuesto: se ejecutó la lógica exacta del repo con tres
+  toques a 0/200/400 ms → **3 sesiones** (V-04 exige 1). Con el título constante → 1.
+- El título con reloj tampoco compraba nada: el servidor renombra la sesión con el primer
+  mensaje, así que "Chat 9802" solo livedía unos segundos en la lista.
+- Arreglo: `MainViewModel.nuevoChat()` = camino único con `TITULO_NUEVO_CHAT` constante.
+  `MainViewModel` recibe la costura por parámetro (mismos defaults) para poder testearlo.
+- Fijado con `FlujoNuevoChatTest` (5 tests) contra el ViewModel real + MockWebServer: un toque
+  → 1 POST en `/sdcard/projects` con agente y modelo; tres toques → **1** sesión; tras la ventana
+  → 2 sesiones (el arreglo no es "no crear nunca"); títulos iguales al servidor; fallo → null
+  con motivo.
+- **PENDIENTE-OJOS:** confirmar en el móvil que tras instalar este APK, dos toques seguidos dan
+  1 sesión. Requiere OK de pantalla (§0) y el APK de CI. Hasta entonces es un PASS de test, no
+  de dispositivo.
