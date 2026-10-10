@@ -67,8 +67,16 @@ class ChatViewModel(
         /**
          * F5: canal unico de sincronizacion por eventos. `false` = bucle actual
          * (`SyncPorPoll` intacto). Solo se pone `true` tras V-06/V-08 tres dias.
+         *
+         * A-2/G3: extra de intent debug `sync_eventos` (MainActivity) lo pone en
+         * `true` solo en debug. En release `fijarSyncPorEventos` no hace nada.
          */
-        const val SYNC_POR_EVENTOS = false
+        var SYNC_POR_EVENTOS = false
+            private set
+
+        fun fijarSyncPorEventos(v: Boolean) {
+            if (com.aegis.hub.BuildConfig.DEBUG) SYNC_POR_EVENTOS = v
+        }
     }
     /**
      * MEDIDO 2026-10-01: esta era `ApiClient.service`, el cliente del Hub, en las 18 llamadas

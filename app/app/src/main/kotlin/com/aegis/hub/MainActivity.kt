@@ -83,6 +83,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A-2/G3: extra de intent debug `sync_eventos` (solo debug; en release el
+        // setter no hace nada). Se lee aqui porque los ViewModel nacen despues.
+        // Uso: `am start -n com.aegis.hub/.MainActivity --ez sync_eventos true`.
+        if (BuildConfig.DEBUG && intent?.getBooleanExtra("sync_eventos", false) == true) {
+            com.aegis.hub.ui.viewmodel.ChatViewModel.fijarSyncPorEventos(true)
+            android.util.Log.i(TAG, "sync_eventos=true por intent debug")
+        }
         // F0 (T-F0.4): en debug, cualquier E/S, red o `su` en el hilo principal sale
         // en logcat. Solo penaltyLog, nunca penaltyDeath: esto es un radar, no un muro.
         if (BuildConfig.DEBUG) {
