@@ -14,6 +14,43 @@ object RootShell {
      */
     private fun shQuote(arg: String): String = "'" + arg.replace("'", "'\\''") + "'"
 
+    /**
+     * Donde vive `su` segun ROM/Magisk. MEDIDO 2026-10-10 en el POCO F3: el unico
+     * `su` esta en `/debug_ramdisk/su`, fuera del PATH de la app (`/system/bin`,
+     * `/system/xbin`, `/sbin` no existen). El `"su"` pelado nunca se resolvia y el
+     * fallback mudo a `sh` escondia el fallo: Magisk jamas veia a la app (0 filas
+     * en `policies`) y nada con root funcionaba (montajes, chroot).
+     */
+    internal val RUTAS_SU_ABSOLUTAS = listOf(
+        "/debug_ramdisk/su",
+        "/sbin/su",
+        "/system/xbin/su",
+        "/system/bin/su",
+        "/su/bin/su"
+    )
+
+    /**
+     * Resuelve el binario `su` sin pedir root (pura y testeable): primero rutas
+     * absolutas que existan, luego `command -v su` con shell normal (sin root,
+     * sin prompt de Magisk). `null` = no hay `su` alcanzable.
+     */
+    internal fun resolverSu(
+        existeArchivo: (String) -> Boolean,
+        cualEnPath: () -> String?
+    ): String? {
+        RUTAS_SU_ABSOLUTAS.firstOrNull { existeArchivo(it) }?.let { return it }
+        return cualEnPath()?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun buscarSuEnPath(): String? = try {
+        val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", "command -v su"))
+        val salida = p.inputStream.bufferedReader().readText().trim()
+        p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
+        salida.ifBlank { null }
+    } catch (_: Exception) {
+        null
+    }
+
     fun exec(cmd: String, timeoutMs: Long = 15000): Result {
         // F0 (T-F0.4): cazar llamadas desde el hilo principal en debug. El `main != null`
         // es intencionado: en tests JVM los stubs de android.jar devuelven null y el

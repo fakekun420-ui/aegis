@@ -166,7 +166,9 @@ class FlujoNuevoChatTest {
         val vm = vm()
 
         vm.nuevoChat()
-        ahora += 1_500
+        // PASADA la ventana de 3 s: si no, el segundo toque se deduplicaría y no habría
+        // segundo POST que comparar (la deduplicación es lo que fija el test de los 3 toques).
+        ahora += SesionesRepo.VENTANA_IDEMPOTENCIA_MS + 1
         vm.nuevoChat()
 
         assertEquals(2, fake.cuerposCreacion.size)
