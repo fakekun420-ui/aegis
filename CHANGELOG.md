@@ -2,6 +2,24 @@
 
 Todo notable de Aegis se documenta aquí. Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [1.2.1] - 2026-10-10
+
+Posteriores a 1.2.0, verificados en dispositivo (V-01…V-11 PASS, `docs/qa/VERIFICACION-20261009.md`).
+
+### Añadido
+- **F12 buscador de modelos:** `OutlinedTextField` en la hoja que filtra por nombre/id
+  (`filtrarPorTexto` pura + tests); la búsqueda se reinicia al abrir.
+
+### Arreglado
+- **F11 chats globales en workspace + serve con toolchain:** `SesionesRepo` nace con
+  `directory=/sdcard/projects` (antes `/root`); `aegis-serve.sh` commiteado con `CHROOT_PATH`
+  (el APK instalado lo traía sin él y los shells de sesión no veían ni `sh`).
+- **F14 scroll de la hoja de modelos:** `LazyColumn` con alto acotado (el `Column+verticalScroll`
+  no scrollea dentro del `BottomSheet`: gestos caídos en la hoja, lista clavada en 5).
+- **F13 catálogo completo + envío honesto:** `loadModels` sin recorte de proveedor (79 modelos:
+  42 opencode + 37 google, todos enabled); guardia `motivoModeloNoDisponible` frena el envío con
+  modelo ausente conservando el texto (composer y reintento).
+
 ## [1.2.0] - 2026-10-07 (plan de estabilización F0–F8/F10, código)
 
 Un solo camino por operación, una fuente de verdad por dato, errores siempre con
@@ -234,9 +252,6 @@ Cierre de la sesión de estabilización: el Hub y el CLI hablaban con **dos serv
 - **Plantilla `projects.json.example`:** Repositorio limpio con `projects.json` ignorado en `.gitignore`.
 - **Guía de Keystore RSA-4096:** `docs/KEYSTORE_SETUP.md` documentando generación, encoding en base64 y configuración de secretos CI.
 - **Scripts de prueba de QA física:** `docs/qa/QA_TEST_SCRIPTS.md` con 8 casos reproducibles para POCO F3.
-- **F11 chats globales en workspace + serve con toolchain (verificado 2026-10-09):** `SesionesRepo` nace con `directory=/sdcard/projects` (antes `/root`); `aegis-serve.sh` commiteado con `CHROOT_PATH` (el APK instalado lo traía sin él y los shells de sesión no veían ni `sh`).
-- **F12 buscador de modelos + F14 scroll (verificado 2026-10-09):** hoja de modelos con `LazyColumn` (el `Column+verticalScroll` no scrollea en el `BottomSheet`) y `OutlinedTextField` que filtra por nombre/id (`filtrarPorTexto` pura + tests).
-- **F13 catálogo completo + envío honesto (verificado 2026-10-09):** `loadModels` sin recorte de proveedor (79 modelos: 42 opencode + 37 google); guardia `motivoModeloNoDisponible` frena el envío con modelo ausente conservando el texto.
 
 ### Changed
 - **CI / Seguridad:** Promoción de `semgrep` y `gitleaks` a bloqueantes en `.github/workflows/build-apk.yml`. Concurrencia fijada a 1 en pruebas backend.

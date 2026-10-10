@@ -10,3 +10,9 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## decisiones F6–F14 (medidas en dispositivo, 2026-10-08/09)
+
+- Guarda anti-duplicado con corchete (`[o]pencode(.exe)? serve --service`); contar listeners `:49374`, no PIDs. Cerrojo `mkdir` 60 s (flock toybox no sirve).
+- `aegis-serve.sh` (asset) fija `HOME/PATH/SHELL` del chroot; verificar el asset del APK instalado, no solo el repo. Chats globales nacen en `/sdcard/projects`.
+- Catálogo de modelos sin recorte de proveedor + guardia de envío honesto (`motivoModeloNoDisponible`). Hoja de modelos con `LazyColumn` + buscador (`filtrarPorTexto`).
