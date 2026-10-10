@@ -55,3 +55,11 @@ V-11: PASS (PSS 225094@00:41Z → 170638@01:12Z, 30 min, baja; Java Heap 42460 �
 - Boot 04:51Z → serve arriba 04:52:50 por el hook de arranque (padre init),
   con el env fijado (PATH Ubuntu + SHELL bash en el cmdline del wrapper).
   1 servidor (wrapper+child), API 401 OK, app funcional (usuario escribe desde ella).
+
+## A-1 + E8 + E2E (2026-10-10, pantalla autorizada)
+- A-1 PASS: 3 chats abiertos, Skills cargó, 90 s reposo, enviado `medicion A-1` con
+  respuesta. Marcas G1 en logcat: E3=3/3/3, enviar=6, reposo 136/38/133 por 60 s,
+  api/model 0–1/10 min (logs `METRICAS-20261010-a1.log`).
+- E8 PASS: `skills.abrir:fin su=1 peticiones=2..3` (2 muestras).
+- E2E chat nuevo PASS: `Chat 9802` creado con + (21:26:09Z), `dir=/sdcard/projects`,
+  mensaje + respuesta verificados en servidor.
