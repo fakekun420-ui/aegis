@@ -13,9 +13,9 @@ import re
 import sys
 from collections import defaultdict
 
-MARK_RE = re.compile(r"AegisMark\(\s*\d+\):\s+(\S+)(?:\s+(\S+))?(?:\s+(.*))?$")
+MARK_RE = re.compile(r"AegisMark:\s+(\S+)(?:\s+(\S+))?(?:\s+(.*))?$")
 TS_RE = re.compile(r"^(\d\d-\d\d \d\d:\d\d):\d\d\.\d+")
-TRACE_MODEL_RE = re.compile(r"GET api/model=(\d+)")
+TRACE_MODEL_RE = re.compile(r"GET /?api/model=(\d+)")
 
 
 def bucket10(ts):
@@ -27,7 +27,7 @@ def bucket10(ts):
 
 def extraer(lineas):
     marcas = []          # (evento, sid, extras, ts)
-    modelos10 = defaultdict(int)
+    modelos10 = defaultdict(lambda: [None, None])  # bucket -> [primero, ultimo]
     for ln in lineas:
         ts = (TS_RE.match(ln).group(1) if TS_RE.match(ln) else None)
         m = MARK_RE.search(ln)
@@ -40,8 +40,13 @@ def extraer(lineas):
             marcas.append((evento, sid, {k: int(v) for k, v in extras.items()}, ts))
             continue
         t = TRACE_MODEL_RE.search(ln)
-        if t:
-            modelos10[bucket10(ts)] += int(t.group(1))
+        if t and ts:
+            # El contador es acumulado: la ventana vale ultimo-primero.
+            b = modelos10[bucket10(ts)]
+            v = int(t.group(1))
+            if b[0] is None:
+                b[0] = v
+            b[1] = v
     return marcas, modelos10
 
 
@@ -55,8 +60,10 @@ def tabla(marcas, modelos10):
     for evento, sid, pet, su in filas:
         md.append(f"| {evento} | {sid} | {pet} | {su} |")
     md.append("")
-    md.append(f"GET api/model por ventana de 10 min: " +
-              (", ".join(f"{k}={v}" for k, v in sorted(modelos10.items())) or "sin datos"))
+    ventanas = {k: (v[1] - v[0] if v[0] is not None and v[1] is not None else 0)
+                for k, v in sorted(modelos10.items())}
+    md.append("GET api/model por ventana de 10 min: " +
+              (", ".join(f"{k}={v}" for k, v in ventanas.items()) or "sin datos"))
     inicios = sum(1 for e, _, _, _ in marcas if e.endswith(":inicio"))
     fines = sum(1 for e, _, _, _ in marcas if e.endswith(":fin"))
     if inicios != fines:

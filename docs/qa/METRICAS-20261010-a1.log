@@ -1,0 +1,19 @@
+--------- beginning of main
+10-10 03:05:26.913 12944 12985 I AegisTrace: GET /api/agent=5 GET /api/event=11 GET /api/model=7 GET /api/session=14 GET /api/session/:id=5 GET /api/session/:id/form=87 GET /api/session/:id/message=106 GET /api/session/:id/permission=87 GET /api/session/active=389 POST /api/session=1 POST /api/session/:id/agent=1 POST /api/session/:id/model=3 POST /api/session/:id/prompt=3
+10-10 03:06:26.914 12944 12985 I AegisTrace: GET /api/agent=5 GET /api/event=11 GET /api/model=7 GET /api/session=16 GET /api/session/:id=5 GET /api/session/:id/form=87 GET /api/session/:id/message=106 GET /api/session/:id/permission=87 GET /api/session/active=409 POST /api/session=1 POST /api/session/:id/agent=1 POST /api/session/:id/model=3 POST /api/session/:id/prompt=3
+10-10 03:07:26.914 12944 12985 I AegisTrace: GET /api/agent=5 GET /api/event=12 GET /api/model=7 GET /api/session=16 GET /api/session/:id=5 GET /api/session/:id/form=87 GET /api/session/:id/message=106 GET /api/session/:id/permission=87 GET /api/session/active=429 POST /api/session=1 POST /api/session/:id/agent=1 POST /api/session/:id/model=3 POST /api/session/:id/prompt=3
+10-10 03:07:46.041 12944 12944 I AegisMark: chat.abrir:inicio ses_ef0b4d50dfferM3dB7hZbvYJBY
+10-10 03:07:46.566 12944 12944 I AegisMark: chat.abrir:fin ses_ef0b4d50dfferM3dB7hZbvYJBY peticiones=3
+10-10 03:08:16.827 12944 12944 I AegisMark: chat.abrir:inicio ses_edbe5f8acffeAr3ZJ8BeDhH4KA
+10-10 03:08:17.057 12944 12944 I AegisMark: chat.abrir:fin ses_edbe5f8acffeAr3ZJ8BeDhH4KA peticiones=3
+10-10 03:08:26.915 12944 12985 I AegisTrace: GET /api/agent=5 GET /api/event=12 GET /api/model=7 GET /api/session=17 GET /api/session/:id=7 GET /api/session/:id/form=97 GET /api/session/:id/message=120 GET /api/session/:id/permission=97 GET /api/session/active=458 POST /api/session=1 POST /api/session/:id/agent=1 POST /api/session/:id/model=3 POST /api/session/:id/prompt=3
+10-10 03:08:37.232 12944 12944 I AegisMark: chat.abrir:inicio ses_edb5ee5b8ffetCe659YKSXQGis
+10-10 03:08:37.289 12944 12944 I AegisMark: chat.abrir:fin ses_edb5ee5b8ffetCe659YKSXQGis peticiones=3
+10-10 03:09:26.917 12944 12985 I AegisTrace: GET /api/agent=5 GET /api/event=13 GET /api/model=7 GET /api/session=18 GET /api/session/:id=8 GET /api/session/:id/form=120 GET /api/session/:id/message=145 GET /api/session/:id/permission=120 GET /api/session/active=501 POST /api/session=1 POST /api/session/:id/agent=1 POST /api/session/:id/model=3 POST /api/session/:id/prompt=3
+10-10 03:09:37.234 12944 12944 I AegisMark: reposo:60s ses_edb5ee5b8ffetCe659YKSXQGis peticiones=136
+10-10 03:10:28.513 12944 12985 I AegisTrace: GET /api/agent=5 GET /api/event=13 GET /api/model=7 GET /api/session=18 GET /api/session/:id=8 GET /api/session/:id/form=128 GET /api/session/:id/message=153 GET /api/session/:id/permission=128 GET /api/session/active=517 POST /api/session=1 POST /api/session/:id/agent=1 POST /api/session/:id/model=3 POST /api/session/:id/prompt=3
+10-10 03:10:37.236 12944 12944 I AegisMark: reposo:60s ses_edb5ee5b8ffetCe659YKSXQGis peticiones=38
+10-10 03:10:48.986 12944 12944 I AegisMark: chat.enviar:inicio ses_edb5ee5b8ffetCe659YKSXQGis
+10-10 03:10:50.127 12944 12944 I AegisMark: chat.enviar:fin ses_edb5ee5b8ffetCe659YKSXQGis peticiones=6
+10-10 03:11:28.513 12944 12985 I AegisTrace: GET /api/agent=5 GET /api/event=15 GET /api/model=8 GET /api/session=18 GET /api/session/:id=8 GET /api/session/:id/form=156 GET /api/session/:id/message=182 GET /api/session/:id/permission=156 GET /api/session/active=563 POST /api/session=1 POST /api/session/:id/agent=1 POST /api/session/:id/model=4 POST /api/session/:id/prompt=4
+10-10 03:11:37.237 12944 12944 I AegisMark: reposo:60s ses_edb5ee5b8ffetCe659YKSXQGis peticiones=133
