@@ -181,3 +181,23 @@ fase, con el commit, la CI y el checklist manual. Se actualiza al cerrar cada fa
   `estabilizar/integracion` conservada (no se borran ramas).
 - Proxima ejecucion de este archivo: cuando `main` tenga >= 72 h desde dac4956
   + evidencia de estabilidad -> entonces F9 (§8). Sin eso: no avanzar.
+
+## EJECUCION 2026-10-10 (plan siguiente G0-G2+G5; G3/G4 aplazados por regla)
+- G0 higiene ✅ (CI verde): CHANGELOG 1.2.1 + versionName 1.2.1; _tmp_*.md ya en
+  _quarantine (premisa del plan desactualizada); PERF-BASELINE honesto (5 arch >700);
+  decisiones F6-F14 en .ponytail.md/AGENTS.md.
+- G1 marcas pasivas ✅ (CI verde): MarcasCiclo + foto/total/su + contarSu en Raiz +
+  mojones load/enviar/loadSkills + ticker reposo (gate debug); extraer_metricas.py
+  + ejemplo + self-test (en CI); MarcasCicloTest JVM.
+- G2 hook ✅ (CI verde): SIN hook en el dispositivo (service.d solo .zn_cleanup.sh;
+  ningun modulo/receiver/Termux:boot arranca opencode) — el arranque real es la
+  primera apertura; ARCHITECTURE lo documenta; check_serve_asset.py en CI.
+- G3: MANTENER `false` (sin evidencia A-2). JVM local imposible aqui (sin SDK
+  Android: no se compila ni se corre ni 1 test); C2 sigue limitacion documentada.
+  Tarea explicita abierta: implementar extra intent debug `sync_eventos`
+  (hoy no existe) cuando se conceda A-2, o retirar ChatSync/EventosServidor.
+- G4: F9 APLAZADA (dac4956 2026-10-08 19:06Z; hoy 10-10 < 11 19:06Z + G3 sin resolver).
+- APK 1.2.1 con G1 instalado (respaldo g1-state-bkp-20261010); recoleccion pasiva
+  intentada sin datos (buffer rotado, APK recien instalado) → E3/E4/E8 a A-1.
+- Decisiones por regla: ninguna A-3 pedida (sin V-08-SSE); A-1/A-2 en
+  docs/qa/AUTORIZACIONES-SOLICITADAS.md (1 frase por item en informe).

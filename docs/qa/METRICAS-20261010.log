@@ -1,0 +1,6 @@
+# Captura pasiva T-G1.3 — 2026-10-10 ~06:05Z (SIN DATOS, registrado como intento)
+
+Comando: `nsenter -t 1 -m -- /system/bin/logcat -d -s AegisMark AegisTrace`
+Resultado: 0 lineas (rc=0). Causa: APK 1.2.1 con marcas recien instalado
+(05:5xZ); el buffer antiguo (con una linea AegisTrace de las 01:48) ya roto.
+Las marcas AegisMark apareceran con el uso normal. No rellenar celdas con esto.

@@ -9,6 +9,8 @@ Posteriores a 1.2.0, verificados en dispositivo (V-01…V-11 PASS, `docs/qa/VERI
 ### Añadido
 - **F12 buscador de modelos:** `OutlinedTextField` en la hoja que filtra por nombre/id
   (`filtrarPorTexto` pura + tests); la búsqueda se reinicia al abrir.
+- **G1 marcas pasivas AegisMark (solo debug):** mojones abrir/enviar/skills/reposo-60s
+  para medir E3/E4/E8 sin pantalla + `tools/extraer_metricas.py` (self-test en CI).
 
 ### Arreglado
 - **F11 chats globales en workspace + serve con toolchain:** `SesionesRepo` nace con
