@@ -52,6 +52,9 @@ jobs:
       # propio script para las reglas y la lista de excepciones).
       - name: Guardia de hilo principal (Regex/su/catch)
         run: python3 tools/check_hilo_principal.py
+      # G1: el extractor de metricas se autoverifica con el ejemplo versionado.
+      - name: Extractor de metricas (self-test)
+        run: python3 tools/extraer_metricas.py --self-test
 
   # ---------------------------------------------------------------------------
   # 2) APK DEBUG

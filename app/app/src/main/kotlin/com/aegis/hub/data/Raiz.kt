@@ -26,6 +26,7 @@ object Raiz {
     suspend fun ejecutar(cmd: String, timeoutMs: Long = 15000L): RootShell.Result =
         withContext(Dispatchers.IO) {
             semaforo.withPermit {
+                TraceoPeticiones.contarSu() // G1: E8 cuenta `su` por ventana
                 RootShell.exec(cmd, timeoutMs)
             }
         }

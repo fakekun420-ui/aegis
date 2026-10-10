@@ -1,0 +1,10 @@
+10-09 04:12:01.100 I/AegisMark( 1234): chat.abrir:inicio ses_a
+10-09 04:12:03.200 I/AegisTrace( 1234): GET api/session/:id=2 GET api/model=1
+10-09 04:12:04.300 I/AegisMark( 1234): chat.abrir:fin ses_a peticiones=3
+10-09 04:12:10.000 I/AegisMark( 1234): chat.enviar:inicio ses_a
+10-09 04:12:20.000 I/AegisMark( 1234): chat.enviar:fin ses_a peticiones=8
+10-09 04:13:01.000 I/AegisMark( 1234): skills.abrir:inicio
+10-09 04:13:02.000 I/AegisMark( 1234): skills.abrir:fin su=1 peticiones=2
+10-09 04:13:03.000 I/AegisTrace( 1234): GET api/model=1
+10-09 04:14:00.000 I/AegisMark( 1234): reposo:60s ses_a peticiones=0
+10-09 04:15:00.000 I/AegisMark( 1234): chat.abrir:inicio ses_b

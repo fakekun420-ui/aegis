@@ -35,6 +35,7 @@ import com.aegis.hub.data.Agente
 import com.aegis.hub.data.seleccionables
 import com.aegis.hub.data.modeloPorDefecto
 import com.aegis.hub.data.ModelosUtil
+import com.aegis.hub.data.MarcasCiclo
 import com.aegis.hub.data.modeloPorDefectoPara
 import com.aegis.hub.data.SendMessageRequest
 import com.aegis.hub.data.EventStream
@@ -194,6 +195,9 @@ class ChatViewModel(
     val agentsLoading: StateFlow<Boolean> = _agentsLoading
 
     private var pollingJob: Job? = null
+    // G1: ticker de reposo (una marca cada 60 s con chat abierto y sin turno).
+    // Se recrea en cada `load` y muere con el cambio de sesion.
+    private var repoJob: Job? = null
 
     // Refresco CONTINUO mientras el chat está abierto. Antes solo existía el poll de
     // envío (pollingJob), que se cancela al terminar el turno: mientras el usuario
@@ -991,6 +995,22 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
     }
 
     fun load(sessionId: String) {
+        // G1: mojon de apertura (la app ya cuenta peticiones en debug).
+        val fotoApertura = MarcasCiclo.abrirInicio(sessionId)
+        repoJob?.cancel()
+        repoJob = if (sessionId.isBlank()) null else viewModelScope.launch {
+            var base = MarcasCiclo.foto()
+            while (isActive) {
+                delay(60_000L)
+                if (_currentSessionId.value != sessionId) return@launch
+                base = if (!_loading.value && _sendingInFlight.value != true) {
+                    MarcasCiclo.reposo(sessionId, base)
+                } else {
+                    // En turno la ventana no cuenta reposo: se reancla sin emitir.
+                    MarcasCiclo.foto()
+                }
+            }
+        }
         pollingJob?.cancel()
         if (SYNC_POR_EVENTOS) {
             // F5: sin bucle viejo; el canal unico alimenta el espejo.
@@ -1060,6 +1080,9 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 _error.value = e.localizedMessage ?: e.message ?: "Error de conexión con el servidor"
             } finally {
                 _loading.value = false
+                // G1: fin de apertura (cubre cola rapida e historial; con el flag
+                // de eventos no hay bloques que medir y el inicio queda sin fin).
+                MarcasCiclo.abrirFin(sessionId, fotoApertura)
             }
             } // if (!SYNC_POR_EVENTOS)
         }
@@ -1145,6 +1168,9 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         val sendKey = "${sessionId.trim()}|${text.trim()}|${files.size}"
         if (sendKey == inFlightSendKey) return false
         inFlightSendKey = sendKey
+        // G1: mojon de envio (solo envios reales: el blank y la guardia F13 ya
+        // devolvieron arriba).
+        val fotoEnvio = MarcasCiclo.enviarInicio(sessionId)
 
         // Titulo provisional, y SOLO si esta sesion no existe todavia. Es la MISMA
         // condicion que decide mas abajo si hay que crearla (`activeSessionId.isBlank()`),
@@ -1417,6 +1443,11 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     }
                 }
             } finally {
+                // G1: fin de envio (sesion efectiva: la actual si ya se fijo).
+                MarcasCiclo.enviarFin(
+                    _currentSessionId.value?.takeIf { it.isNotBlank() } ?: sessionId,
+                    fotoEnvio
+                )
                 _streamingText.value = null
                 _loading.value = false
                 // Red de seguridad: si el POST semurio por una excepcion antes de
