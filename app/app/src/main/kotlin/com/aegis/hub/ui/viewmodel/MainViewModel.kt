@@ -14,7 +14,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import com.aegis.hub.data.TurnState
 
-class MainViewModel : ViewModel() {
+class MainViewModel(
     /**
      * MEDIDO 2026-10-01: sale de [Conexion] por el mismo motivo que `ChatViewModel`, y aquí el
      * motivo es más fuerte: este es el fichero que pinta la LISTA de sesiones, que es la que el
@@ -23,11 +23,40 @@ class MainViewModel : ViewModel() {
      * La costura no es solo el chat. Si solo se cambiara `ChatViewModel`, la lista seguiría
      * viniendo del Hub y habría dos rutas para el mismo dato: el estado de una sesión en la lista
      * y en su chat podrían discrepar. Un solo sitio decide de dónde vienen los datos.
+     *
+     * Inyectable con los MISMOS defaults de siempre (como `BootstrapViewModel`): producción no
+     * cambia y los tests levantan la costura real contra un MockWebServer. Al tener todos los
+     * parámetros con default, Kotlin sigue generando el constructor sin argumentos que
+     * `viewModel()` necesita.
      */
-    private val api = Conexion.api
-    private val projectsStore: ProjectsStore = ProjectsStore.default
+    private val api: ApiService = Conexion.api,
+    private val projectsStore: ProjectsStore = ProjectsStore.default,
     /** F2: creacion/vinculo por el repo; la costura queda para lectura. */
-    private val sesiones = SesionesRepo()
+    private val sesiones: SesionesRepo = SesionesRepo(),
+    /**
+     * `false` solo en tests: el `init` arranca un poll INFINITO de `getInflight`, y con reloj
+     * virtual eso deja `runTest` sin jobs pendientes que drenar (cuelga el test, no la app).
+     * En producción es `true` siempre — el default no cambia el comportamiento.
+     */
+    private val arrancarSondeo: Boolean = true
+) : ViewModel() {
+
+    companion object {
+        /**
+         * Título del chat nuevo global. Constante y SIN reloj a propósito.
+         *
+         * MEDIDO 2026-10-10 (V-04 en fallo): el título valía
+         * `"Chat ${System.currentTimeMillis() % 10000}"`, y ese título es la mitad de la clave de
+         * idempotencia (`"$title|$proyectoId"`). Cada pulsación producía una clave distinta, así
+         * que la ventana de deduplicación de [SesionesRepo] (3 s) nunca se cumplía: tres toques
+         * seguidos en 400 ms creaban TRES sesiones. Reproducido antes de arreglar — con el título
+         * con reloj salen 3, con el constante sale 1.
+         *
+         * El reloj en el título no compraba nada: el servidor renombra la sesión con el primer
+         * mensaje, así que "Chat 9802" solo livedía esos segundos en la lista.
+         */
+        const val TITULO_NUEVO_CHAT = "Nuevo chat"
+    }
 
     private val _projects = MutableStateFlow<List<Project>>(emptyList())
     val projects: StateFlow<List<Project>> = _projects
@@ -118,7 +147,7 @@ class MainViewModel : ViewModel() {
 
     init {
         refreshAll()
-        startInflightPolling()
+        if (arrancarSondeo) startInflightPolling()
     }
 
     /**
@@ -445,6 +474,17 @@ fun moveSession(sessionId: String, projectId: String) {
             }
         }
     }
+
+    /**
+     * "+ Nuevo chat" de la ventana Chats (V-04): el camino ÚNICO para abrir un chat global.
+     *
+     * Sin `proyectoId` y sin reloj en el título, que es lo que rompía la deduplicación: la clave
+     * de idempotencia sale de [TITULO_NUEVO_CHAT], constante, así que dos toques seguidos dentro
+     * de la ventana de 3 s devuelven la misma sesión en vez de crear dos.
+     *
+     * Devuelve el id, o null con el motivo en [error] (navegar a null es un fallo mudo).
+     */
+    suspend fun nuevoChat(): String? = createSessionForProject("", TITULO_NUEVO_CHAT)
 
     suspend fun createSessionForProject(projectId: String, title: String): String? {
         return try {

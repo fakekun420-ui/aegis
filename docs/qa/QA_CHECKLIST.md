@@ -152,6 +152,9 @@ con evidencia. Cada fase del plan exige sus V antes de fusionar a `main`.
   aparece el motivo.
 - [ ] **V-04 Crear chat nuevo global** ("+" en Chats): aparece **una** sola sesión
   nueva con agente y modelo; pulsar "+" dos veces seguidas no crea dos.
+  **ENCONTRADO EN FALLO 2026-10-10:** la parte de "+ dos veces" NO se cumplía (el reloj del
+  título entraba en la clave de idempotencia). Arreglado y fijado con tests de flujo; falta
+  solo confirmarlo en el móvil: dos toques seguidos → 1 sesión, y tras 4 s → 2 sesiones.
 - [ ] **V-05 Crear chat en proyecto vinculado a carpeta con nombre distinto**: la
   sesión nace en esa carpeta, aparece en la lista del proyecto y no en "sin
   proyecto"; si falla algo, hay mensaje con motivo (probar con servidor detenido).
