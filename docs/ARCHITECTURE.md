@@ -25,8 +25,17 @@ opencode serve --service :49374 (único; ver docs/CONTRATO-OPENCODE.md)
   `session.execution.succeeded`, nunca el fin de un segmento de texto.
 - **Lo caro se pide una vez**: catálogo TTL 5 min, `su` en lote con TTL, `Raiz`
   con semáforo de 2 (ver `tools/check_hilo_principal.py` en CI).
-- **Arranque:** `OpenCodeLauncher.asegurarAbierto` + hook Magisk `service.d`
-  (F6 lo deja en un solo lanzador).
+- **Arranque (G2, medido 2026-10-10 en el dispositivo): NO hay hook en
+  `/data/adb/service.d/` (solo `.zn_cleanup.sh`), ningun modulo Magisk arranca
+  opencode, el Manifest no trae receiver de boot y no hay scripts Termux:boot.
+  El servidor sube cuando la app lo pide (`OpenCodeLauncher.asegurarAbierto` →
+  `aegis-serve.sh` desplegado a `/data/local/tmp`) o a mano; tras un reboot no
+  hay nada hasta la primera apertura (corregido el credito al "hook" de V-09:
+  fue la primera apertura, ~1 min tras el boot).
+  Entorno fijado por `aegis-serve.sh` (ver `tools/check_serve_asset.py` en CI):
+  `HOME=/root PATH=<CHROOT_PATH> SHELL=/usr/bin/bash` en chroot, `oom -1000`.
+  Anti-doble: guarda `pgrep` con corchete (contar listeners `:49374`, no PIDs)
+  + cerrojo `mkdir` 60 s.
 
 Diagrama objetivo y fases: [plan de estabilización](PLAN-ESTABILIZACION-AEGIS.md §3).
 Contrato vigente: [CONTRATO-OPENCODE.md](CONTRATO-OPENCODE.md).

@@ -55,6 +55,9 @@ jobs:
       # G1: el extractor de metricas se autoverifica con el ejemplo versionado.
       - name: Extractor de metricas (self-test)
         run: python3 tools/extraer_metricas.py --self-test
+      # G2: el asset del lanzador no puede perder los fijados de entorno (F11).
+      - name: Asset del lanzador (entorno fijado)
+        run: python3 tools/check_serve_asset.py
 
   # ---------------------------------------------------------------------------
   # 2) APK DEBUG
