@@ -6,11 +6,10 @@ import com.aegis.hub.data.repo.SesionConfigRepo
 import com.aegis.hub.data.repo.SesionesRepo
 import com.aegis.hub.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -35,6 +34,12 @@ import org.junit.rules.TemporaryFolder
  * MockWebServer, así que fijan el contrato entero: botón -> ViewModel -> repo -> HTTP.
  * El reloj se inyecta en [SesionesRepo], no se usa `System.currentTimeMillis`: el defecto estaba
  * justamente en el reloj, y un test con reloj real no lo distingue de un resultado correcto.
+ *
+ * MEDIDO 2026-10-10 (run 38088984890): con `runTest` + reloj virtual estos tests NO corren —
+ * `UncompletedCoroutinesError` a los 60 s. Motivo: las llamadas HTTP son E/S real (MockWebServer
+ * en hilos propios), que el reloj virtual de `runTest` no puede drenar. Se usa el mismo patrón
+ * que el resto de los tests de flujo de este repo ([FlujoAbrirChatTest], `runBlocking`) y el de
+ * `ConfigSesionVmTest` para los ViewModel (`UnconfinedTestDispatcher` como Main).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FlujoNuevoChatTest {
@@ -46,7 +51,9 @@ class FlujoNuevoChatTest {
 
     @Before
     fun arrancar() {
-        Dispatchers.setMain(StandardTestDispatcher())
+        // Unconfined, no Standard: `nuevoChat` lanza `refreshSessions()` en viewModelScope
+        // (Main.immediate) y con el scheduler en cola el test se queda esperando.
+        Dispatchers.setMain(UnconfinedTestDispatcher())
         fake = FakeOpenCode()
     }
 
@@ -71,7 +78,7 @@ class FlujoNuevoChatTest {
 
     /**
      * ViewModel real con la costura inyectada. `arrancarSondeo = false`: el poll infinito del
-     * `init` dejaría `runTest` colgado (no es un fallo de la app, es del reloj virtual).
+     * `init` es un poll INFINITO y dejaría el test sin jobs que drenar.
      */
     private fun vm(): MainViewModel {
         val oc = fake.api()
@@ -90,7 +97,7 @@ class FlujoNuevoChatTest {
     }
 
     @Test
-    fun `un solo POST nace en la carpeta global con agente y modelo`() = runTest {
+    fun `un solo POST nace en la carpeta global con agente y modelo`() = runBlocking {
         val vm = vm()
 
         val sid = vm.nuevoChat()
@@ -112,7 +119,7 @@ class FlujoNuevoChatTest {
 
     /** El fallo que se estaba midiendo: 3 toques en 400 ms deben dar 1 sesión, no 3. */
     @Test
-    fun `tres toques seguidos crean una sola sesion`() = runTest {
+    fun `tres toques seguidos crean una sola sesion`() = runBlocking {
         val vm = vm()
 
         val primero = vm.nuevoChat()
@@ -136,7 +143,7 @@ class FlujoNuevoChatTest {
      * pidió — y sería tan invisible como el bug original.
      */
     @Test
-    fun `pasada la ventana de 3 s un toque nuevo si crea otra sesion`() = runTest {
+    fun `pasada la ventana de 3 s un toque nuevo si crea otra sesion`() = runBlocking {
         val vm = vm()
 
         val primero = vm.nuevoChat()
@@ -155,7 +162,7 @@ class FlujoNuevoChatTest {
      * separados por tiempo — no una constante comparada consigo misma, que no probaría nada.
      */
     @Test
-    fun `el titulo enviado al servidor es el mismo en dos toques`() = runTest {
+    fun `el titulo enviado al servidor es el mismo en dos toques`() = runBlocking {
         val vm = vm()
 
         vm.nuevoChat()
@@ -175,7 +182,7 @@ class FlujoNuevoChatTest {
 
     /** Si el servidor cae, `nuevoChat` devuelve null CON motivo — no una navegación muda. */
     @Test
-    fun `si el servidor falla hay motivo y no hay sesion a la que navegar`() = runTest {
+    fun `si el servidor falla hay motivo y no hay sesion a la que navegar`() = runBlocking {
         val vm = vm()
         fake.modo = FakeOpenCode.Modo.FALLO_500
 
@@ -184,6 +191,5 @@ class FlujoNuevoChatTest {
         assertNull("sin sesion no se navega", sid)
         assertNotNull("el motivo tiene que ser visible", vm.error.value)
         assertTrue("motivo con texto: ${vm.error.value}", vm.error.value!!.isNotBlank())
-        runCurrent()
     }
 }
