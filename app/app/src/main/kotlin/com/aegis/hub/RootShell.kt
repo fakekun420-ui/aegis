@@ -64,12 +64,18 @@ object RootShell {
                 )
             }
         }
-        // intenta su -c, si falla sh -c
-        val shells = listOf(arrayOf("su","-c", cmd), arrayOf("sh","-c", cmd))
-        var last: Result? = null
-        for (sh in shells) {
-            try {
-                val p = Runtime.getRuntime().exec(sh)
+        // Sin `su` alcanzable no se finge root: antes se caia en mudo a `sh`
+        // y todo lo privilegiado fallaba en silencio (montajes, chroot). Ahora
+        // el motivo es honesto y Magisk pide permiso en el primer uso real.
+        val binarioSu = resolverSu(
+            existeArchivo = { java.io.File(it).canExecute() },
+            cualEnPath = ::buscarSuEnPath
+        ) ?: return Result(
+            -1, "",
+            "su no disponible: la app no tiene acceso root (concede Superusuario a com.aegis.hub en Magisk)"
+        )
+        return try {
+            val p = Runtime.getRuntime().exec(arrayOf(binarioSu, "-c", cmd))
                 val out = StringBuilder()
                 val err = StringBuilder()
                 // MEDIDO 2026-10-08 en el movil (FATAL x2 en arranque 1.2.0): si el
@@ -88,17 +94,10 @@ object RootShell {
                 val finished = if (timeoutMs>0) p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) else { p.waitFor(); true }
                 if (!finished) { p.destroyForcibly(); return Result(124, out.toString(), "timeout ${timeoutMs}ms") }
                 tOut.join(800); tErr.join(800)
-                val code = p.exitValue()
-                // si usamos su y code !=0 pero su not found, probamos siguiente
-                if (sh[0]=="su" && code!=0 && out.toString().contains("not found", true)) {
-                    last = Result(code, out.toString(), err.toString()); continue
-                }
-                return Result(code, out.toString(), err.toString())
+                return Result(p.exitValue(), out.toString(), err.toString())
             } catch (e: Exception) {
-                last = Result(-1, "", e.message ?: "exec error")
+                return Result(-1, "", e.message ?: "fallo al lanzar su")
             }
-        }
-        return last ?: Result(-1, "", "no shell")
     }
 
     /**
