@@ -81,6 +81,20 @@ V-11: PASS (PSS 225094@00:41Z → 170638@01:12Z, 30 min, baja; Java Heap 42460 �
   → 1 POST en `/sdcard/projects` con agente y modelo; tres toques → **1** sesión; tras la ventana
   → 2 sesiones (el arreglo no es "no crear nunca"); títulos iguales al servidor; fallo → null
   con motivo.
+- **CI (rama `verificar/E2E-nuevo-chat`, run 38090676087): VERDE, 306 tests, 0 fallos.** Los 5
+  tests nuevos aparecen ejecutados en el log. Dos iteraciones previas Fallaron y ambas están
+  registradas porque el fallo era real:
+  - run 38088984890: 4 de 5 con `UncompletedCoroutinesError` a los 60 s y **sin una sola petición
+    okhttp** → el cuelgue era `viewModelScope.launch` (refresh) en el scheduler **virtual** de
+    `runTest`, que no corresponde al tiempo real del MockWebServer. Arreglado con `runBlocking` +
+    `UnconfinedTestDispatcher` (el patrón que ya pasaban en este repo).
+  - run 38089853020: 1 fallo `expected:<2> but was:<1>`, **aserción mía equivocada**: el segundo
+    toque estaba a 1.500 ms, DENTRO de la ventana de 3 s, así que se deduplicaba bien y no había
+    segundo POST que comparar. El código era correcto; el test no.
+- Lección de método: `gh run watch` devolvió exit 0 en el run que estaba FALLIDO. El veredicto se
+  lee en `--json conclusion`, nunca en el exit code de `watch`.
 - **PENDIENTE-OJOS:** confirmar en el móvil que tras instalar este APK, dos toques seguidos dan
-  1 sesión. Requiere OK de pantalla (§0) y el APK de CI. Hasta entonces es un PASS de test, no
-  de dispositivo.
+  1 sesión. Requiere OK de pantalla (§0) y el APK de CI (`aegis-debug`, 19.5 MB, run 38090676087).
+  Hasta entonces es un PASS de test, no de dispositivo.
+- Grafo: `graphify update` falla con `OSError 38` (FUSE), conocido y registrado; el índice queda
+  `STALE=yes` con 1 fichero nuevo (`FlujoNuevoChatTest.kt`). No entregable desde este host.
