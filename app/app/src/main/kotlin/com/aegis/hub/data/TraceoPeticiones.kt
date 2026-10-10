@@ -54,6 +54,18 @@ object TraceoPeticiones {
             .joinToString(" ") { (clave, n) -> "$clave=${n.get()}" }
     }
 
+    /** Total acumulado de peticiones (para fotos de ventana de G1). */
+    fun total(): Long = conteos.values.sumOf { it.get() }
+
+    /** `su` acumulados via [Raiz] (para `skills.abrir:fin su=<n>` de G1). */
+    private val sus = AtomicLong(0)
+
+    fun contarSu() {
+        sus.incrementAndGet()
+    }
+
+    fun susTotales(): Long = sus.get()
+
     fun crearInterceptor(): Interceptor {
         return Interceptor { cadena ->
             val peticion = cadena.request()
@@ -94,5 +106,6 @@ object TraceoPeticiones {
     /** Solo para tests: vacía el contador (no toca [activo]). */
     fun limpiar() {
         conteos.clear()
+        sus.set(0)
     }
 }

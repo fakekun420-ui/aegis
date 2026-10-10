@@ -3,6 +3,7 @@ package com.aegis.hub.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.Conexion
+import com.aegis.hub.data.MarcasCiclo
 import com.aegis.hub.data.InstallSkillRequest
 import com.aegis.hub.data.SkillsData
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,8 @@ class SkillManagerViewModel : ViewModel() {
     val installLog: StateFlow<List<String>> = _installLog.asStateFlow()
 
     fun loadSkills() {
+        // G1: mojon de apertura de Skills (E8 cuenta `su` por ventana).
+        val fotoSkills = MarcasCiclo.skillsInicio()
         viewModelScope.launch {
             try {
                 val response = Conexion.api.getSystemSkills()
@@ -29,6 +32,8 @@ class SkillManagerViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 // Handle error
+            } finally {
+                MarcasCiclo.skillsFin(fotoSkills)
             }
         }
     }
