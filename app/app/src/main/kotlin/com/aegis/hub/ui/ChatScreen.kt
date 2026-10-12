@@ -214,7 +214,8 @@ fun ChatScreen(
                     // interpolaba desde arriba y a menudo no llegaba.
                     listState.scrollToItem(last, Int.MAX_VALUE)
                 } else {
-                    listState.animateScrollToItem(last)
+                    // Offset al máximo para acompañar el crecimiento de altura interna (ej. output bash)
+                    listState.animateScrollToItem(last, scrollOffset = Int.MAX_VALUE)
                 }
                 return@LaunchedEffect
             }
@@ -617,7 +618,10 @@ fun ChatScreen(
                             // "Trabajando en ello": solo mientras el turno NO ha
                             // cerrado. Cierra el ciclo con el divisor "respuesta final",
                             // que aparece al terminar.
-                            if (turnInProgress) {
+                            val isTurnWorking = turnInProgress ||
+                                streamingTools.any { it.status == "running" } ||
+                                messages.lastOrNull()?.parts?.any { it.type == "tool" && it.state?.status == "running" } == true
+                            if (isTurnWorking) {
                                 item(key = "turn_in_progress") {
                                     TurnInProgressRow()
                                 }
@@ -1411,7 +1415,7 @@ private fun UnifiedFloatingComposer(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f, fill = true),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
@@ -1461,6 +1465,7 @@ private fun UnifiedFloatingComposer(
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier
                             .weight(1f, fill = false)
+                            .widthIn(max = 180.dp)
                             .semantics { contentDescription = "Seleccionar modelo" }
                     ) {
                         Row(
