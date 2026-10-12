@@ -175,7 +175,24 @@ fun ChatScreen(
 
     val lastMsgId = messages.lastOrNull()?.info?.id
     val lastMsgTextLen = messages.lastOrNull()?.text?.length ?: 0
-    LaunchedEffect(messages.size, loading, streamingText, streamingTools, lastMsgId, lastMsgTextLen, imeInset, followOutput) {
+    val lastMsgToolsCount = messages.lastOrNull()?.parts?.count { it.type == "tool" } ?: 0
+    val lastMsgToolsLen = messages.lastOrNull()?.parts?.filter { it.type == "tool" }?.sumOf { it.state?.outputText?.length ?: 0 } ?: 0
+    val streamingToolsLen = streamingTools.sumOf { (it.output?.length ?: 0) + it.command.length }
+
+    LaunchedEffect(
+        messages.size,
+        loading,
+        streamingText,
+        streamingTools.size,
+        streamingToolsLen,
+        lastMsgId,
+        lastMsgTextLen,
+        lastMsgToolsCount,
+        lastMsgToolsLen,
+        turnInProgress,
+        imeInset,
+        followOutput
+    ) {
         // El usuario esta leyendo historia: no se le mueve la lista.
         if (!followOutput) return@LaunchedEffect
         // El conteo REAL de items ya compuestos (listState.layoutInfo), no un cálculo
@@ -828,7 +845,7 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    items(visibles, key = { it.id }) { model ->
+                    items(visibles, key = { "${it.providerID ?: ""}:${it.id}" }) { model ->
                         ListItem(
                             headlineContent = { Text(model.name, fontWeight = if (model.id == selectedModel) FontWeight.SemiBold else FontWeight.Normal) },
                             supportingContent = { model.description?.let { Text(it) } },
@@ -1394,14 +1411,14 @@ private fun UnifiedFloatingComposer(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
+                    modifier = Modifier.weight(1f, fill = false),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     IconButton(
                         onClick = onAttach,
                         modifier = Modifier
-                            // A-5: target táctil mínimo 48dp (antes 36dp)
-                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                            .size(38.dp)
                             .semantics { contentDescription = "Adjuntar archivo" }
                     ) {
                         Icon(
@@ -1413,12 +1430,6 @@ private fun UnifiedFloatingComposer(
 
                     // Boton de agente: la letra es la inicial del nombre REAL
                     // (orchestrator -> O, build -> B, plan -> P, kaenor-ai-engineer -> K).
-                    //
-                    // El color pasa a codificar el `mode` que da OpenCode y no dos casos
-                    // escritos a mano: azul = primary, verde azulado = subagent. Antes
-                    // "plan" era mostaza; ahora es primary, o sea azul, y la letra "P" y la
-                    // hoja siguen diciendo cual es. El color queda como pista y no como
-                    // fuente: deducir el modo de un color obliga a recordar la regla.
                     val agentName = agentMode.trim()
                     val letter = agentName.take(1).uppercase().ifBlank { "?" }
                     val buttonBg = if (agentIsPrimary) Color(0xFF1E88E5) else Color(0xFF00897B)
@@ -1428,12 +1439,7 @@ private fun UnifiedFloatingComposer(
                         shape = CircleShape,
                         color = buttonBg,
                         modifier = Modifier
-                            // A-5: target táctil fijo 48dp. OJO: `.sizeIn(min=48)` sólo
-                            // acota el MÍNIMO y este Surface tiene hijo `fillMaxSize()`,
-                            // así que se tragaba toda la altura de la fila y crecía a
-                            // pantalla completa (bug_2026-09-24). `.size()` acota ambos
-                            // extremos: target táctil ≥48dp garantizado, chip contenido.
-                            .size(48.dp)
+                            .size(38.dp)
                             .semantics { contentDescription = modeDesc }
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -1441,7 +1447,7 @@ private fun UnifiedFloatingComposer(
                                 text = letter,
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                                    fontSize = 13.sp
                                 ),
                                 color = Color.White
                             )
@@ -1453,14 +1459,14 @@ private fun UnifiedFloatingComposer(
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier.semantics { contentDescription = "Seleccionar modelo" }
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .semantics { contentDescription = "Seleccionar modelo" }
                     ) {
                         Row(
-                            // A-5: alto mínimo 48dp para que el target táctil cumpla el mínimo
-                            // manteniendo el contenido centrado (layout vertical intacto).
                             modifier = Modifier
-                                .sizeIn(minHeight = 48.dp)
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                                .heightIn(min = 38.dp)
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
@@ -1474,10 +1480,9 @@ private fun UnifiedFloatingComposer(
                                 selectedModelName,
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                                 color = MaterialTheme.colorScheme.onSurface,
-                                // A-5: al crecer los targets vecinos, el nombre del modelo se
-                                // trunca con elipsis en vez de romper la fila del compositor.
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                             Icon(
                                 Icons.Filled.KeyboardArrowDown,
@@ -1489,19 +1494,16 @@ private fun UnifiedFloatingComposer(
                     }
                 }
 
+                Spacer(Modifier.width(4.dp))
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     IconButton(
-                        // MEDIDO 2026-10-01: aqui estaba el boton de auriculares, que abria
-                        // la pantalla de voz. Se sustituye por el interruptor de LEER EN VOZ:
-                        // el TTS antes solo se disparaba dentro del modo duplex, asi que
-                        // quitar ese modo lo dejaba muerto. Conectado aqui: pulsado lee la
-                        // respuesta; sin pulsar, callado y sin coste.
                         onClick = onToggleLeerEnVoz,
                         modifier = Modifier
-                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                            .size(38.dp)
                             .semantics {
                                 contentDescription = if (leerEnVoz) "Dejar de leer en voz alta"
                                 else "Leer la respuesta en voz alta"
@@ -1512,22 +1514,16 @@ private fun UnifiedFloatingComposer(
                             contentDescription = null,
                             tint = if (leerEnVoz) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
 
-                    // MEDIDO 2026-10-01: el microfono vivia en un `else if (listening)` /
-                    // `else` de `if (canSend)`, asi que con un adjunto puesto NUNCA se pintaba
-                    // —`canSend` era true y el microfono era la rama descartada. El boton que
-                    // responde a "hay algo que enviar" no puede decidir si se ve el microfono.
-                    // Aqui el microfono se pinta siempre y el enviar se anade a su lado.
                     val canSend = text.isNotBlank() || attachedFiles.isNotEmpty()
                     if (canSend) {
                         IconButton(
                             onClick = onSend,
                             modifier = Modifier
-                                // A-5: target táctil mínimo 48dp (antes 36dp)
-                                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                                .size(38.dp)
                                 .background(MaterialTheme.colorScheme.primary, CircleShape)
                                 .semantics { contentDescription = "Enviar mensaje" }
                         ) {
@@ -1553,8 +1549,7 @@ private fun UnifiedFloatingComposer(
                         IconButton(
                             onClick = onMic,
                             modifier = Modifier
-                                // A-5: target táctil mínimo 48dp (antes 36dp)
-                                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                                .size(38.dp)
                                 .graphicsLayer { scaleX = scale; scaleY = scale }
                                 .background(MaterialTheme.colorScheme.error, CircleShape)
                                 .semantics { contentDescription = "Dejar de escuchar" }
@@ -1570,8 +1565,7 @@ private fun UnifiedFloatingComposer(
                         IconButton(
                             onClick = onMic,
                             modifier = Modifier
-                                // A-5: target táctil mínimo 48dp (antes 36dp)
-                                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                                .size(38.dp)
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
                                 .semantics { contentDescription = "Hablar" }
                         ) {
