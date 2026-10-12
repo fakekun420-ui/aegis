@@ -1291,14 +1291,7 @@ private fun TerminalStreamingTurn(
         // Generative text streaming
         if (streamText.isBlank()) {
             if (streamingTools.isEmpty()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Generando respuesta…",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
-                        color = Color(0xFF8B949E)
-                    )
-                    GlifoCursor()
-                }
+                TerminalActivityCursor()
             }
         } else {
             TextoConCursorParpadeante(streamText)
@@ -1317,7 +1310,7 @@ private fun TerminalActivityCursor() {
     ) {
         Text(
             "Generando respuesta…",
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
             color = Color(0xFF8B949E)
         )
         GlifoCursor()
@@ -1990,18 +1983,19 @@ private fun TurnInProgressRow() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         CircularProgressIndicator(
-            modifier = Modifier.height(14.dp).width(14.dp),
-            strokeWidth = 2.dp
+            modifier = Modifier.size(12.dp),
+            strokeWidth = 1.5.dp
         )
         Text(
             "Trabajando en ello…",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            color = Color(0xFF8B949E)
         )
     }
 }

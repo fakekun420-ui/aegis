@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.text.style.TextOverflow
 
 /** F7: regex compilados una vez (antes se construian por linea/token en cada render). */
 private val RX_CODIGO_TOKEN = Regex("""(//.*|#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b|[^\sA-Za-z0-9_]+|\s+)""")
@@ -919,7 +920,8 @@ fun ToolExecutionCard(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.5.sp,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -944,13 +946,13 @@ fun ToolExecutionCard(
                         border = BorderStroke(1.dp, statusColor.copy(alpha = 0.5f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             if (isRunning) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(9.dp),
+                                    modifier = Modifier.size(8.dp),
                                     strokeWidth = 1.5.dp,
                                     color = statusColor
                                 )
@@ -959,7 +961,7 @@ fun ToolExecutionCard(
                                 text = statusText,
                                 color = statusColor,
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -999,22 +1001,46 @@ fun ToolExecutionCard(
                             )
                         }
                         Spacer(Modifier.height(4.dp))
+                        val trimmedOutput = output.trim()
+                        val outputLines = remember(trimmedOutput) { trimmedOutput.lines() }
+                        var expanded by remember(trimmedOutput) { mutableStateOf(false) }
+                        val isLongOutput = outputLines.size > 15
+                        val visibleOutput = if (isLongOutput && !expanded) {
+                            outputLines.take(15).joinToString("\n")
+                        } else {
+                            trimmedOutput
+                        }
                         Surface(
                             color = Color(0xFF090D13),
                             shape = RoundedCornerShape(4.dp),
                             border = BorderStroke(1.dp, Color(0xFF21262D)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = output.trim(),
-                                color = Color(0xFFC9D1D9),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.5.sp,
-                                lineHeight = 16.5.sp,
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .horizontalScroll(rememberScrollState())
-                            )
+                            Column {
+                                Text(
+                                    text = visibleOutput,
+                                    color = Color(0xFFC9D1D9),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 16.5.sp,
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .horizontalScroll(rememberScrollState())
+                                )
+                                if (isLongOutput) {
+                                    val hiddenCount = outputLines.size - 15
+                                    Text(
+                                        text = if (expanded) "▲ Ocultar ($hiddenCount líneas más plegadas)" else "… $hiddenCount líneas más (toca para ver)",
+                                        color = Color(0xFF58A6FF),
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { expanded = !expanded }
+                                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
