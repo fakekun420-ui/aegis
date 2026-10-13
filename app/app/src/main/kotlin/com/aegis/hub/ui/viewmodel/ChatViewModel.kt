@@ -1099,7 +1099,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
 
         // FASE A-5: guarda anti doble envío — un segundo click/reentrada con el mismo
         // mensaje mientras sigue en vuelo no debe reenviarlo (ver inFlightSendKey).
-        val sendKey = "${sessionId.trim()}|${text.trim()}|${files.size}"
+        val sendKey = "${_selectedProvider.value ?: ""}|${sessionId.trim()}|${text.trim()}|${files.size}"
         if (sendKey == inFlightSendKey) return false
         inFlightSendKey = sendKey
         // G1: mojon de envio (solo envios reales: el blank y la guardia F13 ya
@@ -1172,6 +1172,9 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
 
             val countBefore = _messages.value.size
             var messageDelivered = false
+            // A1: causa del POST de envio. Si el POST falla antes que el sync, el
+            // catch exterior solo veria un timeout generico; ver catch del POST abajo.
+            var causaEnvio: String? = null
 
             // Baseline para detectar un mensaje del asistente REALMENTE NUEVO.
             // Antes se comprobaba `nonEmpties.any { it.role == "assistant" }`, que en un
@@ -1231,6 +1234,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 val sendReq = SendMessageRequest(
                     parts = reqParts,
                     model = currentModel,
+                    providerID = _selectedProvider.value,
                     agent = currentAgentMode,
                     mode = currentAgentMode
                 )
@@ -1290,9 +1294,13 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     }
                     sseRequestAccepted = true
                     sseSuccess = true
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                     _sendingInFlight.value = false
                     sseSuccess = false
+                    // A1: la causa real del POST no se traga: una linea corta al
+                    // banner (ver causaEnvio) y el detalle completo al log.
+                    causaEnvio = e.message?.lineSequence()?.firstOrNull()?.trim()?.take(160)
+                    android.util.Log.w("AegisChat", "sendMessage POST fallo: ${e.message}", e)
                 } finally {
                     streamJob.cancel()
                     _streamingText.value = null
@@ -1357,6 +1365,10 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     _error.value = if (http != null) {
                         val cuerpo = runCatching { http.response()?.errorBody()?.string() }.getOrNull()
                         ErroresRed.parsear(cuerpo, http.code())
+                    } else if (!causaEnvio.isNullOrBlank()) {
+                        // A1: el POST fallo antes que el sync; su causa (corta, 1
+                        // linea, sin credenciales) es mas honesta que el timeout generico.
+                        "Error al enviar mensaje: $causaEnvio"
                     } else {
                         "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
                     }

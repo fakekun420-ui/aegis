@@ -723,7 +723,7 @@ internal fun parseMarkdown(src: String): List<MdBlock> {
             filaDeTabla(trimmed) != null && i + 1 < lines.size &&
                     filaDeSeparacion(lines[i + 1].trim()) != null -> {
                 flushLists()
-                val cabeceras = filaDeTabla(trimmed)!!
+                val cabeceras = filaDeTabla(trimmed) ?: emptyList()
                 val alineaciones = alineacionesDe(filaDeSeparacion(lines[i + 1].trim()))
                 i += 2
                 val filas = mutableListOf<List<String>>()

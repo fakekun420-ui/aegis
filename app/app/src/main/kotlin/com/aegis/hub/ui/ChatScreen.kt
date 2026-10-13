@@ -288,8 +288,9 @@ fun ChatScreen(
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success && cameraUri != null) {
-            val f = uriToAttachedFile(context, cameraUri!!)
+        val uriCamara = cameraUri
+        if (success && uriCamara != null) {
+            val f = uriToAttachedFile(context, uriCamara)
             if (f != null) attachedFiles = attachedFiles + f
         }
     }
@@ -1688,8 +1689,6 @@ private fun startListeningInternal(
     }
     try { sr.startListening(intent); setListening(true) } catch (e: Exception) { setError(e.message); setListening(false) }
 }
-
-private fun isTechnicalSessionId(t: String?): Boolean = com.aegis.hub.util.esTituloTecnico(t)
 
 /**
  * Divisor que confirma que la IA terminó su turno.
