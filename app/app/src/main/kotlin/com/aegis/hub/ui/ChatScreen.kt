@@ -317,27 +317,33 @@ fun ChatScreen(
     // Cuando llega un mensaje del asistente, leerlo en voz si el interruptor esta activo.
     // MEDIDO 2026-10-01: esto era `if (duplex && ...)`. Al quitar el modo duplex el TTS
     // se quedaba sin disparador, asi que ahora depende del interruptor del compositor.
+    // H1 2026-10-13: id del ultimo mensaje ya encolado al TTS. Sin marca, cada poll
+    // reasigna `messages` y el LaunchedEffect de abajo re-encolaba el mismo texto sin cota.
+    // Clave de sesion: al cambiar de chat la marca se resetea sola.
+    var ultimoTtsEncoladoId by remember(sessionId) { mutableStateOf<String?>(null) }
+
     LaunchedEffect(messages, leerEnVoz) {
-        if (!leerEnVoz) return@LaunchedEffect
+        if (!leerEnVoz) {
+            ultimoTtsEncoladoId = null
+            return@LaunchedEffect
+        }
         val last = messages.lastOrNull()
-        if (last != null && last.role == "assistant") {
+        val lastId = last?.info?.id ?: "idx_${messages.lastIndex}"
+        if (last != null && last.role == "assistant" && lastId != ultimoTtsEncoladoId) {
             val stripped = last.strippedText().ifBlank { last.text }
-            if (stripped.isNotBlank()) queueTts(stripped)
+            if (stripped.isNotBlank()) {
+                ultimoTtsEncoladoId = lastId
+                queueTts(stripped)
+            }
         }
     }
 
     Scaffold(
         topBar = {
             if (showTopBar) {
-                val firstUserMsg = messages.firstOrNull { it.role == "user" && it.text.isNotBlank() }?.text?.trim()
-                val displayTitle = when {
-                    !sessionTitle.isNullOrBlank() && !isTechnicalSessionId(sessionTitle) -> sessionTitle!!
-                    !firstUserMsg.isNullOrBlank() -> {
-                        val clean = firstUserMsg.replace("\n", " ").trim()
-                        if (clean.length > 30) clean.take(30).trim() + "…" else clean
-                    }
-                    else -> "Nuevo chat"
-                }
+                // D4: la VM es fuente de verdad del titulo; la UI solo lo usa y cae a
+                // "Nuevo chat" si es nulo/vacio (sin duplicar el take(30) de la VM).
+                val displayTitle = sessionTitle.takeIf { !it.isNullOrBlank() } ?: "Nuevo chat"
 
                 TopAppBar(
                     title = {
@@ -881,7 +887,6 @@ fun ChatScreen(
 
 }
 
-@Composable
 private fun decodeBase64Bitmap(b64: String): android.graphics.Bitmap? {
     return try {
         val clean = b64.substringAfter(",", b64)
@@ -956,8 +961,8 @@ private fun PartRow(
     var descargada by remember(part.id) { mutableStateOf<String?>(null) }
     var pidiendo by remember(part.id) { mutableStateOf(false) }
 
-    val bitmap = (descargada ?: part.image ?: part.data ?: part.url)
-        ?.let { decodeBase64Bitmap(it) }
+    val contenido = descargada ?: part.image ?: part.data ?: part.url
+    val bitmap = remember(contenido) { contenido?.let { decodeBase64Bitmap(it) } }
 
     if (bitmap != null) {
         val forma = if (alto > 0) {
@@ -1232,12 +1237,6 @@ private fun TerminalConsoleTurn(
     }
 }
 
-/**
- * MEDIDO 2026-10-03: habia DOS bucles `while(true){delay(500)}` identicos, uno en cada
- * componente de abajo, y el estado `cursorVisible` se leia en el cuerpo del padre: 2
- * recomposiciones por segundo de las tarjetas de herramienta enteras. El parpadeo vive
- * ahora en estas hojas: solo el glifo se recompone, nunca las tarjetas ni la columna.
- */
 @Composable
 private fun CursorParpadeanteCadena(): String {
     var visible by remember { mutableStateOf(true) }
