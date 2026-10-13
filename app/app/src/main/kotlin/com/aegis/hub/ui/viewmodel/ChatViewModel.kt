@@ -685,8 +685,17 @@ class ChatViewModel(
                         // Idem: el siguiente ciclo reintenta por el camino rapido.
                     }
                     if (fresh == null) {
-                        val r = api.getMessages(sessionId)
-                        if (r.ok && r.data != null) fresh = r.data.filterNot { it.isEmpty }
+                        // Cooldown del camino lento (H3): sin freno, cada ciclo de 2 s
+                        // descargaba el historial entero (~1730 mensajes) mientras el
+                        // rapido fallaba. Maximo 1 historial completo cada 30 s; si
+                        // no, se salta el ciclo conservando los visibles y el
+                        // siguiente reintenta por el camino rapido.
+                        val ahora = System.currentTimeMillis()
+                        if (ahora - ultimoFallbackCompletoMs >= 30_000L) {
+                            ultimoFallbackCompletoMs = ahora
+                            val r = api.getMessages(sessionId)
+                            if (r.ok && r.data != null) fresh = r.data.filterNot { it.isEmpty }
+                        }
                     }
                     if (fresh != null) {
                         if (fresh != _messages.value) {
@@ -722,6 +731,10 @@ class ChatViewModel(
             }
         }
     }
+
+    // Cooldown del fallback a historial completo (H3): marca del ultimo uso.
+    // El camino lento solo corre si pasaron >= 30 s desde su ultimo uso.
+    private var ultimoFallbackCompletoMs: Long = 0L
 
     /**
      * Detiene el refresco. [ownerSessionId] da propiedad del job: sin él, el

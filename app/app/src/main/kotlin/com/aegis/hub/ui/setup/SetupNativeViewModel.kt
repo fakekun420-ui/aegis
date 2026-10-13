@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.hub.data.AuthGuideData
 import com.aegis.hub.data.AuthGuideResponse
-import com.aegis.hub.data.BootstrapPhase
 import com.aegis.hub.data.BootstrapState
 import com.aegis.hub.data.FinalCheckResponse
 import com.aegis.hub.data.SetupCheckStatus
@@ -13,11 +12,9 @@ import com.aegis.hub.ui.viewmodel.BootstrapUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -27,7 +24,7 @@ import kotlinx.coroutines.launch
  * - Emite exactamente [BootstrapUiState] para que [com.aegis.hub.ui.screens.SetupWizardScreen]
  *   pueda consumirlo sin modificar su interfaz visual.
  * - Conecta con [SetupNative] para ejecutar y consultar los 5 pasos del instalador y los 2 checks.
- * - Mantiene el polling de estado cada 1000 ms durante la fase `running`.
+ * - D1 2026-10-13: SIN sondeo (se elimino el poll de 1000 ms: duplicaba al de BootstrapViewModel).
  * - Maneja verificación final y smoke test directo contra OpenCode.
  */
 class SetupNativeViewModel(
@@ -81,9 +78,6 @@ class SetupNativeViewModel(
                     state = st,
                     servidorAlcanzable = true
                 )
-                if (st.phaseOrIdle == BootstrapPhase.running) {
-                    startPolling()
-                }
             }
         }
     }
@@ -104,19 +98,6 @@ class SetupNativeViewModel(
             loading = false,
             servidorAlcanzable = true
         )
-        if (st.phaseOrIdle == BootstrapPhase.running) {
-            startPolling()
-        }
-    }
-
-    private fun startPolling() {
-        if (pollJob?.isActive == true) return
-        pollJob = scope.launch {
-            while (isActive && _ui.value.state?.phaseOrIdle == BootstrapPhase.running) {
-                delay(1000)
-                refresh(silent = true)
-            }
-        }
     }
 
     /**

@@ -301,7 +301,11 @@ private fun MarkdownInlineText(
 }
 
 @Composable
-private fun CodeBlockItem(block: MdBlock.CodeBlock) {
+private fun CopiedBadge(
+    output: String,
+    idleColor: Color = Color(0xFF8B949E),
+    withIconButton: Boolean = true
+) {
     val clipboardManager = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
 
@@ -312,6 +316,43 @@ private fun CodeBlockItem(block: MdBlock.CodeBlock) {
         }
     }
 
+    val activeColor = Color(0xFF3FB950)
+    val onCopy = {
+        clipboardManager.setText(AnnotatedString(output))
+        copied = true
+    }
+    if (withIconButton) {
+        TextButton(
+            onClick = onCopy,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+            modifier = Modifier.height(28.dp).semantics { contentDescription = if (copied) "Copiado" else "Copiar código" }
+        ) {
+            Icon(
+                if (copied) Icons.Filled.Done else Icons.Outlined.ContentCopy,
+                contentDescription = null,
+                modifier = Modifier.size(13.dp),
+                tint = if (copied) activeColor else idleColor
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                if (copied) "¡Copiado!" else "Copiar",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+                color = if (copied) activeColor else idleColor
+            )
+        }
+    } else {
+        Text(
+            text = if (copied) "¡Copiado!" else "Copiar",
+            color = if (copied) activeColor else idleColor,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.5.sp,
+            modifier = Modifier.clickable { onCopy() }
+        )
+    }
+}
+
+@Composable
+private fun CodeBlockItem(block: MdBlock.CodeBlock) {
     Surface(
         color = Color(0xFF0D1117),
         shape = RoundedCornerShape(8.dp),
@@ -334,27 +375,7 @@ private fun CodeBlockItem(block: MdBlock.CodeBlock) {
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF8B949E)
                 )
-                TextButton(
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(block.code))
-                        copied = true
-                    },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                    modifier = Modifier.height(28.dp).semantics { contentDescription = if (copied) "Copiado" else "Copiar código" }
-                ) {
-                    Icon(
-                        if (copied) Icons.Filled.Done else Icons.Outlined.ContentCopy,
-                        contentDescription = null,
-                        modifier = Modifier.size(13.dp),
-                        tint = if (copied) Color(0xFF3FB950) else Color(0xFF8B949E)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        if (copied) "¡Copiado!" else "Copiar",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
-                        color = if (copied) Color(0xFF3FB950) else Color(0xFF8B949E)
-                    )
-                }
+                CopiedBadge(output = block.code)
             }
             val highlighted = remember(block.code, block.language) {
                 highlightCode(block.code, block.language)
@@ -856,16 +877,6 @@ fun ToolExecutionCard(
     duration: Double? = null,
     modifier: Modifier = Modifier
 ) {
-    val clipboardManager = LocalClipboardManager.current
-    var copied by remember { mutableStateOf(false) }
-
-    LaunchedEffect(copied) {
-        if (copied) {
-            delay(2000)
-            copied = false
-        }
-    }
-
     val isRunning = status == "running"
     val isError = status == "error" || (exitCode != null && exitCode != 0)
     val statusColor = when {
@@ -989,15 +1000,10 @@ fun ToolExecutionCard(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Text(
-                                text = if (copied) "¡Copiado!" else "Copiar",
-                                color = if (copied) Color(0xFF3FB950) else Color(0xFF58A6FF),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 10.5.sp,
-                                modifier = Modifier.clickable {
-                                    clipboardManager.setText(AnnotatedString(output))
-                                    copied = true
-                                }
+                            CopiedBadge(
+                                output = output,
+                                idleColor = Color(0xFF58A6FF),
+                                withIconButton = false
                             )
                         }
                         Spacer(Modifier.height(4.dp))
