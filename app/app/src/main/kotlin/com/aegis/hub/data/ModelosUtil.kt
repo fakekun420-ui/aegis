@@ -64,19 +64,15 @@ object ModelosUtil {
     }
 
     /**
-     * El variant con el que fijar un modelo: `max` si el catalogo lo ofrece, null si no.
+     * Variant por defecto: null (decide opencode/servidor).
      *
-     * Decision del usuario 2026-10-03 ("5. max"). MEDIDO en el catalogo vivo: tanto
-     * `space-bunny-free` como `muse-spark-1.3-contributor-free` ofrecen `max` entre sus
-     * variants. Si un modelo no lo ofrece, se manda sin variant y decide el servidor en
-     * vez de mandar un variant que no existe.
+     * Reversa 2026-10-13 de la decision 2026-10-03 ("5. max"): Aegis ya no
+     * fuerza `max` aunque el catalogo lo ofrezca. Solo se fija variant cuando
+     * el usuario lo elige explicitamente (`variantExplicita` en SesionConfigRepo).
      */
+    @Suppress("UNUSED_PARAMETER")
     fun resolveVariantFor(modelId: String?, catalogo: List<OpenCodeNativeModel>): String? {
-        val id = normalizarIdModelo(modelId)
-        if (id.isEmpty()) return null
-        val entrada = catalogo.firstOrNull { (it.id ?: it.modelID) == id } ?: return null
-        val ids = entrada.variants.orEmpty().mapNotNull { it.id }
-        return if (ids.contains("max")) "max" else null
+        return null
     }
 
     /**

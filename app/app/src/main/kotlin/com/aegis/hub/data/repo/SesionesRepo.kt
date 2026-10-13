@@ -8,6 +8,9 @@ import com.aegis.hub.data.OpenCodeModelRef
 import com.aegis.hub.data.Project
 import com.aegis.hub.data.ProjectsStore
 import com.aegis.hub.data.UpdateOpenCodeSessionRequest
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Un solo camino para crear, renombrar, borrar y vincular sesiones (F2).
@@ -21,7 +24,9 @@ import com.aegis.hub.data.UpdateOpenCodeSessionRequest
  * 3. El vinculo es UNA sola escritura (`store.linkSessionToProject` +
  *    `setSessionTitle`); la costura delega aqui en vez de escribir dos veces.
  * 4. Idempotencia optativa contra doble pulsacion: misma clave dentro de 3 s no
- *    crea otra sesion.
+ *    crea otra sesion. La clave se reserva ATOMICAMENTE antes de la red
+ *    (V-04-RESERVA-ATOMICA, 2026-10-13): la segunda llamada concurrente espera
+ *    a la que esta en vuelo y devuelve la misma sesion (1 POST, no 2).
  */
 data class NuevaSesion(
     val titulo: String,
@@ -66,15 +71,77 @@ class SesionesRepo(
     private var ultimaCreada: SesionCreada? = null
     private var ultimaMs: Long = 0L
 
+    /**
+     * V-04-RESERVA-ATOMICA (2026-10-13): peticiones en vuelo por clave de
+     * idempotencia, bajo [guardiaCreacion].
+     *
+     * MEDIDO en dispositivo (APK 1.2.1/401): un doble toque en "+ Nuevo chat"
+     * creaba 2 sesiones a 122 ms porque la guarda anterior comprobaba
+     * (`ultimaClave`, L70-76) y registraba (L119-123) DESPUES del await de la
+     * red: carrera check-then-act — los dos toques pasaban la comprobacion
+     * antes de que ninguno registrara. La ventana de 3 s solo contenia toques
+     * SECUENCIALES, nunca concurrentes.
+     */
+    private val guardiaCreacion = Mutex()
+    private val enVuelo = mutableMapOf<String, CompletableDeferred<Resultado<SesionCreada>>>()
+
     suspend fun crear(req: NuevaSesion, claveIdempotencia: String? = null): Resultado<SesionCreada> {
-        if (claveIdempotencia != null && claveIdempotencia == ultimaClave) {
-            val previa = ultimaCreada
-            if (previa != null && reloj() - ultimaMs < VENTANA_IDEMPOTENCIA_MS) {
-                Log.i(TAG, "crear: doble pulsacion con la misma clave, se reutiliza ${previa.id}")
-                return Resultado.Ok(previa)
+        val clave = claveIdempotencia ?: return ejecutarCreacion(req, null)
+
+        // Reserva ATOMICA antes de la red: o hay una peticion en vuelo con esta
+        // clave (se espera y se devuelve la misma sesion), o esta llamada se
+        // convierte en la dueña. La segunda llamada concurrente NUNCA llega al POST.
+        var ajena: CompletableDeferred<Resultado<SesionCreada>>? = null
+        var mia: CompletableDeferred<Resultado<SesionCreada>>? = null
+        guardiaCreacion.withLock {
+            val vuelo = enVuelo[clave]
+            if (vuelo != null) {
+                ajena = vuelo
+            } else {
+                val previa = ultimaCreada
+                if (clave == ultimaClave && previa != null && reloj() - ultimaMs < VENTANA_IDEMPOTENCIA_MS) {
+                    Log.i(TAG, "crear: doble pulsacion con la misma clave, se reutiliza ${previa.id}")
+                    ajena = CompletableDeferred<Resultado<SesionCreada>>(Resultado.Ok(previa))
+                } else {
+                    mia = CompletableDeferred<Resultado<SesionCreada>>().also { enVuelo[clave] = it }
+                }
             }
         }
+        ajena?.let { return it.await() }
+        val duena = mia ?: error("SesionesRepo.crear: sin reserva ni espera para $clave")
 
+        val resultado: Resultado<SesionCreada> = try {
+            ejecutarCreacion(req, clave)
+        } catch (e: Exception) {
+            // El dueño cayo (red rota a mitad, cancelacion): soltar a los que
+            // esperan con un Fallo en vez de dejar el Deferred colgado, y relanzar
+            // (la cancelacion se propaga, no se traga).
+            guardiaCreacion.withLock {
+                enVuelo.remove(clave)
+                if (!duena.isCompleted) {
+                    duena.complete(Resultado.Fallo("No se pudo crear la sesión: ${e.message ?: "error de red"}", e))
+                }
+            }
+            throw e
+        }
+        guardiaCreacion.withLock {
+            duena.complete(resultado)
+            if (resultado is Resultado.Ok) {
+                ultimaClave = clave
+                ultimaCreada = resultado.valor
+                ultimaMs = reloj()
+            }
+            enVuelo.remove(clave)
+        }
+        return resultado
+    }
+
+    /**
+     * El trabajo real de crear (red + agente/modelo/vinculo). Sin guarda propia:
+     * la idempotencia vive en [crear], que reserva la clave ATOMICAMENTE antes
+     * de llamar aqui (V-04-RESERVA-ATOMICA).
+     */
+    private suspend fun ejecutarCreacion(req: NuevaSesion, claveIdempotencia: String?): Resultado<SesionCreada> {
         val carpeta = req.carpeta?.takeIf { it.isNotBlank() }
             ?: req.proyectoId?.let { pid -> store.getProject(pid)?.folder?.takeIf { it.isNotBlank() } }
             ?: CARPETA_POR_DEFECTO
@@ -117,9 +184,7 @@ class SesionesRepo(
 
         val creada = SesionCreada(id = id, titulo = req.titulo, carpeta = carpeta)
         if (claveIdempotencia != null) {
-            ultimaClave = claveIdempotencia
-            ultimaCreada = creada
-            ultimaMs = reloj()
+            Log.i(TAG, "crear: sesion $id con clave (reserva V-04-RESERVA-ATOMICA)")
         }
         return Resultado.Ok(creada, avisos)
     }

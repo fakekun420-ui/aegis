@@ -172,7 +172,7 @@ class SesionConfigRepo(
             val prov = ModelosUtil.proveedorDeRef(ref)
                 ?: ModelosUtil.resolveProviderFor(limpio, pistaProveedor, nativosFinales)
             val variante = variantExplicita?.trim()?.takeIf { it.isNotBlank() }
-                ?: ModelosUtil.resolveVariantFor(limpio, nativosFinales)
+            // Por defecto null: decide opencode/servidor (reversa 2026-10-13).
             val r = oc.setSessionModel(
                 sid,
                 SetSessionModelRequest(

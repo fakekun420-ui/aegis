@@ -6,6 +6,8 @@ import com.aegis.hub.data.repo.SesionConfigRepo
 import com.aegis.hub.data.repo.SesionesRepo
 import com.aegis.hub.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -131,6 +133,37 @@ class FlujoNuevoChatTest {
         assertEquals(
             "los tres toques deben devolver la MISMA sesión",
             listOf(primero, segundo, tercero).distinct().size, 1
+        )
+        assertEquals(1, fake.contarExacto("POST", "/api/session"))
+        assertEquals(1, fake.crearSesiones.get())
+        assertNull(vm.error.value)
+    }
+
+    /**
+     * V-04-RESERVA-ATOMICA (2026-10-13): el doble toque CONCURRENTE, no secuencial.
+     *
+     * MEDIDO en dispositivo (APK 1.2.1/401): dos toques a 122 ms creaban 2 sesiones porque la
+     * guarda de 3 s comprobaba/registraba DESPUES del await de la red (carrera check-then-act):
+     * los dos toques pasaban la comprobacion antes de que ninguno registrara. El test de los
+     * tres toques de arriba NO cubre esto (es secuencial: cada `nuevoChat()` termina antes del
+     * siguiente, asi que la ventana lo contiene con o sin fix).
+     *
+     * `LENTO` (300 ms por peticion) deja al primer toque en vuelo cuando entra el segundo a
+     * 50 ms (<=150 ms, como los 122 ms medidos). Sin el fix salen 2 POST; con el fix, 1.
+     */
+    @Test
+    fun `doble toque concurrente crea una sola sesion`() = runBlocking {
+        val vm = vm()
+        fake.modo = FakeOpenCode.Modo.LENTO
+
+        val primero = async { vm.nuevoChat() }
+        delay(50)
+        val segundo = async { vm.nuevoChat() }
+
+        val ids = listOf(primero.await(), segundo.await())
+        assertEquals(
+            "el doble toque concurrente devuelve la MISMA sesión: $ids",
+            1, ids.distinct().size
         )
         assertEquals(1, fake.contarExacto("POST", "/api/session"))
         assertEquals(1, fake.crearSesiones.get())
