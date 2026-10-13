@@ -819,8 +819,13 @@ class RutaNativa(
         val modeloId = ModelosUtil.normalizarIdModelo(body.model)
         if (modeloId.isNotEmpty()) {
             // F3: con salto de redundante. Se pasa el ref ORIGINAL (con prefijo: es la
-            // pista de proveedor) en vez del ya normalizado.
-            config.fijarModelo(sessionId, body.model ?: modeloId)
+            // pista de proveedor) en vez del ya normalizado, mas el proveedor elegido
+            // en la UI (A2: sin esto, pasado ~60 s el envio tardio re-adivinaba opencode).
+            // A4: el Resultado ya no se descarta: si no se fija, se sigue igual pero con rastro.
+            when (val r = config.fijarModelo(sessionId, body.model ?: modeloId, pistaProveedor = body.providerID)) {
+                is Resultado.Fallo -> android.util.Log.w(TAG, "sendMessage: sigue sin fijar modelo: ${r.motivo}")
+                else -> Unit
+            }
         }
 
         oc.sendPrompt(

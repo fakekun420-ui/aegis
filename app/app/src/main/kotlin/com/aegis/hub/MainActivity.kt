@@ -503,7 +503,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startListening(){ /* Phase 1: native STT handled via Compose voice FAB later */ }
     private fun toast(m:String)= Toast.makeText(this,m,Toast.LENGTH_SHORT).show()
     // MEDIDO 2026-10-01: antes apagaba aqui el motor de voz y el reconocedor de esta Activity,
     // y paraba el listener de la frase de activacion. Los tres se han ido con el modo

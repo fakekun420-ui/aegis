@@ -193,7 +193,7 @@ data class Message(
     val role: String get() = info?.role ?: "assistant"
     val text: String get() = parts
         ?.filter { it.type == "text" && !it.text.isNullOrBlank() }
-        ?.joinToString("\n") { it.text!! } ?: ""
+        ?.mapNotNull { it.text }?.joinToString("\n") ?: ""
     fun isMemoryContext(): Boolean {
         val t = text.trim()
         return t.startsWith("<memory_context") || t.contains("<project_knowledge") || t.contains("<memory relevance=")
@@ -231,6 +231,7 @@ data class Message(
 data class SendMessageRequest(
     val parts: List<Map<String, String>>,
     val model: String? = null,
+    val providerID: String? = null,
     val agent: String? = null,
     val mode: String? = null
 )
