@@ -76,15 +76,15 @@ class SesionModeloSyncTest {
     }
 
     @Test
-    fun `max se elige cuando el catalogo lo ofrece y si no es null`() {        val conMax = listOf(
+    fun `por defecto es null aunque el catalogo ofrezca max`() {        val conMax = listOf(
             OpenCodeNativeModel(
                 id = "muse-spark-1.3-contributor-free",
                 variants = listOf(OpenCodeModelVariant(id = "low"), OpenCodeModelVariant(id = "max"))
             )
         )
-        assertEquals("max", ModelosUtil.resolveVariantFor("muse-spark-1.3-contributor-free", conMax))
-        // Con prefijo tambien resuelve, porque normaliza antes de buscar.
-        assertEquals("max", ModelosUtil.resolveVariantFor("opencode/muse-spark-1.3-contributor-free", conMax))
+        assertEquals(null, ModelosUtil.resolveVariantFor("muse-spark-1.3-contributor-free", conMax))
+        // Con prefijo tambien es null: reversa 2026-10-13, por defecto decide el servidor.
+        assertEquals(null, ModelosUtil.resolveVariantFor("opencode/muse-spark-1.3-contributor-free", conMax))
         val sinMax = listOf(
             OpenCodeNativeModel(id = "otro", variants = listOf(OpenCodeModelVariant(id = "low")))
         )
