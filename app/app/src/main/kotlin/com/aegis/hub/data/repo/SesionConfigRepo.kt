@@ -25,6 +25,9 @@ data class ConfigSesion(
     val titulo: String?,
     val modelo: String?,
     val agente: String?,
+    // Pareja del modelo (el servidor distingue por id mas providerID): sin esto
+    // dos filas con el mismo id en la hoja de modelos se marcan las dos.
+    val proveedorModelo: String? = null,
     val origen: Origen
 ) {
     enum class Origen { SERVIDOR, CACHE_LOCAL }
@@ -115,6 +118,7 @@ class SesionConfigRepo(
                     titulo = s.title,
                     modelo = modelo,
                     agente = agente,
+                    proveedorModelo = s.model?.providerID,
                     origen = ConfigSesion.Origen.SERVIDOR
                 )
             }

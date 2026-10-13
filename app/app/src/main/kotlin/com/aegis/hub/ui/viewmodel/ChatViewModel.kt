@@ -100,6 +100,13 @@ class ChatViewModel(
     private val _selectedModel = MutableStateFlow<String?>(null)
     val selectedModel: StateFlow<String?> = _selectedModel
 
+    // Proveedor del modelo elegido (pareja id mas providerID): el mismo id
+    // existe en varios proveedores (OpenCode Zen y anthropic) y comparar solo
+    // el id marcaba las dos filas. Null = se desconoce (lectura vieja): la hoja
+    // vuelve a comparar solo por id para no dejar nada marcado.
+    private val _selectedProvider = MutableStateFlow<String?>(null)
+    val selectedProvider: StateFlow<String?> = _selectedProvider
+
     // F1: motor unico (OpenCode). El estado de "proveedor elegido" y de "sesion
     // vinculada a proveedor" (Antigravity) se elimino: solo ses_ existe.
 
@@ -297,6 +304,7 @@ class ChatViewModel(
             if (_currentSessionId.value != sid) return@launch
             _servidorAlcanzable.value = cfg.origen == ConfigSesion.Origen.SERVIDOR || sid.isBlank()
             if (cfg.modelo != null) _selectedModel.value = cfg.modelo
+            _selectedProvider.value = cfg.proveedorModelo
             _agentMode.value = cfg.agente ?: AGENTE_POR_DEFECTO
             // F4: el titulo viene del mismo GET (antes: lista completa solo para esto).
             if (!cfg.titulo.isNullOrBlank() && !isTechnicalTitle(cfg.titulo)) {
@@ -305,28 +313,34 @@ class ChatViewModel(
         }
     }
 
-    fun selectModel(modelId: String?) {
+    fun selectModel(modelId: String?, providerId: String? = null) {
         // Nunca se guarda ni se envia con prefijo: la lista trae ids cortos y el servidor
         // distingue por pareja id mas providerID, no por un id compuesto.
         val limpio = ModelPreferences.normalizar(modelId)
         if (limpio.isBlank()) return
+        val prov = providerId?.trim()?.takeIf { it.isNotBlank() }
         // F3: optimista con reversa. Se pinta ya; si el servidor rechaza, se restaura el
         // previo y el motivo va a _error (antes: prefs primero y catch mudo, H-05).
         val previo = _selectedModel.value
+        val previoProv = _selectedProvider.value
         _selectedModel.value = limpio
+        _selectedProvider.value = prov
         modeloManualEnSesion = true
         val sid = (_currentSessionId.value ?: "").trim()
         if (sid.isBlank()) {
             // Chat nuevo sin id: no hay servidor al que empujar; el repo guardara la
             // ultima eleccion cuando se fije de verdad.
-            viewModelScope.launch { configRepo.fijarModelo("", limpio) }
+            viewModelScope.launch { configRepo.fijarModelo("", limpio, null, prov) }
             return
         }
         viewModelScope.launch {
-            when (val r = configRepo.fijarModelo(sid, limpio)) {
+            when (val r = configRepo.fijarModelo(sid, limpio, null, prov)) {
                 is Resultado.Ok -> Unit
                 is Resultado.Fallo -> {
-                    if (_currentSessionId.value == sid) _selectedModel.value = previo
+                    if (_currentSessionId.value == sid) {
+                        _selectedModel.value = previo
+                        _selectedProvider.value = previoProv
+                    }
                     _error.value = r.motivo
                 }
             }
@@ -365,12 +379,14 @@ class ChatViewModel(
                 is Resultado.Ok -> Unit
             }
             if (!modeloManualEnSesion && sid.isNotBlank()) {
-                val mod = configRepo.modeloDeAgente(limpio)?.id
+                val refAgente = configRepo.modeloDeAgente(limpio)
+                val mod = refAgente?.id
                 if (!mod.isNullOrBlank()) {
-                    when (val r2 = configRepo.fijarModelo(sid, mod)) {
+                    when (val r2 = configRepo.fijarModelo(sid, mod, null, refAgente?.providerID)) {
                         is Resultado.Ok -> {
                             if ((_currentSessionId.value ?: "").trim() == sid) {
                                 _selectedModel.value = ModelosUtil.normalizarIdModelo(mod)
+                                _selectedProvider.value = refAgente?.providerID
                             }
                         }
                         is Resultado.Fallo -> {
@@ -462,11 +478,16 @@ class ChatViewModel(
                         // veces si y a veces no segun quien llegara antes.
                         val ags = _agents.value.takeIf { it.isNotEmpty() }
                             ?: runCatching { api.getOpencodeAgents() }.getOrNull()?.data.orEmpty()
-                        _selectedModel.value = modeloPorDefectoPara(
+                        val porDefecto = modeloPorDefectoPara(
                             _agentMode.value,
                             ags,
                             resp.data
                         )
+                        _selectedModel.value = porDefecto
+                        _selectedProvider.value = porDefecto?.let { id ->
+                            val c = resp.data.filter { it.id == id }
+                            (c.firstOrNull { it.providerID == "opencode" } ?: c.firstOrNull())?.providerID
+                        }
                     }
                 } else {
                     // F6: sin lista fiable NO se conserva la del proveedor anterior
@@ -979,6 +1000,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         // muestra el modelo/agente de otra sesion mientras llega la lectura.
         _currentSessionId.value = sessionId
         _selectedModel.value = null
+        _selectedProvider.value = null
         _agentMode.value = AGENTE_POR_DEFECTO
         cargarConfig(sessionId)
         if (sessionId.isBlank()) {

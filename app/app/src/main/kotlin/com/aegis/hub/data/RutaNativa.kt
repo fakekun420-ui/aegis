@@ -124,7 +124,31 @@ class RutaNativa(
     private fun <T> envolturaFallo(motivo: String): Envelope<T> =
         Envelope(ok = false, data = null, error = ErrorBody(code = "nativo", message = motivo))
 
-        // MEDIDO 2026-10-02: `GET /api/session` devuelve `id`, `title`, `agent`, `model` (OBJETO),
+        /**
+     * MEDIDO 2026-10-13 contra el servidor vivo: `GET /api/session?limit=50`
+     * devuelve UNA pagina (243 sesiones en 6 paginas) con `cursor.next` para el
+     * resto. La app pedia solo la primera pagina y, tras el filtro de `parentID`
+     * (48 hijas de 50 en la primera pagina), la lista global se quedaba en 2
+     * ("aegis up", "orquestador"). Se recorre el cursor hasta agotarlo, con tope
+     * de 20 paginas (1000 sesiones) por seguridad.
+     */
+    private suspend fun todasLasSesiones(): List<OpenCodeSession> {
+        val todas = mutableListOf<OpenCodeSession>()
+        var cursor: String? = null
+        var paginas = 0
+        do {
+            val r = oc.listSessions(cursor = cursor)
+            todas += r.data.orEmpty()
+            cursor = r.cursor?.next
+            paginas++
+        } while (cursor != null && paginas < 20)
+        if (cursor != null) {
+            Log.w(TAG, "todasLasSesiones(): tope de 20 paginas, la lista puede estar incompleta")
+        }
+        return todas
+    }
+
+    // MEDIDO 2026-10-02: `GET /api/session` devuelve `id`, `title`, `agent`, `model` (OBJETO),
         // `time` (OBJETO con created/updated/idle), `cost`, `tokens`, `projectID` y `location`.
         //
         // Este mapa NO usa la conversion con Gson que si usaba en los agentes: alli el campo
@@ -150,7 +174,7 @@ class RutaNativa(
             // proyecto): si se filtrara en un solo sitio, un chat apareceria en
             // una lista y no en la otra, que es el mismo criterio que ya
             // sustenta `getProjectSessions`.
-            val lista = oc.listSessions().data.orEmpty()
+            val lista = todasLasSesiones()
                 .filter { it.parentID.isNullOrBlank() }
                 .map { s ->
                 Sesion(
@@ -499,15 +523,12 @@ class RutaNativa(
      * Y por que no sale solo del store: ahi esta el vinculo, pero no el titulo real de OpenCode ni
      * la fecha. Sin `/api/session` la lista saldria con titulos vacios.
      *
-     * LIMITACION, escrita porque es real: se piden las 50 primeras sesiones, que es el limite que
-     * usa el resto de la app. Un proyecto con mas de 50 sesiones no las muestra todas, y con
-     * paginacion por `cursor` se podria resolver. No lo hago aqui porque es la unica pantalla que
-     * paginaria, y anadir un bucle de paginas a una pantalla es un cambio de alcance que no es
-     * de este arreglo; queda dicho para que no se lea como si estuviera resuelto.
+     * Paginado por `cursor` (ver `todasLasSesiones`): el tope de 50 por pagina
+     * ya no recorta la lista del proyecto.
      */
     override suspend fun getProjectSessions(projectId: String): Envelope<List<SessionRef>> {
         val ids = store.getSessionIdsForProject(projectId).toSet()
-        val todas = oc.listSessions().data.orEmpty()
+        val todas = todasLasSesiones()
             // MEDIDO el 2026-10-02: mismo filtro que `getOpencodeSessions`, y
             // por el mismo motivo. Las dos listas tienen que usar el MISMO
             // criterio: si aqui no se filtrara, un subagente apareceria en la

@@ -84,6 +84,7 @@ fun ChatScreen(
     val servidorAlcanzable by vm.servidorAlcanzable.collectAsState()
     val models by vm.models.collectAsState()
     val selectedModel by vm.selectedModel.collectAsState()
+    val selectedProvider by vm.selectedProvider.collectAsState()
     val pendingForms by vm.pendingForms.collectAsState()
     val pendingPermissions by vm.pendingPermissions.collectAsState()
     val replyingPermission by vm.replyingPermission.collectAsState()
@@ -267,6 +268,14 @@ fun ChatScreen(
     var composerText by rememberSaveable { mutableStateOf("") }
     var attachedFiles by remember { mutableStateOf<List<AttachedFile>>(emptyList()) }
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    // BUG STT 2026-10-13 (A-2): el recognizer retenia la conexion al servicio
+    // tras salir del chat; al cambiar de instancia o salir se destruye.
+    DisposableEffect(recognizer) {
+        onDispose {
+            try { recognizer?.cancel() } catch (_: Exception) {}
+            try { recognizer?.destroy() } catch (_: Exception) {}
+        }
+    }
 
 
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -382,7 +391,7 @@ fun ChatScreen(
                 // MEDIDO 2026-10-03: el valor puede venir con prefijo `proveedor/id` de
                 // prefs viejas; se compara sin el para que la lista (ids cortos) coincida.
                 val modeloCorto = selectedModel?.trim()?.substringAfterLast("/")?.trim().orEmpty()
-                val modelDisplayName = models.find { it.id == modeloCorto }?.name
+                val modelDisplayName = models.firstOrNull { it.id == modeloCorto && (selectedProvider == null || it.providerID == selectedProvider) }?.name
                     ?: when {
                         modeloCorto.isBlank() && !modelsLoading -> "Elige un modelo"
                         modeloCorto.isBlank() -> "Cargando modelos…"
@@ -818,6 +827,10 @@ fun ChatScreen(
             // composicion): conservar el filtro anterior no tiene sentido.
             var busqueda by remember { mutableStateOf("") }
             val visibles = remember(busqueda, models) { models.filtrarPorTexto(busqueda) }
+            // Id corto y proveedor elegido, normalizados igual que al guardar
+            // (sin el prefijo `proveedor/` de prefs viejas).
+            val modeloSelId = selectedModel?.trim()?.substringAfterLast("/")?.trim()
+            val provSel = selectedProvider?.trim()?.takeIf { it.isNotBlank() }
             Column(
                 modifier = Modifier.fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 16.dp),
@@ -856,16 +869,22 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     items(visibles, key = { "${it.providerID ?: ""}:${it.id}" }) { model ->
+                        // La comparacion es por pareja proveedor+id: el mismo id
+                        // existe en varios proveedores y solo por id se marcaban
+                        // las dos filas. Sin proveedor conocido (lectura vieja),
+                        // se vuelve a comparar solo por id.
+                        val estaSel = model.id == modeloSelId &&
+                            (provSel == null || (model.providerID ?: "opencode") == provSel)
                         ListItem(
-                            headlineContent = { Text(model.name, fontWeight = if (model.id == selectedModel) FontWeight.SemiBold else FontWeight.Normal) },
-                            supportingContent = { model.description?.let { Text(it) } },
+                            headlineContent = { Text(model.name, fontWeight = if (estaSel) FontWeight.SemiBold else FontWeight.Normal) },
+                            supportingContent = { Text(listOfNotNull(model.providerID?.takeIf { it.isNotBlank() }, model.description?.takeIf { it.isNotBlank() }).joinToString(" · ").ifBlank { "OpenCode" }) },
                             leadingContent = {
                                 RadioButton(
-                                    selected = model.id == selectedModel,
-                                    onClick = { vm.selectModel(model.id); showModelSheet = false }
+                                    selected = estaSel,
+                                    onClick = { vm.selectModel(model.id, model.providerID); showModelSheet = false }
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth().clickable { vm.selectModel(model.id); showModelSheet = false }
+                            modifier = Modifier.fillMaxWidth().clickable { vm.selectModel(model.id, model.providerID); showModelSheet = false }
                         )
                     }
                 }
@@ -1491,11 +1510,13 @@ private fun UnifiedFloatingComposer(
                     }
                 }
 
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(8.dp))
 
+                // BUG composer 2026-10-13: enviar y micro miden lo mismo (36dp)
+                // con separacion fija 8dp; en 411dp no se solapan.
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     IconButton(
                         onClick = onToggleLeerEnVoz,
@@ -1520,7 +1541,7 @@ private fun UnifiedFloatingComposer(
                         IconButton(
                             onClick = onSend,
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(36.dp)
                                 .background(MaterialTheme.colorScheme.primary, CircleShape)
                                 .semantics { contentDescription = "Enviar mensaje" }
                         ) {
@@ -1546,7 +1567,7 @@ private fun UnifiedFloatingComposer(
                         IconButton(
                             onClick = onMic,
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(36.dp)
                                 .graphicsLayer { scaleX = scale; scaleY = scale }
                                 .background(MaterialTheme.colorScheme.error, CircleShape)
                                 .semantics { contentDescription = "Dejar de escuchar" }
@@ -1562,7 +1583,7 @@ private fun UnifiedFloatingComposer(
                         IconButton(
                             onClick = onMic,
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(36.dp)
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
                                 .semantics { contentDescription = "Hablar" }
                         ) {
