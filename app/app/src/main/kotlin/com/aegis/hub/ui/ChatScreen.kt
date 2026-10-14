@@ -31,6 +31,11 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aegis.hub.ui.viewmodel.ChatConversationUiState
+import com.aegis.hub.ui.viewmodel.ChatDeliveryUiState
+import com.aegis.hub.ui.viewmodel.ChatConfigUiState
+import com.aegis.hub.ui.viewmodel.ChatInteractionUiState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,24 +79,36 @@ fun ChatScreen(
     showTopBar: Boolean = sessionId.isNotBlank()
 ) {
     val context = LocalContext.current
-    val messages by vm.messages.collectAsState()
-    val sessionTitle by vm.sessionTitle.collectAsState()
-    val loading by vm.loading.collectAsState()
-    val sendingInFlight by vm.sendingInFlight.collectAsState()
-    val error by vm.error.collectAsState()
-    val servidorAlcanzable by vm.servidorAlcanzable.collectAsState()
-    val models by vm.models.collectAsState()
-    val selectedModel by vm.selectedModel.collectAsState()
-    val selectedProvider by vm.selectedProvider.collectAsState()
-    val pendingForms by vm.pendingForms.collectAsState()
-    val pendingPermissions by vm.pendingPermissions.collectAsState()
-    val replyingPermission by vm.replyingPermission.collectAsState()
-    val turnInProgress by vm.turnInProgress.collectAsState()
-    // El divisor usa la MISMA decisión que la notificación (vm.turnFinished), no el
-    // turnOver crudo del vigilante: leer dos señales distintas es lo que hacía que el
-    // aviso saliera tras cada bash mientras el divisor no aparecía nunca.
-    val turnFinished by vm.turnFinished.collectAsState()
-    val replyingForm by vm.replyingForm.collectAsState()
+    // G4/F9: Agrupacion en UiStates consolidados con collectAsStateWithLifecycle
+    val conversationState by vm.conversationUiState.collectAsStateWithLifecycle()
+    val deliveryState by vm.deliveryUiState.collectAsStateWithLifecycle()
+    val configState by vm.configUiState.collectAsStateWithLifecycle()
+    val interactionState by vm.interactionUiState.collectAsStateWithLifecycle()
+
+    val messages = conversationState.messages
+    val sessionTitle = conversationState.sessionTitle
+    val turnInProgress = conversationState.turnInProgress
+    val turnFinished = conversationState.turnFinished
+
+    val loading = deliveryState.loading
+    val sendingInFlight = deliveryState.sendingInFlight
+    val error = deliveryState.error
+    val servidorAlcanzable = deliveryState.servidorAlcanzable
+    val streamingText = deliveryState.streamingText
+    val streamingTools = deliveryState.streamingTools
+
+    val models = configState.models
+    val selectedModel = configState.selectedModel
+    val selectedProvider = configState.selectedProvider
+    val modelsLoading = configState.modelsLoading
+    val agentMode = configState.agentMode
+    val agents = configState.agents
+    val agentsLoading = configState.agentsLoading
+
+    val pendingForms = interactionState.pendingForms
+    val pendingPermissions = interactionState.pendingPermissions
+    val replyingForm = interactionState.replyingForm
+    val replyingPermission = interactionState.replyingPermission
 
     // Las filas se calculan AQUÍ y no dentro del `content` del LazyColumn: ese lambda
     // no es un contexto @Composable, y llamar a `remember` dentro de él no compila
@@ -107,15 +124,9 @@ fun ChatScreen(
     val onRetryMessage: (Message) -> Unit = remember(sessionId) { { m -> vm.retryMessage(m, sessionId) } }
     val onLoadPartFull: (String?, (PartFull?) -> Unit) -> Unit = remember { { partId, done -> vm.loadPartFull(partId, null, done) } }
 
-    val modelsLoading by vm.modelsLoading.collectAsState()
-    val streamingText by vm.streamingText.collectAsState()
-    val streamingTools by vm.streamingTools.collectAsState()
-    val agentMode by vm.agentMode.collectAsState()
-    val agents by vm.agents.collectAsState()
     // MEDIDO 2026-10-01: la hoja se llenaba con una sola llamada hecha al crear el ViewModel.
     // Si esa llamada fallaba, la hoja quedaba vacia PARA SIEMPRE: el boton no volvia a
     // pedirla y no decia por que. Aqui se pide al abrir, que es cuando hace falta.
-    val agentsLoading by vm.agentsLoading.collectAsState()
     var showModelSheet by remember { mutableStateOf(false) }
     var showAgentSheet by remember { mutableStateOf(false) }
     // Al abrir la hoja se pide la lista. Es idempotente: el ViewModel no hace nada si ya
