@@ -98,8 +98,11 @@ dependencies {
     // Core + legacy views (kept for existing non-Compose code path)
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
-    // F3-P0: material M2 fuera — 0 imports androidx.compose.material.* en el codigo
-    // (solo material3 + material.icons.*); R8 + poda de iconos hacen el resto.
+    // FIX-CI 2026-10-14 (run 38509114618): material M2 RESTAURADO. themes.xml usa el
+    // bridge Theme.Material3.DayNight.NoActionBar que vive en el artefacto M2
+    // (no hay imports Kotlin M2, pero el recurso XML si lo necesita). R8 poda
+    // el codigo M2 no usado; el coste residual es ~0.
+    implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     // MEDIDO 2026-10-03: webkit y coordinatorlayout con 0 referencias en todo el codigo
     // (ni imports ni layouts que los usen). Se quitan del binario, no de la historia.
