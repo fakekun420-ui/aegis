@@ -57,6 +57,9 @@ import com.aegis.hub.data.TurnState
  */
 private const val AGENTE_POR_DEFECTO = "build"
 
+/** F3-P8.2: el camino lento (historial completo) corre como maximo 1 vez cada 30 s. */
+internal const val COOLDOWN_FALLBACK_COMPLETO_MS = 30_000L
+
 class ChatViewModel(
     private val configRepo: SesionConfigRepo = SesionConfigRepo(),
     private val sesionesRepo: SesionesRepo = SesionesRepo()
@@ -135,7 +138,7 @@ class ChatViewModel(
      * un fallo puntual se ignora, y eso se respeta. Lo que se cambia no es tragarse
      * el fallo, es que tragarselo tenga un final.
      */
-    private fun noteRefreshResult(ok: Boolean) {
+    internal fun noteRefreshResult(ok: Boolean) {
         if (ok) {
             if (refreshFailStreak != 0) {
                 refreshFailStreak = 0
@@ -544,6 +547,21 @@ class ChatViewModel(
     // fallo puntual, suficiente para no dejar la pantalla mintiendo un minuto.
     private val SERVIDOR_FAIL_STREAK_FOR_DEGRADED = 3
 
+    /**
+     * F3-P8.2: politica de espera del refresco, extraida del bucle para fijarla con
+     * tests JVM. El bucle la usa tal cual: mismo comportamiento, sin duplicar numeros.
+     */
+    internal fun esperaRefrescoMs(fallosSeguidos: Int): Long =
+        if (fallosSeguidos >= SERVIDOR_FAIL_STREAK_FOR_DEGRADED) REFRESH_MAX_WAIT_MS else REFRESH_MIN_WAIT_MS
+
+    /**
+     * F3-P8.2: guarda de propiedad del refresco. `stopViewRefresh(otraSesion)` NO debe
+     * matar el refresco propio (el onDispose de la pantalla anterior corre DESPUES del
+     * LaunchedEffect de la nueva).
+     */
+    internal fun puedeDetenerRefresco(ownerSessionId: String?): Boolean =
+        ownerSessionId == null || ownerSessionId == viewRefreshSessionId
+
     private fun mergeTail(actual: List<Message>, cola: List<Message>): List<Message> {
         if (cola.isEmpty()) return actual
         val porId = HashMap<String, Message>()
@@ -683,7 +701,7 @@ class ChatViewModel(
                         // no, se salta el ciclo conservando los visibles y el
                         // siguiente reintenta por el camino rapido.
                         val ahora = System.currentTimeMillis()
-                        if (ahora - ultimoFallbackCompletoMs >= 30_000L) {
+                        if (ahora - ultimoFallbackCompletoMs >= COOLDOWN_FALLBACK_COMPLETO_MS) {
                             ultimoFallbackCompletoMs = ahora
                             val r = api.getMessages(sessionId)
                             if (r.ok && r.data != null) fresh = r.data.filterNot { it.isEmpty }
@@ -715,7 +733,7 @@ class ChatViewModel(
                 // noteRefreshResult: un exito intermedio no resetea nada.
                 if (cycleFailed) {
                     refreshFailures++
-                    if (refreshFailures >= 3) waitMs = REFRESH_MAX_WAIT_MS
+                    waitMs = esperaRefrescoMs(refreshFailures)
                 } else {
                     refreshFailures = 0
                     if (waitMs != REFRESH_MIN_WAIT_MS) waitMs = REFRESH_MIN_WAIT_MS
@@ -960,7 +978,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
     }
 
     fun stopViewRefresh(ownerSessionId: String? = null) {
-        if (ownerSessionId != null && viewRefreshSessionId != ownerSessionId) return
+        if (!puedeDetenerRefresco(ownerSessionId)) return
         viewRefreshJob?.cancel()
         viewRefreshJob = null
         viewRefreshSessionId = null
