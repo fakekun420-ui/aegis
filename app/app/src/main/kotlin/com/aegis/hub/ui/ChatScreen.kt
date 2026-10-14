@@ -907,11 +907,25 @@ fun ChatScreen(
 
 }
 
+// F3-P4 (2026-10-14): downsample con tope de lado mayor 2048. Una captura
+// 1080x2400x4B ~= 10 MB a resolucion completa; con inSampleSize el bitmap en
+// RAM baja ~4x y la vista lo muestra a ancho de pantalla de todos modos.
+private const val MAX_BITMAP_SIDE = 2048
 private fun decodeBase64Bitmap(b64: String): android.graphics.Bitmap? {
     return try {
         val clean = b64.substringAfter(",", b64)
         val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
-        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val bounds = android.graphics.BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        val mayor = maxOf(bounds.outWidth, bounds.outHeight)
+        while (mayor / (sample * 2) >= MAX_BITMAP_SIDE) sample *= 2
+        val opts = android.graphics.BitmapFactory.Options().apply {
+            inSampleSize = sample
+        }
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
     } catch (_: Exception) { null }
 }
 

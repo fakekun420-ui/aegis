@@ -36,7 +36,11 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // F3-P0 (2026-10-14): R8 + shrink en release. Reglas en proguard-rules.pro
+            // (Gson/modelos por reflexion, Retrofit/OkHttp, coroutines).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Use release keystore if present (CI), otherwise fallback to debug keystore locally
             signingConfig = signingConfigs.findByName("release")?.takeIf { file("companion-release.keystore").exists() } ?: signingConfigs.getByName("debug")
         }
@@ -94,7 +98,8 @@ dependencies {
     // Core + legacy views (kept for existing non-Compose code path)
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("com.google.android.material:material:1.12.0")
+    // F3-P0: material M2 fuera — 0 imports androidx.compose.material.* en el codigo
+    // (solo material3 + material.icons.*); R8 + poda de iconos hacen el resto.
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     // MEDIDO 2026-10-03: webkit y coordinatorlayout con 0 referencias en todo el codigo
     // (ni imports ni layouts que los usen). Se quitan del binario, no de la historia.

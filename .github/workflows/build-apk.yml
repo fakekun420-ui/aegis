@@ -94,6 +94,49 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------------
+  # 2b) VALIDACION R8 (F3-P0): assembleRelease SIEMPRE, sin firma.
+  # El buildType release usa el keystore debug como fallback cuando no existe
+  # companion-release.keystore, asi que esto valida R8+shrink en cada push
+  # aunque no haya secreto KEYSTORE_BASE64. Reporta tamanos para el informe.
+  # ---------------------------------------------------------------------------
+  validate-release:
+    needs: build-debug
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build Release APK (sin firma, valida R8)
+        run: gradle assembleRelease
+        working-directory: app
+      - name: Reportar tamanos APK (debug vs release)
+        run: |
+          ls -la app/app/build/outputs/apk/debug/*.apk app/app/build/outputs/apk/release/*.apk
+          python3 - <<'EOF'
+          import glob
+          for f in sorted(glob.glob('app/app/build/outputs/apk/*/*.apk')):
+              import os
+              print(f"{f}: {os.path.getsize(f)/1048576:.2f} MB")
+          EOF
+      - name: Upload APK release (sin firma, validacion R8)
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-release-unsigned
+          path: app/app/build/outputs/apk/release/*.apk
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
   # 3) APK RELEASE firmado
   # ---------------------------------------------------------------------------
   build-release:
