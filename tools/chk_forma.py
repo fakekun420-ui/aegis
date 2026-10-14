@@ -24,6 +24,7 @@ import subprocess
 import sys
 import urllib.request
 import base64
+from pathlib import Path
 
 PW = ""
 try:
@@ -99,7 +100,7 @@ def primera_de_lista(d):
     return d
 
 
-RUTA = "/sdcard/projects/Aegis/app/app/src/main/kotlin/com/aegis/hub/data/NativeModels.kt"
+RUTA = str(Path(__file__).resolve().parent.parent / "app/app/src/main/kotlin/com/aegis/hub/data/NativeModels.kt")
 DECL = declarados(RUTA)
 
 ENDPOINTS = [

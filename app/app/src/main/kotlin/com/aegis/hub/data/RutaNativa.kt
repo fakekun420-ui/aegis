@@ -110,6 +110,17 @@ class RutaNativa(
     /** F4: catalogos con cache corta (modelos + agentes). */
     private val catalogo = CatalogoRepo(oc)
 
+    /** G4/F9: colaboradores delegados para partir el objeto dios */
+    private val colaboradorMensajes = MensajesRutaNativa(oc, config)
+    private val colaboradorInteracciones = InteraccionesRutaNativa(oc)
+    private val colaboradorCatalogo = CatalogoRutaNativa(catalogo)
+    private val colaboradorSistema = SistemaRutaNativa(
+        sh = ::sh,
+        rutaDeSkills = ::rutaDeSkills,
+        raizProyectos = RAIZ_PROYECTOS,
+        rutaChrootRoot = RUTA_CHROOT_ROOT
+    )
+
     private fun <T> envoltura(datos: T?): Envelope<T> =
         if (datos == null) Envelope(ok = false, data = null)
         else Envelope(ok = true, data = datos)
@@ -221,49 +232,11 @@ class RutaNativa(
      * (ChatViewModel:552) anade al final lo que no ha visto, asi que con la lista invertida los
      * mensajes nuevos se apendirian en orden contrario. La app espera cronologico.
      */
-    override suspend fun getMessagesTail(sessionId: String, tail: Int): Envelope<List<Message>> {
-        val limite = colaDe(tail)
-        val r = oc.getMessages(sessionId, limit = limite, order = OpenCodeApi.ORDEN_COLA)
-        return envoltura(NativeMapper.toMessages(r.data, sessionId).reversed())
-    }
+    override suspend fun getMessagesTail(sessionId: String, tail: Int): Envelope<List<Message>> =
+        colaboradorMensajes.getMessagesTail(sessionId, tail)
 
-    /**
-     * MEDIDO: los cinco llamadores de esta funcion usan el resultado para lo MISMO — reemplazar
-     * la lista que se ve (ChatViewModel:685, 1014, 1153, 1431) — y ninguno quiere el principio
-     * del historial. Con `asc` los cuatro se quedaban con los primeros 200 de 2520.
-     *
-     * Por eso esta tambien devuelve la COLA. Y es un cambio de semantica que se dice aqui, no en
-     * silencio: `updateTitleFromFirstMessage` (ChatViewModel:264) saca el titulo del primer prompt
-     * de la lista, y con la cola ese primer prompt es uno reciente, no el original. Solo afecta
-     * cuando el titulo de la sesion esta vacio o es tecnico, porque el titulo REAL de OpenCode se
-     * lee antes (ChatViewModel:1015) y manda.
-     *
-     * LIMITACION REAL y no resuelta: con mas de 200 mensajes no se puede ir hacia atras. Se puede
-     * paginar por `cursor`, pero solo SIN `order` (MEDIDO: `400 InvalidCursorError`), o sea que
-     * haria falta un recorrido distinto para "cargar anteriores". Queda escrito para que no se lea
-     * como resuelto: hoy un chat largo muestra sus ultimos 200 mensajes y nada mas.
-     */
-    override suspend fun getMessages(sessionId: String): Envelope<List<Message>> {
-        val r = oc.getMessages(sessionId, limit = OpenCodeApi.LIMITE_MAX_MENSAJES, order = OpenCodeApi.ORDEN_COLA)
-        return envoltura(NativeMapper.toMessages(r.data, sessionId).reversed())
-    }
-
-    /**
-     * El limite pedido por el llamador, recortado al tope real del servidor.
-     *
-     * MEDIDO: por encima de 200 la respuesta viene VACIA, no con un error. Asi que recortar aqui
-     * no es defensa, es la diferencia entre un chat con 200 mensajes y un chat con CERO. Y el
-     * recorte se avisa por log, porque un `coerceIn` callado seria el mismo fallo reproduciendose
-     * en otra forma.
-     */
-    private fun colaDe(tail: Int): Int {
-        if (tail > OpenCodeApi.LIMITE_MAX_MENSAJES) {
-            Log.w(TAG, "colaDe(): se piden $tail mensajes y el tope del servidor es " +
-                "${OpenCodeApi.LIMITE_MAX_MENSAJES}. MEDIDO: por encima del tope la respuesta viene " +
-                "VACIA, sin error. Se recorta a ${OpenCodeApi.LIMITE_MAX_MENSAJES}.")
-        }
-        return tail.coerceIn(1, OpenCodeApi.LIMITE_MAX_MENSAJES)
-    }
+    override suspend fun getMessages(sessionId: String): Envelope<List<Message>> =
+        colaboradorMensajes.getMessages(sessionId)
 
     // getOpencodeAgents: conversion estructural con Gson; conserva 'hidden'
     // Conversion ESTRUCTURAL con Gson, no campo a campo: los dos data class describen el mismo
@@ -285,35 +258,18 @@ class RutaNativa(
         // (`primary && !hidden`), y `GET /api/agent` devuelve el catalogo entero. Con el mapeo
         // anterior la hoja habria recibido los 40 y `seleccionables()` los habria dejado en 3, pero
         // el filtro se queda aqui, que es donde estaba.
-        override suspend fun getOpencodeAgents(): Envelope<List<Agente>> {
-            // F4: catalogo con cache (antes: GET /api/agent entero en cada llamada).
-            val lista = catalogo.agentesNativos().mapNotNull { a ->
-                Agente(
-                    name = a.name,
-                    mode = a.mode ?: "primary",
-                    // MEDIDO: aquí viene el OBJETO {id, providerID}; lo que la app quiere es el
-                    // identificador. Se toma el `id`.
-                    model = a.model?.id,
-                    description = a.description,
-                    hidden = a.hidden ?: false
-                )
-            }
-            // El Hub filtraba antes de responder: `primary && !hidden` deja exactamente los 3
-            // que la hoja muestra (Build, Plan, orchestrator) de los 40 del catálogo.
-            return envoltura(lista.filter { it.mode == "primary" && !it.hidden })
-        }
+        override suspend fun getOpencodeAgents(): Envelope<List<Agente>> =
+        colaboradorCatalogo.getOpencodeAgents()
 
     // getPendingForms: mismos tipos; con sessionId nulo se delega
     // MEDIDO: OpenCode devuelve YA los tipos de la app (PendingForm), sin traduccion.
     // MEDIDO 2026-10-03: con sessionId nulo se delegaba al Hub, que ya no escucha. Sin sesion
     // no hay formularios que pedir: lista vacia honesta en vez de una excepcion de red.
-        override suspend fun getPendingForms(sessionId: String?): Envelope<List<PendingForm>> = if (sessionId == null) envoltura(emptyList())
-           else envoltura(oc.getSessionForms(sessionId).data)
+        override suspend fun getPendingForms(sessionId: String?): Envelope<List<PendingForm>> =
+        colaboradorInteracciones.getPendingForms(sessionId)
 
-    // getPendingPermissions: mismos tipos; con sessionId nulo se delega
-    // Igual que los formularios: mismos tipos, misma historia.
-        override suspend fun getPendingPermissions(sessionId: String?): Envelope<List<PendingPermission>> = if (sessionId == null) envoltura(emptyList())
-           else envoltura(oc.getSessionPermissions(sessionId).data)
+    override suspend fun getPendingPermissions(sessionId: String?): Envelope<List<PendingPermission>> =
+        colaboradorInteracciones.getPendingPermissions(sessionId)
 
     // F2: pistas puras en ModelosUtil (misma logica; SesionesRepo las usa sin costura).
 
@@ -592,7 +548,7 @@ class RutaNativa(
 
     private fun invalidarSkills() {
         cacheSkills = null
-        cacheSystemSkills = null
+        colaboradorSistema.invalidarCacheSkills()
     }
 
     override suspend fun getSkills(projectId: String?): Envelope<SkillListResponse> {
@@ -736,487 +692,59 @@ class RutaNativa(
      * sobre el historial, y se acepta: la app solo lo llama al tocar una imagen, no en el poll.
      * Poner un endpoint de "buscar parte" en OpenCode seria inventar una API que no existe.
      */
-    override suspend fun getPart(sessionId: String, partId: String, messageId: String?): Envelope<PartFull> {
-        val mensajes = oc.getMessages(sessionId).data.orEmpty()
-        val encontradas = NativeMapper.toMessages(mensajes, sessionId)
-        val parte = encontradas.asSequence()
-            .flatMap { it.parts.orEmpty().asSequence() }
-            .firstOrNull { it.id == partId || it.id == messageId }
-            ?: return envoltura(null as PartFull?)
-        return envoltura(PartFull(
-            id = parte.id,
-            type = parte.type,
-            mime = parte.mime,
-            filename = parte.filename,
-            text = parte.text,
-            url = parte.url,
-            image = parte.image,
-            data = parte.data
-        ))
-    }
+    override suspend fun getPart(sessionId: String, partId: String, messageId: String?): Envelope<PartFull> =
+        colaboradorMensajes.getPart(sessionId, partId, messageId)
 
-    // =========================================================================
-    // ESTA ES LA FUNCION QUE HACIA FALTA PARA QUE LA APP SERVIRSE DE ALGO
-    // =========================================================================
-    //
-    // MEDIDO 2026-10-02: `POST /api/session/{id}/prompt` es ASINCRONO. Devuelve HTTP 200 en
-    // 1,66 s con un acuse `{type,id,sessionID,payload,delivery,time}` y `text` VACIO. O sea: NO
-    // devuelve la respuesta del asistente, devuelve el ticket. El texto llega por el SSE.
-    //
-    // La app YA esta diseñada para esto, y es lo que hace que esto no sea un invento: antes de
-    // llamar aqui intenta el SSE, y despues —con `delay(400)`— hace un sync y sigue con el poll,
-    // que ya es nativo (`getMessagesTail` -> `GET /api/session/{id}/message`). Es decir: la
-    // respuesta llega igual, por la otra via.
-    //
-    // Por eso se devuelve un Message VACIO y no la respuesta: en `ChatViewModel` hay
-    //
-    //     if (!responseMsg.isEmpty) { messageDelivered = true; pollingJob?.cancel() }
-    //
-    // y devolver algo aqui cancelaria el poll Y marcaria el mensaje como entregado, sin que
-    // hubiera llegado nada. La app se quedaria esperando una respuesta que no existe. Un Message
-    // vacio es lo unico honesto: "aceptado, la respuesta va por otro lado".
     override suspend fun sendMessage(
         sessionId: String,
         body: SendMessageRequest
-    ): Message {
-        // MEDIDO: la app manda `parts` como mapa libre, con type "text" y type "file". OpenCode
-        // quiere un `text` plano y `files` con URI OBLIGATORIA. Se traduce aqui.
-        val texto = body.parts
-            .filter { it["type"] == "text" }
-            .mapNotNull { it["text"] }
-            .joinToString("\n")
-            .trim()
+    ): Message = colaboradorMensajes.sendMessage(sessionId, body)
 
-        val ficheros = body.parts
-            .filter { it["type"] == "file" }
-            .mapNotNull { p ->
-                val nombre = p["filename"] ?: p["name"] ?: return@mapNotNull null
-                val mime = p["mime"]
-                // MEDIDO 2026-10-02: la app manda el adjunto con la clave "url", y las otras tres
-                // no existen nunca en sus peticiones. MEDIDO en el historial: los mensajes
-                // enviados desde la app llegan con `files: []` — el adjunto se perdia en silencio.
-                val datos = p["data"] ?: p["base64"] ?: p["url"] ?: p["uri"]
-                    ?: return@mapNotNull null
-                // MEDIDO: `files` exige `uri` (obligatorio, sin valor por defecto). La app trae
-                // base64, y un data-URI es una URI valida: es lo que el Hub hacia al reenviar.
-                val uri = if (datos.startsWith("data:")) datos
-                         else "data:${mime ?: "application/octet-stream"};base64,$datos"
-                // MEDIDO: `OpenCodePromptFileRef` NO tiene campo mime (solo uri, name,
-                // description y mention). Lo escribi de memoria y no compila. El mime va en
-                // `description`, que es donde cabe, y es donde la app lo muestra igual.
-                OpenCodePromptFileRef(
-                    uri = uri,
-                    name = nombre,
-                    description = mime?.let { "mime: $it" }
-                )
-            }
-            .takeIf { it.isNotEmpty() }
+    override suspend fun getSystemHealth(): Response<HealthResponse> =
+        colaboradorSistema.getSystemHealth()
 
-        val agentes = body.agent?.takeIf { it.isNotBlank() }?.let { listOf(OpenCodePromptAgentRef(name = it)) }
+    override suspend fun getBootstrapState(): Response<BootstrapResponse> =
+        colaboradorSistema.getBootstrapState()
 
-        // MEDIDO 2026-10-03: el prompt del CLI no acepta modelo (su schema solo trae text,
-        // files, agents...). El modelo de `body` se ignoraba aqui en silencio: la app creia
-        // mandarlo y el CLI ni lo miraba. La unica via es fijarlo ANTES del prompt. Si falla,
-        // el turno sigue con el modelo que tenga la sesion: fallar el envio entero por no
-        // poder fijar el modelo seria peor.
-        val modeloId = ModelosUtil.normalizarIdModelo(body.model)
-        if (modeloId.isNotEmpty()) {
-            // F3: con salto de redundante. Se pasa el ref ORIGINAL (con prefijo: es la
-            // pista de proveedor) en vez del ya normalizado, mas el proveedor elegido
-            // en la UI (A2: sin esto, pasado ~60 s el envio tardio re-adivinaba opencode).
-            // A4: el Resultado ya no se descarta: si no se fija, se sigue igual pero con rastro.
-            when (val r = config.fijarModelo(sessionId, body.model ?: modeloId, pistaProveedor = body.providerID)) {
-                is Resultado.Fallo -> android.util.Log.w(TAG, "sendMessage: sigue sin fijar modelo: ${r.motivo}")
-                else -> Unit
-            }
-        }
+    override suspend fun runBootstrap(body: BootstrapRunRequest): Response<BootstrapActionResponse> =
+        colaboradorSistema.runBootstrap(body)
 
-        oc.sendPrompt(
-            sessionId,
-            OpenCodePromptRequest(
-                text = texto,
-                files = ficheros,
-                agents = agentes
-            )
-        )
-        // Ver el comentario de arriba: un Message vacio, porque la respuesta va por el SSE/poll.
-        return Message()
-    }
+    override suspend fun retryBootstrapStep(id: String): Response<BootstrapActionResponse> =
+        colaboradorSistema.retryBootstrapStep(id)
 
-    private val setupNative: SetupNative by lazy { SetupNative() }
+    override suspend fun cancelBootstrap(): Response<BootstrapActionResponse> =
+        colaboradorSistema.cancelBootstrap()
 
-    override suspend fun getSystemHealth(): Response<HealthResponse> {
-        cacheHealth?.takeIf { cacheVigente(it.first, 5_000L) }?.let { return it.second }
-        // F7: UN solo `su` (antes: 4 ejecuciones). Secciones separadas por
-        // `@@AEGIS_SALUD@@<nombre>`; sin regex en el parseo (F7.4).
-        return try {
-            val baseSkills = rutaDeSkills()
-            val lote = sh(
-                "cat /proc/uptime 2>/dev/null; echo '@@AEGIS_SALUD@@mem'\n" +
-                    "cat /proc/meminfo 2>/dev/null; echo '@@AEGIS_SALUD@@ls'\n" +
-                    "ls -1d $RAIZ_PROYECTOS/*/ 2>/dev/null | wc -l; echo '@@AEGIS_SALUD@@skills'\n" +
-                    "ls -1d '$baseSkills'/*/ 2>/dev/null",
-                5000
-            )
-            val secciones = mutableMapOf<String, StringBuilder>()
-            var actual = StringBuilder()
-            var nombre = "uptime"
-            for (linea in lote.stdout.lines()) {
-                if (linea.startsWith("@@AEGIS_SALUD@@")) {
-                    secciones[nombre] = actual
-                    nombre = linea.removePrefix("@@AEGIS_SALUD@@")
-                    actual = StringBuilder()
-                } else {
-                    actual.appendLine(linea)
-                }
-            }
-            secciones[nombre] = actual
+    override suspend fun getFinalCheck(): Response<FinalCheckResponse> =
+        colaboradorSistema.getFinalCheck()
 
-            val uptimeSec = secciones["uptime"]?.toString()
-                ?.split(' ', '\t', '\n')?.firstOrNull { it.isNotBlank() }
-                ?.toDoubleOrNull()?.toLong() ?: 0L
+    override suspend fun runSmokeTest(): Response<SmokeTestResponse> =
+        colaboradorSistema.runSmokeTest()
 
-            var totalKb = 0L
-            var freeKb = 0L
-            var availableKb = 0L
-            for (line in (secciones["mem"]?.toString() ?: "").lines()) {
-                val valor = line.substringAfter(":").trim().split(' ', '\t')
-                    .firstOrNull { it.isNotBlank() }?.toLongOrNull() ?: continue
-                when {
-                    line.startsWith("MemTotal:") -> totalKb = valor
-                    line.startsWith("MemAvailable:") -> availableKb = valor
-                    line.startsWith("MemFree:") -> freeKb = valor
-                }
-            }
-            val usedKb = if (availableKb > 0) (totalKb - availableKb) else (totalKb - freeKb)
-            val memData = MemoryData(
-                heapUsed = "${usedKb / 1024}MB",
-                heapTotal = "${totalKb / 1024}MB"
-            )
-
-            val projectCount = secciones["ls"]?.toString()?.trim()?.toIntOrNull() ?: 0
-
-            val skillNames = (secciones["skills"]?.toString() ?: "").lines()
-                .map { it.trim().trimEnd('/') }
-                .filter { it.isNotEmpty() }
-                .map { it.substringAfterLast('/') }
-                .filter { !it.startsWith(".") }
-
-            val adaptersMap = mapOf("rootshell" to "healthy", "opencode" to "healthy")
-            val healthData = HealthData(
-                server = "running",
-                port = 49374,
-                uptime = uptimeSec,
-                memory = memData,
-                workspace = RAIZ_PROYECTOS,
-                projects = projectCount,
-                agents = AgentsSummary(active = 0, registered = 0),
-                jobs = JobsSummary(active = 0, lastRun = null),
-                skills = SkillsSummary(installed = skillNames),
-                adapters = adaptersMap
-            )
-            Response.success(HealthResponse(ok = true, data = healthData))
-                .also { cacheHealth = System.currentTimeMillis() to it }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Log.w(TAG, "getSystemHealth fallo: ${e.message}")
-            Response.success(HealthResponse(ok = false, data = null))
-        }
-    }
-
-    // F1: getSystemLogs/getSystemMemory eliminados (0 usos; el estado del sistema
-    // vive en getSystemHealth, que ya lee /proc/meminfo por su cuenta).
-
-    override suspend fun getBootstrapState(): Response<BootstrapResponse> {
-        return try {
-            val snapshot = setupNative.getSnapshot()
-            Response.success(BootstrapResponse(ok = true, data = snapshot))
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Log.w(TAG, "getBootstrapState fallo: ${e.message}")
-            Response.success(
-                BootstrapResponse(
-                    ok = false,
-                    data = null,
-                    error = ErrorBody(code = "BOOTSTRAP_STATE_ERROR", message = e.message ?: "error leyendo estado")
-                )
-            )
-        }
-    }
-
-    override suspend fun runBootstrap(body: BootstrapRunRequest): Response<BootstrapActionResponse> {
-        return try {
-            val result = setupNative.runBootstrap(resume = body.resume)
-            if (result.isSuccess) {
-                val state = result.getOrNull()
-                Response.success(
-                    BootstrapActionResponse(
-                        ok = true,
-                        data = BootstrapActionData(phase = state?.phaseOrIdle ?: BootstrapPhase.running)
-                    )
-                )
-            } else {
-                val err = result.exceptionOrNull()
-                Response.success(
-                    BootstrapActionResponse(
-                        ok = false,
-                        data = null,
-                        error = ErrorBody(code = "BOOTSTRAP_RUN_FAILED", message = err?.message ?: "error ejecutando bootstrap")
-                    )
-                )
-            }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Response.success(
-                BootstrapActionResponse(
-                    ok = false,
-                    data = null,
-                    error = ErrorBody(code = "BOOTSTRAP_RUN_ERROR", message = e.message ?: "error")
-                )
-            )
-        }
-    }
-
-    override suspend fun retryBootstrapStep(id: String): Response<BootstrapActionResponse> {
-        return try {
-            val result = setupNative.runBootstrap(resume = true, retryStepId = id)
-            if (result.isSuccess) {
-                val state = result.getOrNull()
-                Response.success(
-                    BootstrapActionResponse(
-                        ok = true,
-                        data = BootstrapActionData(phase = state?.phaseOrIdle ?: BootstrapPhase.running)
-                    )
-                )
-            } else {
-                val err = result.exceptionOrNull()
-                Response.success(
-                    BootstrapActionResponse(
-                        ok = false,
-                        data = null,
-                        error = ErrorBody(code = "BOOTSTRAP_RETRY_FAILED", message = err?.message ?: "error reintentando paso $id")
-                    )
-                )
-            }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Response.success(
-                BootstrapActionResponse(
-                    ok = false,
-                    data = null,
-                    error = ErrorBody(code = "BOOTSTRAP_RETRY_ERROR", message = e.message ?: "error")
-                )
-            )
-        }
-    }
-
-    override suspend fun cancelBootstrap(): Response<BootstrapActionResponse> {
-        val cancelled = setupNative.cancelExecution()
-        val snapshot = setupNative.getSnapshot()
-        return Response.success(
-            BootstrapActionResponse(
-                ok = cancelled,
-                data = BootstrapActionData(phase = snapshot.phaseOrIdle)
-            )
-        )
-    }
-
-    override suspend fun getFinalCheck(): Response<FinalCheckResponse> {
-        return try {
-            val resp = setupNative.runFinalCheck()
-            Response.success(resp)
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Response.success(
-                FinalCheckResponse(
-                    ok = false,
-                    data = null,
-                    error = ErrorBody(code = "FINAL_CHECK_ERROR", message = e.message ?: "error")
-                )
-            )
-        }
-    }
-
-    override suspend fun runSmokeTest(): Response<SmokeTestResponse> {
-        return try {
-            val resp = setupNative.runSmokeTest()
-            Response.success(resp)
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Response.success(
-                SmokeTestResponse(
-                    ok = false,
-                    data = null,
-                    error = ErrorBody(code = "SMOKE_FAILED", message = e.message ?: "error")
-                )
-            )
-        }
-    }
-
-    override suspend fun runAuthGuide(): Response<AuthGuideResponse> {
-        return Response.success(
-            AuthGuideResponse(
-                ok = true,
-                data = AuthGuideData(
-                    mode = "command",
-                    command = "opencode serve --service",
-                    status = "unauthenticated"
-                )
-            )
-        )
-    }
+    override suspend fun runAuthGuide(): Response<AuthGuideResponse> =
+        colaboradorSistema.runAuthGuide()
 
     // El campo `free` que usa la app lo calculaba el Hub mirando el COSTE del modelo (medido:
     // 39 de 472). OpenCode manda `cost`, no `free`: el criterio vive en CatalogoRepo.esGratis
     // (calculado una vez al cachear) con su propio test.
 
     /** F4: invalida el catalogo (pantalla de modelos, tras "modelo no encontrado"). */
-    override suspend fun refrescarCatalogo(): Envelope<Boolean> {
-        catalogo.invalidar()
-        return envoltura(true)
-    }
+    override suspend fun refrescarCatalogo(): Envelope<Boolean> =
+        colaboradorCatalogo.refrescarCatalogo()
 
-    override suspend fun getModels(provider: String?): Envelope<List<ModeloElegible>> {
-        // F4: catalogo con cache (antes: GET /api/model entero en cada llamada).
-        val todos = catalogo.modelosNativos()
-            .filter { it.enabled }
-            // MEDIDO 2026-10-02: el filtro por `providerID` es lo que hacia que los modelos
-            // aparecieran "a veces" (el chip decia "No disponible" con la lista cargada).
-            // F1: `loadModels` ya no trae proveedor elegido; manda "opencode" fijo.
-            //
-            // Es el mismo patron que el del sintoma que ya se corrigio dos veces: un filtro que
-            // descarta en silencio y deja una pantalla vacia sin explicar por que. Por eso el
-            // filtro se DECLARA y la lista no se recorta: el selector tiene que poder mostrar un
-            // modelo de otro motor, que es justo lo que hace el resto de la app.
-            .filter { provider == null || it.providerID == provider || it.id == ID_MODELO_POR_DEFECTO }
-            // MEDIDO: el Hub ORDENABA por free y por proveedor (rank 0..3), y la app lo hereda.
-            // Un cambio de orden cambia qué modelo aparece primero, que es lo que ve el usuario.
-            //
-            // MEDIDO 2026-10-02: aquí escribí `compareBy({ free } + { opencode })`, y `+` no
-            // funciona entre lambdas: `compareBy` toma selectores VARIADICOS, se pasan uno detrás
-            // de otro. Un cambio de orden de modelos es exactamente de los que el usuario no ve
-            // hasta que el modelo por defecto es otro.
-            .sortedWith(
-                compareBy<OpenCodeNativeModel> { if (catalogo.esGratis(it.id ?: it.modelID)) 0 else 2 }
-                    .thenBy { if (it.providerID == "opencode") 0 else 1 }
-            )
-        val etiquetas = mapOf(
-            "opencode" to "OpenCode Zen", "google" to "Google AI (API key)",
-            "openrouter" to "OpenRouter"
-        )
-        val lista = todos.map { m ->
-            ModeloElegible(
-                id = m.id ?: m.modelID.orEmpty(),
-                name = m.name ?: m.modelID ?: m.id,
-                description = buildString {
-                    append(etiquetas[m.providerID] ?: m.providerID)
-                    append(" · ")
-                    append(m.family ?: "AI")
-                    if (catalogo.esGratis(m.id ?: m.modelID)) append(" · gratis")
-                },
-                free = catalogo.esGratis(m.id ?: m.modelID),
-                // MEDIDO 2026-10-03: sin el proveedor la app no puede fijar el modelo en el
-                // servidor, que distingue por pareja id mas providerID. Antes se tiraba.
-                providerID = m.providerID
-            )
-        }
-        return envoltura(lista)
-    }
+    override suspend fun getModels(provider: String?): Envelope<List<ModeloElegible>> =
+        colaboradorCatalogo.getModels(provider)
 
 
 
-    override suspend fun getSystemSkills(): Response<SkillsResponse> {
-        cacheSystemSkills?.takeIf { cacheVigente(it.first, 10_000L) }?.let { return it.second }
-        val base = rutaDeSkills()
-        // F7: UN solo `su` (antes: 1 ls + N test -f).
-        val listado = sh(
-            "cd '$base' 2>/dev/null || exit 0\n" +
-                "for d in */; do n=\"\${d%/}\"; [ -f \"\$n/SKILL.md\" ] && printf '%s\\n' \"\$n\"; done",
-            5000
-        )
-        val carpetas = if (listado.code == 0) {
-            listado.stdout.split("\n")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() && it != ".papelera" }
-        } else {
-            emptyList()
-        }
-
-        val installedSet = mutableSetOf<String>()
-        val installedList = mutableListOf<SkillItem>()
-        for (id in carpetas) {
-            installedSet.add(id)
-            installedList.add(
-                SkillItem(
-                    id = id,
-                    name = id,
-                    version = null,
-                    description = "Skill local ($id)",
-                    installed = true,
-                    enabled = true
-                )
-            )
-        }
-
-        val availableCatalog = listOf(
-            Triple("graphify", "graphify", "Convierte archivos en grafo de conocimiento (GraphRAG)"),
-            Triple("opencode-mem", "opencode-mem", "Memoria persistente para OpenCode")
-        )
-
-        val availableList = mutableListOf<SkillItem>()
-        for ((catId, catName, catDesc) in availableCatalog) {
-            if (!installedSet.contains(catId)) {
-                availableList.add(
-                    SkillItem(
-                        id = catId,
-                        name = catName,
-                        version = if (catId == "opencode-mem") "2.26.0" else null,
-                        description = catDesc,
-                        installed = false,
-                        enabled = true
-                    )
-                )
-            }
-        }
-
-        return Response.success(
-            SkillsResponse(
-                ok = true,
-                data = SkillsData(
-                    installed = installedList,
-                    available = availableList
-                )
-            )
-        ).also { cacheSystemSkills = System.currentTimeMillis() to it }
-    }
+    override suspend fun getSystemSkills(): Response<SkillsResponse> =
+        colaboradorSistema.getSystemSkills()
 
     override suspend fun installSkill(body: InstallSkillRequest): Response<TaskResponse> =
-        Response.success(
-            TaskResponse(
-                ok = false,
-                data = TaskData(
-                    taskId = null,
-                    message = "La instalacion asincrona de paquetes npm/uv era del Hub retirado. Para anadir skills copie el directorio con SKILL.md en $RUTA_CHROOT_ROOT/.config/opencode/skills/"
-                )
-            )
-        )
+        colaboradorSistema.installSkill(body)
 
-    override suspend fun uninstallSkill(skillId: String): Response<BaseResponse> {
-        val id = skillId.trim()
-        if (id.isEmpty() || id.contains("..") || id.contains("/")) {
-            return Response.success(
-                BaseResponse(
-                    ok = false,
-                    error = ErrorBody(code = "SKILL_INVALID", message = "id de skill invalido: $id")
-                )
-            )
-        }
-        val delResult = deleteSkill("global", id)
-        return if (delResult.ok) {
-            Response.success(BaseResponse(ok = true, error = null))
-        } else {
-            Response.success(
-                BaseResponse(
-                    ok = false,
-                    error = ErrorBody(code = "UNINSTALL_FAILED", message = delResult.error?.message ?: "error apartando skill")
-                )
-            )
-        }
-    }
+    override suspend fun uninstallSkill(skillId: String): Response<BaseResponse> =
+        colaboradorSistema.uninstallSkill(skillId) { scope, name -> deleteSkill(scope, name) }
 
     // F1: getSkillConfig/updateSkillConfig eliminados (0 usos; ningun JSON de
     // config bajo rutaDeSkills tiene lector ni escritor).
@@ -1448,43 +976,13 @@ class RutaNativa(
         sessionId: String,
         formId: String,
         body: FormReplyBody
-    ): Envelope<Map<String, Any>> {
-        val r = oc.replyForm(
-            sessionId,
-            formId,
-            OpenCodeFormReplyRequest(answer = body.answer.mapValues { it.value })
-        )
-        return if (r.isSuccessful) {
-            envoltura(mapOf("formId" to formId, "enviado" to true))
-        } else {
-            envolturaFallo("El formulario $formId no se pudo contestar (${r.code()})")
-        }
-    }
+    ): Envelope<Map<String, Any>> = colaboradorInteracciones.replyForm(sessionId, formId, body)
 
     override suspend fun replyPermission(
         sessionId: String,
         requestId: String,
         body: PermissionReplyBody
-    ): Envelope<Map<String, Any>> {
-        // MEDIDO: `decision` solo admite "once" | "always" | "reject". Se valida aqui y no en el
-        // nativo para que el error llegue al usuario como texto y no como un 400 sin explicar.
-        val validas = setOf("once", "always", "reject")
-        if (body.decision !in validas) {
-            return envolturaFallo(
-                "decision '${body.decision}' no vale. MEDIDO: solo ${validas.joinToString(", ")}."
-            )
-        }
-        val r = oc.replyPermission(
-            sessionId,
-            requestId,
-            OpenCodePermissionReplyRequest(decision = body.decision, message = body.message)
-        )
-        return if (r.isSuccessful) {
-            envoltura(mapOf("requestId" to requestId, "decision" to body.decision))
-        } else {
-            envolturaFallo("El permiso $requestId no se pudo contestar (${r.code()})")
-        }
-    }
+    ): Envelope<Map<String, Any>> = colaboradorInteracciones.replyPermission(sessionId, requestId, body)
 
 
 

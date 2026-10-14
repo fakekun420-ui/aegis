@@ -47,6 +47,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.aegis.hub.data.TurnState
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 
 /**
  * Agente con el que arranca un chat que no sabe cual usar. "build" desde 2026-10-07:
@@ -225,7 +228,7 @@ class ChatViewModel(
     // La MISMA decisión que alimenta la notificación, expuesta para el divisor.
     //
     // Antes el divisor leía el `turnOver` CRUDO del vigilante, y la notificación leía
-    // `turnIsReallyFinished()`, que además tiene respaldo por los mensajes. Eran dos
+    // `ChatTurnHelper.turnIsReallyFinished()`, que además tiene respaldo por los mensajes. Eran dos
     // señales distintas y divergían: la notificación saltaba tras cada `bash` (el
     // respaldo daba el turno por terminado) mientras el divisor no aparecía (turnOver
     // en false). Ahora hay UNA sola decisión y los dos la consumen.
@@ -246,6 +249,39 @@ class ChatViewModel(
     // cuándo terminó de verdad y no solo cuando llegó el último trozo de texto.
     private val _finishedTurnId = MutableStateFlow<String?>(null)
     val finishedTurnId: StateFlow<String?> = _finishedTurnId
+
+    /** G4/F9: UiStates combinados con WhileSubscribed(5000) para ChatScreen */
+    val conversationUiState: StateFlow<ChatConversationUiState> = combine(
+        _messages,
+        _sessionTitle,
+        _turnInProgress,
+        _turnFinished
+    ) { msgs, title, inProg, finished ->
+        ChatConversationUiState(msgs, title, inProg, finished)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChatConversationUiState())
+
+    val deliveryUiState: StateFlow<ChatDeliveryUiState> = combine(
+        combine(_loading, _sendingInFlight, _error) { l, s, e -> Triple(l, s, e) },
+        combine(_servidorAlcanzable, _streamingText, _streamingTools) { a, st, tools -> Triple(a, st, tools) }
+    ) { (l, s, e), (a, st, tools) ->
+        ChatDeliveryUiState(l, s, e, a, st, tools)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChatDeliveryUiState())
+
+    val configUiState: StateFlow<ChatConfigUiState> = combine(
+        combine(_models, _selectedModel, _selectedProvider) { m, sm, sp -> Triple(m, sm, sp) },
+        combine(_modelsLoading, _agentMode, _agents, _agentsLoading) { ml, mode, ag, al -> Tuple4(ml, mode, ag, al) }
+    ) { (m, sm, sp), (ml, mode, ag, al) ->
+        ChatConfigUiState(m, sm, sp, ml, mode, ag, al)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChatConfigUiState())
+
+    val interactionUiState: StateFlow<ChatInteractionUiState> = combine(
+        _pendingForms,
+        _pendingPermissions,
+        _replyingForm,
+        _replyingPermission
+    ) { forms, perms, rf, rp ->
+        ChatInteractionUiState(forms, perms, rf, rp)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChatInteractionUiState())
 
     // FASE A-5 (anti doble envío): clave del envío actualmente en vuelo
     // ("proveedor|sesión|texto|nº archivos"). Si llega un segundo click o una
@@ -552,41 +588,13 @@ class ChatViewModel(
      * tests JVM. El bucle la usa tal cual: mismo comportamiento, sin duplicar numeros.
      */
     internal fun esperaRefrescoMs(fallosSeguidos: Int): Long =
-        if (fallosSeguidos >= SERVIDOR_FAIL_STREAK_FOR_DEGRADED) REFRESH_MAX_WAIT_MS else REFRESH_MIN_WAIT_MS
+        ChatRefreshHelper.esperaRefrescoMs(fallosSeguidos)
 
-    /**
-     * F3-P8.2: guarda de propiedad del refresco. `stopViewRefresh(otraSesion)` NO debe
-     * matar el refresco propio (el onDispose de la pantalla anterior corre DESPUES del
-     * LaunchedEffect de la nueva).
-     */
     internal fun puedeDetenerRefresco(ownerSessionId: String?): Boolean =
-        ownerSessionId == null || ownerSessionId == viewRefreshSessionId
+        ChatRefreshHelper.puedeDetenerRefresco(ownerSessionId, viewRefreshSessionId)
 
-    private fun mergeTail(actual: List<Message>, cola: List<Message>): List<Message> {
-        if (cola.isEmpty()) return actual
-        val porId = HashMap<String, Message>()
-        cola.forEach { m -> m.info?.id?.let { porId[it] = m } }
-        if (porId.isEmpty()) return actual
-        val vistos = HashSet<String>()
-        val fusion = ArrayList<Message>(actual.size + cola.size)
-        for (m in actual) {
-            val id = m.info?.id
-            if (id != null && porId.containsKey(id)) {
-                fusion.add(porId.getValue(id))
-                vistos.add(id)
-            } else {
-                fusion.add(m)
-            }
-        }
-        for (m in cola) {
-            val id = m.info?.id ?: continue
-            if (id !in vistos) {
-                fusion.add(m)
-                vistos.add(id)
-            }
-        }
-        return fusion
-    }
+    private fun mergeTail(actual: List<Message>, cola: List<Message>): List<Message> =
+        ChatRefreshHelper.mergeTail(actual, cola)
 
     private fun startViewRefresh(sessionId: String) {
         viewRefreshJob?.cancel()
@@ -714,9 +722,36 @@ class ChatViewModel(
                         // Se comprueba el cierre SIEMPRE, no solo cuando la lista cambia.
                         // El propio flujo de envío ya dejó _messages al día, así que en
                         // el primer poll tras el turno la lista es idéntica y el aviso
-                        // se habría quedado sin disparar. announceFinishedTurnIfAny es
-                        // idempotente: ignora el turno ya anunciado.
-                        announceFinishedTurnIfAny(fresh)
+                        // se habría quedado sin disparar. ChatTurnHelper.announceFinishedTurnIfAny
+                        // es idempotente: ignora el turno ya anunciado.
+                        val finishedPoll = ChatTurnHelper.turnIsReallyFinished(
+                            messages = fresh,
+                            pendingForms = _pendingForms.value,
+                            pendingPermissions = _pendingPermissions.value,
+                            turnBusy = _turnBusy.value,
+                            turnOver = _turnOver.value,
+                            onWarnNoWatcher = {
+                                if (!warnedNoWatcher) {
+                                    warnedNoWatcher = true
+                                    android.util.Log.w(
+                                        "AegisChat",
+                                        "Vigilante sin datos para ${_currentSessionId.value}: se decide con los mensajes."
+                                    )
+                                }
+                            }
+                        )
+                        _turnInProgress.value = !finishedPoll
+                        _turnFinished.value = finishedPoll
+                        val nuevoIdPoll = ChatTurnHelper.announceFinishedTurnIfAny(
+                            fresh = fresh,
+                            lastFinishedTurnId = _finishedTurnId.value,
+                            isFinished = finishedPoll,
+                            sessionTitle = _sessionTitle.value,
+                            sessionId = _currentSessionId.value
+                        )
+                        if (nuevoIdPoll != null) {
+                            _finishedTurnId.value = nuevoIdPoll
+                        }
                     }
                 } catch (_: Exception) {
                     // Aqui ya fallo el camino rapido Y el lento (si el rapido se
@@ -758,7 +793,7 @@ class ChatViewModel(
      *
      * "Cerrado" NO se deduce de `info.time.completed`: ese campo cierra el MENSAJE y se
      * cumple tras cada `bash` con exit 0, aunque el agente siga trabajando. La condición
-     * vive en `turnIsReallyFinished()` y sale del vigilante
+     * vive en `ChatTurnHelper.turnIsReallyFinished()` y sale del vigilante
      * (`session.execution.succeeded`). Ver `docs/adr/ADR-003-turn-final-signal.md`.
      *
      * Si el turno terminó justo ahora:
@@ -769,93 +804,9 @@ class ChatViewModel(
      * Divisor y notificación comparten esta función y la misma guarda, así que no
      * pueden desincronizarse: es exactamente el mismo disparo.
      */
-    /**
-     * ¿Ha terminado DE VERDAD el turno del asistente?
-     *
-     * `time.completed` por sí solo NO basta, y esa era la causa de los dos síntoma que
-     * reportó el usuario (divisor saltando a mitad y "trabajando en ello" pegado al
-     * divisor). Un mensaje del asistente puede llevar `completed` mientras el turno
-     * sigue vivo, porque lo que se cierra es ESE mensaje, no el turno:
-     *
-     *  1. Hay una herramienta en estado `running` (p. ej. un `bash`): el agente aún
-     *     espera su salida.
-     *  2. Hay un formulario pendiente: el agente está esperando a la persona.
-     */
-
-    /**
-     * Actualiza el indicador de "trabajando" y lanza el aviso de fin de turno UNA vez.
-     *
-     * La condición NO la decide esta función sino `turnIsReallyFinished()`, que se apoya
-     * solo en los eventos `session.execution.*` del vigilante. Aquí solo se aplica a la
-     * dedup: un mismo turno no debe de avisar cada 2 s.
-     */
-    private fun turnIsReallyFinished(messages: List<Message>): Boolean {
-        // VETO INMEDIATO, antes de mirar NADA mas. Una herramienta en ejecucion
-        // significa que el turno NO ha terminado, diga lo que diga el resto.
-        //
-        // Va el primero A PROPOSITO. Antes estaba mas abajo del todo, detras de
-        // "if (_turnOver.value) return true", asi que cuando el vigilante decia
-        // "terminado" nunca se llegaba a mirar y el divisor se pintaba con un bash
-        // "ejecutando..." debajo. El mismo estado erroneo hacia fallar los TRES
-        // sintomas a la vez (divisor, notificacion y circulo de carga), porque los
-        // tres beben la misma decision de turno.
-        //
-        // Se mira la cola de los ultimos TAIL_POLL (200) mensajes, no solo el ultimo: en un
-        // turno largo (asi, no literalmente "todo" el historial)
-        // OpenCode genera varios mensajes del asistente, y el ultimo puede ser solo
-        // texto mientras el bash sigue en marcha en el anterior.
-if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } }) {
-            return false
-        }
-        // Un formulario pendiente significa que el agente esta esperando a la persona,
-        // asi que el turno NO ha terminado.
-        if (_pendingForms.value.isNotEmpty()) return false
-
-        // Misma regla para los permisos. Sin esto, un turno con un prompt de permiso en
-        // pantalla marcaba "respuesta final" y disparaba la notificacion mientras la
-        // herramienta seguia bloqueada esperando una respuesta que la app no ensenaba.
-        if (_pendingPermissions.value.isNotEmpty()) return false
-        if (_turnBusy.value) return false
-        if (_turnOver.value) return true
-        // VIGILANTE CIEGO: no hay registro, o es tan viejo que ya no se cree. Aqui no se
-        // puede devolver "no ha terminado" a ciegas: eso dejaba el indicador de
-        // "trabajando" pegado indefinidamente. Se usa la senal de los mensajes, que en
-        // este caso si es fiable:
-        //  - hay una herramienta running -> hay trabajo vivo, NO ha terminado. Cubre el
-        //    bash sleep 60, donde no llega ningun evento y un registro por antiguedad
-        //    mentiria.
-        //  - no hay herramienta y el ultimo mensaje esta cerrado -> lo mas probable es que
-        //    el turno haya terminado. Es el caso degradado: el vigilante no pudo saberlo.
-        val last = messages.lastOrNull { it.role == "assistant" } ?: return false
-        if (!warnedNoWatcher) {
-            warnedNoWatcher = true
-            android.util.Log.w(
-                "AegisChat",
-                "Vigilante sin datos para ${_currentSessionId.value}: se decide con los mensajes."
-            )
-        }
-        return last.info?.time?.containsKey("completed") == true
-    }
-
+    // Dedup del aviso "vigilante sin datos": las llamadas directas a
+    // ChatTurnHelper.turnIsReallyFinished lo usan vía onWarnNoWatcher.
     private var warnedNoWatcher = false
-
-    private fun announceFinishedTurnIfAny(fresh: List<Message>) {
-        val lastAssistant = fresh.lastOrNull { it.role == "assistant" } ?: return
-        val id = lastAssistant.info?.id ?: return
-        val finished = turnIsReallyFinished(fresh)
-        _turnInProgress.value = !finished
-        _turnFinished.value = finished
-        if (!finished) return
-        if (id == _finishedTurnId.value) return   // ya anunciado, no repetir cada 2 s
-        _finishedTurnId.value = id
-
-        val title = _sessionTitle.value?.takeIf { it.isNotBlank() } ?: "Aegis"
-        TurnNotifier.notifyTurnFinished(
-            title = "$title · respuesta final",
-            preview = lastAssistant.text.take(160),
-            sessionId = _currentSessionId.value
-        )
-    }
 
     /**
      * Responde un formulario pendiente.
@@ -1117,29 +1068,14 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
 
         val tempMsgId = "local_${System.currentTimeMillis()}"
 
-        // FASE A-5: guarda anti doble envío — un segundo click/reentrada con el mismo
-        // mensaje mientras sigue en vuelo no debe reenviarlo (ver inFlightSendKey).
-        val sendKey = "${_selectedProvider.value ?: ""}|${sessionId.trim()}|${text.trim()}|${files.size}"
+        // FASE A-5: guarda anti doble envío
+        val sendKey = ChatSendHelper.buildSendKey(_selectedProvider.value, sessionId, text, files.size)
         if (sendKey == inFlightSendKey) return false
         inFlightSendKey = sendKey
-        // G1: mojon de envio (solo envios reales: el blank y la guardia F13 ya
-        // devolvieron arriba).
         val fotoEnvio = MarcasCiclo.enviarInicio(sessionId)
 
-        // Titulo provisional, y SOLO si esta sesion no existe todavia. Es la MISMA
-        // condicion que decide mas abajo si hay que crearla (`activeSessionId.isBlank()`),
-        // y no la de "el titulo esta vacio": con esa, cualquier sesion cuyo titulo
-        // llegara tarde o fuera tecnico se renombraba aqui Y en el Hub, y el recorte del
-        // primer mensaje se quedaba puesto para siempre.
-        //
-        // MEDIDO 2026-09-30: ses_f15109400ffe se llama "quant-math" en OpenCode y salia en
-        // la app como "adjunto captura ee pantalla de…". Ademas el Hub guardaba ese texto
-        // en el mismo cubo que el renombrado a mano, asi que ganaba al nombre real; las dos
-        // mitades estan arregladas (esta aqui, y en server.js del lado del Hub).
-        val sesionEsNueva = sessionId.isBlank() && _currentSessionId.value.isNullOrBlank()
-        if (text.isNotBlank() && sesionEsNueva) {
-            val clean = text.replace("\n", " ").trim()
-            _sessionTitle.value = if (clean.length > 30) clean.take(30).trim() + "…" else clean
+        ChatSendHelper.computeProvisionalTitle(text, sessionId, _currentSessionId.value)?.let {
+            _sessionTitle.value = it
         }
 
         viewModelScope.launch {
@@ -1147,20 +1083,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             _error.value = null
 
             // 1. Optimistic user message with PENDING status
-            val optimisticParts = mutableListOf<MessagePart>()
-            if (text.isNotBlank()) {
-                optimisticParts += MessagePart(type = "text", text = text)
-            }
-            for (f in files) {
-                when {
-                    f.text != null -> optimisticParts += MessagePart(type = "text", text = "Archivo ${f.name} (${f.mime}):\n```\n${f.text.take(30000)}\n```", filename = f.name, mime = f.mime)
-                    f.base64 != null -> optimisticParts += MessagePart(type = "file", filename = f.name, mime = f.mime, url = "data:${f.mime};base64,${f.base64}")
-                }
-            }
-            val optimistic = Message(
-                info = MessageInfo(id = tempMsgId, role = "user", status = MessageDeliveryStatus.PENDING),
-                parts = optimisticParts
-            )
+            val optimistic = ChatSendHelper.buildOptimisticMessage(tempMsgId, text, files)
             _messages.value = _messages.value + optimistic
 
             // 2. Resolve Target Session ID
@@ -1178,17 +1101,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             _currentSessionId.value = targetSessionId
 
             // 3. Prepare payload parts
-            val reqParts = mutableListOf<Map<String, String>>()
-            if (text.isNotBlank()) reqParts += mapOf("type" to "text", "text" to text)
-            for (f in files) {
-                when {
-                    f.text != null -> reqParts += mapOf("type" to "text", "text" to "Archivo ${f.name} (${f.mime}):\n```\n${f.text.take(30000)}\n```")
-                    f.base64 != null -> {
-                        val dataUri = "data:${f.mime};base64,${f.base64}"
-                        reqParts += mapOf("type" to "file", "mime" to f.mime, "filename" to f.name, "url" to dataUri)
-                    }
-                }
-            }
+            val reqParts = ChatSendHelper.buildRequestParts(text, files)
 
             val countBefore = _messages.value.size
             var messageDelivered = false
@@ -1349,7 +1262,34 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                         // aviso no se disparaba NUNCA al enviar desde la app, que es
                         // justo cuando tiene que pasar. Se llama también aquí, al
                         // cerrar el turno del propio envío.
-                        announceFinishedTurnIfAny(synced)
+                        val finishedSend = ChatTurnHelper.turnIsReallyFinished(
+                            messages = synced,
+                            pendingForms = _pendingForms.value,
+                            pendingPermissions = _pendingPermissions.value,
+                            turnBusy = _turnBusy.value,
+                            turnOver = _turnOver.value,
+                            onWarnNoWatcher = {
+                                if (!warnedNoWatcher) {
+                                    warnedNoWatcher = true
+                                    android.util.Log.w(
+                                        "AegisChat",
+                                        "Vigilante sin datos para ${_currentSessionId.value}: se decide con los mensajes."
+                                    )
+                                }
+                            }
+                        )
+                        _turnInProgress.value = !finishedSend
+                        _turnFinished.value = finishedSend
+                        val nuevoIdSend = ChatTurnHelper.announceFinishedTurnIfAny(
+                            fresh = synced,
+                            lastFinishedTurnId = _finishedTurnId.value,
+                            isFinished = finishedSend,
+                            sessionTitle = _sessionTitle.value,
+                            sessionId = _currentSessionId.value
+                        )
+                        if (nuevoIdSend != null) {
+                            _finishedTurnId.value = nuevoIdSend
+                        }
                     }
                 }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
@@ -1437,3 +1377,5 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
         }
     }
 }
+
+private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
