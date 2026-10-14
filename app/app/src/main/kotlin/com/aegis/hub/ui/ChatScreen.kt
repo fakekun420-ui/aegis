@@ -3,11 +3,9 @@ package com.aegis.hub.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.provider.OpenableColumns
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
@@ -101,6 +99,14 @@ fun ChatScreen(
     // function"). El divisor de fin de turno se intercala entre los mensajes aquí.
     val filas = remember(messages, turnFinished) { buildChatRows(messages, turnFinished) }
 
+    // F3-P3: callbacks estables por fila. Antes cada `items(filas)` creaba dos
+    // lambdas nuevas por fila y por recomposicion (`onRetry` clausuraba hasta el
+    // mensaje) y `TerminalConsoleTurn` no podia skipear nunca. `onLoadPart` ni
+    // siquiera depende de la fila; `onRetry` recibe el mensaje como parametro.
+    // Mismo comportamiento visible: solo cambia la identidad de las lambdas.
+    val onRetryMessage: (Message) -> Unit = remember(sessionId) { { m -> vm.retryMessage(m, sessionId) } }
+    val onLoadPartFull: (String?, (PartFull?) -> Unit) -> Unit = remember { { partId, done -> vm.loadPartFull(partId, null, done) } }
+
     val modelsLoading by vm.modelsLoading.collectAsState()
     val streamingText by vm.streamingText.collectAsState()
     val streamingTools by vm.streamingTools.collectAsState()
@@ -110,7 +116,6 @@ fun ChatScreen(
     // Si esa llamada fallaba, la hoja quedaba vacia PARA SIEMPRE: el boton no volvia a
     // pedirla y no decia por que. Aqui se pide al abrir, que es cuando hace falta.
     val agentsLoading by vm.agentsLoading.collectAsState()
-    val agentsError by vm.error.collectAsState()
     var showModelSheet by remember { mutableStateOf(false) }
     var showAgentSheet by remember { mutableStateOf(false) }
     // Al abrir la hoja se pide la lista. Es idempotente: el ViewModel no hace nada si ya
@@ -174,11 +179,15 @@ fun ChatScreen(
             }
     }
 
-    val lastMsgId = messages.lastOrNull()?.info?.id
-    val lastMsgTextLen = messages.lastOrNull()?.text?.length ?: 0
-    val lastMsgToolsCount = messages.lastOrNull()?.parts?.count { it.type == "tool" } ?: 0
-    val lastMsgToolsLen = messages.lastOrNull()?.parts?.filter { it.type == "tool" }?.sumOf { it.state?.outputText?.length ?: 0 } ?: 0
-    val streamingToolsLen = streamingTools.sumOf { (it.output?.length ?: 0) + it.command.length }
+    // F3-P3: derivados del ultimo mensaje bajo remember(messages): mismo valor,
+    // sin recalcular en cada recomposicion ajena (p. ej. cada tick de streaming).
+    // Las claves del LaunchedEffect de auto-scroll NO cambian.
+    val lastMsg = remember(messages) { messages.lastOrNull() }
+    val lastMsgId = lastMsg?.info?.id
+    val lastMsgTextLen = lastMsg?.text?.length ?: 0
+    val lastMsgToolsCount = lastMsg?.parts?.count { it.type == "tool" } ?: 0
+    val lastMsgToolsLen = lastMsg?.parts?.filter { it.type == "tool" }?.sumOf { it.state?.outputText?.length ?: 0 } ?: 0
+    val streamingToolsLen = remember(streamingTools) { streamingTools.sumOf { (it.output?.length ?: 0) + it.command.length } }
 
     LaunchedEffect(
         messages.size,
@@ -391,13 +400,17 @@ fun ChatScreen(
                 // lo que pasaba con el id caducado que se usaba por defecto.
                 // MEDIDO 2026-10-03: el valor puede venir con prefijo `proveedor/id` de
                 // prefs viejas; se compara sin el para que la lista (ids cortos) coincida.
-                val modeloCorto = selectedModel?.trim()?.substringAfterLast("/")?.trim().orEmpty()
-                val modelDisplayName = models.firstOrNull { it.id == modeloCorto && (selectedProvider == null || it.providerID == selectedProvider) }?.name
-                    ?: when {
-                        modeloCorto.isBlank() && !modelsLoading -> "Elige un modelo"
-                        modeloCorto.isBlank() -> "Cargando modelos…"
-                        else -> "No disponible: $modeloCorto"
-                    }
+                // F3-P3: derivado puro bajo remember: mismo texto sin recalcular por
+                // recomposicion ajena. No cambia lo que se muestra.
+                val modelDisplayName = remember(models, selectedModel, selectedProvider, modelsLoading) {
+                    val modeloCorto = selectedModel?.trim()?.substringAfterLast("/")?.trim().orEmpty()
+                    models.firstOrNull { it.id == modeloCorto && (selectedProvider == null || it.providerID == selectedProvider) }?.name
+                        ?: when {
+                            modeloCorto.isBlank() && !modelsLoading -> "Elige un modelo"
+                            modeloCorto.isBlank() -> "Cargando modelos…"
+                            else -> "No disponible: $modeloCorto"
+                        }
+                }
 
                 UnifiedFloatingComposer(
                     text = composerText,
@@ -595,8 +608,8 @@ fun ChatScreen(
                                     is ChatRow.Mensaje -> TerminalConsoleTurn(
                                         msg = fila.message,
                                         sendingInFlight = sendingInFlight,
-                                        onRetry = { vm.retryMessage(fila.message, sessionId) },
-                                        onLoadPart = { partId, done -> vm.loadPartFull(partId, null, done) }
+                                        onRetry = onRetryMessage,
+                                        onLoadPart = onLoadPartFull
                                     )
                                     is ChatRow.Cierre -> TurnFinishedDivider()
                                 }
@@ -699,48 +712,20 @@ fun ChatScreen(
 
     if (showAttachSheet) {
         ModalBottomSheet(onDismissRequest = { showAttachSheet = false }) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Agregar al chat", style = MaterialTheme.typography.titleMedium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        FilledTonalIconButton(
-                            onClick = {
-                                showAttachSheet = false
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                                    val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", java.io.File(context.cacheDir, "photo_${System.currentTimeMillis()}.jpg"))
-                                    cameraUri = uri
-                                    cameraLauncher.launch(uri)
-                                } else {
-                                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                                }
-                            },
-                            modifier = Modifier.size(56.dp).semantics { contentDescription = "Cámara" }
-                        ) { Icon(Icons.Filled.CameraAlt, contentDescription = "Cámara", modifier = Modifier.size(28.dp)) }
-                        Text("Cámara", style = MaterialTheme.typography.labelSmall)
+            AttachSheetContent(
+                onCamera = {
+                    showAttachSheet = false
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                        val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", java.io.File(context.cacheDir, "photo_${System.currentTimeMillis()}.jpg"))
+                        cameraUri = uri
+                        cameraLauncher.launch(uri)
+                    } else {
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        FilledTonalIconButton(
-                            onClick = { showAttachSheet = false; photoPickerLauncher.launch("image/*") },
-                            modifier = Modifier.size(56.dp).semantics { contentDescription = "Fotos" }
-                        ) { Icon(Icons.Filled.Photo, contentDescription = "Fotos", modifier = Modifier.size(28.dp)) }
-                        Text("Fotos", style = MaterialTheme.typography.labelSmall)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        FilledTonalIconButton(
-                            onClick = { showAttachSheet = false; filePickerLauncher.launch(arrayOf("*/*")) },
-                            modifier = Modifier.size(56.dp).semantics { contentDescription = "Archivos" }
-                        ) { Icon(Icons.Filled.FolderOpen, contentDescription = "Archivos", modifier = Modifier.size(28.dp)) }
-                        Text("Archivos", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
+                },
+                onPhotos = { showAttachSheet = false; photoPickerLauncher.launch("image/*") },
+                onFiles = { showAttachSheet = false; filePickerLauncher.launch(arrayOf("*/*")) }
+            )
         }
     }
 
@@ -779,7 +764,7 @@ fun ChatScreen(
                     Text(
                         when {
                             agentsLoading -> "Cargando agentes\u2026"
-                            agentsError != null -> "No se pudieron cargar: ${agentsError!!}"
+                            error != null -> "No se pudieron cargar: ${error!!}"
                             else -> "No se pudieron cargar los agentes. Revisa que OpenCode este activo."
                         },
                         style = MaterialTheme.typography.bodyMedium,
@@ -907,142 +892,11 @@ fun ChatScreen(
 
 }
 
-// F3-P4 (2026-10-14): downsample con tope de lado mayor 2048. Una captura
-// 1080x2400x4B ~= 10 MB a resolucion completa; con inSampleSize el bitmap en
-// RAM baja ~4x y la vista lo muestra a ancho de pantalla de todos modos.
-private const val MAX_BITMAP_SIDE = 2048
-private fun decodeBase64Bitmap(b64: String): android.graphics.Bitmap? {
-    return try {
-        val clean = b64.substringAfter(",", b64)
-        val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
-        val bounds = android.graphics.BitmapFactory.Options().apply {
-            inJustDecodeBounds = true
-        }
-        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        var sample = 1
-        val mayor = maxOf(bounds.outWidth, bounds.outHeight)
-        while (mayor / (sample * 2) >= MAX_BITMAP_SIDE) sample *= 2
-        val opts = android.graphics.BitmapFactory.Options().apply {
-            inSampleSize = sample
-        }
-        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-    } catch (_: Exception) { null }
-}
-
-@Composable
-private fun FileRow(
-    name: String,
-    mime: String,
-    tint: androidx.compose.ui.graphics.Color,
-    onClick: (() -> Unit)? = null,
-    cargando: Boolean = false
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = if (onClick != null) {
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .clickable(enabled = !cargando) { onClick?.invoke() }
-        } else Modifier
-    ) {
-        if (cargando) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-                color = tint
-            )
-        } else {
-            Icon(
-                if (mime.startsWith("image/")) Icons.Filled.Photo else Icons.Filled.FolderOpen,
-                contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)
-            )
-        }
-        Column {
-            Text(name, style = MaterialTheme.typography.bodySmall, color = tint, maxLines = 1)
-            if (mime.isNotBlank()) Text(mime, style = MaterialTheme.typography.labelSmall, color = tint.copy(alpha = 0.7f), maxLines = 1)
-        }
-    }
-}
-
-
-/**
- * Una fila de parte adjunta, con el toque que recupera el binario cuando la venia
- * recortada.
- *
- * Esta en un solo lugar a proposito. La version anterior tenia la logica metida dentro
- * del bucle de `images`, y MEDIDO sobre una sesion real resulto ser codigo muerto: las
- * partes recortadas son type="file" sin `url` (el recorte se lo borra), asi que caen en
- * `nonImageFiles` y no en `images`. Con el toque en la rama, no lo tocaba nadie.
- * Ahora las tres ramas pasan por aqui, asi que el toque va con la parte y no con la
- * rama: si el reparto cambia manana, sigue funcionando.
- *
- * @param alto 0 = sin limite de alto; >0 = tope en dp, como necesitan los adjuntos
- *   pequenos. Las imagenes grandes se muestran a ancho completo sin tope.
- */
-@Composable
-private fun PartRow(
-    part: MessagePart,
-    nombre: String,
-    mime: String,
-    tint: androidx.compose.ui.graphics.Color,
-    onLoadPart: ((partId: String?, done: (PartFull?) -> Unit) -> Unit)?,
-    alto: Int = 0
-) {
-    // La clave del remember es el id de la PARTE y no el del mensaje: con la del mensaje
-    // dos imagenes del mismo turno comparten estado y pulsar una moveria la otra.
-    var descargada by remember(part.id) { mutableStateOf<String?>(null) }
-    var pidiendo by remember(part.id) { mutableStateOf(false) }
-
-    val contenido = descargada ?: part.image ?: part.data ?: part.url
-    val bitmap = remember(contenido) { contenido?.let { decodeBase64Bitmap(it) } }
-
-    if (bitmap != null) {
-        val forma = if (alto > 0) {
-            Modifier.fillMaxWidth(0.7f).heightIn(max = alto.dp).clip(RoundedCornerShape(8.dp))
-        } else {
-            Modifier.fillMaxWidth(0.7f).clip(RoundedCornerShape(8.dp))
-        }
-        Image(
-            bitmap = bitmap.asImageBitmap(),
-            contentDescription = nombre,
-            modifier = forma,
-            contentScale = ContentScale.FillWidth
-        )
-        return
-    }
-
-    // El toque solo si la parte venia recortada Y el binario es una imagen. En
-    // nonImageFiles tambien caen adjuntos que no lo son, y bajarse 5 MB de un PDF para
-    // no poder pintar nada es peor que no tener toque: se descarga solo lo que se ve.
-    val esImagen = mime.isBlank() || mime.startsWith("image/")
-    val pulsable = part.hasBinary == true && esImagen && !pidiendo && onLoadPart != null
-    FileRow(
-        name = nombre,
-        mime = mime,
-        tint = tint,
-        cargando = pidiendo,
-        onClick = if (pulsable) {
-            {
-                pidiendo = true
-                onLoadPart?.invoke(part.id) { parte ->
-                    // Siempre se invoca, tambien en error (lo garantiza loadPartFull): si
-                    // no, un fallo deja el spinner girando para siempre. Por eso el false
-                    // va ANTES de asignar el resultado.
-                    pidiendo = false
-                    descargada = parte?.base64()
-                }
-            }
-        } else null
-    )
-}
-
 @Composable
 private fun TerminalConsoleTurn(
     msg: Message,
     sendingInFlight: Boolean = false,
-    onRetry: (() -> Unit)? = null,
+    onRetry: ((Message) -> Unit)? = null,
     // Cargar una parte que venia recortada. Se pasa como lambda de comportamiento
     // (el mismo patron que onRetry) y no el ViewModel entero: la sesion ya la sabe
     // el ViewModel, y pasar `vm` por el arbol de composables por un parametro es
@@ -1193,7 +1047,8 @@ private fun TerminalConsoleTurn(
                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                             color = MaterialTheme.colorScheme.error
                                         )
-                                        if (onRetry != null) {
+                                        val retryNow = onRetry
+                                        if (retryNow != null) {
                                             Text(
                                                 "• Reintentar",
                                                 style = MaterialTheme.typography.labelSmall.copy(
@@ -1201,7 +1056,7 @@ private fun TerminalConsoleTurn(
                                                     fontSize = 10.sp
                                                 ),
                                                 color = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.clickable { onRetry() }
+                                                modifier = Modifier.clickable { retryNow(msg) }
                                             )
                                         }
                                     }
@@ -1616,57 +1471,6 @@ private fun UnifiedFloatingComposer(
             }
         }
     }
-}
-
-/**
- * F3-P8.3: politica de adjuntos en funciones puras (sin Context) para fijarla con
- * tests JVM. `uriToAttachedFile` conserva la parte Android (ContentResolver) y delega aqui.
- */
-internal const val LIMITE_ADJUNTO_BYTES = 5 * 1024 * 1024
-internal const val MAX_TEXTO_ADJUNTO_CHARS = 60_000
-internal fun esTextoAdjunto(mime: String, nombre: String): Boolean =
-    mime.startsWith("text/") || nombre.endsWith(".txt") || nombre.endsWith(".md") || nombre.endsWith(".json")
-internal fun recortarTextoAdjunto(bytes: ByteArray): String =
-    String(bytes, Charsets.UTF_8).take(MAX_TEXTO_ADJUNTO_CHARS)
-internal fun adjuntoExcedeLimite(bytes: ByteArray): Boolean = bytes.size > LIMITE_ADJUNTO_BYTES
-internal fun describirAdjuntoGrande(sizeBytes: Long): String =
-    "[archivo demasiado grande, ${humanSize(sizeBytes)}]"
-
-private fun humanSize(b: Long): String = when {
-    b < 1024 -> "$b B"
-    b < 1024 * 1024 -> "${(b / 1024.0).let { String.format("%.1f", it) }} KB"
-    else -> "${(b / 1024.0 / 1024.0).let { String.format("%.1f", it) }} MB"
-}
-
-private fun uriToAttachedFile(context: android.content.Context, uri: Uri): AttachedFile? {
-    return try {
-        val cr = context.contentResolver
-        val mime = cr.getType(uri) ?: "application/octet-stream"
-        var name = "archivo"
-        var size = 0L
-        cr.query(uri, null, null, null, null)?.use { c ->
-            val nameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            val sizeIdx = c.getColumnIndex(OpenableColumns.SIZE)
-            if (c.moveToFirst()) {
-                if (nameIdx >= 0) name = c.getString(nameIdx) ?: name
-                if (sizeIdx >= 0) size = c.getLong(sizeIdx)
-            }
-        }
-        // Base64 for images/files under ~5MB, else just metadata
-        val isText = esTextoAdjunto(mime, name)
-        cr.openInputStream(uri)?.use { input ->
-            val bytes = input.readBytes()
-            if (adjuntoExcedeLimite(bytes)) {
-                AttachedFile(name = name, mime = mime, size = bytes.size.toLong(), text = describirAdjuntoGrande(bytes.size.toLong()))
-            } else if (isText) {
-                val text = recortarTextoAdjunto(bytes)
-                AttachedFile(name = name, mime = mime, size = bytes.size.toLong(), text = text)
-            } else {
-                val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                AttachedFile(name = name, mime = mime, size = bytes.size.toLong(), base64 = b64)
-            }
-        }
-    } catch (_: Exception) { null }
 }
 
 // ---- helpers ----
