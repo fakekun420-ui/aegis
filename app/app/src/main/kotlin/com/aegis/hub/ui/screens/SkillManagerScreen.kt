@@ -64,7 +64,7 @@ fun SkillManagerScreen(
                         Text("INSTALLED SKILLS", color = ClaudeOnSurfaceVariant, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                         Spacer(Modifier.height(8.dp))
                     }
-                    items(installed) { skill ->
+                    items(installed, key = { it.id }) { skill ->
                         SkillCard(
                             name = skill.name,
                             version = skill.version,
@@ -82,7 +82,7 @@ fun SkillManagerScreen(
                         Text("AVAILABLE SKILLS", color = ClaudeOnSurfaceVariant, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                         Spacer(Modifier.height(8.dp))
                     }
-                    items(available) { skill ->
+                    items(available, key = { it.id }) { skill ->
                         SkillCard(
                             name = skill.name,
                             version = skill.version,

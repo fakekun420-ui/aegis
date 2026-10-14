@@ -178,7 +178,7 @@ fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
 @Composable
 fun SkillsList(skills: List<String>) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(skills) { skill ->
+        items(skills, key = { it }) { skill ->
             Box(
                 modifier = Modifier
                     .border(1.dp, ClaudeOutline, RoundedCornerShape(16.dp))

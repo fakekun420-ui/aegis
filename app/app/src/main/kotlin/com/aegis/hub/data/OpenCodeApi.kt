@@ -283,7 +283,8 @@ interface OpenCodeApi {
                 .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
                 .addInterceptor(createAuthInterceptor(credentials))
                 .addInterceptor(HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BASIC
+                    // F3-P1: sin logging HTTP en release (menos I/O por poll, sin metadatos a logcat).
+                    level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
                 })
             // F0 (T-F0.3): contador de peticiones solo en debug. En release no se
             // instala nada y TraceoPeticiones.activo se queda en false (coste cero).

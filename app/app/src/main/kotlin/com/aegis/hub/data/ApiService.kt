@@ -31,6 +31,7 @@ interface ApiService {
     @POST("api/opencode/sessions/{id}/unpin")
     suspend fun unpinSession(@Path("id") id: String): Envelope<PinResponse>
 
+    @Deprecated("F1: sin llamadores; el vinculo lo escribe SesionesRepo.vincular")
     @POST("api/projects/{id}/sessions")
     suspend fun linkSession(@Path("id") projectId: String, @Body body: LinkSessionRequest): Envelope<SessionRef>
 

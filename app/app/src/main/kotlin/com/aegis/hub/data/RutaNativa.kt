@@ -490,6 +490,8 @@ class RutaNativa(
     }
 
     // F2: fachada sobre el repo (una sola escritura).
+    // F1: en cuarentena (0 llamadores); el vinculo lo escribe SesionesRepo.vincular.
+    @Deprecated("F1: sin llamadores; el vinculo lo escribe SesionesRepo.vincular")
     override suspend fun linkSession(projectId: String, body: LinkSessionRequest): Envelope<SessionRef> {
         return when (val r = sesiones.vincular(body.sessionId, projectId, body.title)) {
             is Resultado.Ok -> envoltura(
@@ -914,7 +916,7 @@ class RutaNativa(
             )
             Response.success(HealthResponse(ok = true, data = healthData))
                 .also { cacheHealth = System.currentTimeMillis() to it }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "getSystemHealth fallo: ${e.message}")
             Response.success(HealthResponse(ok = false, data = null))
         }
@@ -927,7 +929,7 @@ class RutaNativa(
         return try {
             val snapshot = setupNative.getSnapshot()
             Response.success(BootstrapResponse(ok = true, data = snapshot))
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "getBootstrapState fallo: ${e.message}")
             Response.success(
                 BootstrapResponse(
@@ -960,7 +962,7 @@ class RutaNativa(
                     )
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Response.success(
                 BootstrapActionResponse(
                     ok = false,
@@ -992,7 +994,7 @@ class RutaNativa(
                     )
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Response.success(
                 BootstrapActionResponse(
                     ok = false,
@@ -1018,7 +1020,7 @@ class RutaNativa(
         return try {
             val resp = setupNative.runFinalCheck()
             Response.success(resp)
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Response.success(
                 FinalCheckResponse(
                     ok = false,
@@ -1033,7 +1035,7 @@ class RutaNativa(
         return try {
             val resp = setupNative.runSmokeTest()
             Response.success(resp)
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Response.success(
                 SmokeTestResponse(
                     ok = false,

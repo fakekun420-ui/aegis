@@ -37,6 +37,7 @@ import com.aegis.hub.data.modeloPorDefectoPara
 import com.aegis.hub.data.SendMessageRequest
 import com.aegis.hub.data.EventStream
 import com.aegis.hub.data.OpenCodeStreamItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -436,7 +437,7 @@ class ChatViewModel(
                         _agentMode.value = "build"
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 _error.value = "No se pudieron cargar los agentes: ${e.message}"
             } finally {
                 _agentsLoading.value = false
@@ -494,7 +495,8 @@ class ChatViewModel(
                     // (antes se veían modelos ajenos/v1 bajo la pestaña de OpenCode).
                     _models.value = emptyList()
                 }
-            } catch (_: Exception) {
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                android.util.Log.w("AegisChat", "loadModels fallo: ${e.message}")
                 _models.value = emptyList()
             } finally {
                 _modelsLoading.value = false
@@ -886,7 +888,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     _error.value = resp.error?.message ?: resp.error?.code
                         ?: "No se pudo enviar la decisión"
                 }
-            } catch (e: Exception) {
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 _error.value = e.message ?: "Error al enviar la decisión"
             } finally {
                 _replyingPermission.value = false
@@ -949,7 +951,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 } else {
                     _error.value = resp.error?.message ?: resp.error?.code ?: "No se pudo enviar la respuesta"
                 }
-            } catch (e: Exception) {
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 _error.value = e.message ?: "Error al enviar la respuesta"
             } finally {
                 _replyingForm.value = false
@@ -1029,7 +1031,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     updateTitleFromFirstMessage(nonEmpties)
                     _loading.value = false
                 }
-            } catch (e: Exception) {
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     // La cola es optimizacion (rapida); si falla va el historial
                     // completo debajo, que si avisa. Un aviso aqui duplicaria.
                     android.util.Log.d("AegisChat", "cola rapida fallo, va historial: ${e.message}")
@@ -1044,8 +1046,8 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                 } else if (!resp.ok) {
                     _error.value = resp.error?.message ?: resp.error?.code ?: "Error al obtener mensajes"
                 }
-            } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: e.message ?: "Error de conexión con el servidor"
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                _error.value = (e.localizedMessage ?: e.message)?.lineSequence()?.firstOrNull()?.trim()?.take(160)?.takeIf { it.isNotBlank() } ?: "Error de conexión con el servidor"
             } finally {
                 _loading.value = false
                 // G1: fin de apertura (cubre cola rapida e historial).
@@ -1188,6 +1190,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
             // 4. Start active background polling in parallel to catch assistant output or SSE stream completions
             pollingJob?.cancel()
             pollingJob = launch {
+                var fallosPoll = 0
                 // Poll cada 1.5s hasta ~600s, alineado con AEGIS_TURN_TIMEOUT_MS del Hub
                 // (antes 50 intentos = 75s, muy corto para un turno agéntico con tool calls).
                 for (attempt in 1..400) {
@@ -1219,9 +1222,14 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                 _messages.value = nonEmpties
                             }
                         }
-                    // GUARD-SILENCIO-OK: poll de 1,5 s por diseno (reintenta solo;
-                    // el estado final lo marca el bloque sync de abajo con motivo).
-                    } catch (_: Exception) { }
+                    // M2: poll de 1,5 s por diseno (reintenta solo); rastro cada
+                    // 20 fallos para distinguir "red caida" de "servidor lento".
+                    // El estado final lo marca el bloque sync de abajo con motivo.
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        fallosPoll++
+                        if (fallosPoll % 20 == 1) android.util.Log.d("AegisChat", "poll turno sin respuesta ($fallosPoll fallos): ${e.message}")
+                    }
                 }
             }
 
@@ -1264,9 +1272,12 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                 _streamingText.value = item.textAccumulated
                             }
                         }
-                    // GUARD-SILENCIO-OK: stream best-effort (el poll trae lo mismo;
-                    // si el stream muere, el parcial sigue llegando por el poll).
-                    } catch (_: Exception) { }
+                    // M2: stream best-effort (el poll trae lo mismo; si el stream
+                    // muere, el parcial sigue llegando por el poll). Rastro unico.
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        android.util.Log.d("AegisChat", "stream best-effort caido, sigue el poll: ${e.message}")
+                    }
                 }
 
                 _sendingInFlight.value = true
@@ -1294,7 +1305,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                     }
                     sseRequestAccepted = true
                     sseSuccess = true
-                } catch (e: Exception) {
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     _sendingInFlight.value = false
                     sseSuccess = false
                     // A1: la causa real del POST no se traga: una linea corta al
@@ -1323,7 +1334,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                         announceFinishedTurnIfAny(synced)
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 // Check if background polling already retrieved the response
                 // ¿El poll trajo ya la respuesta? Debe ser un asistente NUEVO (id distinto
                 // al baseline). Antes `any { ...id != tempMsgId }` daba true en cuanto el
@@ -1348,7 +1359,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                                 return@launch
                             }
                         }
-                    } catch (e: Exception) {
+                    } catch (e: CancellationException) { throw e } catch (e: Exception) {
                         // Ultimo intento antes del ERROR visible de abajo: se deja
                         // rastro en log para distinguir "fallo el reintento" de
                         // "ni se intento".
@@ -1370,7 +1381,7 @@ if (messages.any { m -> m.parts.orEmpty().any { it.state?.status == "running" } 
                         // linea, sin credenciales) es mas honesta que el timeout generico.
                         "Error al enviar mensaje: $causaEnvio"
                     } else {
-                        "Error al enviar mensaje: ${e.localizedMessage ?: e.message ?: "Tiempo de espera agotado"}"
+                        "Error al enviar mensaje: ${(e.localizedMessage ?: e.message)?.lineSequence()?.firstOrNull()?.trim()?.take(160)?.takeIf { it.isNotBlank() } ?: "Tiempo de espera agotado"}"
                     }
                     _messages.value = _messages.value.map {
                         if (it.info?.id == tempMsgId) it.withStatus(MessageDeliveryStatus.ERROR) else it

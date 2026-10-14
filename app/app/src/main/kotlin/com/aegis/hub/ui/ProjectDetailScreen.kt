@@ -493,7 +493,7 @@ fun ProjectDetailScreen(
                                 }
                             } else {
                                 val ids = project.linkedProjects ?: emptyList()
-                                items(ids) { pid ->
+                                items(ids, key = { it }) { pid ->
                                     val lp = linkedProjects.find { it.id == pid }
                                     OutlinedCard(
                                         shape = RoundedCornerShape(12.dp),
