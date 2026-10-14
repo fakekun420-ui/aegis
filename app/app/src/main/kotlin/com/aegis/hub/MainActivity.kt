@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,6 +49,9 @@ import com.aegis.hub.data.AppContext
  */
 class MainActivity : ComponentActivity() {
 
+    // M5: cliente HTTP compartido en los checks de arranque (antes: un
+    // OkHttpClient nuevo por llamada, pool e hilos desperdiciados).
+    private val clienteOkHttp by lazy { okhttp3.OkHttpClient() }
 
     private var systemReady by mutableStateOf(false)
     private var systemOwnership by mutableStateOf("unknown")
@@ -222,19 +226,20 @@ class MainActivity : ComponentActivity() {
             // Ahora se pregunta a quien de verdad manda: OpenCode, en :49374, con HTTP Basic.
             // MEDIDO: sin cabecera responde 401, y con la contraseña buena 200. Un 401 aqui NO
             // es "caido": es "vivo y exigiendo autenticacion", que es el estado que importa.
-            val resp = try {
+            val codigo = try {
                 okhttp3.Request.Builder()
                     .url("http://127.0.0.1:49374/api/info")
                     .header("Authorization", com.aegis.hub.data.Credentials.default.getBasicAuthHeaderBlocking())
                     .build()
-                    .let { okhttp3.OkHttpClient().newCall(it).execute() }
-            } catch (e: Exception) {
+                    .let { clienteOkHttp.newCall(it).execute() }
+                    .use { it.code }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 // Sin respuesta NINGUNA: no hay nadie escuchando.
                 android.util.Log.w(TAG, "checkSystemReady sin respuesta: ${e.message}")
                 return@withContext Pair(false, "sin-respuesta")
             }
-            resp.use {
-                val code = it.code
+            run {
+                val code = codigo
                 when {
                     // MEDIDO: 401 significa que el servidor EXISTE y pide Basic. No es un fallo.
                     code == 401 || code == 403 -> {
@@ -248,7 +253,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             android.util.Log.w(TAG, "checkSystemReady fail: ${e.message}")
             return@withContext Pair(false, "error:${e.message?.take(60)}")
         }
@@ -262,11 +267,11 @@ class MainActivity : ComponentActivity() {
                 .url("http://127.0.0.1:49374/api/info")
                 .header("Authorization", com.aegis.hub.data.Credentials.default.getBasicAuthHeaderBlocking())
                 .build()
-            okhttp3.OkHttpClient().newCall(req).execute().use { r ->
+            clienteOkHttp.newCall(req).execute().use { r ->
                 val c = r.code
                 c == 200 || c == 401 || c == 403
             }
-        } catch (_: Exception) { false }
+        } catch (e: Exception) { if (e is CancellationException) throw e; false }
     }
 
 
@@ -366,7 +371,7 @@ class MainActivity : ComponentActivity() {
             val pending = phase != com.aegis.hub.data.BootstrapPhase.done
             android.util.Log.i(TAG, "isBootstrapPending phase=$phase pending=$pending")
             pending
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             android.util.Log.w(TAG, "isBootstrapPending fail: ${e.message}")
             false
         }
@@ -493,7 +498,7 @@ class MainActivity : ComponentActivity() {
                 )
             )
             allFilesWarned = true   // ya avisamos de lo que hace falta; no repetir en onResume
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             // Algunas ROMs (y las pruebas instrumentadas) no tienen esa pantalla.
             try {
                 startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))

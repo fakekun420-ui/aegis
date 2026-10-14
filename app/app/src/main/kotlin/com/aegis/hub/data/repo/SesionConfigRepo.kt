@@ -9,6 +9,8 @@ import com.aegis.hub.data.OpenCodeApi
 import com.aegis.hub.data.OpenCodeModelRef
 import com.aegis.hub.data.SetSessionAgentRequest
 import com.aegis.hub.data.SetSessionModelRequest
+import kotlinx.coroutines.CancellationException
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Modelo y agente con el servidor como unica verdad (F3).
@@ -87,8 +89,8 @@ class SesionConfigRepo(
         const val FRESCURA_LECTURA_MS = 60_000L
     }
 
-    private val ultimoFijado = mutableMapOf<String, String>()
-    private val ultimoLeido = mutableMapOf<String, Long>()
+    private val ultimoFijado = ConcurrentHashMap<String, String>()
+    private val ultimoLeido = ConcurrentHashMap<String, Long>()
 
     /** Olvida el fijado cacheado (F5 lo llamara al ver cambios externos). */
     fun olvidarFijado(sessionId: String) {
@@ -122,7 +124,7 @@ class SesionConfigRepo(
                     origen = ConfigSesion.Origen.SERVIDOR
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "leer $sid fallo, tira de cache: ${e.message}")
         }
         return ConfigSesion(
@@ -156,7 +158,7 @@ class SesionConfigRepo(
         }
         var nativos = try {
             catalogo.modelosNativos()
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
         if (nativos.isNotEmpty() && nativos.none { (it.id ?: it.modelID) == limpio }) {
@@ -164,7 +166,7 @@ class SesionConfigRepo(
             catalogo.invalidar()
             nativos = try {
                 catalogo.modelosNativos()
-            } catch (e: Exception) {
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 emptyList()
             }
             if (nativos.isNotEmpty() && nativos.none { (it.id ?: it.modelID) == limpio }) {
@@ -189,7 +191,7 @@ class SesionConfigRepo(
                 if (r.code() == 404) catalogo.invalidar()
                 return Resultado.Fallo("El servidor no aceptó el modelo $limpio (HTTP ${r.code()})")
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "fijarModelo $limpio en $sid fallo: ${e.message}")
             return Resultado.Fallo("No se pudo fijar el modelo $limpio: ${e.message ?: "error de red"}", e)
         }
@@ -211,7 +213,7 @@ class SesionConfigRepo(
             if (!r.isSuccessful) {
                 return Resultado.Fallo("El servidor no aceptó el agente $limpio (HTTP ${r.code()})")
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "fijarAgente $limpio en $sid fallo: ${e.message}")
             return Resultado.Fallo("No se pudo fijar el agente $limpio: ${e.message ?: "error de red"}", e)
         }

@@ -73,7 +73,7 @@ fun WorkspaceScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(projects) { p ->
+                items(projects, key = { it.id }) { p ->
                     ProjectCard(
                         project = p,
                         onOpen = { navController.navigate("project/${p.id}") },

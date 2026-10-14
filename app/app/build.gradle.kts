@@ -125,11 +125,9 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1") // misma versión que coroutines-android
     // F10: servidor falso de OpenCode (misma versión que okhttp).
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
-    // Instrumentada (src/androidTest): ext junit + espresso + compose ui-test.
+    // Instrumentada (src/androidTest): compose ui-test (F1: ext-junit y espresso fuera, 0 imports).
     // El BOM se REUTILIZA (el mismo de release, 2024.10.00): no se introduce una
     // segunda versión de compose-bom que pudiera desalinear ui-test y la app.
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

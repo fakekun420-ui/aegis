@@ -60,7 +60,7 @@ fun WorkflowScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(workflows) { wf ->
+                items(workflows, key = { it.id }) { wf ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = ClaudeSurface),
                         shape = RoundedCornerShape(8.dp),
