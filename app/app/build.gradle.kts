@@ -23,6 +23,15 @@ android {
         ndk { abiFilters += "arm64-v8a" }
     }
     signingConfigs {
+        // ORD-20261014-1100 (A): debug con keystore FIJO versionado en app/debug.keystore
+        // (clave debug publica, sin valor secreto). Sin esto cada CI genera una firma
+        // distinta e INSTALL_FAILED_UPDATE_INCOMPATIBLE obliga a uninstall (rc=13).
+        getByName("debug") {
+            storeFile = file("../debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("release") {
             // CI injects companion-release.keystore via KEYSTORE_BASE64 secret decode (spec 1)
             val ksFile = file("companion-release.keystore")
@@ -46,6 +55,7 @@ android {
         }
         debug {
             isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

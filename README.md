@@ -50,6 +50,10 @@ Sin toolchain Android en el host: la única compilación real es la CI
 `build-release` · `semgrep` · `gitleaks` · `instrumented` manual). Commits
 pequeños, un push por tarea, esperar verde antes de seguir.
 
+## Firma debug
+
+Debug firma con keystore fijo versionado (`app/debug.keystore`, clave debug publica): la PRIMERA instalacion tras este cambio aun pide `uninstall` (firma anterior distinta); las siguientes admiten `pm install -r` sin perder uid.
+
 ## Seguridad
 
 Ver [ADR-001](docs/adr/ADR-001-security-model.md). Keystore de release fuera del

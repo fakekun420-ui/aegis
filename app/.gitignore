@@ -4,5 +4,7 @@ app/build/
 local.properties
 *.keystore
 *.jks
+# ORD-20261014-1100 (A): el debug fijo SI se versiona (clave debug publica).
+!debug.keystore
 .idea/
 *.iml

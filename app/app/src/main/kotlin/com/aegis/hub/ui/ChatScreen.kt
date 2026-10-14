@@ -1618,6 +1618,20 @@ private fun UnifiedFloatingComposer(
     }
 }
 
+/**
+ * F3-P8.3: politica de adjuntos en funciones puras (sin Context) para fijarla con
+ * tests JVM. `uriToAttachedFile` conserva la parte Android (ContentResolver) y delega aqui.
+ */
+internal const val LIMITE_ADJUNTO_BYTES = 5 * 1024 * 1024
+internal const val MAX_TEXTO_ADJUNTO_CHARS = 60_000
+internal fun esTextoAdjunto(mime: String, nombre: String): Boolean =
+    mime.startsWith("text/") || nombre.endsWith(".txt") || nombre.endsWith(".md") || nombre.endsWith(".json")
+internal fun recortarTextoAdjunto(bytes: ByteArray): String =
+    String(bytes, Charsets.UTF_8).take(MAX_TEXTO_ADJUNTO_CHARS)
+internal fun adjuntoExcedeLimite(bytes: ByteArray): Boolean = bytes.size > LIMITE_ADJUNTO_BYTES
+internal fun describirAdjuntoGrande(sizeBytes: Long): String =
+    "[archivo demasiado grande, ${humanSize(sizeBytes)}]"
+
 private fun humanSize(b: Long): String = when {
     b < 1024 -> "$b B"
     b < 1024 * 1024 -> "${(b / 1024.0).let { String.format("%.1f", it) }} KB"
@@ -1639,13 +1653,13 @@ private fun uriToAttachedFile(context: android.content.Context, uri: Uri): Attac
             }
         }
         // Base64 for images/files under ~5MB, else just metadata
-        val isText = mime.startsWith("text/") || name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".json")
+        val isText = esTextoAdjunto(mime, name)
         cr.openInputStream(uri)?.use { input ->
             val bytes = input.readBytes()
-            if (bytes.size > 5 * 1024 * 1024) {
-                AttachedFile(name = name, mime = mime, size = bytes.size.toLong(), text = "[archivo demasiado grande, ${humanSize(bytes.size.toLong())}]")
+            if (adjuntoExcedeLimite(bytes)) {
+                AttachedFile(name = name, mime = mime, size = bytes.size.toLong(), text = describirAdjuntoGrande(bytes.size.toLong()))
             } else if (isText) {
-                val text = String(bytes, Charsets.UTF_8).take(60000)
+                val text = recortarTextoAdjunto(bytes)
                 AttachedFile(name = name, mime = mime, size = bytes.size.toLong(), text = text)
             } else {
                 val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
@@ -2060,7 +2074,7 @@ private fun isFinalResponseOf(messages: List<Message>, index: Int, turnFinished:
 }
 
 /** Una fila de la lista del chat: un mensaje, o el divisor que cierra un turno. */
-private sealed interface ChatRow {
+internal sealed interface ChatRow {
     val key: String
 
     data class Mensaje(val index: Int, val message: Message) : ChatRow {
@@ -2074,7 +2088,7 @@ private sealed interface ChatRow {
     }
 }
 
-private fun buildChatRows(messages: List<Message>, turnFinished: Boolean): List<ChatRow> = buildList {
+internal fun buildChatRows(messages: List<Message>, turnFinished: Boolean): List<ChatRow> = buildList {
     messages.forEachIndexed { index, msg ->
         add(ChatRow.Mensaje(index, msg))
         if (isFinalResponseOf(messages, index, turnFinished)) {
