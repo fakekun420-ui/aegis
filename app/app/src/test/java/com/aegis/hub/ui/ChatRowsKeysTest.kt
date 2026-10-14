@@ -27,7 +27,9 @@ class ChatRowsKeysTest {
 
     @Test
     fun `los ids distintos dan keys distintas`() {
-        val claves = clavesDe(listOf(texto("m1"), texto("m2", "assistant"), texto("m3")), turnFinished = false)
+        // Los tres de usuario: ningun turno de asistente que cerrar (asistente + usuario
+        // posterior SI anade Cierre por historia; ver el test dedicado mas abajo).
+        val claves = clavesDe(listOf(texto("m1"), texto("m2"), texto("m3")), turnFinished = false)
         assertEquals("3 mensajes sin cierre -> 3 filas", 3, claves.size)
         assertEquals("sin duplicados", claves.size, claves.distinct().size)
         assertTrue("el id manda cuando existe", claves[0] == "m1" && claves[1] == "m2")
