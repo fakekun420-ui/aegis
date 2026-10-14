@@ -120,12 +120,12 @@ jobs:
       - name: Build Release APK (sin firma, valida R8)
         run: gradle assembleRelease
         working-directory: app
-      - name: Reportar tamanos APK (debug vs release)
+      - name: Reportar tamano APK release (valida R8)
         run: |
-          ls -la app/app/build/outputs/apk/debug/*.apk app/app/build/outputs/apk/release/*.apk
+          ls -la app/app/build/outputs/apk/release/*.apk
           python3 - <<'EOF'
           import glob
-          for f in sorted(glob.glob('app/app/build/outputs/apk/*/*.apk')):
+          for f in sorted(glob.glob('app/app/build/outputs/apk/release/*.apk')):
               import os
               print(f"{f}: {os.path.getsize(f)/1048576:.2f} MB")
           EOF
