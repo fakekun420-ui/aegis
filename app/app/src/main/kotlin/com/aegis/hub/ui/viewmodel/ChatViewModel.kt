@@ -228,7 +228,7 @@ class ChatViewModel(
     // La MISMA decisión que alimenta la notificación, expuesta para el divisor.
     //
     // Antes el divisor leía el `turnOver` CRUDO del vigilante, y la notificación leía
-    // `turnIsReallyFinished()`, que además tiene respaldo por los mensajes. Eran dos
+    // `ChatTurnHelper.turnIsReallyFinished()`, que además tiene respaldo por los mensajes. Eran dos
     // señales distintas y divergían: la notificación saltaba tras cada `bash` (el
     // respaldo daba el turno por terminado) mientras el divisor no aparecía (turnOver
     // en false). Ahora hay UNA sola decisión y los dos la consumen.
@@ -722,9 +722,36 @@ class ChatViewModel(
                         // Se comprueba el cierre SIEMPRE, no solo cuando la lista cambia.
                         // El propio flujo de envío ya dejó _messages al día, así que en
                         // el primer poll tras el turno la lista es idéntica y el aviso
-                        // se habría quedado sin disparar. announceFinishedTurnIfAny es
-                        // idempotente: ignora el turno ya anunciado.
-                        announceFinishedTurnIfAny(fresh)
+                        // se habría quedado sin disparar. ChatTurnHelper.announceFinishedTurnIfAny
+                        // es idempotente: ignora el turno ya anunciado.
+                        val finishedPoll = ChatTurnHelper.turnIsReallyFinished(
+                            messages = fresh,
+                            pendingForms = _pendingForms.value,
+                            pendingPermissions = _pendingPermissions.value,
+                            turnBusy = _turnBusy.value,
+                            turnOver = _turnOver.value,
+                            onWarnNoWatcher = {
+                                if (!warnedNoWatcher) {
+                                    warnedNoWatcher = true
+                                    android.util.Log.w(
+                                        "AegisChat",
+                                        "Vigilante sin datos para ${_currentSessionId.value}: se decide con los mensajes."
+                                    )
+                                }
+                            }
+                        )
+                        _turnInProgress.value = !finishedPoll
+                        _turnFinished.value = finishedPoll
+                        val nuevoIdPoll = ChatTurnHelper.announceFinishedTurnIfAny(
+                            fresh = fresh,
+                            lastFinishedTurnId = _finishedTurnId.value,
+                            isFinished = finishedPoll,
+                            sessionTitle = _sessionTitle.value,
+                            sessionId = _currentSessionId.value
+                        )
+                        if (nuevoIdPoll != null) {
+                            _finishedTurnId.value = nuevoIdPoll
+                        }
                     }
                 } catch (_: Exception) {
                     // Aqui ya fallo el camino rapido Y el lento (si el rapido se
@@ -766,7 +793,7 @@ class ChatViewModel(
      *
      * "Cerrado" NO se deduce de `info.time.completed`: ese campo cierra el MENSAJE y se
      * cumple tras cada `bash` con exit 0, aunque el agente siga trabajando. La condición
-     * vive en `turnIsReallyFinished()` y sale del vigilante
+     * vive en `ChatTurnHelper.turnIsReallyFinished()` y sale del vigilante
      * (`session.execution.succeeded`). Ver `docs/adr/ADR-003-turn-final-signal.md`.
      *
      * Si el turno terminó justo ahora:
@@ -777,61 +804,9 @@ class ChatViewModel(
      * Divisor y notificación comparten esta función y la misma guarda, así que no
      * pueden desincronizarse: es exactamente el mismo disparo.
      */
-    /**
-     * ¿Ha terminado DE VERDAD el turno del asistente?
-     *
-     * `time.completed` por sí solo NO basta, y esa era la causa de los dos síntoma que
-     * reportó el usuario (divisor saltando a mitad y "trabajando en ello" pegado al
-     * divisor). Un mensaje del asistente puede llevar `completed` mientras el turno
-     * sigue vivo, porque lo que se cierra es ESE mensaje, no el turno:
-     *
-     *  1. Hay una herramienta en estado `running` (p. ej. un `bash`): el agente aún
-     *     espera su salida.
-     *  2. Hay un formulario pendiente: el agente está esperando a la persona.
-     */
-
-    /**
-     * Actualiza el indicador de "trabajando" y lanza el aviso de fin de turno UNA vez.
-     *
-     * La condición NO la decide esta función sino `turnIsReallyFinished()`, que se apoya
-     * solo en los eventos `session.execution.*` del vigilante. Aquí solo se aplica a la
-     * dedup: un mismo turno no debe de avisar cada 2 s.
-     */
+    // Dedup del aviso "vigilante sin datos": las llamadas directas a
+    // ChatTurnHelper.turnIsReallyFinished lo usan vía onWarnNoWatcher.
     private var warnedNoWatcher = false
-
-    private fun turnIsReallyFinished(messages: List<Message>): Boolean =
-        ChatTurnHelper.turnIsReallyFinished(
-            messages = messages,
-            pendingForms = _pendingForms.value,
-            pendingPermissions = _pendingPermissions.value,
-            turnBusy = _turnBusy.value,
-            turnOver = _turnOver.value,
-            onWarnNoWatcher = {
-                if (!warnedNoWatcher) {
-                    warnedNoWatcher = true
-                    android.util.Log.w(
-                        "AegisChat",
-                        "Vigilante sin datos para ${_currentSessionId.value}: se decide con los mensajes."
-                    )
-                }
-            }
-        )
-
-    private fun announceFinishedTurnIfAny(fresh: List<Message>) {
-        val finished = turnIsReallyFinished(fresh)
-        _turnInProgress.value = !finished
-        _turnFinished.value = finished
-        val nuevoId = ChatTurnHelper.announceFinishedTurnIfAny(
-            fresh = fresh,
-            lastFinishedTurnId = _finishedTurnId.value,
-            isFinished = finished,
-            sessionTitle = _sessionTitle.value,
-            sessionId = _currentSessionId.value
-        )
-        if (nuevoId != null) {
-            _finishedTurnId.value = nuevoId
-        }
-    }
 
     /**
      * Responde un formulario pendiente.
@@ -1287,7 +1262,34 @@ class ChatViewModel(
                         // aviso no se disparaba NUNCA al enviar desde la app, que es
                         // justo cuando tiene que pasar. Se llama también aquí, al
                         // cerrar el turno del propio envío.
-                        announceFinishedTurnIfAny(synced)
+                        val finishedSend = ChatTurnHelper.turnIsReallyFinished(
+                            messages = synced,
+                            pendingForms = _pendingForms.value,
+                            pendingPermissions = _pendingPermissions.value,
+                            turnBusy = _turnBusy.value,
+                            turnOver = _turnOver.value,
+                            onWarnNoWatcher = {
+                                if (!warnedNoWatcher) {
+                                    warnedNoWatcher = true
+                                    android.util.Log.w(
+                                        "AegisChat",
+                                        "Vigilante sin datos para ${_currentSessionId.value}: se decide con los mensajes."
+                                    )
+                                }
+                            }
+                        )
+                        _turnInProgress.value = !finishedSend
+                        _turnFinished.value = finishedSend
+                        val nuevoIdSend = ChatTurnHelper.announceFinishedTurnIfAny(
+                            fresh = synced,
+                            lastFinishedTurnId = _finishedTurnId.value,
+                            isFinished = finishedSend,
+                            sessionTitle = _sessionTitle.value,
+                            sessionId = _currentSessionId.value
+                        )
+                        if (nuevoIdSend != null) {
+                            _finishedTurnId.value = nuevoIdSend
+                        }
                     }
                 }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
