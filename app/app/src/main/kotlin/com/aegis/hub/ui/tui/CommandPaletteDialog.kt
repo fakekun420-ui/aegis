@@ -54,13 +54,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.aegis.hub.data.Conexion
-import com.aegis.hub.data.NuevaSesion
 import com.aegis.hub.data.OpenCodeApi
 import com.aegis.hub.data.OpenCodeNativeAgent
 import com.aegis.hub.data.OpenCodeNativeModel
 import com.aegis.hub.data.OpenCodeSession
 import com.aegis.hub.data.Skill
 import com.aegis.hub.data.repo.CatalogoRepo
+import com.aegis.hub.data.repo.NuevaSesion
+import com.aegis.hub.data.repo.Resultado
 import com.aegis.hub.data.repo.SesionConfigRepo
 import com.aegis.hub.data.repo.SesionesRepo
 import kotlinx.coroutines.launch
@@ -285,8 +286,8 @@ fun CommandPaletteDialog(
         } else {
             scope.launch {
                 val res = sesionesRepo.crear(NuevaSesion(titulo = "Nueva sesión"))
-                if (res is com.aegis.hub.data.Resultado.Exito) {
-                    onSessionSelected(res.datos.id)
+                if (res is Resultado.Ok) {
+                    onSessionSelected(res.valor.id)
                     Toast.makeText(context, "New session created", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(context, "Failed to create session", Toast.LENGTH_SHORT).show()
