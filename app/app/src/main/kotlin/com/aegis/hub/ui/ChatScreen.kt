@@ -513,7 +513,9 @@ private fun ChatScreenContenido(
                 // "Nuevo chat" si es nulo/vacio (sin duplicar el take(30) de la VM).
                 val displayTitle = sessionTitle.takeIf { !it.isNullOrBlank() } ?: "Nuevo chat"
 
-                Column {
+                Column(
+                    modifier = Modifier.statusBarsPadding()
+                ) {
                     // Barra de pestañas TUI por encima del AppBar: un tap conmuta
                     // (navega a esa sesión), "✕" cierra SOLO la pestaña (la sesión
                     // sigue viva en :49374 y en la lista de Chats) y "+" crea una
