@@ -311,14 +311,10 @@ fun CommandPaletteDialog(
         scope.launch {
             try {
                 val msgs = openCodeApi.getMessages(currentSessionId, limit = 100).data.orEmpty()
-                val text = msgs.joinToString("
-
-") { m ->
+                val text = msgs.joinToString("\n\n") { m ->
                     val author = m.agent ?: m.role ?: m.type ?: "system"
-                    val content = m.text ?: m.content?.joinToString("
-") { it.text.orEmpty() } ?: ""
-                    "[$author]:
-$content"
+                    val content = m.text ?: m.content?.joinToString("\n") { it.text.orEmpty() } ?: ""
+                    "[$author]:\n$content"
                 }
                 clipboardManager.setText(AnnotatedString(text))
                 val msg = if (exportFormat) "Transcript exported to clipboard" else "Transcript copied"
@@ -344,8 +340,7 @@ $content"
                     role == "assistant" || (m.agent != null && role != "user")
                 }
                 val text = lastAssistant?.text
-                    ?: lastAssistant?.content?.joinToString("
-") { it.text.orEmpty() }
+                    ?: lastAssistant?.content?.joinToString("\n") { it.text.orEmpty() }
                 if (!text.isNullOrBlank()) {
                     clipboardManager.setText(AnnotatedString(text))
                     Toast.makeText(context, "Last assistant message copied", Toast.LENGTH_SHORT).show()
