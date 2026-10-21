@@ -990,36 +990,25 @@ class ChatViewModel(
             // F4: fuera (el titulo viene de cargarConfig/leer con el mismo GET de
             // modelo+agente). Esta era 1 peticion de lista completa solo por el titulo.
 
-            // F4: la cola primero (rapida) para pintar ya; el historial completo
-            // despues reconcilia por id (F5 lo hara bajo demanda por scroll).
+            // F4/F5: cola rapida unicamente (100). Sin historial completo en caliente.
+            // Si se requiere historial mas antiguo, usar paginacion/scroll hacia arriba (lazy loading).
             try {
-                val colaResp = api.getMessagesTail(sessionId, 200)
+                val colaResp = api.getMessagesTail(sessionId, 100)
                 if (colaResp.ok && colaResp.data != null) {
                     val nonEmpties = colaResp.data.filterNot { it.isEmpty }
                     _messages.value = nonEmpties
                     updateTitleFromFirstMessage(nonEmpties)
-                    _loading.value = false
+                } else if (!colaResp.ok) {
+                    _error.value = colaResp.error?.message ?: colaResp.error?.code ?: "Error al obtener mensajes"
                 }
-            } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                    // La cola es optimizacion (rapida); si falla va el historial
-                    // completo debajo, que si avisa. Un aviso aqui duplicaria.
-                    android.util.Log.d("AegisChat", "cola rapida fallo, va historial: ${e.message}")
-                }
-
-            try {
-                val resp = api.getMessages(sessionId)
-                if (resp.ok && resp.data != null) {
-                    val nonEmpties = resp.data.filterNot { it.isEmpty }
-                    _messages.value = mergeTail(_messages.value, nonEmpties)
-                    updateTitleFromFirstMessage(_messages.value)
-                } else if (!resp.ok) {
-                    _error.value = resp.error?.message ?: resp.error?.code ?: "Error al obtener mensajes"
-                }
-            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.d("AegisChat", "cola rapida fallo: ${e.message}")
                 _error.value = (e.localizedMessage ?: e.message)?.lineSequence()?.firstOrNull()?.trim()?.take(160)?.takeIf { it.isNotBlank() } ?: "Error de conexión con el servidor"
             } finally {
                 _loading.value = false
-                // G1: fin de apertura (cubre cola rapida e historial).
+                // G1: fin de apertura (solo cola rapida).
                 MarcasCiclo.abrirFin(sessionId, fotoApertura)
             }
         }

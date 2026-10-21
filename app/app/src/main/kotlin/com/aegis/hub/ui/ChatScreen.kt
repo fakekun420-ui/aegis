@@ -508,70 +508,28 @@ private fun ChatScreenContenido(
 
     Scaffold(
         topBar = {
-            if (showTopBar) {
-                // D4: la VM es fuente de verdad del titulo; la UI solo lo usa y cae a
-                // "Nuevo chat" si es nulo/vacio (sin duplicar el take(30) de la VM).
-                val displayTitle = sessionTitle.takeIf { !it.isNullOrBlank() } ?: "Nuevo chat"
-
-                Column(
-                    modifier = Modifier.statusBarsPadding()
-                ) {
-                    // Barra de pestañas TUI por encima del AppBar: un tap conmuta
-                    // (navega a esa sesión), "✕" cierra SOLO la pestaña (la sesión
-                    // sigue viva en :49374 y en la lista de Chats) y "+" crea una
-                    // sesión nueva con SessionTabManager y la abre.
-                    if (tabManager != null) {
-                        val pestanas by tabManager.pestanas.collectAsStateWithLifecycle()
-                        TuiSessionTabBar(
-                            pestanas = pestanas,
-                            onPestanaSeleccionada = { tab ->
-                                // La pestaña activa YA es esta pantalla: tocarla no
-                                // navega y no recrea la entrada del back stack.
-                                if (!tab.isCurrent) onOpenSession(tab.sessionId)
-                            },
-                            onPestanaCerrada = { tab ->
-                                tabManager.cerrarPestana(tab.sessionId)
-                                // Como en el TUI: si se cerró la activa, la vecina
-                                // pasa a serlo y la pantalla la abre.
-                                if (tab.isCurrent) {
-                                    tabManager.pestanaActual?.let { onOpenSession(it.sessionId) }
-                                }
-                            },
-                            onNueva = {
-                                scope.launch {
-                                    tabManager.abrirNueva()?.let { nueva ->
-                                        onOpenSession(nueva.sessionId)
-                                    }
-                                }
-                            },
-                        )
-                    }
-                    TopAppBar(
-                        title = {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(
-                                        text = displayTitle,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        modifier = Modifier.weight(1f, fill = false)
-                                    )
-                                }
-                                if (sessionId.isNotBlank()) {
-                                    Text(
-                                        text = sessionId.take(16),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                        maxLines = 1
-                                    )
-                                }
+            if (showTopBar && tabManager != null) {
+                val pestanas by tabManager.pestanas.collectAsStateWithLifecycle()
+                TuiSessionTabBar(
+                    pestanas = pestanas,
+                    onPestanaSeleccionada = { tab ->
+                        if (!tab.isCurrent) onOpenSession(tab.sessionId)
+                    },
+                    onPestanaCerrada = { tab ->
+                        tabManager.cerrarPestana(tab.sessionId)
+                        if (tab.isCurrent) {
+                            tabManager.pestanaActual?.let { onOpenSession(it.sessionId) }
+                        }
+                    },
+                    onNueva = {
+                        scope.launch {
+                            tabManager.abrirNueva()?.let { nueva ->
+                                onOpenSession(nueva.sessionId)
                             }
-                        },
-                        navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-                    )
-                }
+                        }
+                    },
+                    modifier = Modifier.statusBarsPadding()
+                )
             }
         },
         bottomBar = {
@@ -1540,30 +1498,12 @@ private fun startListeningInternal(
  */
 @Composable
 private fun TurnFinishedDivider() {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 8.dp)
     ) {
-        Box(
-            Modifier
-                .weight(1f)
-                .height(1.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant)
-        )
-        Text(
-            "  ✓ respuesta final  ",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Box(
-            Modifier
-                .weight(1f)
-                .height(1.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant)
-        )
+        HorizontalDivider(thickness = 1.dp, color = Color(0xFF262626))
     }
 }
 

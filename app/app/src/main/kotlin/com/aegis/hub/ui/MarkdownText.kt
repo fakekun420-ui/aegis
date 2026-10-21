@@ -127,19 +127,19 @@ private fun MarkdownTextContent(
                     text = buildInline(block.text, trailingCursor),
                     style = when (block.level) {
                         1 -> MaterialTheme.typography.titleMedium.copy(
-                            fontFamily = FontFamily.SansSerif,
+                            fontFamily = FontFamily.Monospace,
                             fontSize = 16.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             lineHeight = 22.sp
                         )
                         2 -> MaterialTheme.typography.titleSmall.copy(
-                            fontFamily = FontFamily.SansSerif,
+                            fontFamily = FontFamily.Monospace,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             lineHeight = 20.sp
                         )
                         else -> MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = FontFamily.SansSerif,
+                            fontFamily = FontFamily.Monospace,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             lineHeight = 19.sp
@@ -206,7 +206,7 @@ private fun MarkdownTextContent(
                             Text(
                                 "• ",
                                 style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = FontFamily.SansSerif,
+                                    fontFamily = FontFamily.Monospace,
                                     fontSize = 14.5.sp
                                 ),
                                 color = Color(0xFF8B949E)
@@ -214,7 +214,7 @@ private fun MarkdownTextContent(
                             MarkdownInlineText(
                                 text = buildInline(item, itemCursor),
                                 style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = FontFamily.SansSerif,
+                                    fontFamily = FontFamily.Monospace,
                                     fontSize = 14.5.sp,
                                     lineHeight = 21.sp
                                 ),
@@ -239,7 +239,7 @@ private fun MarkdownTextContent(
                             MarkdownInlineText(
                                 text = buildInline(item, itemCursor),
                                 style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = FontFamily.SansSerif,
+                                    fontFamily = FontFamily.Monospace,
                                     fontSize = 14.5.sp,
                                     lineHeight = 21.sp
                                 ),
@@ -252,7 +252,7 @@ private fun MarkdownTextContent(
                 is MdBlock.Paragraph -> MarkdownInlineText(
                     text = buildInline(block.text, trailingCursor),
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.SansSerif,
+                        fontFamily = FontFamily.Monospace,
                         fontSize = 14.5.sp,
                         lineHeight = 21.sp
                     ),
@@ -868,6 +868,12 @@ private fun buildInline(src: String, cursor: String = ""): AnnotatedString {
  * código de salida (exit code) y bloque de consola terminal `#0D1117`.
  */
 @Composable
+/**
+ * CLI Wizard Continuous Tool Execution Card for Aegis & Antigravity.
+ * Renderiza pasos de ejecución en tiempo real: comando $ tool/command, progreso,
+ * código de salida (exit code) y bloque de consola terminal.
+ */
+@Composable
 fun ToolExecutionCard(
     tool: String,
     command: String,
@@ -879,58 +885,51 @@ fun ToolExecutionCard(
 ) {
     val isRunning = status == "running"
     val isError = status == "error" || (exitCode != null && exitCode != 0)
-    val statusColor = when {
-        isRunning -> Color(0xFFD29922)
-        isError -> Color(0xFFF85149)
-        else -> Color(0xFF3FB950)
-    }
-    val statusBg = when {
-        isRunning -> Color(0xFF2E2412)
-        isError -> Color(0xFF381E20)
-        else -> Color(0xFF1B2C20)
-    }
     val statusText = when {
-        isRunning -> "ejecutando…"
+        isRunning -> "running"
         isError -> "exit ${exitCode ?: 1}"
         else -> "exit 0"
     }
+    val statusColor = when {
+        isRunning -> Color(0xFFD29922)
+        isError -> Color(0xFFF85149)
+        else -> Color(0xFF6B6B6B)
+    }
 
     Surface(
-        color = Color(0xFF0D1117),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, Color(0xFF30363D)),
+        color = Color(0xFF0D0D0D),
+        shape = androidx.compose.foundation.shape.RectangleShape,
+        border = BorderStroke(1.dp, Color(0xFF262626)),
         modifier = modifier.fillMaxWidth()
     ) {
         Column {
-            // Header row: prompt symbol ❯, tool(command), and status badge
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF161B22))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     modifier = Modifier.weight(1f, fill = false),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "❯",
-                        color = Color(0xFF58A6FF),
+                        text = "$",
+                        color = Color(0xFF8B949E),
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.sp
                     )
                     val cleanCmd = command.trim().removeSurrounding("\"")
-                    val displayCmd = if (cleanCmd.isNotBlank()) "$tool($cleanCmd)" else "$tool()"
+                    val headerText = if (cleanCmd.isNotBlank()) cleanCmd else tool
                     Text(
-                        text = displayCmd,
-                        color = Color(0xFF79C0FF),
+                        text = headerText,
+                        color = Color(0xFFE6EDF3),
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -945,112 +944,61 @@ fun ToolExecutionCard(
                     if (duration != null && duration > 0) {
                         Text(
                             text = String.format(java.util.Locale.US, "%.2fs", duration),
-                            color = Color(0xFF8B949E),
+                            color = Color(0xFF6B6B6B),
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp
+                            fontSize = 10.sp
                         )
                     }
-
-                    Surface(
-                        color = statusBg,
-                        shape = RoundedCornerShape(4.dp),
-                        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.5f))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            if (isRunning) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(8.dp),
-                                    strokeWidth = 1.5.dp,
-                                    color = statusColor
-                                )
-                            }
-                            Text(
-                                text = statusText,
-                                color = statusColor,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
+                    Text(
+                        text = statusText,
+                        color = statusColor,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Normal
+                    )
                 }
             }
 
-            // Console output container (if output present)
             if (!output.isNullOrBlank()) {
-                Box(
+                val trimmedOutput = output.trimEnd()
+                val outputLines = remember(trimmedOutput) { if (trimmedOutput.isEmpty()) emptyList() else trimmedOutput.lines() }
+                var expanded by remember(trimmedOutput) { mutableStateOf(false) }
+                val isLongOutput = outputLines.size > 15
+                val visibleOutput = if (isLongOutput && !expanded) {
+                    outputLines.take(15).joinToString("\n")
+                } else {
+                    trimmedOutput
+                }
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "CONSOLE OUTPUT",
-                                color = Color(0xFF8B949E),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            CopiedBadge(
-                                output = output,
-                                idleColor = Color(0xFF58A6FF),
-                                withIconButton = false
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        val trimmedOutput = output.trim()
-                        val outputLines = remember(trimmedOutput) { trimmedOutput.lines() }
-                        var expanded by remember(trimmedOutput) { mutableStateOf(false) }
-                        val isLongOutput = outputLines.size > 15
-                        val visibleOutput = if (isLongOutput && !expanded) {
-                            outputLines.take(15).joinToString("\n")
-                        } else {
-                            trimmedOutput
-                        }
-                        Surface(
-                            color = Color(0xFF090D13),
-                            shape = RoundedCornerShape(4.dp),
-                            border = BorderStroke(1.dp, Color(0xFF21262D)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column {
-                                Text(
-                                    text = visibleOutput,
-                                    color = Color(0xFFC9D1D9),
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 11.5.sp,
-                                    lineHeight = 16.5.sp,
-                                    modifier = Modifier
-                                        .padding(8.dp)
-                                        .horizontalScroll(rememberScrollState())
-                                )
-                                if (isLongOutput) {
-                                    val hiddenCount = outputLines.size - 15
-                                    Text(
-                                        text = if (expanded) "▲ Ocultar ($hiddenCount líneas más plegadas)" else "… $hiddenCount líneas más (toca para ver)",
-                                        color = Color(0xFF58A6FF),
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { expanded = !expanded }
-                                            .padding(horizontal = 8.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }
-                        }
+                    Text(
+                        text = visibleOutput,
+                        color = Color(0xFFC9D1D9),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        lineHeight = 15.5.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                    )
+                    if (isLongOutput) {
+                        val hiddenCount = outputLines.size - 15
+                        Text(
+                            text = if (expanded) "(hide earlier lines)" else "($hiddenCount earlier lines)",
+                            color = Color(0xFF6B6B6B),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            modifier = Modifier
+                                .clickable { expanded = !expanded }
+                                .padding(top = 2.dp)
+                        )
                     }
                 }
             }
         }
     }
 }
+
