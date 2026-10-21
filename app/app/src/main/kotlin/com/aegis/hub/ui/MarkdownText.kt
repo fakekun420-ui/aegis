@@ -867,7 +867,6 @@ private fun buildInline(src: String, cursor: String = ""): AnnotatedString {
  * Renderiza pasos de ejecución en tiempo real: comando ❯ bash(...), progreso,
  * código de salida (exit code) y bloque de consola terminal `#0D1117`.
  */
-@Composable
 /**
  * CLI Wizard Continuous Tool Execution Card for Aegis & Antigravity.
  * Renderiza pasos de ejecución en tiempo real: comando $ tool/command, progreso,
@@ -898,7 +897,7 @@ fun ToolExecutionCard(
 
     Surface(
         color = Color(0xFF0D0D0D),
-        shape = androidx.compose.foundation.shape.RectangleShape,
+        shape = androidx.compose.ui.graphics.RectangleShape,
         border = BorderStroke(1.dp, Color(0xFF262626)),
         modifier = modifier.fillMaxWidth()
     ) {
