@@ -20,6 +20,7 @@ import com.aegis.hub.ui.screens.WorkflowScreen
 import com.aegis.hub.ui.viewmodel.BootstrapViewModel
 import com.aegis.hub.ui.viewmodel.ChatViewModel
 import com.aegis.hub.ui.viewmodel.MainViewModel
+import com.aegis.hub.ui.viewmodel.SessionTabManager
 import kotlinx.coroutines.launch
 
 // F1: startDestination parametrizado (por defecto el actual) para poder arrancar
@@ -29,6 +30,12 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
     val navController = rememberNavController()
     val vm: MainViewModel = viewModel()
     val draftVm: ChatViewModel = viewModel(key = "draft_chat")
+
+    // TUI: pestañas de sesión compartidas por TODAS las pantallas de chat. Vive
+    // aquí y no en ChatScreen porque la composición de cada destino del NavHost
+    // se destruye al navegar: dentro de ChatScreen el `remember` moriría con la
+    // pestaña recién tocada y la barra arrancaría vacía en cada salto.
+    val sessionTabs = remember { SessionTabManager() }
 
     val projects by vm.projects.collectAsState()
     val sessions by vm.sessions.collectAsState()
@@ -198,7 +205,19 @@ fun AppNavHost(startDestination: String = NavRoutes.DRAFT_CHAT) {
             ChatScreen(
                 sessionId = sid,
                 vm = chatVm,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                // TUI: barra de pestañas + salto directo a otra sesión (tap de
+                // pestaña o sesión elegida en la paleta de comandos).
+                tabManager = sessionTabs,
+                onOpenSession = { id ->
+                    navController.navigate(NavRoutes.chat(id)) {
+                        launchSingleTop = true
+                        // Cambiar de pestaña REEMPLAZA la entrada de chat actual:
+                        // sin esto cada toque apilaba una entrada nueva y "atrás"
+                        // recorría todas las visitas.
+                        popUpTo(NavRoutes.CHAT_PLACEHOLDER) { inclusive = true }
+                    }
+                }
             )
         }
         

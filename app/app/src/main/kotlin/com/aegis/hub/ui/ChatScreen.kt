@@ -69,14 +69,60 @@ import com.aegis.hub.data.PendingForm
 import com.aegis.hub.data.PendingPermission
 import com.aegis.hub.data.PartFull
 import com.aegis.hub.data.filtrarPorTexto
+import com.aegis.hub.data.OpenCodeApi
+import com.aegis.hub.data.OpenCodeSession
+import com.aegis.hub.data.repo.SesionesRepo
+import com.aegis.hub.ui.tui.*
+import com.aegis.hub.ui.viewmodel.SessionTabManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Pantalla de chat con la experiencia 100 % del TUI de OpenCode: [TuiTheme]
+ * impone la paleta estricta (negro puro, monoespaciada, highlight melocotón) y
+ * [TerminalDensityProvider] aplica el zoom del usuario (TuiZoomPreset) a TODO el
+ * subárbol, composer y barra de estado incluidos. La lógica vive en
+ * [ChatScreenContenido]: cero cambios en las llamadas a ChatViewModel.
+ *
+ * @param tabManager gestor de pestañas TUI compartido a nivel de NavHost;
+ *   null (borrador, previews) = sin barra de pestañas.
+ * @param onOpenSession salta a otra sesión de chat (tap de pestaña o sesión
+ *   elegida en la paleta de comandos).
+ */
 @Composable
 fun ChatScreen(
     sessionId: String,
     vm: ChatViewModel,
     onBack: () -> Unit,
-    showTopBar: Boolean = sessionId.isNotBlank()
+    showTopBar: Boolean = sessionId.isNotBlank(),
+    tabManager: SessionTabManager? = null,
+    onOpenSession: (String) -> Unit = {},
+) {
+    TuiTheme {
+        TerminalDensityProvider(state = rememberTuiZoomState()) {
+            ChatScreenContenido(
+                sessionId = sessionId,
+                vm = vm,
+                onBack = onBack,
+                showTopBar = showTopBar,
+                tabManager = tabManager,
+                onOpenSession = onOpenSession,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatScreenContenido(
+    sessionId: String,
+    vm: ChatViewModel,
+    onBack: () -> Unit,
+    showTopBar: Boolean,
+    tabManager: SessionTabManager?,
+    onOpenSession: (String) -> Unit,
 ) {
     val context = LocalContext.current
     // G4/F9: Agrupacion en UiStates consolidados con collectAsStateWithLifecycle
@@ -134,11 +180,103 @@ fun ChatScreen(
     // seguidas no son dos peticiones.
     LaunchedEffect(showAgentSheet) { if (showAgentSheet) vm.loadAgents() }
 
+    // ------------------- Estado TUI (paleta / workspaces) -------------------
+    // Paleta de comandos estilo ctrl+p: en móvil no hay teclado físico, así que
+    // el disparador es el botón "ctrl+p commands" de la barra de estado.
+    var mostrarPaleta by rememberSaveable { mutableStateOf(false) }
+    // Panel de workspaces (Subagents | Shell | Terminals).
+    var mostrarWorkspaces by remember { mutableStateOf(false) }
+    var workspacesDescartado by remember(sessionId) { mutableStateOf(false) }
+    // Línea de subagente dentro del composer: ctrl+b la manda "a background" y
+    // deja de mostrarse hasta que cambie el subagente en ejecución.
+    var subagenteEnLinea by remember(sessionId) { mutableStateOf(true) }
+
+    // Filas de subagentes derivadas de las MISMAS partes de mensaje que ya pinta
+    // SubagentCard: sin una sola llamada nueva al backend.
+    val filasSubagentes = remember(messages) {
+        messages.flatMap { m -> m.parts.orEmpty() }.mapNotNull { p ->
+            if (p.type != "tool") return@mapNotNull null
+            val st = p.state ?: return@mapNotNull null
+            if (!st.isSubagent) return@mapNotNull null
+            val running = st.status == "running" || st.status == "pending"
+            TuiSubagentRow(
+                agent = st.agentName ?: "subagente",
+                task = (st.agentDescription ?: "").ifBlank { st.command }.ifBlank { "" },
+                status = if (running) "Running" else "Completed",
+                activo = running,
+            )
+        }.distinctBy { it.agent to it.task }
+    }
+    val subagenteActivo = remember(filasSubagentes) { filasSubagentes.firstOrNull { it.activo } }
+
+    // Pestaña "Shell" del panel: bash de las partes ya persistidas + los que
+    // viajan en vivo en el streaming (el duplicado al cerrar el turno no importa:
+    // es un log, no una factura).
+    val comandosShell = remember(messages, streamingTools) {
+        (messages.flatMap { m -> m.parts.orEmpty() }.mapNotNull { p ->
+            if (p.type != "tool") return@mapNotNull null
+            val st = p.state ?: return@mapNotNull null
+            if (st.toolName != "bash") return@mapNotNull null
+            st.command.takeIf { it.isNotBlank() }
+        } + streamingTools.map { it.command })
+            .filter { it.isNotBlank() }
+            .takeLast(30)
+    }
+    val haySubagentesActivos = filasSubagentes.any { it.activo }
+
+    // Auto-apertura del panel mientras haya subagente en marcha; cerrarlo lo
+    // recuerda por sesión y el contador lo vuelve a abrir.
+    LaunchedEffect(haySubagentesActivos) {
+        if (haySubagentesActivos && !workspacesDescartado) mostrarWorkspaces = true
+    }
+    LaunchedEffect(subagenteActivo) {
+        if (subagenteActivo != null) subagenteEnLinea = true
+    }
+
+    // Detalle de la sesión para la barra de estado (ruta, rama, tokens, coste):
+    // un GET /api/session/{id} al abrir y en cada cambio de turno. Si el Hub no
+    // responde la barra se queda en sus defaults; solo COMPLEMENTA el flujo de
+    // ChatViewModel, no lo toca.
+    var detalleSesion by remember(sessionId) { mutableStateOf<OpenCodeSession?>(null) }
+    var rutaYRama by remember(sessionId) { mutableStateOf(SesionesRepo.CARPETA_POR_DEFECTO) }
+    LaunchedEffect(sessionId, turnFinished) {
+        if (sessionId.isBlank()) return@LaunchedEffect
+        val detalle = runCatching { OpenCodeApi.default.getSession(sessionId) }
+            .getOrNull()?.data
+        detalleSesion = detalle
+        val dir = detalle?.location?.directory?.takeIf { it.isNotBlank() }
+            ?: SesionesRepo.CARPETA_POR_DEFECTO
+        val rama = withContext(Dispatchers.IO) {
+            runCatching {
+                File(dir, ".git/HEAD").readText().trim()
+                    .removePrefix("ref: refs/heads/")
+                    .takeIf { !it.contains("/") }
+            }.getOrNull()
+        }
+        rutaYRama = if (rama.isNullOrBlank()) dir else "$dir:$rama"
+    }
+    val contextoYCoste = remember(detalleSesion) {
+        val det = detalleSesion ?: return@remember "\u2026"
+        val t = det.tokens
+        val total = listOfNotNull(t?.input, t?.output, t?.reasoning).sum()
+        "${formatearTokens(total)} · \$${String.format(Locale.US, "%.2f", det.cost ?: 0.0)}"
+    }
+
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(sessionId) {
         vm.load(sessionId)
+    }
+
+    // TUI: la barra de pestañas vive en el llamador (AppNavHost) y aquí solo se
+    // siembra con ESTA sesión: abrir/conmutar la marca activa y el título real
+    // la reetiqueta en vivo. Sin `tabManager` (borrador, previews) no se hace nada.
+    LaunchedEffect(sessionId, sessionTitle, tabManager) {
+        val tm = tabManager ?: return@LaunchedEffect
+        if (sessionId.isBlank()) return@LaunchedEffect
+        tm.abrirOConmutar(sessionId)
+        sessionTitle?.takeIf { it.isNotBlank() }?.let { tm.reetiquetar(sessionId, it) }
     }
 
     // El ViewModel suele estar scoped a la Activity, así que onCleared NO se dispara
@@ -375,31 +513,63 @@ fun ChatScreen(
                 // "Nuevo chat" si es nulo/vacio (sin duplicar el take(30) de la VM).
                 val displayTitle = sessionTitle.takeIf { !it.isNullOrBlank() } ?: "Nuevo chat"
 
-                TopAppBar(
-                    title = {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    text = displayTitle,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    modifier = Modifier.weight(1f, fill = false)
-                                )
+                Column {
+                    // Barra de pestañas TUI por encima del AppBar: un tap conmuta
+                    // (navega a esa sesión), "✕" cierra SOLO la pestaña (la sesión
+                    // sigue viva en :49374 y en la lista de Chats) y "+" crea una
+                    // sesión nueva con SessionTabManager y la abre.
+                    if (tabManager != null) {
+                        val pestanas by tabManager.pestanas.collectAsStateWithLifecycle()
+                        TuiSessionTabBar(
+                            pestanas = pestanas,
+                            onPestanaSeleccionada = { tab ->
+                                // La pestaña activa YA es esta pantalla: tocarla no
+                                // navega y no recrea la entrada del back stack.
+                                if (!tab.isCurrent) onOpenSession(tab.sessionId)
+                            },
+                            onPestanaCerrada = { tab ->
+                                tabManager.cerrarPestana(tab.sessionId)
+                                // Como en el TUI: si se cerró la activa, la vecina
+                                // pasa a serlo y la pantalla la abre.
+                                if (tab.isCurrent) {
+                                    tabManager.pestanaActual?.let { onOpenSession(it.sessionId) }
+                                }
+                            },
+                            onNueva = {
+                                scope.launch {
+                                    tabManager.abrirNueva()?.let { nueva ->
+                                        onOpenSession(nueva.sessionId)
+                                    }
+                                }
+                            },
+                        )
+                    }
+                    TopAppBar(
+                        title = {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = displayTitle,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                }
+                                if (sessionId.isNotBlank()) {
+                                    Text(
+                                        text = sessionId.take(16),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        maxLines = 1
+                                    )
+                                }
                             }
-                            if (sessionId.isNotBlank()) {
-                                Text(
-                                    text = sessionId.take(16),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    },
-                    navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-                )
+                        },
+                        navigationIcon = { IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Volver" }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Volver") } },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                    )
+                }
             }
         },
         bottomBar = {
@@ -423,15 +593,62 @@ fun ChatScreen(
                         }
                 }
 
-                UnifiedFloatingComposer(
+                // Contador de subagentes: entrada al panel de workspaces.
+                if (filasSubagentes.isNotEmpty()) {
+                    val coloresTui = LocalTuiColors.current
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                workspacesDescartado = false
+                                mostrarWorkspaces = !mostrarWorkspaces
+                            }
+                            .padding(horizontal = 12.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        val activos = filasSubagentes.count { it.activo }
+                        Text(
+                            text = "⠆ $activos subagent" + if (activos == 1) "" else "es",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                color = if (haySubagentesActivos) coloresTui.selection else coloresTui.textSecondary,
+                            ),
+                        )
+                        Text(
+                            text = if (mostrarWorkspaces) "[esc hide]" else "[workspaces]",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                color = coloresTui.textSecondary,
+                            ),
+                            modifier = Modifier.semantics { contentDescription = "Workspaces" },
+                        )
+                    }
+                }
+
+                if (mostrarWorkspaces) {
+                    TuiWorkspacesPanel(
+                        subagentes = filasSubagentes,
+                        comandosShell = comandosShell,
+                        onCerrar = {
+                            mostrarWorkspaces = false
+                            workspacesDescartado = true
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+
+                TuiComposer(
                     text = composerText,
                     onTextChange = { composerText = it },
                     onSend = {
                         val t = composerText.trim()
                         if (t.isNotBlank() || attachedFiles.isNotEmpty()) {
-                            // F13: si la guardia frena el envio (modelo ausente del
-                            // catalogo), el texto SE CONSERVA: limpiar aqui lo
-                            // borraria delante del motivo honesto del VM.
+                            // F13: si la guardia frena el envío (modelo ausente del
+                            // catálogo), el texto SE CONSERVA: limpiar aquí lo
+                            // borraría delante del motivo honesto del VM.
                             if (vm.sendWithFiles(sessionId, t, attachedFiles)) {
                                 composerText = ""
                                 attachedFiles = emptyList()
@@ -440,7 +657,7 @@ fun ChatScreen(
                     },
                     onAttach = { showAttachSheet = true },
                     onMic = {
-                        if (!ensureMicPermission()) return@UnifiedFloatingComposer
+                        if (!ensureMicPermission()) return@TuiComposer
                         if (listening) {
                             try { recognizer?.stopListening() } catch (_: Exception) {}
                         } else {
@@ -455,11 +672,32 @@ fun ChatScreen(
                     onRemoveFile = { idx -> attachedFiles = attachedFiles.filterIndexed { i, _ -> i != idx } },
                     selectedModelName = modelDisplayName,
                     onSelectModelClick = { showModelSheet = true },
+                    agentMode = agentMode,
+                    onSelectAgentClick = { showAgentSheet = true },
                     leerEnVoz = leerEnVoz,
                     onToggleLeerEnVoz = { leerEnVoz = !leerEnVoz },
-                    agentMode = agentMode,
-                    agentIsPrimary = agents.firstOrNull { it.name == agentMode }?.mode != "subagent",
-                    onSelectAgentClick = { showAgentSheet = true }
+                    subagentName = if (subagenteEnLinea) subagenteActivo?.agent else null,
+                    subagentTask = if (subagenteEnLinea) subagenteActivo?.task else null,
+                    onBackgroundWork = { subagenteEnLinea = false },
+                )
+
+                // Barra de estado TUI: ruta/rama, tokens, coste, zoom y ctrl+p.
+                val zoomTui = LocalTuiZoomState.current
+                TuiStatusBar(
+                    pathAndBranch = rutaYRama,
+                    contextAndCost = contextoYCoste,
+                    zoomPercent = (zoomTui.preset.scale * 100).roundToInt(),
+                    onZoomIn = {
+                        val idx = TuiZoomPreset.entries.indexOf(zoomTui.preset)
+                        if (idx < TuiZoomPreset.entries.lastIndex) {
+                            zoomTui.select(TuiZoomPreset.entries[idx + 1])
+                        }
+                    },
+                    onZoomOut = {
+                        val idx = TuiZoomPreset.entries.indexOf(zoomTui.preset)
+                        if (idx > 0) zoomTui.select(TuiZoomPreset.entries[idx - 1])
+                    },
+                    onOpenCommandPalette = { mostrarPaleta = true },
                 )
             }
         }
@@ -719,6 +957,21 @@ fun ChatScreen(
                 Snackbar(modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) { Text(sttError ?: "") }
             }
         }
+    }
+
+    // Paleta de comandos TUI (ctrl+p / botón "ctrl+p commands" de la barra de
+    // estado). Usa los mismos repos y la misma red que el resto de la pantalla;
+    // al elegir sesión/modelo/agente navega o delega en el VM (el diálogo se
+    // cierra solo después de cada selección).
+    if (mostrarPaleta) {
+        CommandPaletteDialog(
+            onDismissRequest = { mostrarPaleta = false },
+            currentSessionId = sessionId.takeIf { it.isNotBlank() },
+            currentSessionTitle = sessionTitle,
+            onSessionSelected = { id -> if (id != sessionId) onOpenSession(id) },
+            onModelSelected = { m -> vm.selectModel(m.id, m.providerID) },
+            onAgentSelected = { a -> vm.selectAgent(a.name) },
+        )
     }
 
     if (showAttachSheet) {
@@ -1216,275 +1469,14 @@ private fun TerminalActivityCursor() {
     }
 }
 
-@Composable
-private fun UnifiedFloatingComposer(
-    text: String,
-    onTextChange: (String) -> Unit,
-    onSend: () -> Unit,
-    onAttach: () -> Unit,
-    onMic: () -> Unit,
-    listening: Boolean,
-    attachedFiles: List<AttachedFile>,
-    onRemoveFile: (Int) -> Unit,
-    selectedModelName: String,
-    onSelectModelClick: () -> Unit,
-    leerEnVoz: Boolean,
-    onToggleLeerEnVoz: () -> Unit,
-    agentMode: String = "build",
-    // Antes `onToggleAgentMode`, un interruptor de dos. Ahora el boton ABRE una hoja con
-    // los agentes que OpenCode publica de verdad (MEDIDO 2026-09-30: 40, no 2).
-    onSelectAgentClick: () -> Unit = {},
-    // Si el agente elegido NO es un subagent. Con la lista sin cargar no se sabe, y se
-    // supone primary porque es el valor por defecto del propio OpenCode: ante la duda se
-    // muestra el estado de partida, no un color inventado.
-    agentIsPrimary: Boolean = true,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(22.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 4.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-            // Attached files chips
-            if (attachedFiles.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(bottom = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    attachedFiles.forEachIndexed { idx, f ->
-                        AssistChip(
-                            onClick = {},
-                            label = { Text("${f.name.take(18)} ${humanSize(f.size)}", maxLines = 1, style = MaterialTheme.typography.labelSmall) },
-                            shape = RoundedCornerShape(10.dp),
-                            trailingIcon = {
-                                IconButton(onClick = { onRemoveFile(idx) }, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
-                                    Icon(Icons.Filled.Close, contentDescription = "Quitar", modifier = Modifier.size(12.dp))
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
-            // Text input
-            TextField(
-                value = text,
-                onValueChange = onTextChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics { contentDescription = "Escribe un mensaje" },
-                placeholder = {
-                    Text(
-                        "Escribe un mensaje…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                },
-                maxLines = 5,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                    unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
-                ),
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
-            )
-
-            // Bottom toolbar inside the pill
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f, fill = true),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    IconButton(
-                        onClick = onAttach,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .semantics { contentDescription = "Adjuntar archivo" }
-                    ) {
-                        Icon(
-                            Icons.Outlined.Add,
-                            contentDescription = "Adjuntar archivo",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // Boton de agente: la letra es la inicial del nombre REAL
-                    // (orchestrator -> O, build -> B, plan -> P, kaenor-ai-engineer -> K).
-                    val agentName = agentMode.trim()
-                    val letter = agentName.take(1).uppercase().ifBlank { "?" }
-                    val buttonBg = if (agentIsPrimary) Color(0xFF1E88E5) else Color(0xFF00897B)
-                    val modeDesc = "Agente: $agentName. Toca para cambiar de agente"
-                    Surface(
-                        onClick = onSelectAgentClick,
-                        shape = CircleShape,
-                        color = buttonBg,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .semantics { contentDescription = modeDesc }
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Text(
-                                text = letter,
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                ),
-                                color = Color.White
-                            )
-                        }
-                    }
-
-                    Surface(
-                        onClick = onSelectModelClick,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .widthIn(max = 180.dp)
-                            .semantics { contentDescription = "Seleccionar modelo" }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .heightIn(min = 38.dp)
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                Icons.Outlined.AutoAwesome,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                selectedModelName,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            Icon(
-                                Icons.Filled.KeyboardArrowDown,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                // BUG composer 2026-10-13: enviar y micro miden lo mismo (36dp)
-                // con separacion fija 8dp; en 411dp no se solapan.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    IconButton(
-                        onClick = onToggleLeerEnVoz,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .semantics {
-                                contentDescription = if (leerEnVoz) "Dejar de leer en voz alta"
-                                else "Leer la respuesta en voz alta"
-                            }
-                    ) {
-                        Icon(
-                            if (leerEnVoz) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
-                            contentDescription = null,
-                            tint = if (leerEnVoz) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-
-                    val canSend = text.isNotBlank() || attachedFiles.isNotEmpty()
-                    if (canSend) {
-                        IconButton(
-                            onClick = onSend,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape)
-                                .semantics { contentDescription = "Enviar mensaje" }
-                        ) {
-                            Icon(
-                                Icons.Filled.ArrowUpward,
-                                contentDescription = "Enviar mensaje",
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                    if (listening) {
-                        val infiniteTransition = rememberInfiniteTransition(label = "pulse_mic")
-                        val scale by infiniteTransition.animateFloat(
-                            initialValue = 1f,
-                            targetValue = 1.15f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(500, easing = FastOutSlowInEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "micScale"
-                        )
-                        IconButton(
-                            onClick = onMic,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .graphicsLayer { scaleX = scale; scaleY = scale }
-                                .background(MaterialTheme.colorScheme.error, CircleShape)
-                                .semantics { contentDescription = "Dejar de escuchar" }
-                        ) {
-                            Icon(
-                                Icons.Filled.Mic,
-                                contentDescription = "Dejar de escuchar",
-                                tint = MaterialTheme.colorScheme.onError,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    } else {
-                        IconButton(
-                            onClick = onMic,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
-                                .semantics { contentDescription = "Hablar" }
-                        ) {
-                            Icon(
-                                Icons.Filled.MicNone,
-                                contentDescription = "Hablar",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                    // El microfono ya no esta en un `else` de nada: termina aqui su rama, y el
-                    // boton de voz (leer en voz alta) se pinta al lado, siempre.
-                }
-            }
-        }
-    }
-}
-
 // ---- helpers ----
+
+/** Forma un recuento de tokens al estilo del TUI: 12.3K, 1.2M o 943. */
+private fun formatearTokens(n: Long): String = when {
+    n >= 1_000_000 -> String.format(Locale.US, "%.1fM", n / 1_000_000.0)
+    n >= 1_000 -> String.format(Locale.US, "%.1fK", n / 1_000.0)
+    else -> n.toString()
+}
 
 private fun startListeningInternal(
     context: android.content.Context,
