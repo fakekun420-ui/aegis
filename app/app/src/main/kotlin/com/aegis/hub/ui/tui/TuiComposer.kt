@@ -1,5 +1,6 @@
 package com.aegis.hub.ui.tui
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -56,10 +57,7 @@ import com.aegis.hub.data.AttachedFile
 /**
  * Paleta TUI monocromática estricta con estética terminal / hacker.
  */
-private val TuiBackground = Color(0xFF0A0A0A)
-private val TuiBorder = Color(0xFF262626)
 private val TuiBorderFocused = Color(0xFF404040)
-private val TuiTextPrimary = Color(0xFFE5E5E5)
 private val TuiTextMuted = Color(0xFF737373)
 private val TuiAccentYellow = Color(0xFFE5C07B)
 private val TuiChipBackground = Color(0xFF141414)
