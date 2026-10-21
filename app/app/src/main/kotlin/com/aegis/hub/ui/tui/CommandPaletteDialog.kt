@@ -57,7 +57,7 @@ import com.aegis.hub.data.OpenCodeApi
 import com.aegis.hub.data.OpenCodeNativeAgent
 import com.aegis.hub.data.OpenCodeNativeModel
 import com.aegis.hub.data.OpenCodeSession
-import com.aegis.hub.data.modelos.Skill
+import com.aegis.hub.data.Skill
 import com.aegis.hub.data.repo.CatalogoRepo
 import com.aegis.hub.data.repo.SesionConfigRepo
 import com.aegis.hub.data.repo.SesionesRepo
@@ -335,8 +335,8 @@ fun CommandPaletteDialog(
                                     try {
                                         val msgs = openCodeApi.getMessages(currentSessionId, limit = 100).data.orEmpty()
                                         val text = msgs.joinToString("\n\n") { m ->
-                                            val author = m.author?.name ?: m.role ?: "system"
-                                            val content = m.text ?: ""
+                                            val author = m.agent ?: m.role ?: m.type ?: "system"
+                                            val content = m.text ?: m.content?.joinToString("\n") { it.text.orEmpty() } ?: ""
                                             "[$author]:\n$content"
                                         }
                                         clipboardManager.setText(AnnotatedString(text))
@@ -399,7 +399,7 @@ fun CommandPaletteDialog(
                     )
                 )
 
-                list
+                list.toList()
             }
 
             PaletteMode.SELECT_MODEL -> {
