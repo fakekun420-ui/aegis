@@ -930,6 +930,99 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Corta el turno en curso en el servidor (equivalente a Esc / ctrl+d en el TUI).
+     *
+     * Va por [sesiones] (`SesionesRepo.interrumpir`) y no por `api`: `interruptSession`
+     * vive en `OpenCodeApi`, que `ApiService` no expone. Si [sessionId] llega vacío se
+     * usa la sesión activa del VM.
+     */
+    fun abortar(sessionId: String) {
+        val sid = (sessionId.takeIf { it.isNotBlank() } ?: _currentSessionId.value.orEmpty()).trim()
+        if (sid.isBlank()) return
+        viewModelScope.launch {
+            try {
+                when (val r = sesiones.interrumpir(sid)) {
+                    is Resultado.Ok -> {
+                        // El turno deja de estar vivo: se limpia el texto en vuelo y el
+                        // refresco periódico reconciliará el estado real del servidor.
+                        _streamingText.value = null
+                        _streamingTools.value = emptyList()
+                        _error.value = null
+                    }
+                    is Resultado.Fallo -> _error.value = r.motivo
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = (e.localizedMessage ?: e.message)
+                    ?.lineSequence()?.firstOrNull()?.trim()?.take(160)
+            }
+        }
+    }
+
+    /** Renombra una sesión con el título que el usuario escriba (repo: [sesiones]). */
+    fun renombrarSesion(sessionId: String, titulo: String) {
+        val sid = (sessionId.takeIf { it.isNotBlank() } ?: _currentSessionId.value.orEmpty()).trim()
+        val nuevo = titulo.trim()
+        if (sid.isBlank()) {
+            _error.value = "No hay sesión que renombrar"
+            return
+        }
+        if (nuevo.isBlank()) {
+            _error.value = "El título no puede estar vacío"
+            return
+        }
+        viewModelScope.launch {
+            try {
+                when (val r = sesiones.renombrar(sid, nuevo)) {
+                    is Resultado.Ok -> _error.value = null
+                    is Resultado.Fallo -> _error.value = r.motivo
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = (e.localizedMessage ?: e.message)
+                    ?.lineSequence()?.firstOrNull()?.trim()?.take(160)
+            }
+        }
+    }
+
+    /**
+     * Borra la sesión en el servidor (repo: [sesiones]).
+     *
+     * El VM no tiene el `SessionTabManager` (vive en el NavHost), así que no puede cerrar
+     * la pestaña: devuelve el resultado por [onDone] y la UI decide. Sin valor por defecto
+     * en el callback a propósito — un default silencioso es exactamente el fallo que se
+     * está corrigiendo aquí.
+     */
+    fun borrarSesion(sessionId: String, onDone: (Boolean) -> Unit) {
+        val sid = (sessionId.takeIf { it.isNotBlank() } ?: _currentSessionId.value.orEmpty()).trim()
+        if (sid.isBlank()) {
+            _error.value = "No hay sesión que borrar"
+            onDone(false)
+            return
+        }
+        viewModelScope.launch {
+            var borrada = false
+            try {
+                when (val r = sesiones.borrar(sid)) {
+                    is Resultado.Ok -> {
+                        borrada = true
+                        _error.value = null
+                    }
+                    is Resultado.Fallo -> _error.value = r.motivo
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = (e.localizedMessage ?: e.message)
+                    ?.lineSequence()?.firstOrNull()?.trim()?.take(160)
+            }
+            onDone(borrada)
+        }
+    }
+
     fun stopViewRefresh(ownerSessionId: String? = null) {
         if (!puedeDetenerRefresco(ownerSessionId)) return
         viewRefreshJob?.cancel()

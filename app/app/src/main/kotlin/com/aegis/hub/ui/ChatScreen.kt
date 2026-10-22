@@ -184,6 +184,12 @@ private fun ChatScreenContenido(
     // Paleta de comandos estilo ctrl+p: en móvil no hay teclado físico, así que
     // el disparador es el botón "ctrl+p commands" de la barra de estado.
     var mostrarPaleta by rememberSaveable { mutableStateOf(false) }
+    // Hoja de ajustes honesta (densidad real + versión real + servidor real).
+    var mostrarAjustes by rememberSaveable { mutableStateOf(false) }
+    // Sesión que el usuario quiere renombrar y el texto que está escribiendo. La paleta
+    // entrega el ID de sesión, NO el título nuevo, así que el título se pide aquí.
+    var sesionARenombrar by remember { mutableStateOf<String?>(null) }
+    var tituloRenombrado by remember { mutableStateOf("") }
     // Panel de workspaces (Subagents | Shell | Terminals).
     var mostrarWorkspaces by remember { mutableStateOf(false) }
     var workspacesDescartado by remember(sessionId) { mutableStateOf(false) }
@@ -594,6 +600,9 @@ private fun ChatScreenContenido(
                             mostrarWorkspaces = false
                             workspacesDescartado = true
                         },
+                        // "interrupt ctrl+d" del pie: antes tenía default `{}` y el botón
+                        // se veía habilitado pero no hacía nada. Ahora corta el turno real.
+                        onInterrumpir = { _ -> vm.abortar(sessionId) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -931,6 +940,74 @@ private fun ChatScreenContenido(
             onSessionSelected = { id -> if (id != sessionId) onOpenSession(id) },
             onModelSelected = { m -> vm.selectModel(m.id, m.providerID) },
             onAgentSelected = { a -> vm.selectAgent(a.name) },
+            // Los cinco callbacks que antes caían en defaults silenciosos (null / {}):
+            // el comando existía y no hacía nada. El argumento de rename/delete es el
+            // ID de sesión que envía la paleta, no un título.
+            onCloseTabRequested = {
+                if (tabManager != null) {
+                    tabManager.cerrarPestana(sessionId)
+                    tabManager.pestanaActual?.let { onOpenSession(it.sessionId) }
+                }
+            },
+            onToggleWorkspaces = { mostrarWorkspaces = !mostrarWorkspaces },
+            onRenameRequested = { idSesion ->
+                sesionARenombrar = idSesion
+                tituloRenombrado = if (idSesion == sessionId) sessionTitle.orEmpty() else ""
+            },
+            onDeleteRequested = { idSesion ->
+                vm.borrarSesion(idSesion) { borrada ->
+                    // Solo se cierra la pestaña y se sale si el servidor confirmó el
+                    // borrado: si falló, el tab sigue apuntando a una sesión que existe.
+                    if (borrada) {
+                        tabManager?.cerrarPestana(idSesion)
+                        onBack()
+                    }
+                }
+            },
+            onOpenSettings = { mostrarAjustes = true },
+        )
+    }
+
+    if (mostrarAjustes) {
+        TuiSettingsSheet(onDismissRequest = { mostrarAjustes = false })
+    }
+
+    // Diálogo de renombrado: la paleta solo entrega el ID, el título lo escribe el usuario.
+    val renombrando = sesionARenombrar
+    if (renombrando != null) {
+        AlertDialog(
+            onDismissRequest = { sesionARenombrar = null },
+            containerColor = TuiSurface,
+            title = {
+                Text(
+                    "Renombrar sesión",
+                    fontFamily = FontFamily.Monospace,
+                    color = TuiTextPrimary,
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = tituloRenombrado,
+                    onValueChange = { tituloRenombrado = it },
+                    singleLine = true,
+                    label = { Text("Título", fontFamily = FontFamily.Monospace) },
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.renombrarSesion(renombrando, tituloRenombrado)
+                        sesionARenombrar = null
+                    },
+                    enabled = tituloRenombrado.isNotBlank(),
+                ) { Text("Guardar", fontFamily = FontFamily.Monospace) }
+            },
+            dismissButton = {
+                TextButton(onClick = { sesionARenombrar = null }) {
+                    Text("Cancelar", fontFamily = FontFamily.Monospace)
+                }
+            },
         )
     }
 

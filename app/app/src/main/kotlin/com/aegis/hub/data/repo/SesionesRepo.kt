@@ -189,6 +189,28 @@ class SesionesRepo(
         return Resultado.Ok(creada, avisos)
     }
 
+    /**
+     * Corta el turno en curso de [id] (el `Esc`/`ctrl+d` del TUI: `POST api/session/{id}/interrupt`).
+     *
+     * Va por el repo y no por `Conexion.api` porque `interruptSession` solo existe en
+     * [OpenCodeApi], no en `ApiService`; este repo ya tiene el cliente nativo inyectado.
+     * No borra nada del servidor: el turno deja de estar vivo y el siguiente refresco
+     * reconcilia el estado real.
+     */
+    suspend fun interrumpir(id: String): Resultado<Unit> {
+        if (id.isBlank()) return Resultado.Fallo("No hay sesión que interrumpir")
+        try {
+            val r = oc.interruptSession(id)
+            if (!r.isSuccessful) {
+                return Resultado.Fallo("No se pudo interrumpir el turno (HTTP ${r.code()})")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "interrumpir $id fallo: ${e.message}")
+            return Resultado.Fallo("No se pudo interrumpir el turno: ${e.message ?: "error de red"}", e)
+        }
+        return Resultado.Ok(Unit)
+    }
+
     suspend fun renombrar(id: String, titulo: String): Resultado<Unit> {
         if (titulo.isBlank()) return Resultado.Fallo("No se puede renombrar con el título vacío")
         try {
