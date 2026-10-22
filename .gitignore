@@ -41,3 +41,7 @@ backend/patch_main_2.py
 # No deben acabar en el repo: son copias completas de ficheros ya versionados.
 *.bak
 *.bak-pre-*
+
+# Artefactos temporales de trabajo del agente (ORD-20261022-17): viven en
+# _quarantine/, nunca en el repo.
+_tmp_artifacts/
