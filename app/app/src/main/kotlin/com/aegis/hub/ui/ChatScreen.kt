@@ -347,7 +347,9 @@ private fun ChatScreenContenido(
     LaunchedEffect(
         messages.size,
         loading,
-        streamingText,
+        // Bucket de 200 caracteres en vez del texto entero: con la clave por token
+        // (o por caracter) este efecto se relanzaba en CADA delta del stream.
+        streamingText?.length?.div(200) ?: -1,
         streamingTools.size,
         streamingToolsLen,
         lastMsgId,
@@ -374,14 +376,11 @@ private fun ChatScreenContenido(
             val total = listState.layoutInfo.totalItemsCount
             if (total > 0) {
                 val last = total - 1
-                if (intentos == 0) {
-                    // Salto instantáneo al final absoluto; animateScrollToItem
-                    // interpolaba desde arriba y a menudo no llegaba.
-                    listState.scrollToItem(last, Int.MAX_VALUE)
-                } else {
-                    // Offset al máximo para acompañar el crecimiento de altura interna (ej. output bash)
-                    listState.animateScrollToItem(last, scrollOffset = Int.MAX_VALUE)
-                }
+                // Salto instantáneo al final absoluto en TODOS los intentos. Antes se
+                // animaba (animateScrollToItem), que relanzaba una animacion por token y
+                // competia con el siguiente, y ademas interpolaba desde arriba sin llegar.
+                // Con scrollToItem no hay animacion que cancelar: es idempotente.
+                listState.scrollToItem(last)
                 return@LaunchedEffect
             }
             intentos++
@@ -821,7 +820,7 @@ private fun ChatScreenContenido(
                             // de filas de dos tipos: `item()` no se puede llamar desde
                             // dentro de `itemsIndexed` (Kotlin lo rechaza por el receptor
                             // implícito), pero `items()` sobre una lista heterogénea sí.
-                            items(filas, key = { it.key }) { fila ->
+                            items(filas, key = { it.key }, contentType = { it::class }) { fila ->
                                 when (fila) {
                                     is ChatRow.Mensaje -> TerminalConsoleTurn(
                                         msg = fila.message,
@@ -1494,7 +1493,14 @@ private fun GlifoCursor() {
 
 @Composable
 private fun TextoConCursorParpadeante(text: String) {
-    MarkdownText(text = text, cursor = CursorParpadeanteCadena())
+    // El cursor parpadeante va FUERA del arbol markdown: antes se pasaba como `cursor`
+    // a MarkdownText, asi que cada parpadeo (2 por segundo) recomponia y re-tokenizaba
+    // el mensaje entero. Ahora es un Text hermano: solo se recompone el mismo.
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        MarkdownText(text = text, cursor = "")
+        // Solo tiene sentido mientras hay texto en vivo (streaming).
+        if (text.isNotBlank()) GlifoCursor()
+    }
 }
 
 @Composable

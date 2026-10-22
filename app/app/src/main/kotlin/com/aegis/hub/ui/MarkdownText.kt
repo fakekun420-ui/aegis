@@ -123,31 +123,38 @@ private fun MarkdownTextContent(
             val trailingCursor = if (isLast && !truncado) cursor else ""
 
             when (block) {
-                is MdBlock.Header -> MarkdownInlineText(
-                    text = buildInline(block.text, trailingCursor),
-                    style = when (block.level) {
-                        1 -> MaterialTheme.typography.titleMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 16.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            lineHeight = 22.sp
-                        )
-                        2 -> MaterialTheme.typography.titleSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            lineHeight = 20.sp
-                        )
-                        else -> MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            lineHeight = 19.sp
-                        )
-                    },
-                    color = Color(0xFF79C0FF),
-                    onLinkClick = handleLink
-                )
+                is MdBlock.Header -> {
+                    // El tokenizado inline (4 regex por bloque) se memoiza por bloque y
+                    // cursor: antes se repetia en CADA recomposicion del arbol markdown.
+                    val inline = remember(block, trailingCursor) {
+                        buildInline(block.text, trailingCursor)
+                    }
+                    MarkdownInlineText(
+                        text = inline,
+                        style = when (block.level) {
+                            1 -> MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 16.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                lineHeight = 22.sp
+                            )
+                            2 -> MaterialTheme.typography.titleSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                lineHeight = 20.sp
+                            )
+                            else -> MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = 19.sp
+                            )
+                        },
+                        color = Color(0xFF79C0FF),
+                        onLinkClick = handleLink
+                    )
+                }
                 is MdBlock.CodeBlock -> {
                     CodeBlockItem(block)
                     if (trailingCursor.isNotBlank()) {
@@ -182,22 +189,27 @@ private fun MarkdownTextContent(
                     rows = block.rows,
                     align = block.align
                 )
-                is MdBlock.Quote -> Surface(
-                    color = Color(0xFF161B22).copy(alpha = 0.6f),
-                    shape = RoundedCornerShape(4.dp),
-                    border = BorderStroke(1.dp, Color(0xFF30363D))
-                ) {
-                    MarkdownInlineText(
-                        text = buildInline(block.text, trailingCursor),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.SansSerif,
-                            fontSize = 13.5.sp,
-                            lineHeight = 19.sp
-                        ),
-                        color = Color(0xFF8B949E),
-                        onLinkClick = handleLink
-                    )
+                is MdBlock.Quote -> {
+                    val inline = remember(block, trailingCursor) {
+                        buildInline(block.text, trailingCursor)
+                    }
+                    Surface(
+                        color = Color(0xFF161B22).copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(1.dp, Color(0xFF30363D))
+                    ) {
+                        MarkdownInlineText(
+                            text = inline,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.SansSerif,
+                                fontSize = 13.5.sp,
+                                lineHeight = 19.sp
+                            ),
+                            color = Color(0xFF8B949E),
+                            onLinkClick = handleLink
+                        )
+                    }
                 }
                 is MdBlock.BulletList -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     block.items.forEachIndexed { itemIdx, item ->
@@ -211,8 +223,11 @@ private fun MarkdownTextContent(
                                 ),
                                 color = Color(0xFF8B949E)
                             )
+                            val inline = remember(item, itemCursor) {
+                                buildInline(item, itemCursor)
+                            }
                             MarkdownInlineText(
-                                text = buildInline(item, itemCursor),
+                                text = inline,
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 14.5.sp,
@@ -236,8 +251,11 @@ private fun MarkdownTextContent(
                                 ),
                                 color = Color(0xFF8B949E)
                             )
+                            val inline = remember(item, itemCursor) {
+                                buildInline(item, itemCursor)
+                            }
                             MarkdownInlineText(
-                                text = buildInline(item, itemCursor),
+                                text = inline,
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 14.5.sp,
@@ -249,16 +267,21 @@ private fun MarkdownTextContent(
                         }
                     }
                 }
-                is MdBlock.Paragraph -> MarkdownInlineText(
-                    text = buildInline(block.text, trailingCursor),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 14.5.sp,
-                        lineHeight = 21.sp
-                    ),
-                    color = Color(0xFFE6EDF3),
-                    onLinkClick = handleLink
-                )
+                is MdBlock.Paragraph -> {
+                    val inline = remember(block, trailingCursor) {
+                        buildInline(block.text, trailingCursor)
+                    }
+                    MarkdownInlineText(
+                        text = inline,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 14.5.sp,
+                            lineHeight = 21.sp
+                        ),
+                        color = Color(0xFFE6EDF3),
+                        onLinkClick = handleLink
+                    )
+                }
             }
         }
     }

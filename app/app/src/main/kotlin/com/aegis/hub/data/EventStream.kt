@@ -52,10 +52,14 @@ object EventStream {
         while (coroutineContext.isActive) {
             try {
                 val responseBody = api.openEventStream()
-                // Si la conexión fue exitosa, reiniciamos el backoff
-                currentBackoff = INITIAL_BACKOFF_MS
+                // OJO: el backoff NO se resetea aqui. Antes se reseteaba en cuanto la
+                // conexion se abria, asi que un servidor que acepta el socket y cierra
+                // sin mandar nada dejaba el backoff clavado en 1 s para siempre
+                // (reconexion en bucle). Se resetea mas abajo, al procesar la PRIMERA
+                // linea util de esta conexion.
 
                 val reader = BufferedReader(InputStreamReader(responseBody.byteStream(), Charsets.UTF_8))
+                var primeraLineaUtil = false
                 try {
                     // MEDIDO 2026-10-01: aqui habia
                     //   var line: String?
@@ -73,6 +77,13 @@ object EventStream {
                     var line: String? = reader.readLine()
                     while (coroutineContext.isActive && line != null) {
                         val items = parser.processLine(line, targetSessionId)
+                        // Primera linea UTIL de esta conexion: ahora si el stream esta
+                        // vivo de verdad. Los keep-alives y lineas vacias devuelven lista
+                        // vacia y NO cuentan, que es justo el caso que se arregla.
+                        if (!primeraLineaUtil && items.isNotEmpty()) {
+                            primeraLineaUtil = true
+                            currentBackoff = INITIAL_BACKOFF_MS
+                        }
                         for (item in items) {
                             emit(item)
                         }

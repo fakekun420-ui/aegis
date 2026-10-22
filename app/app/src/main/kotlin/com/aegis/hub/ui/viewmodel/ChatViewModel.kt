@@ -40,12 +40,14 @@ import com.aegis.hub.data.OpenCodeStreamItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import com.aegis.hub.data.TurnState
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -578,6 +580,12 @@ class ChatViewModel(
     private val REFRESH_MIN_WAIT_MS = 2_000L
     private val REFRESH_MAX_WAIT_MS = 30_000L
 
+    // Tope por peticion DENTRO de un ciclo de refresco. El cliente HTTP usa
+    // readTimeout de 660 s: sin este tope, una sola peticion colgada congela el
+    // ciclo entero (y con el, el chat) mas de 10 minutos. 10 s es de sobra para
+    // un GET local del Hub, y si se agota el ciclo cuenta como fallido (backoff).
+    private val PETICION_REFRESCO_TIMEOUT_MS = 10_000L
+
     // Ciclos de refresco seguidos fallidos antes de decir que el Hub no esta.
     // El refresco va cada 2 s, asi que 3 son ~6 s: suficiente para no Destapar un
     // fallo puntual, suficiente para no dejar la pantalla mintiendo un minuto.
@@ -638,7 +646,7 @@ class ChatViewModel(
                 // turno ha terminado de verdad, asi que va PRIMERO. O(1): el Hub lo
                 // tiene en memoria, no consulta a OpenCode.
                 try {
-                    val ex = api.getInflight()
+                    val ex = withTimeout(PETICION_REFRESCO_TIMEOUT_MS) { api.getInflight() }
                     if (ex.ok && ex.data != null) {
                         val sid = sessionId
                         // El vigilante manda UNA fila por sesion: busy si no ha
@@ -651,6 +659,16 @@ class ChatViewModel(
                         _turnBusy.value = TurnState.isBusy(mine)
                         _turnOver.value = TurnState.isOver(mine)
                     }
+                } catch (_: TimeoutCancellationException) {
+                    // Timeout de ESTA peticion: cuenta como ciclo fallido, NO como
+                    // cancelacion. Va ANTES que CancellationException porque
+                    // TimeoutCancellationException HEREDA de ella: si el orden se
+                    // invierte, el rethrow de abajo mataria el bucle de refresco
+                    // entero y el chat se quedaria sin refresco para siempre.
+                    cycleFailed = true
+                } catch (e: CancellationException) {
+                    // Cancelacion REAL (del ViewModel o del job): se propaga.
+                    throw e
                 } catch (_: Exception) {
                     // Antes era un catch mudo SIN NI UN COMENTARIO: un 429/502 aqui no
                     // dejaba ni una linea, y como de este bloque depende el "trabajando"
@@ -664,8 +682,13 @@ class ChatViewModel(
                 // las preguntas tiene que estar fresco ANTES de juzgar si el turno
                 // terminó, porque un agente esperando respuesta sigue trabajando.
                 try {
-                    val fr = api.getPendingForms(sessionId)
+                    val fr = withTimeout(PETICION_REFRESCO_TIMEOUT_MS) { api.getPendingForms(sessionId) }
                     if (fr.ok && fr.data != null) _pendingForms.value = fr.data
+                } catch (_: TimeoutCancellationException) {
+                    // Timeout de ESTA peticion: ciclo fallido, no cancelacion (ver arriba).
+                    cycleFailed = true
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     // Un fallo puntual de red no debe tumbar el refresco: el siguiente
                     // ciclo reintenta solo. Lo que se anade es que CUENTE, para que
@@ -678,8 +701,13 @@ class ChatViewModel(
                 // si el turno termino. Un turno bloqueado esperando un permiso sigue
                 // trabajando: la herramienta esta suspendida, no terminada.
                 try {
-                    val pr = api.getPendingPermissions(sessionId)
+                    val pr = withTimeout(PETICION_REFRESCO_TIMEOUT_MS) { api.getPendingPermissions(sessionId) }
                     if (pr.ok && pr.data != null) _pendingPermissions.value = pr.data
+                } catch (_: TimeoutCancellationException) {
+                    // Timeout de ESTA peticion: ciclo fallido, no cancelacion (ver arriba).
+                    cycleFailed = true
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     // Idem: el siguiente ciclo reintenta, y ademas cuenta.
                     cycleFailed = true
@@ -695,10 +723,17 @@ class ChatViewModel(
                     // 15 s, pero solo cuando el rapido ya ha fallado.
                     var fresh: List<Message>? = null
                     try {
-                        val cola = api.getMessagesTail(sessionId, TAIL_POLL)
+                        val cola = withTimeout(PETICION_REFRESCO_TIMEOUT_MS) {
+                            api.getMessagesTail(sessionId, TAIL_POLL)
+                        }
                         if (cola.ok && cola.data != null) {
                             fresh = mergeTail(_messages.value, cola.data.filterNot { it.isEmpty })
                         }
+                    } catch (_: TimeoutCancellationException) {
+                        // Timeout del camino rapido: queda `fresh == null` y se intenta
+                        // el lento (con su cooldown). NO es cancelacion.
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (_: Exception) {
                         // Idem: el siguiente ciclo reintenta por el camino rapido.
                     }
@@ -755,6 +790,11 @@ class ChatViewModel(
                             _finishedTurnId.value = nuevoIdPoll
                         }
                     }
+                } catch (_: TimeoutCancellationException) {
+                    // Timeout de ESTA peticion (mensajes): ciclo fallido, no cancelacion.
+                    cycleFailed = true
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     // Aqui ya fallo el camino rapido Y el lento (si el rapido se
                     // recupera con el historial completo, se sale por el if de arriba
@@ -1449,10 +1489,23 @@ class ChatViewModel(
                 // y se cancela en el finally. Si el stream falla, el poll de arriba sigue trayendo
                 // el parcial cada 1,5 s: el streaming adelanta, no sustituye.
                 val streamJob = launch {
+                    // Ultima longitud publicada. Vive en la CORRUTINA del stream, no como
+                    // campo del ViewModel: cada envio tiene la suya y no se pisan entre
+                    // sesiones.
+                    var lastPublishedLen = 0
                     try {
                         EventStream.createEventStream(targetSessionId).collect { item ->
                             if (item is OpenCodeStreamItem.TextUpdate) {
-                                _streamingText.value = item.textAccumulated
+                                // Coalescer: publicar en CADA delta obliga al render a
+                                // re-parsear el mensaje entero cada token (O(n^2)). Se
+                                // publica al crecer >= 40 caracteres, y SIEMPRE al cerrar
+                                // el turno con el texto final completo.
+                                if (item.isEnded ||
+                                    item.textAccumulated.length - lastPublishedLen >= 40
+                                ) {
+                                    lastPublishedLen = item.textAccumulated.length
+                                    _streamingText.value = item.textAccumulated
+                                }
                             }
                         }
                     // M2: stream best-effort (el poll trae lo mismo; si el stream
