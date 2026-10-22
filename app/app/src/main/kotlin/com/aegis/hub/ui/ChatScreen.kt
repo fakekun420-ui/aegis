@@ -932,6 +932,35 @@ private fun ChatScreenContenido(
     // estado). Usa los mismos repos y la misma red que el resto de la pantalla;
     // al elegir sesión/modelo/agente navega o delega en el VM (el diálogo se
     // cierra solo después de cada selección).
+    // Exportar/compartir: el VM entrega el TEXTO real del servidor
+    // (`GET api/experimental/session/{id}/export`), y aquí se copia y se ofrece compartir.
+    // No hay Toast de "copiado" antes de tener el texto: si el export falla, lo dice el error.
+    fun copiarYCompartirTranscripcion(texto: String) {
+        if (texto.isBlank()) return
+        try {
+            val portapapeles = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                as? android.content.ClipboardManager
+            portapapeles?.setPrimaryClip(
+                android.content.ClipData.newPlainText("Aegis transcript", texto)
+            )
+        } catch (_: Exception) {
+            // Sin portapapeles (raro) el share de abajo sigue siendo válido.
+        }
+        val enviar = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_TEXT, texto)
+            putExtra(android.content.Intent.EXTRA_SUBJECT, sessionTitle ?: "Aegis transcript")
+        }
+        val selector = android.content.Intent
+            .createChooser(enviar, "Compartir transcripción")
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(selector)
+        } catch (_: Exception) {
+            // Sin app que reciba ACTION_SEND: el texto ya está en el portapapeles.
+        }
+    }
+
     if (mostrarPaleta) {
         CommandPaletteDialog(
             onDismissRequest = { mostrarPaleta = false },
@@ -965,6 +994,20 @@ private fun ChatScreenContenido(
                 }
             },
             onOpenSettings = { mostrarAjustes = true },
+            // Comandos reales (antes: Toasts de mentira). Sin defaults: el compilador
+            // obliga a pasarlos, así que no pueden volver a quedarse sin implementación.
+            onCompactRequested = { vm.compactar(sessionId) },
+            onUndoRequested = { vm.deshacer(sessionId) },
+            onForkRequested = {
+                vm.forkear(sessionId) { nueva ->
+                    // El repo devuelve la original si el servidor no dio id legible:
+                    // en ese caso no se navega a ninguna sesión inventada.
+                    if (nueva != sessionId) onOpenSession(nueva)
+                }
+            },
+            onExportRequested = {
+                vm.exportar(sessionId) { texto -> copiarYCompartirTranscripcion(texto) }
+            },
         )
     }
 

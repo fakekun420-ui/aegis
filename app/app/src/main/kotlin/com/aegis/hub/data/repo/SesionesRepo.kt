@@ -211,6 +211,186 @@ class SesionesRepo(
         return Resultado.Ok(Unit)
     }
 
+    // ==========================================
+    // Compactar / Revertir / Fork / Exportar
+    //
+    // Estas cinco operaciones existen en [OpenCodeApi] (cliente nativo), no en `ApiService`,
+    // igual que [interrumpir]. Regla comun: exito SOLO con `isSuccessful` (2xx, 204 incluido);
+    // si el servidor dice que no, [Resultado.Fallo] con el codigo HTTP y su cuerpo REAL.
+    // ==========================================
+
+    /**
+     * Compacta el contexto de [id]: `POST api/session/{id}/compact` con body `{}`.
+     *
+     * No borra el historial. El servidor inserta un mensaje `type:"compaction"` con `summary`
+     * y `reason:"manual"`; para verlo en pantalla hay que refrescar la cola (lo hace el VM).
+     */
+    suspend fun compactar(id: String): Resultado<Unit> =
+        peticion("compactar el contexto", id) { oc.compactSession(id) }
+
+    /**
+     * Etapa 1 del undo: marca el punto al que se retrocede (`POST .../revert/stage`).
+     * El servidor NO aplica nada hasta [revertirConfirmar]; [revertirCancelar] lo deshace.
+     */
+    suspend fun revertirEtapa(id: String, messageId: String): Resultado<Unit> {
+        if (messageId.isBlank()) return Resultado.Fallo("No hay mensaje que deshacer")
+        return peticion("preparar el undo", id) {
+            oc.stageRevert(id, mapOf("messageID" to messageId, "files" to true))
+        }
+    }
+
+    /** Etapa 2 del undo: aplica el retroceso preparado por [revertirEtapa]. */
+    suspend fun revertirConfirmar(id: String): Resultado<Unit> =
+        peticion("confirmar el undo", id) { oc.commitRevert(id) }
+
+    /** Cancela un undo preparado y no confirmado (`DELETE .../revert` -> 204). */
+    suspend fun revertirCancelar(id: String): Resultado<Unit> =
+        peticion("cancelar el undo", id) { oc.clearRevert(id) }
+
+    /**
+     * Bifurca la sesión (`POST .../fork`, body `{before:null}`) y devuelve el id de la NUEVA.
+     *
+     * Si el servidor responde 2xx pero sin id legible, se devuelve [id] (la original): es lo
+     * unico verificable. No se inventa un id que luego no exista en el servidor.
+     */
+    suspend fun forkear(id: String): Resultado<String> {
+        if (id.isBlank()) return Resultado.Fallo("No hay sesión que bifurcar")
+        return try {
+            val resp = oc.forkSession(id, mapOf("before" to null))
+            val nueva = resp.data?.id?.takeIf { it.isNotBlank() }
+            Resultado.Ok(nueva ?: id)
+        } catch (e: java.util.concurrent.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "forkear $id fallo: ${e.message}")
+            Resultado.Fallo("No se pudo bifurcar la sesión: ${e.message ?: "error de red"}", e)
+        }
+    }
+
+    /**
+     * Exporta la transcripción como TEXTO legible (para copiar/compartir).
+     *
+     * `GET api/experimental/session/{id}/export` devuelve el historial entero: se recorta a
+     * ~200 KB antes de parsear (un chat de miles de mensajes no cabe en un Intent sin
+     * reventar el binder). Si el JSON no se puede interpretar, se devuelve el volcado crudo
+     * recortado, nunca un "listo" falso.
+     */
+    suspend fun exportar(id: String): Resultado<String> {
+        if (id.isBlank()) return Resultado.Fallo("No hay sesión que exportar")
+        return try {
+            val r = oc.exportSession(id)
+            if (!r.isSuccessful) {
+                return Resultado.Fallo("No se pudo exportar (HTTP ${r.code()}): ${cuerpoRecortado(r)}")
+            }
+            // El cuerpo se lee en IO: `ResponseBody.string()` es I/O de red y esto se llama
+            // desde `viewModelScope` (Main). Sin esto, un export grande bloqueaba la UI.
+            val cuerpo = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                r.body()?.string().orEmpty()
+            }
+            if (cuerpo.isBlank()) return Resultado.Fallo("El servidor devolvió un export vacío")
+            Resultado.Ok(textoLegible(cuerpo))
+        } catch (e: java.util.concurrent.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "exportar $id fallo: ${e.message}")
+            Resultado.Fallo("No se pudo exportar la sesión: ${e.message ?: "error de red"}", e)
+        }
+    }
+
+    /**
+     * Envoltorio comun: exito solo con 2xx y, si no, HTTP + cuerpo real recortado.
+     * El cuerpo importa: el servidor explica el rechazo ahi y perderlo dejaba
+     * "no se pudo" sin causa, que es la mitad del problema.
+     */
+    private suspend fun peticion(
+        etiqueta: String,
+        id: String,
+        bloque: suspend () -> retrofit2.Response<Unit>
+    ): Resultado<Unit> {
+        if (id.isBlank()) return Resultado.Fallo("Falta el id de sesión para $etiqueta")
+        return try {
+            val r = bloque()
+            if (!r.isSuccessful) {
+                return Resultado.Fallo("No se pudo $etiqueta (HTTP ${r.code()}): ${cuerpoRecortado(r)}")
+            }
+            Resultado.Ok(Unit)
+        } catch (e: java.util.concurrent.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "$etiqueta en $id fallo: ${e.message}")
+            Resultado.Fallo("No se pudo $etiqueta: ${e.message ?: "error de red"}", e)
+        }
+    }
+
+    private suspend fun cuerpoRecortado(r: retrofit2.Response<*>): String {
+        val texto = try {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                r.errorBody()?.string().orEmpty()
+            }
+        } catch (e: java.util.concurrent.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            ""
+        }
+        val limpio = texto.replace(RX_ESPACIOS, " ").trim()
+        return if (limpio.isBlank()) "(sin cuerpo)" else limpio.take(300)
+    }
+
+    /** JSON del export -> texto con `[role]` y el texto de cada mensaje. */
+    private fun textoLegible(json: String): String {
+        val limite = 200_000
+        val base = if (json.length > limite) {
+            json.substring(0, limite) +
+                "\n\n[Export RECORTADO a ${limite / 1024} KB de ${json.length} caracteres]"
+        } else {
+            json
+        }
+        val raiz = try {
+            com.google.gson.JsonParser.parseString(base).asJsonObject
+        } catch (_: Exception) {
+            null
+        } ?: return base
+        val info = raiz.getAsJsonObject("info")
+            ?: raiz.getAsJsonObject("data")?.getAsJsonObject("info")
+        val titulo = info?.get("title")?.let { if (it.isJsonPrimitive) it.asString else null }
+        val lista = (raiz.get("messages") ?: raiz.getAsJsonObject("data")?.get("messages"))
+            ?.let { if (it.isJsonArray) it.asJsonArray else null }
+            ?: return base
+        val sb = StringBuilder()
+        sb.append("Transcripción")
+        if (!titulo.isNullOrBlank()) sb.append(" — ").append(titulo)
+        sb.append("\n\n")
+        lista.forEach { el ->
+            val m = if (el.isJsonObject) el.asJsonObject else return@forEach
+            val meta = m.getAsJsonObject("info")
+            val rol = (meta?.get("role") ?: m.get("role"))
+                ?.let { if (it.isJsonPrimitive) it.asString else null }
+                ?: "?"
+            val texto = textoDeMensaje(m, meta)
+            if (texto.isNotBlank()) sb.append("[").append(rol).append("]\n").append(texto).append("\n\n")
+        }
+        return if (sb.length <= 32) base else sb.toString()
+    }
+
+    private fun textoDeMensaje(
+        m: com.google.gson.JsonObject,
+        meta: com.google.gson.JsonObject?
+    ): String {
+        (meta?.get("text") ?: m.get("text"))
+            ?.let { if (it.isJsonPrimitive) it.asString else null }
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return it }
+        val partes = (m.get("parts") ?: meta?.get("parts"))
+            ?.let { if (it.isJsonArray) it.asJsonArray else null }
+            ?: return ""
+        return partes.mapNotNull { p ->
+            val o = if (p.isJsonObject) p.asJsonObject else return@mapNotNull null
+            val tipo = o.get("type")?.let { if (it.isJsonPrimitive) it.asString else null }
+            if (tipo != null && tipo != "text") return@mapNotNull null
+            o.get("text")?.let { if (it.isJsonPrimitive) it.asString else null }
+        }.joinToString("\n")
+    }
+
     suspend fun renombrar(id: String, titulo: String): Resultado<Unit> {
         if (titulo.isBlank()) return Resultado.Fallo("No se puede renombrar con el título vacío")
         try {
@@ -271,5 +451,12 @@ class SesionesRepo(
  * `/sdcard/projects/<nombre>` de `ProjectDetailViewModel` desaparece a favor
  * de esta funcion (es identica a `resolvedFolder`, asi que nada cambia).
  */
+/**
+ * Colapsa saltos de línea y espacios del cuerpo de error para que el motivo quepa en una
+ * línea. Compilado UNA vez a nivel de fichero (crear `Regex` por llamada costaba en el hilo
+ * principal y el check de hilo principal lo marca).
+ */
+private val RX_ESPACIOS = Regex("\\s+")
+
 fun carpetaDeProyecto(p: Project): String? =
     p.folder?.takeIf { it.isNotBlank() } ?: p.resolvedFolder.takeIf { it.isNotBlank() }

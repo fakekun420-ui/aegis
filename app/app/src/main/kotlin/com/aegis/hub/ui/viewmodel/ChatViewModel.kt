@@ -1023,6 +1023,157 @@ class ChatViewModel(
         }
     }
 
+    // ==========================================
+    // Compactar / Undo / Fork / Exportar (paleta de comandos)
+    //
+    // Todos pasan por [sesiones] y reportan el resultado REAL: el Toast de exito lo pone la
+    // paleta solo cuando el servidor contesto 2xx. Antes estos comandos eran Toasts falsos:
+    // "Session context compacted" sin enviar nada.
+    // ==========================================
+
+    /**
+     * Compacta el contexto de la sesión y, si el servidor lo acepto, refresca la cola UNA vez
+     * para que aparezca el mensaje `compaction` que el servidor inserta.
+     */
+    fun compactar(sessionId: String) {
+        val sid = (sessionId.takeIf { it.isNotBlank() } ?: _currentSessionId.value.orEmpty()).trim()
+        if (sid.isBlank()) {
+            _error.value = "No hay sesión que compactar"
+            return
+        }
+        viewModelScope.launch {
+            try {
+                when (val r = sesiones.compactar(sid)) {
+                    is Resultado.Ok -> {
+                        _error.value = null
+                        refrescarColaUnaVez(sid)
+                    }
+                    is Resultado.Fallo -> _error.value = r.motivo
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = (e.localizedMessage ?: e.message)
+                    ?.lineSequence()?.firstOrNull()?.trim()?.take(160)
+            }
+        }
+    }
+
+    /**
+     * Deshace el ÚLTIMO turno de usuario: `revert/stage` y, si el servidor lo acepta,
+     * `revert/commit`. Si el commit falla se CANCELA el revert preparado, para no dejar la
+     * sesión a medio retroceder.
+     */
+    fun deshacer(sessionId: String) {
+        val sid = (sessionId.takeIf { it.isNotBlank() } ?: _currentSessionId.value.orEmpty()).trim()
+        if (sid.isBlank()) {
+            _error.value = "No hay sesión en la que deshacer"
+            return
+        }
+        val messageId = mensajeUsuarioParaDeshacer()
+        if (messageId.isNullOrBlank()) {
+            _error.value = "No hay ningún mensaje de usuario que deshacer en esta sesión"
+            return
+        }
+        viewModelScope.launch {
+            try {
+                when (val etapa = sesiones.revertirEtapa(sid, messageId)) {
+                    is Resultado.Fallo -> _error.value = etapa.motivo
+                    is Resultado.Ok -> when (val commit = sesiones.revertirConfirmar(sid)) {
+                        is Resultado.Ok -> {
+                            _error.value = null
+                            refrescarColaUnaVez(sid)
+                        }
+                        is Resultado.Fallo -> {
+                            val cancelado = sesiones.revertirCancelar(sid)
+                            _error.value = if (cancelado is Resultado.Fallo) {
+                                "${commit.motivo} (y el revert preparado no se pudo cancelar: ${cancelado.motivo})"
+                            } else {
+                                commit.motivo
+                            }
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = (e.localizedMessage ?: e.message)
+                    ?.lineSequence()?.firstOrNull()?.trim()?.take(160)
+            }
+        }
+    }
+
+    /** Bifurca la sesión y entrega el id de la nueva por [onNueva]. */
+    fun forkear(sessionId: String, onNueva: (String) -> Unit) {
+        val sid = (sessionId.takeIf { it.isNotBlank() } ?: _currentSessionId.value.orEmpty()).trim()
+        if (sid.isBlank()) {
+            _error.value = "No hay sesión que bifurcar"
+            return
+        }
+        viewModelScope.launch {
+            try {
+                when (val r = sesiones.forkear(sid)) {
+                    is Resultado.Ok -> {
+                        _error.value = null
+                        onNueva(r.valor)
+                    }
+                    is Resultado.Fallo -> _error.value = r.motivo
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = (e.localizedMessage ?: e.message)
+                    ?.lineSequence()?.firstOrNull()?.trim()?.take(160)
+            }
+        }
+    }
+
+    /** Exporta la transcripción como texto y la entrega por [onTexto] (copiar/compartir). */
+    fun exportar(sessionId: String, onTexto: (String) -> Unit) {
+        val sid = (sessionId.takeIf { it.isNotBlank() } ?: _currentSessionId.value.orEmpty()).trim()
+        if (sid.isBlank()) {
+            _error.value = "No hay sesión que exportar"
+            return
+        }
+        viewModelScope.launch {
+            try {
+                when (val r = sesiones.exportar(sid)) {
+                    is Resultado.Ok -> {
+                        _error.value = null
+                        onTexto(r.valor)
+                    }
+                    is Resultado.Fallo -> _error.value = r.motivo
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = (e.localizedMessage ?: e.message)
+                    ?.lineSequence()?.firstOrNull()?.trim()?.take(160)
+            }
+        }
+    }
+
+    /**
+     * Id (`info.id`) del último mensaje con `role == "user"` de la lista que se ve ahora.
+     * El undo del TUI retrocede hasta ESE mensaje; sin id no se llama al servidor.
+     */
+    private fun mensajeUsuarioParaDeshacer(): String? =
+        _messages.value.lastOrNull { it.role == "user" && !it.info?.id.isNullOrBlank() }?.info?.id
+
+    /** Una sola peticion de cola: suficiente para ver el mensaje `compaction`. */
+    private suspend fun refrescarColaUnaVez(sid: String) {
+        try {
+            val cola = api.getMessagesTail(sid, 100)
+            if (cola.ok && cola.data != null && _currentSessionId.value == sid) {
+                _messages.value = cola.data.filterNot { it.isEmpty }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // El refresco periódico reintenta; aqui no se pisa el resultado del comando.
+        }
+    }
+
     fun stopViewRefresh(ownerSessionId: String? = null) {
         if (!puedeDetenerRefresco(ownerSessionId)) return
         viewRefreshJob?.cancel()

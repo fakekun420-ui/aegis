@@ -39,6 +39,19 @@ class CatalogoRepoTest {
         override suspend fun getMessage(sessionId: String, messageID: String) = no()
         override suspend fun sendPrompt(sessionId: String, body: OpenCodePromptRequest) = no()
         override suspend fun interruptSession(sessionId: String) = retrofit2.Response.success(Unit)
+        // Ampliacion (compact/revert/fork/export): el fake no las ejercita todavia.
+        override suspend fun compactSession(id: String, body: Map<String, Any?>): retrofit2.Response<Unit> =
+            throw UnsupportedOperationException("compactSession no simulado")
+        override suspend fun stageRevert(id: String, body: Map<String, Any?>): retrofit2.Response<Unit> =
+            throw UnsupportedOperationException("stageRevert no simulado")
+        override suspend fun commitRevert(id: String): retrofit2.Response<Unit> =
+            throw UnsupportedOperationException("commitRevert no simulado")
+        override suspend fun clearRevert(id: String): retrofit2.Response<Unit> =
+            throw UnsupportedOperationException("clearRevert no simulado")
+        override suspend fun forkSession(id: String, body: Map<String, Any?>): com.aegis.hub.data.OpenCodeSessionResponse =
+            throw UnsupportedOperationException("forkSession no simulado")
+        override suspend fun exportSession(id: String): retrofit2.Response<okhttp3.ResponseBody> =
+            throw UnsupportedOperationException("exportSession no simulado")
         override suspend fun setSessionModel(sessionId: String, body: com.aegis.hub.data.SetSessionModelRequest) =
             retrofit2.Response.success(Unit)
         override suspend fun setSessionAgent(sessionId: String, body: com.aegis.hub.data.SetSessionAgentRequest) =

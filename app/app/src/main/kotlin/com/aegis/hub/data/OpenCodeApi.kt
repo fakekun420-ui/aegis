@@ -133,6 +133,63 @@ interface OpenCodeApi {
     ): retrofit2.Response<Unit>
 
     // ==========================================
+    // Compactar / Revertir / Fork / Exportar
+    //
+    // MEDIDO contra el servidor vivo (OpenCode v2.0.24, 127.0.0.1:49374):
+    //   POST api/session/{id}/compact        body {}                    -> 200, inserta un
+    //        mensaje `type:"compaction"` con `summary` y `reason:"manual"`. NO borra historial.
+    //   POST api/session/{id}/revert/stage   body {messageID,files}     -> 200
+    //   POST api/session/{id}/revert/commit  sin body                   -> 200
+    //   DELETE api/session/{id}/revert       sin body                   -> 204
+    //   POST api/session/{id}/fork           body {before:null}         -> 200, devuelve la sesion nueva
+    //   GET  api/experimental/session/{id}/export                       -> 200, JSON completo
+    //
+    // 204 tambien es exito: quien consuma esto compara `isSuccessful`, NO `code() == 200`.
+    // ==========================================
+
+    @POST("api/session/{id}/compact")
+    suspend fun compactSession(
+        @Path("id") id: String,
+        @Body body: Map<String, Any?> = emptyMap()
+    ): retrofit2.Response<Unit>
+
+    @POST("api/session/{id}/revert/stage")
+    suspend fun stageRevert(
+        @Path("id") id: String,
+        @Body body: Map<String, Any?>
+    ): retrofit2.Response<Unit>
+
+    @POST("api/session/{id}/revert/commit")
+    suspend fun commitRevert(
+        @Path("id") id: String
+    ): retrofit2.Response<Unit>
+
+    @DELETE("api/session/{id}/revert")
+    suspend fun clearRevert(
+        @Path("id") id: String
+    ): retrofit2.Response<Unit>
+
+    /**
+     * `fork` devuelve la SESION NUEVA en el mismo envoltorio `data` que [getSession], asi que
+     * se reutiliza [OpenCodeSessionResponse]: no hace falta tipo nuevo ni parseo a mano.
+     */
+    @POST("api/session/{id}/fork")
+    suspend fun forkSession(
+        @Path("id") id: String,
+        @Body body: Map<String, Any?> = emptyMap()
+    ): OpenCodeSessionResponse
+
+    /**
+     * El export es el historial ENTERO en un solo JSON. Se pide como [okhttp3.ResponseBody]
+     * crudo a proposito: pedirlo tipado obligaria a deserializar megas en memoria solo para
+     * acabar recortando el texto. Asi el repo mira el tamaño antes de parsear nada.
+     */
+    @GET("api/experimental/session/{id}/export")
+    suspend fun exportSession(
+        @Path("id") id: String
+    ): retrofit2.Response<okhttp3.ResponseBody>
+
+    // ==========================================
     // Configuración de Modelo y Agente por Sesión
     // ==========================================
 

@@ -115,7 +115,6 @@ data class PaletteFooterHint(
  * 2. Session:
  *    - Switch session (ctrl+x l)
  *    - New session (ctrl+x n)
- *    - Clear session
  *    - Open session or project (ctrl+o)
  *    - Close tab (ctrl+x w)
  *    - Reopen closed tab (ctrl+shift+t)
@@ -190,6 +189,13 @@ fun CommandPaletteDialog(
     onToggleWorkspaces: (() -> Unit)? = null,
     onRenameRequested: ((String) -> Unit)? = null,
     onDeleteRequested: ((String) -> Unit)? = null,
+    // Comandos que hasta ahora eran Toasts de mentira. SIN valor por defecto a propósito:
+    // si una pantalla no los pasa, no compila (un default silencioso es justo el fallo
+    // que estos cuatro sustituyen).
+    onCompactRequested: () -> Unit,
+    onUndoRequested: () -> Unit,
+    onForkRequested: () -> Unit,
+    onExportRequested: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -361,30 +367,39 @@ fun CommandPaletteDialog(
             onDismissRequest()
             return
         }
-        scope.launch {
-            try {
-                // Notifica al usuario y ejecuta limpieza/resumen si el servidor lo admite
-                Toast.makeText(context, "Session context compacted", Toast.LENGTH_SHORT).show()
-            } catch (_: Exception) {
-                Toast.makeText(context, "Failed to compact session", Toast.LENGTH_SHORT).show()
-            }
-        }
+        // La llamada real (y su Toast de exito) vive en la pantalla, que tiene el VM: aqui
+        // solo se dispara. Antes esto mostraba "Session context compacted" sin enviar nada.
+        onCompactRequested()
         onDismissRequest()
     }
 
-    fun triggerClearSession() {
+    fun triggerUndo() {
         if (currentSessionId.isNullOrBlank()) {
             Toast.makeText(context, "No active session", Toast.LENGTH_SHORT).show()
             onDismissRequest()
             return
         }
-        scope.launch {
-            try {
-                Toast.makeText(context, "Session cleared", Toast.LENGTH_SHORT).show()
-            } catch (_: Exception) {
-                Toast.makeText(context, "Failed to clear session", Toast.LENGTH_SHORT).show()
-            }
+        onUndoRequested()
+        onDismissRequest()
+    }
+
+    fun triggerForkSession() {
+        if (currentSessionId.isNullOrBlank()) {
+            Toast.makeText(context, "No active session", Toast.LENGTH_SHORT).show()
+            onDismissRequest()
+            return
         }
+        onForkRequested()
+        onDismissRequest()
+    }
+
+    fun triggerExportSession() {
+        if (currentSessionId.isNullOrBlank()) {
+            Toast.makeText(context, "No active session", Toast.LENGTH_SHORT).show()
+            onDismissRequest()
+            return
+        }
+        onExportRequested()
         onDismissRequest()
     }
 
@@ -480,16 +495,6 @@ fun CommandPaletteDialog(
                         shortcut = "ctrl+x n",
                         category = "Session",
                         onExecute = { triggerNewSession() }
-                    )
-                )
-                list.add(
-                    TuiCommandItem(
-                        id = "ses_clear_session",
-                        title = "Clear session",
-                        subtitle = "Clear message history in active session",
-                        shortcut = null,
-                        category = "Session",
-                        onExecute = { triggerClearSession() }
                     )
                 )
                 list.add(
@@ -592,10 +597,7 @@ fun CommandPaletteDialog(
                         subtitle = "Create a branching session from current state",
                         shortcut = null,
                         category = "Session",
-                        onExecute = {
-                            Toast.makeText(context, "Fork session requested for $currentSessionId", Toast.LENGTH_SHORT).show()
-                            onDismissRequest()
-                        }
+                        onExecute = { triggerForkSession() }
                     )
                 )
                 list.add(
@@ -615,10 +617,7 @@ fun CommandPaletteDialog(
                         subtitle = "Revert last prompt & response turn",
                         shortcut = "ctrl+x u",
                         category = "Session",
-                        onExecute = {
-                            Toast.makeText(context, "Undo previous message requested", Toast.LENGTH_SHORT).show()
-                            onDismissRequest()
-                        }
+                        onExecute = { triggerUndo() }
                     )
                 )
                 list.add(
@@ -676,7 +675,7 @@ fun CommandPaletteDialog(
                         subtitle = "Export formatted conversation log",
                         shortcut = "ctrl+x x",
                         category = "Session",
-                        onExecute = { triggerCopyTranscript(exportFormat = true) }
+                        onExecute = { triggerExportSession() }
                     )
                 )
                 list.add(
