@@ -1,6 +1,7 @@
 package com.aegis.hub
 
 import android.os.Looper
+import com.aegis.hub.data.ShellQuote
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -11,8 +12,9 @@ object RootShell {
      * Escapa un argumento para sh con comillas simples: dentro de '...' todo es literal,
      * por lo que neutraliza `;`, `|`, `&`, `<`, `>`, backticks, `$`, `\n` y `\`.
      * El único carácter especial es la comilla simple, que se cierra y reabre con '\''.
+     * La implementación NO se duplica aquí: delega en [ShellQuote.quote] (fuente única).
      */
-    private fun shQuote(arg: String): String = "'" + arg.replace("'", "'\\''") + "'"
+    internal fun shQuote(arg: String): String = ShellQuote.quote(arg)
 
     /**
      * Donde vive `su` segun ROM/Magisk. MEDIDO 2026-10-10 en el POCO F3: el unico

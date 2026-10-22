@@ -6,7 +6,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- READ_CONTACTS eliminado (auditoria 2026-10-22): el permiso estaba declarado y
+         se pedia en runtime, pero no hay ni una referencia a ContactsContract en
+         src/main. Un permiso peligroso sin uso solo amplia la superficie de la app. -->
     <!-- ===== Almacenamiento: para dejar de usar root =====
          MEDIDO 2026-10-02: esto hablaba de `backend/.aegis_token`, el secreto compartido con el
          Hub. Sin Hub no hay a quien autenticarle: ese fichero ya no existe, y con el la razon
@@ -62,7 +64,7 @@
         </intent>
     </queries>
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@android:mipmap/sym_def_app_icon"
         android:roundIcon="@android:mipmap/sym_def_app_icon"
         android:label="Aegis"

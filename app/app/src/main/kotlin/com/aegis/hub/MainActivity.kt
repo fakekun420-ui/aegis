@@ -63,9 +63,8 @@ class MainActivity : ComponentActivity() {
     private val reqMic = registerForActivityResult(ActivityResultContracts.RequestPermission()){ ok ->
         if(ok) toast("Micrófono concedido") else toast("Micrófono denegado — STT no funcionará")
     }
-    private val reqContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()){ ok ->
-        if(ok) toast("Contactos concedidos") else toast("Contactos denegados — WhatsApp por nombre no funcionará")
-    }
+    // reqContacts eliminado (auditoria 2026-10-22): el permiso READ_CONTACTS no lo usaba
+    // nadie (cero referencias a ContactsContract), asi que se quito tambien del manifest.
     private val reqCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()){ ok ->
         if(ok) toast("Cámara concedida") else toast("Cámara denegada — no se podrán adjuntar fotos")
     }
@@ -456,9 +455,7 @@ class MainActivity : ComponentActivity() {
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED){
             reqMic.launch(Manifest.permission.RECORD_AUDIO)
         }
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED){
-            reqContacts.launch(Manifest.permission.READ_CONTACTS)
-        }
+        // READ_CONTACTS ya no se pide: no habia codigo que leyera contactos (auditoria 2026-10-22).
         if(Build.VERSION.SDK_INT >= 33){
             if(ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED){
                 reqNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)

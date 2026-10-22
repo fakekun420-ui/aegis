@@ -624,17 +624,23 @@ class RutaNativa(
         require(name.isNotBlank()) { "deleteSkill sin nombre" }
         // MEDIDO: el nombre viene de la URL, y `..` en un nombre de skill es un path traversal
         // que dejaria borrar `/`. Se filtra ANTES de tocar el sistema de ficheros.
-        require(!name.contains("..") && !name.contains("/")) {
+        // esSlugSeguro cierra la inyeccion de comandos via `su -c`: un `'` en el nombre
+        // cerraba el literal de shell y lo que viniera detras se ejecutaba como root.
+        require(!name.contains("..") && !name.contains("/") && ShellQuote.esSlugSeguro(name)) {
             "Nombre de skill invalido: $name"
         }
         val base = rutaDeSkills()
         val origen = "$base/$name"
-        val comprobacion = sh("test -d '$origen' && echo SI", 3000)
+        val comprobacion = sh("test -d ${ShellQuote.quote(origen)} && echo SI", 3000)
         if (comprobacion.stdout.trim() != "SI") {
             return envolturaFallo("No existe el skill '$name'")
         }
         val destino = "$base/.papelera/$name-$(System.currentTimeMillis())"
-        val r = sh("mkdir -p '$base/.papelera' && mv '$origen' '$destino'", 8000)
+        val r = sh(
+            "mkdir -p ${ShellQuote.quote("$base/.papelera")} && " +
+                "mv ${ShellQuote.quote(origen)} ${ShellQuote.quote(destino)}",
+            8000
+        )
         if (r.code != 0) {
             return envolturaFallo("No se pudo apartar '$name': ${r.stderr.take(140)}")
         }
@@ -651,17 +657,19 @@ class RutaNativa(
         if (name.isEmpty()) {
             return envolturaFallo("Nombre de skill vacio")
         }
-        if (name.contains("..") || name.contains("/")) {
+        // esSlugSeguro cierra la inyeccion de comandos via `su -c` (un `'` cerraba el literal).
+        if (name.contains("..") || name.contains("/") || !ShellQuote.esSlugSeguro(name)) {
             return envolturaFallo("Nombre de skill invalido: $name")
         }
         val base = rutaDeSkills()
         val dir = "$base/$name"
-        val check = sh("test -d '$dir' && echo SI", 3000)
+        val check = sh("test -d ${ShellQuote.quote(dir)} && echo SI", 3000)
         if (check.stdout.trim() == "SI") {
             return envolturaFallo("El skill '$name' ya existe")
         }
         val encoded = android.util.Base64.encodeToString(content.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        val cmd = "mkdir -p '$dir' && echo '$encoded' | base64 -d > '$dir/SKILL.md'"
+        val cmd = "mkdir -p ${ShellQuote.quote(dir)} && " +
+            "echo ${ShellQuote.quote(encoded)} | base64 -d > ${ShellQuote.quote("$dir/SKILL.md")}"
         val r = sh(cmd, 5000)
         if (r.code != 0) {
             return envolturaFallo("Error creando skill '$name': ${r.stderr.take(140)}")
