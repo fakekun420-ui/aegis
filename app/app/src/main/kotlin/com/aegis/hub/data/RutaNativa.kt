@@ -667,7 +667,7 @@ class RutaNativa(
         if (check.stdout.trim() == "SI") {
             return envolturaFallo("El skill '$name' ya existe")
         }
-        val encoded = android.util.Base64.encodeToString(content.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+        val encoded = java.util.Base64.getEncoder().encodeToString(content.toByteArray(Charsets.UTF_8))
         val cmd = "mkdir -p ${ShellQuote.quote(dir)} && " +
             "echo ${ShellQuote.quote(encoded)} | base64 -d > ${ShellQuote.quote("$dir/SKILL.md")}"
         val r = sh(cmd, 5000)
