@@ -716,9 +716,11 @@ class ChatViewModel(
                         }
                     }
                     if (fresh != null) {
-                        if (fresh != _messages.value) {
-                            _messages.value = fresh
-                        }
+                        // Cinturon anti-encogimiento: la fusion ya garantiza que no se
+                        // pierden ids, pero nunca se reemplaza la lista visible por una
+                        // mas corta (dejaria mensajes recientes enterrados o fuera).
+                        val actual = _messages.value
+                        if (fresh != actual && fresh.size >= actual.size) _messages.value = fresh
                         // Se comprueba el cierre SIEMPRE, no solo cuando la lista cambia.
                         // El propio flujo de envío ya dejó _messages al día, así que en
                         // el primer poll tras el turno la lista es idéntica y el aviso
@@ -1010,6 +1012,23 @@ class ChatViewModel(
                 _loading.value = false
                 // G1: fin de apertura (solo cola rapida).
                 MarcasCiclo.abrirFin(sessionId, fotoApertura)
+            }
+            // Relleno de historial en segundo plano: NO bloquea _loading (ya liberado
+            // arriba). Sin esto, tras reducir la carga inicial a la cola de 100 al
+            // desplazarse hacia arriba no habia historial antiguo que mostrar.
+            viewModelScope.launch {
+                try {
+                    val hist = api.getMessages(sessionId)
+                    if (hist.ok && hist.data != null && _currentSessionId.value == sessionId) {
+                        val full = hist.data.filterNot { it.isEmpty }
+                        if (full.isNotEmpty()) _messages.value = mergeTail(_messages.value, full)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Best-effort: si falla, la cola rapida ya esta pintada.
+                    android.util.Log.d("AegisChat", "relleno de historial fallo: ${e.message}")
+                }
             }
         }
     }

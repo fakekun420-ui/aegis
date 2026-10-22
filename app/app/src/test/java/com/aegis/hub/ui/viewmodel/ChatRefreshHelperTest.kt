@@ -32,6 +32,33 @@ class ChatRefreshHelperTest {
     }
 
     @Test
+    fun `mergeTail no mete mensajes viejos despues de los nuevos`() {
+        val actual = (101..200).map { msg("m$it") }
+        val cola = (1..200).map { msg("m$it") }
+        val fusion = ChatRefreshHelper.mergeTail(actual, cola)
+        assertEquals((1..200).map { "m$it" }, fusion.mapNotNull { it.info?.id })
+    }
+
+    @Test
+    fun `mergeTail no pierde ningun id de actual`() {
+        val actual = listOf(msg("m100"), msg("m101"), msg("local_1"))
+        val cola = listOf(msg("m99"), msg("m100"), msg("m101"))
+        val fusion = ChatRefreshHelper.mergeTail(actual, cola)
+        val ids = fusion.mapNotNull { it.info?.id }
+        assertEquals(listOf("m99", "m100", "m101", "local_1"), ids)
+        assertEquals("local_1", ids.last())
+        assertEquals(4, ids.toSet().size)
+    }
+
+    @Test
+    fun `mergeTail mantiene el orden ascendente de la cola con ventana de cola pequena`() {
+        val actual = listOf(msg("m1"), msg("m2"))
+        val cola = listOf(msg("m2"), msg("m3"), msg("m4"))
+        val fusion = ChatRefreshHelper.mergeTail(actual, cola)
+        assertEquals(listOf("m1", "m2", "m3", "m4"), fusion.mapNotNull { it.info?.id })
+    }
+
+    @Test
     fun `esperaRefrescoMs escala a 30s al tercer fallo`() {
         assertEquals(2000L, ChatRefreshHelper.esperaRefrescoMs(0))
         assertEquals(2000L, ChatRefreshHelper.esperaRefrescoMs(1))

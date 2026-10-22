@@ -13,33 +13,52 @@ object ChatRefreshHelper {
     const val TAIL_POLL = 200
 
     /**
-     * Fusiona la cola de mensajes con los mensajes actuales sin duplicar por ID
-     * y preservando el orden ascendente.
+     * Union CRONOLOGICA de la cola del servidor (`cola`, ascendente) con lo que ya
+     * hay en pantalla (`actual`).
+     *
+     * Contrato:
+     * - NUNCA encoge la lista: todo id de `actual` sigue presente al terminar.
+     * - NUNCA coloca mensajes viejos despues de los nuevos: el historial que solo
+     *   existe en `actual` (mas antiguo que la ventana de la cola) se queda DELANTE.
+     * - La cola deduplicada por id sustituye en su sitio a los mensajes ya presentes.
+     * - Los mensajes de `actual` ausentes de la cola que caen dentro de la ventana
+     *   (optimistas locales) se conservan al final, nunca se descartan.
+     *
+     * Regresion que esto cierra: la version anterior anexaba al final todo id de la
+     * cola ausente de `actual`, asi que con carga inicial de 100 y poll de 200 los
+     * ~100 mas antiguos de la cola se pintaban DESPUES de los recientes y las
+     * respuestas nuevas quedaban enterradas al hacer scroll.
      */
     fun mergeTail(actual: List<Message>, cola: List<Message>): List<Message> {
         if (cola.isEmpty()) return actual
+        // Dedupe de la cola por id: gana la ULTIMA version de cada id, pero se
+        // respeta el orden ascendente original de la cola.
         val porId = HashMap<String, Message>()
         cola.forEach { m -> m.info?.id?.let { porId[it] = m } }
         if (porId.isEmpty()) return actual
         val vistos = HashSet<String>()
-        val fusion = ArrayList<Message>(actual.size + cola.size)
-        for (m in actual) {
-            val id = m.info?.id
-            if (id != null && porId.containsKey(id)) {
-                fusion.add(porId.getValue(id))
-                vistos.add(id)
-            } else {
-                fusion.add(m)
-            }
-        }
+        val colaDedup = ArrayList<Message>(porId.size)
         for (m in cola) {
             val id = m.info?.id ?: continue
-            if (id !in vistos) {
-                fusion.add(m)
-                vistos.add(id)
-            }
+            if (vistos.add(id)) colaDedup.add(porId.getValue(id))
         }
-        return fusion
+        // Primer punto donde `actual` solapa con la ventana de la cola.
+        val idxPrimerMatch = actual.indexOfFirst { a ->
+            val id = a.info?.id
+            id != null && porId.containsKey(id)
+        }
+        // Todo lo anterior al solape es historial mas viejo: se queda DELANTE.
+        val antes: List<Message> = if (idxPrimerMatch >= 0) actual.subList(0, idxPrimerMatch) else actual
+        // Lo posterior al solape solo sobrevive si no lo trae ya la cola (optimistas).
+        val despues: List<Message> = if (idxPrimerMatch >= 0) {
+            actual.drop(idxPrimerMatch).filter { a ->
+                val id = a.info?.id
+                id == null || !porId.containsKey(id)
+            }
+        } else {
+            emptyList()
+        }
+        return antes + colaDedup + despues
     }
 
     /**
